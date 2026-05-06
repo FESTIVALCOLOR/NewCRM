@@ -1909,7 +1909,7 @@ async function deleteMsg(msg) {
     await api.delete(`/api/v1/chats/${chatId}/messages/${msg.id}`)
     const idx = messages.value.findIndex(m => m.id === msg.id)
     if (idx !== -1) {
-      messages.value[idx] = { ...messages.value[idx], is_deleted: true, content: '[Сообщение удалено]' }
+      messages.value[idx] = { ...messages.value[idx], is_deleted: true, content: '[Сообщение удалено]', message_type: 'text' }
     }
   } catch (e) {
     $q.notify({ type: 'negative', message: e.response?.data?.detail || 'Ошибка удаления' })
@@ -2307,7 +2307,7 @@ onMounted(() => {
       onMessageDeleted: (msgId) => {
         const idx = messages.value.findIndex(m => m.id === msgId)
         if (idx !== -1) {
-          messages.value[idx] = { ...messages.value[idx], is_deleted: true, content: '[Сообщение удалено]' }
+          messages.value[idx] = { ...messages.value[idx], is_deleted: true, content: '[Сообщение удалено]', message_type: 'text' }
         }
       },
       onMemberAdded: async () => {

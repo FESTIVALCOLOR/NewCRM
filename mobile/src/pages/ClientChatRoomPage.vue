@@ -1323,6 +1323,7 @@ async function deleteMsg(msg) {
     if (m) {
       m.is_deleted = true
       m.content = 'Сообщение удалено'
+      m.message_type = 'text'
     }
   } catch {
     $q.notify({ type: 'negative', message: 'Ошибка удаления' })
@@ -1975,7 +1976,7 @@ onMounted(() => {
       },
       onMessageDeleted: (msgId) => {
         const idx = messages.value.findIndex(m => m.id === msgId)
-        if (idx !== -1) messages.value[idx] = { ...messages.value[idx], is_deleted: true, content: '[Сообщение удалено]' }
+        if (idx !== -1) messages.value[idx] = { ...messages.value[idx], is_deleted: true, content: '[Сообщение удалено]', message_type: 'text' }
       },
       onPinned: (evt) => {
         const idx = messages.value.findIndex(m => m.id === evt.message_id)

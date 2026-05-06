@@ -187,7 +187,7 @@ class ChatMessageBubble(QWidget):
             self._build_forwarded_marker(v)
 
         # Содержимое
-        if msg_type == "text":
+        if self._msg.get("is_deleted") or msg_type == "text":
             self._build_text(v)
         elif msg_type == "voice":
             self._build_voice(v)

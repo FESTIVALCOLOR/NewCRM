@@ -807,7 +807,7 @@ class ChatRoomWidget(QWidget):
             if ok:
                 for i, m in enumerate(self._messages):
                     if m.get("id") == msg_id:
-                        self._messages[i] = dict(m, is_deleted=True, content="Сообщение удалено")
+                        self._messages[i] = dict(m, is_deleted=True, content="Сообщение удалено", message_type="text")
                         break
                 # Перерисовываем через сигнал (уже в рабочем потоке)
                 self._sig_ws_data.emit({"type": "_rerender"})
@@ -1006,7 +1006,7 @@ class ChatRoomWidget(QWidget):
         if event == "message_deleted":
             for i, m in enumerate(self._messages):
                 if m.get("id") == msg_id:
-                    self._messages[i] = dict(m, is_deleted=True, content="Сообщение удалено")
+                    self._messages[i] = dict(m, is_deleted=True, content="Сообщение удалено", message_type="text")
         else:
             new_content = data.get("content", "")
             for i, m in enumerate(self._messages):
