@@ -550,29 +550,24 @@
           <q-tooltip>Прикрепить файл</q-tooltip>
         </q-btn>
         <input ref="fileInput" type="file" class="hidden" @change="onFileSelected">
-        <!-- Запись голоса -->
+        <!-- Запись голоса: удерживать для записи -->
         <q-btn
-          v-if="!inputText.trim() && !isRecording"
+          v-if="!inputText.trim()"
           flat
           round
           dense
           icon="mic"
-          color="grey-7"
-          @click="startRecording"
+          :color="isRecording ? 'red-6' : 'grey-7'"
+          :style="isRecording ? 'background:rgba(229,57,53,0.12);border-radius:50%' : ''"
+          @pointerdown.prevent="onVoiceBtnDown"
+          @pointerup="onVoiceBtnUp"
+          @pointercancel="onVoiceBtnCancel"
+          @contextmenu.prevent
         >
-          <q-tooltip>Записать голосовое</q-tooltip>
+          <q-tooltip>Удерживайте для записи голосового</q-tooltip>
         </q-btn>
-        <q-btn
-          v-if="isRecording"
-          flat
-          round
-          dense
-          icon="stop"
-          color="red-6"
-          @click="stopRecording"
-        />
         <div v-if="isRecording" class="text-caption text-red-6 q-mx-xs" style="flex: 1">
-          ● Запись {{ recordSeconds }}с
+          ● {{ recordSeconds }}с — отпустите для отправки
         </div>
         <q-input
           v-if="!isRecording"
@@ -1146,6 +1141,8 @@ const isRecording = ref(false)
 const recordSeconds = ref(0)
 let _mediaRecorder = null
 let _audioChunks = []
+let _cancelRequested = false
+let _pressStartTime = 0
 let _recordTimer = null
 
 // Копирование в карточку
@@ -1474,7 +1471,8 @@ function scrollToBottom() {
 
 function scrollToMsg(id) {
   nextTick(() => {
-    const el = document.getElementById(`msg-${id}`)
+    const el = document.getElementById(`msg-${id}`) ||
+               document.querySelector(`[data-msg-id="${id}"]`)
     if (el) {
       el.scrollIntoView({ behavior: 'smooth', block: 'center' })
       el.classList.add('msg-highlight')
@@ -1764,22 +1762,58 @@ function isOwnReaction(msg, emoji) {
   return reactors.some(r => r.employee_id === authStore.user?.id)
 }
 
+function _getVoiceMimeType() {
+  if (!window.MediaRecorder?.isTypeSupported) return ''
+  const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4']
+  return candidates.find(t => MediaRecorder.isTypeSupported(t)) || ''
+}
+
+function onVoiceBtnDown() {
+  _pressStartTime = Date.now()
+  startRecording()
+}
+
+function onVoiceBtnUp() {
+  if (!isRecording.value) return
+  if (Date.now() - _pressStartTime < 300) {
+    cancelRecording()
+    $q.notify({ type: 'info', message: 'Удерживайте кнопку для записи', timeout: 1500 })
+  } else {
+    stopRecording()
+  }
+}
+
+function onVoiceBtnCancel() {
+  if (isRecording.value) cancelRecording()
+}
+
+function cancelRecording() {
+  clearInterval(_recordTimer)
+  isRecording.value = false
+  _audioChunks = []
+  _cancelRequested = true
+  if (_mediaRecorder && _mediaRecorder.state !== 'inactive') _mediaRecorder.stop()
+}
+
 async function startRecording() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
     _audioChunks = []
-    _mediaRecorder = new MediaRecorder(stream)
+    _cancelRequested = false
+    const mimeType = _getVoiceMimeType()
+    _mediaRecorder = new MediaRecorder(stream, ...(mimeType ? [{ mimeType }] : []))
     _mediaRecorder.ondataavailable = e => { if (e.data.size > 0) _audioChunks.push(e.data) }
     _mediaRecorder.onstop = async () => {
       stream.getTracks().forEach(t => t.stop())
-      const mimeType = _mediaRecorder.mimeType || 'audio/webm'
-      const ext = mimeType.includes('ogg') ? '.ogg' : mimeType.includes('mp4') ? '.m4a' : '.webm'
-      const blob = new Blob(_audioChunks, { type: mimeType })
+      if (_cancelRequested) return
+      const mt = _mediaRecorder.mimeType || mimeType || 'audio/webm'
+      const blob = new Blob(_audioChunks, { type: mt })
       if (blob.size === 0) {
         $q.notify({ type: 'negative', message: 'Запись пуста — попробуйте ещё раз', timeout: 2000 })
         return
       }
-      const file = new File([blob], `voice${ext}`, { type: mimeType })
+      const ext = mt.includes('ogg') ? '.ogg' : mt.includes('mp4') ? '.m4a' : '.webm'
+      const file = new File([blob], `voice${ext}`, { type: mt })
       await _uploadVoice(file)
     }
     _mediaRecorder.start(250)
@@ -1832,6 +1866,14 @@ async function goToSearchResult(msg) {
   searchQuery.value = ''
   searchResults.value = []
   await nextTick()
+  if (!messages.value.find(m => m.id === msg.id)) {
+    let attempts = 0
+    while (hasMoreMessages.value && !messages.value.find(m => m.id === msg.id) && attempts < 20) {
+      await loadOlderMessages()
+      attempts++
+    }
+    await nextTick()
+  }
   scrollToMsg(msg.id)
 }
 
