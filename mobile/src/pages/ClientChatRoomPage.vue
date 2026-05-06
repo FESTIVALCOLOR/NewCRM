@@ -422,13 +422,33 @@
                 <!-- Голосовое -->
                 <template v-else-if="msg.message_type === 'voice'">
                   <audio
-                    controls
-                    preload="none"
+                    :ref="el => { if (el) _voiceRefs[msg.id] = el }"
                     :src="imgStreamUrl(msg)"
-                    style="height: 36px; width: 220px; display: block; border-radius: 8px"
+                    preload="none"
+                    style="display: none"
+                    @timeupdate="voiceCurrent[msg.id] = $event.target.currentTime"
+                    @ended="voicePlaying[msg.id] = false; voiceCurrent[msg.id] = 0"
+                    @play="voicePlaying[msg.id] = true"
+                    @pause="voicePlaying[msg.id] = false"
                   />
-                  <div v-if="msg.content" class="text-caption text-grey-6" style="margin-top: 2px; font-size: 11px">
-                    {{ fmtDuration(msg.content) }}
+                  <div class="row items-center" style="gap: 6px; width: 220px; padding: 4px 0">
+                    <q-btn
+                      flat
+                      round
+                      dense
+                      :icon="voicePlaying[msg.id] ? 'pause' : 'play_arrow'"
+                      color="primary"
+                      size="sm"
+                      @click="toggleVoice(msg)"
+                    />
+                    <div class="column" style="flex: 1; min-width: 0; gap: 3px">
+                      <div style="height: 3px; background: #e0e0e0; border-radius: 2px; overflow: hidden">
+                        <div :style="{ width: voiceProgressPct(msg) + '%', background: '#1976d2', height: '100%' }" />
+                      </div>
+                      <div class="text-caption text-grey-6" style="font-size: 10px">
+                        {{ voicePlaying[msg.id] ? fmtDuration(voiceCurrent[msg.id]) : fmtDuration(msg.content) }}
+                      </div>
+                    </div>
                   </div>
                 </template>
 
@@ -1250,6 +1270,29 @@ function fmtDuration(sec) {
   return `${m}:${String(s % 60).padStart(2, '0')}`
 }
 
+const voicePlaying = reactive({})
+const voiceCurrent = reactive({})
+const _voiceRefs = {}
+
+function toggleVoice(msg) {
+  const audio = _voiceRefs[msg.id]
+  if (!audio) return
+  if (audio.paused) {
+    Object.entries(_voiceRefs).forEach(([id, a]) => {
+      if (id !== String(msg.id) && !a.paused) a.pause()
+    })
+    audio.play()
+  } else {
+    audio.pause()
+  }
+}
+
+function voiceProgressPct(msg) {
+  const dur = parseInt(msg.content) || 0
+  if (!dur) return 0
+  return Math.min(100, ((voiceCurrent[msg.id] || 0) / dur) * 100)
+}
+
 function isOwn(msg) {
   const myId = authStore.user?.id
   if (!myId) return false
@@ -1927,7 +1970,8 @@ async function goToSearchResult(msg) {
     }
     await nextTick()
   }
-  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))
+  // Ждём закрытия клавиатуры на мобильном (анимация ~250-300мс)
+  await new Promise(r => setTimeout(r, 350))
   const container = messagesEl.value
   if (!container) { setupTopObserver(); return }
   const el = container.querySelector(`#msg-${msg.id}`) ||
