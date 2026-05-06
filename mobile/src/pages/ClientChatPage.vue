@@ -922,7 +922,8 @@ function _getVoiceMimeType() {
   return candidates.find(t => MediaRecorder.isTypeSupported(t)) || ''
 }
 
-function onVoiceBtnDown() {
+function onVoiceBtnDown(e) {
+  try { e?.currentTarget?.setPointerCapture(e.pointerId) } catch {}
   _pressStartTime = Date.now()
   _cancelRequested = false
   _holdTimer = setTimeout(() => {
@@ -982,7 +983,8 @@ async function startRecording() {
         return
       }
       const ext = mt.includes('ogg') ? '.ogg' : mt.includes('mp4') ? '.m4a' : '.webm'
-      const file = new File([blob], `voice${ext}`, { type: mt })
+      const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+      const file = new File([blob], `voice_${ts}${ext}`, { type: mt })
       await _uploadGuestVoice(file)
     }
     _mediaRecorder.start()

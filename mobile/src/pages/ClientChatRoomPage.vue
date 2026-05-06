@@ -1771,7 +1771,8 @@ function _getVoiceMimeType() {
   return candidates.find(t => MediaRecorder.isTypeSupported(t)) || ''
 }
 
-function onVoiceBtnDown() {
+function onVoiceBtnDown(e) {
+  try { e?.currentTarget?.setPointerCapture(e.pointerId) } catch {}
   _pressStartTime = Date.now()
   _cancelRequested = false
   _holdTimer = setTimeout(() => {
@@ -1831,7 +1832,8 @@ async function startRecording() {
         return
       }
       const ext = mt.includes('ogg') ? '.ogg' : mt.includes('mp4') ? '.m4a' : '.webm'
-      const file = new File([blob], `voice${ext}`, { type: mt })
+      const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+      const file = new File([blob], `voice_${ts}${ext}`, { type: mt })
       await _uploadVoice(file)
     }
     _mediaRecorder.start()
@@ -1899,18 +1901,18 @@ async function goToSearchResult(msg) {
     }
     await nextTick()
   }
-  nextTick(() => {
-    const el = document.getElementById(`msg-${msg.id}`) ||
-               document.querySelector(`[data-msg-id="${msg.id}"]`)
-    if (!el || !messagesEl.value) { setTimeout(() => setupTopObserver(), 200); return }
-    const container = messagesEl.value
-    const cRect = container.getBoundingClientRect()
-    const eRect = el.getBoundingClientRect()
-    container.scrollTop = Math.max(0, container.scrollTop + (eRect.top - cRect.top) - cRect.height / 2 + eRect.height / 2)
-    el.classList.add('msg-highlight')
-    setTimeout(() => el.classList.remove('msg-highlight'), 1500)
-    setTimeout(() => setupTopObserver(), 300)
-  })
+  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))
+  const container = messagesEl.value
+  if (!container) { setupTopObserver(); return }
+  const el = container.querySelector(`#msg-${msg.id}`) ||
+             container.querySelector(`[data-msg-id="${msg.id}"]`)
+  if (!el) { setupTopObserver(); return }
+  const cRect = container.getBoundingClientRect()
+  const eRect = el.getBoundingClientRect()
+  container.scrollTop = Math.max(0, container.scrollTop + (eRect.top - cRect.top) - cRect.height / 2 + eRect.height / 2)
+  el.classList.add('msg-highlight')
+  setTimeout(() => el.classList.remove('msg-highlight'), 1500)
+  setTimeout(() => setupTopObserver(), 300)
 }
 
 function selectScript(s) {
