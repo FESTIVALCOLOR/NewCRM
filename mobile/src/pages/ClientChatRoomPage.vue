@@ -553,12 +553,10 @@
         <!-- Запись голоса: удерживать для записи -->
         <q-btn
           v-if="!inputText.trim()"
-          flat
           round
           dense
           icon="mic"
-          :color="isRecording ? 'red-6' : 'grey-7'"
-          :style="isRecording ? 'background:rgba(229,57,53,0.12);border-radius:50%' : ''"
+          :color="isRecording ? 'red-6' : 'grey-6'"
           @pointerdown.prevent="onVoiceBtnDown"
           @pointerup="onVoiceBtnUp"
           @pointercancel="onVoiceBtnCancel"
@@ -1836,7 +1834,7 @@ async function startRecording() {
       const file = new File([blob], `voice${ext}`, { type: mt })
       await _uploadVoice(file)
     }
-    _mediaRecorder.start(250)
+    _mediaRecorder.start()
     isRecording.value = true
     recordSeconds.value = 0
     _recordTimer = setInterval(() => { recordSeconds.value++ }, 1000)
@@ -1891,6 +1889,7 @@ async function goToSearchResult(msg) {
   showSearch.value = false
   searchQuery.value = ''
   searchResults.value = []
+  if (_topObserver) _topObserver.disconnect()
   await nextTick()
   if (!messages.value.find(m => m.id === msg.id)) {
     let attempts = 0
@@ -1900,7 +1899,18 @@ async function goToSearchResult(msg) {
     }
     await nextTick()
   }
-  scrollToMsg(msg.id)
+  nextTick(() => {
+    const el = document.getElementById(`msg-${msg.id}`) ||
+               document.querySelector(`[data-msg-id="${msg.id}"]`)
+    if (!el || !messagesEl.value) { setTimeout(() => setupTopObserver(), 200); return }
+    const container = messagesEl.value
+    const cRect = container.getBoundingClientRect()
+    const eRect = el.getBoundingClientRect()
+    container.scrollTop = Math.max(0, container.scrollTop + (eRect.top - cRect.top) - cRect.height / 2 + eRect.height / 2)
+    el.classList.add('msg-highlight')
+    setTimeout(() => el.classList.remove('msg-highlight'), 1500)
+    setTimeout(() => setupTopObserver(), 300)
+  })
 }
 
 function selectScript(s) {

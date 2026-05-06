@@ -772,12 +772,10 @@
         <!-- Запись голоса (когда нет текста и нет файлов): удерживать для записи -->
         <q-btn
           v-if="!pendingFiles.length && !inputText.trim()"
-          flat
           round
           dense
           icon="mic"
-          :color="isRecording ? 'red-6' : 'grey-7'"
-          :style="isRecording ? 'background:rgba(229,57,53,0.12);border-radius:50%' : ''"
+          :color="isRecording ? 'red-6' : 'grey-6'"
           @pointerdown.prevent="onVoiceBtnDown"
           @pointerup="onVoiceBtnUp"
           @pointercancel="onVoiceBtnCancel"
@@ -1334,8 +1332,9 @@ async function goToSearchResult(msg) {
   showSearch.value = false
   searchQuery.value = ''
   searchResults.value = []
+  // Отключаем автозагрузку, чтобы IntersectionObserver не сбросил позицию после прокрутки
+  if (_topObserver) _topObserver.disconnect()
   await nextTick()
-  // Если сообщение не в текущем списке — догружаем старые (как scrollToPinnedMsg)
   if (!messages.value.find(m => m.id === msg.id)) {
     let attempts = 0
     while (hasMoreMessages.value && !messages.value.find(m => m.id === msg.id) && attempts < 20) {
@@ -1344,7 +1343,18 @@ async function goToSearchResult(msg) {
     }
     await nextTick()
   }
-  scrollToMsg(msg.id)
+  nextTick(() => {
+    const el = document.getElementById(`msg-${msg.id}`) ||
+               document.querySelector(`[data-msg-id="${msg.id}"]`)
+    if (!el || !messagesEl.value) { setTimeout(() => setupTopObserver(), 200); return }
+    const container = messagesEl.value
+    const cRect = container.getBoundingClientRect()
+    const eRect = el.getBoundingClientRect()
+    container.scrollTop = Math.max(0, container.scrollTop + (eRect.top - cRect.top) - cRect.height / 2 + eRect.height / 2)
+    el.classList.add('msg-highlight')
+    setTimeout(() => el.classList.remove('msg-highlight'), 1500)
+    setTimeout(() => setupTopObserver(), 300)
+  })
 }
 
 // Диалог скриптов
@@ -2240,7 +2250,7 @@ async function startRecording() {
       const file = new File([blob], `voice${ext}`, { type: mt })
       await _uploadVoice(file)
     }
-    _mediaRecorder.start(250)
+    _mediaRecorder.start()
     isRecording.value = true
     recordSeconds.value = 0
     _recordTimer = setInterval(() => { recordSeconds.value++ }, 1000)

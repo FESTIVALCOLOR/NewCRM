@@ -374,12 +374,10 @@
         <!-- Запись голоса: удерживать для записи -->
         <q-btn
           v-if="!inputText.trim()"
-          flat
           round
           dense
           icon="mic"
-          :color="isRecording ? 'red-6' : 'grey-7'"
-          :style="isRecording ? 'background:rgba(229,57,53,0.12);border-radius:50%' : ''"
+          :color="isRecording ? 'red-6' : 'grey-6'"
           @pointerdown.prevent="onVoiceBtnDown"
           @pointerup="onVoiceBtnUp"
           @pointercancel="onVoiceBtnCancel"
@@ -987,7 +985,7 @@ async function startRecording() {
       const file = new File([blob], `voice${ext}`, { type: mt })
       await _uploadGuestVoice(file)
     }
-    _mediaRecorder.start(250)
+    _mediaRecorder.start()
     isRecording.value = true
     recordSeconds.value = 0
     _recordTimer = setInterval(() => { recordSeconds.value++ }, 1000)
