@@ -77,6 +77,67 @@
       >
         <q-tooltip>Участники</q-tooltip>
       </q-btn>
+      <!-- Кнопка поиска -->
+      <q-btn
+        flat
+        dense
+        size="xs"
+        icon="search"
+        :color="showSearch ? 'primary' : 'grey-7'"
+        style="flex: 0 0 auto; margin-left: 2px"
+        @click="showSearch = !showSearch; searchQuery = ''; searchResults = []"
+      >
+        <q-tooltip>Поиск в чате</q-tooltip>
+      </q-btn>
+    </div>
+
+    <!-- Поиск по сообщениям -->
+    <div v-if="showSearch" class="q-px-sm q-py-xs bg-white" style="border-bottom: 1px solid #E0E0E0; flex-shrink: 0">
+      <q-input
+        v-model="searchQuery"
+        dense
+        outlined
+        clearable
+        autofocus
+        hide-bottom-space
+        placeholder="Поиск сообщений…"
+        style="font-size: 13px"
+        @update:model-value="handleSearch"
+        @clear="searchResults = []"
+      >
+        <template #prepend>
+          <q-icon name="search" size="16px" color="grey-6" />
+        </template>
+      </q-input>
+      <q-list
+        v-if="searchResults.length"
+        dense
+        separator
+        class="q-mt-xs"
+        style="max-height: 180px; overflow-y: auto; background: #fff; border: 1px solid #e0e0e0; border-radius: 4px"
+      >
+        <q-item
+          v-for="r in searchResults"
+          :key="r.id"
+          v-ripple
+          clickable
+          dense
+          @click="goToSearchResult(r)"
+        >
+          <q-item-section>
+            <q-item-label class="text-caption text-weight-bold">
+              {{ r.sender_name || '?' }}
+              <span class="text-grey-5 text-weight-regular q-ml-xs">{{ formatTime(r.created_at) }}</span>
+            </q-item-label>
+            <q-item-label caption class="ellipsis">
+              {{ r.content || r.file_name || '[файл]' }}
+            </q-item-label>
+          </q-item-section>
+        </q-item>
+      </q-list>
+      <div v-else-if="searchQuery && !searchLoading" class="text-caption text-grey-5 q-mt-xs text-center q-pb-xs">
+        Ничего не найдено
+      </div>
     </div>
 
     <!-- Индикатор печати -->
@@ -543,6 +604,39 @@
                       <div v-else class="row items-center q-gutter-xs">
                         <q-icon :name="isPdf(msg) ? 'picture_as_pdf' : 'attach_file'" :size="isPdf(msg) ? '28px' : '18px'" :color="isPdf(msg) ? 'red-6' : 'grey-7'" />
                         <a :href="msg.file_url" target="_blank" class="text-body2 ellipsis" style="max-width:200px;color:inherit">{{ msg.file_name || 'Файл' }}</a>
+                      </div>
+                    </template>
+
+                    <!-- Голосовое -->
+                    <template v-else-if="msg.message_type === 'voice'">
+                      <audio
+                        :ref="el => { if (el) _voiceRefs[msg.id] = el }"
+                        :src="imgStreamUrl(msg)"
+                        preload="none"
+                        style="display: none"
+                        @timeupdate="voiceCurrent[msg.id] = $event.target.currentTime"
+                        @ended="voicePlaying[msg.id] = false; voiceCurrent[msg.id] = 0"
+                        @play="voicePlaying[msg.id] = true"
+                        @pause="voicePlaying[msg.id] = false"
+                      />
+                      <div class="row items-center" style="gap: 6px; width: 200px; padding: 4px 0">
+                        <q-btn
+                          flat
+                          round
+                          dense
+                          :icon="voicePlaying[msg.id] ? 'pause' : 'play_arrow'"
+                          color="primary"
+                          size="sm"
+                          @click="toggleVoice(msg)"
+                        />
+                        <div class="column" style="flex: 1; min-width: 0; gap: 3px">
+                          <div style="height: 3px; background: #e0e0e0; border-radius: 2px; overflow: hidden">
+                            <div :style="{ width: voiceProgressPct(msg) + '%', background: '#1976d2', height: '100%' }" />
+                          </div>
+                          <div class="text-caption text-grey-6" style="font-size: 10px">
+                            {{ voicePlaying[msg.id] ? fmtDuration(voiceCurrent[msg.id]) : fmtDuration(msg.content) }}
+                          </div>
+                        </div>
                       </div>
                     </template>
 
@@ -1149,6 +1243,71 @@ const filteredForwardChats = computed(() => {
   return forwardTargetChats.value.filter(c => (c.title || '').toLowerCase().includes(q))
 })
 const showMembers = ref(false)
+
+// Поиск по сообщениям
+const showSearch = ref(false)
+const searchQuery = ref('')
+const searchResults = ref([])
+const searchLoading = ref(false)
+let _searchTimer = null
+
+function handleSearch(val) {
+  clearTimeout(_searchTimer)
+  if (!val || !val.trim()) { searchResults.value = []; return }
+  searchLoading.value = true
+  _searchTimer = setTimeout(async () => {
+    try {
+      if (!chat.value) return
+      const { data } = await api.get(`/api/v1/chats/${chat.value.id}/messages/search`, { params: { q: val, limit: 20 } })
+      searchResults.value = Array.isArray(data) ? data : []
+    } catch { searchResults.value = [] } finally { searchLoading.value = false }
+  }, 400)
+}
+
+async function goToSearchResult(msg) {
+  showSearch.value = false
+  searchQuery.value = ''
+  searchResults.value = []
+  await nextTick()
+  await new Promise(r => setTimeout(r, 100))
+  const container = messagesEl.value
+  if (!container) return
+  const el = container.querySelector(`#msg-${msg.id}`) || container.querySelector(`[data-msg-id="${msg.id}"]`)
+  if (!el) return
+  el.scrollIntoView({ block: 'center', behavior: 'instant' })
+  el.classList.add('msg-highlight')
+  setTimeout(() => el.classList.remove('msg-highlight'), 1500)
+}
+
+// Голосовые сообщения
+const voicePlaying = reactive({})
+const voiceCurrent = reactive({})
+const _voiceRefs = {}
+
+function fmtDuration(sec) {
+  const s = parseInt(sec) || 0
+  const m = Math.floor(s / 60)
+  return `${m}:${String(s % 60).padStart(2, '0')}`
+}
+
+function toggleVoice(msg) {
+  const audio = _voiceRefs[msg.id]
+  if (!audio) return
+  if (audio.paused) {
+    Object.entries(_voiceRefs).forEach(([id, a]) => {
+      if (id !== String(msg.id) && !a.paused) a.pause()
+    })
+    audio.play()
+  } else {
+    audio.pause()
+  }
+}
+
+function voiceProgressPct(msg) {
+  const dur = parseInt(msg.content) || 0
+  if (!dur) return 0
+  return Math.min(100, ((voiceCurrent[msg.id] || 0) / dur) * 100)
+}
 
 // Группировка сообщений: consecutive messages с одинаковым group_id → медиа-группа
 const renderedItems = computed(() => {
