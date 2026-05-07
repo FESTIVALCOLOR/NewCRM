@@ -194,16 +194,16 @@
             <div
               :data-msg-id="item.msgs[0].id"
               class="q-mb-sm"
-              :class="isOwnVisual(item.msgs[0]) ? 'row justify-end' : 'row justify-start'"
+              :class="isOwn(item.msgs[0]) ? 'row justify-end' : 'row justify-start'"
             >
               <div
-                :class="isOwnVisual(item.msgs[0]) ? 'bubble-img-own' : 'bubble-img-other'"
+                :class="[isOwn(item.msgs[0]) ? 'bubble-img-own' : 'bubble-img-other', { 'bubble-forwarded': isForwarded(item.msgs[0]) }]"
                 :style="galleryBubbleStyle(item.msgs.length)"
               >
                 <div class="row no-wrap items-center justify-between" style="padding: 6px 10px 4px; min-height: 16px; gap: 2px">
                   <div
                     class="text-caption text-weight-bold"
-                    :style="{ color: isOwnVisual(item.msgs[0]) ? '#999' : '#1565C0' }"
+                    :style="{ color: isOwn(item.msgs[0]) ? '#999' : '#1565C0' }"
                     style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap"
                   >
                     {{ item.msgs[0].sender_display_name }}
@@ -385,7 +385,7 @@
                 :id="`msg-${msg.id}`"
                 :data-msg-id="msg.id"
                 class="q-mb-sm"
-                :class="isOwnVisual(msg) ? 'row justify-end' : 'row justify-start'"
+                :class="isOwn(msg) ? 'row justify-end' : 'row justify-start'"
               >
                 <!-- Системные сообщения — по центру -->
                 <div v-if="msg.message_type === 'system'" class="text-center full-width">
@@ -397,9 +397,9 @@
                 <!-- Обычные сообщения -->
                 <div
                   v-else
-                  :class="(msg.message_type === 'image' || (isPdf(msg) && pdfThumbnails[msg.id]))
-                    ? (isOwnVisual(msg) ? 'bubble-img-own' : 'bubble-img-other')
-                    : (isOwnVisual(msg) ? 'bubble-own' : 'bubble-other')"
+                  :class="[(msg.message_type === 'image' || (isPdf(msg) && pdfThumbnails[msg.id]))
+                    ? (isOwn(msg) ? 'bubble-img-own' : 'bubble-img-other')
+                    : (isOwn(msg) ? 'bubble-own' : 'bubble-other'), { 'bubble-forwarded': isForwarded(msg) }]"
                   :style="pdfBubbleStyle(msg)"
                 >
                   <!-- Верхняя строка: имя отправителя + кнопка меню -->
@@ -409,7 +409,7 @@
                   >
                     <div
                       class="text-caption text-weight-bold"
-                      :style="{ color: isOwnVisual(msg) ? '#999' : '#1565C0' }"
+                      :style="{ color: isOwn(msg) ? '#999' : '#1565C0' }"
                       style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap"
                     >
                       {{ msg.sender_display_name }}
@@ -660,7 +660,7 @@
                   <!-- Нижняя строка: время -->
                   <div
                     class="row no-wrap items-center"
-                    :class="isOwnVisual(msg) ? 'justify-end' : 'justify-start'"
+                    :class="isOwn(msg) ? 'justify-end' : 'justify-start'"
                     :style="(msg.message_type === 'image' || (isPdf(msg) && pdfThumbnails[msg.id])) ? 'padding: 2px 10px 6px; margin-top: 0' : 'margin-top: 4px'"
                   >
                     <span v-if="msg.is_edited" class="text-caption text-grey-5 q-mr-xs" style="font-size: 9px">изм.</span>
@@ -1626,11 +1626,6 @@ function isForwarded(msg) {
   return typeof msg.sender_display_name === 'string' && msg.sender_display_name.includes('(переслано)')
 }
 
-function isOwnVisual(msg) {
-  if (isForwarded(msg)) return false
-  return isOwn(msg)
-}
-
 function imgStreamUrl(msg) {
   if (msg._previewUrl) return msg._previewUrl
   if (!msg.yandex_path) return ''
@@ -2511,6 +2506,9 @@ onUnmounted(() => {
   border-radius: 12px 12px 2px 12px;
   padding: 8px 12px;
   max-width: 80%;
+}
+.bubble-forwarded {
+  background: #EEEEEE !important;
 }
 .bubble-other {
   background: #fff;

@@ -212,7 +212,7 @@
             :id="`msg-${msg.id}`"
             :data-msg-id="msg.id"
             class="q-mb-sm"
-            :class="isOwnVisual(msg) ? 'row justify-end' : 'row justify-start'"
+            :class="isOwn(msg) ? 'row justify-end' : 'row justify-start'"
           >
             <!-- Системные -->
             <div v-if="msg.message_type === 'system'" class="text-center full-width">
@@ -223,9 +223,9 @@
 
             <div
               v-else
-              :class="(msg.message_type === 'image' || (isPdf(msg) && pdfThumbnails[msg.id]))
-                ? (isOwnVisual(msg) ? 'bubble-img-own' : 'bubble-img-other')
-                : (isOwnVisual(msg) ? 'bubble-own' : 'bubble-other')"
+              :class="[(msg.message_type === 'image' || (isPdf(msg) && pdfThumbnails[msg.id]))
+                ? (isOwn(msg) ? 'bubble-img-own' : 'bubble-img-other')
+                : (isOwn(msg) ? 'bubble-own' : 'bubble-other'), { 'bubble-forwarded': isForwarded(msg) }]"
               :style="pdfBubbleStyle(msg)"
             >
               <!-- Верхняя строка: имя + меню -->
@@ -235,7 +235,7 @@
               >
                 <div
                   class="text-caption text-weight-bold"
-                  :style="{ color: isOwnVisual(msg) ? '#999' : (isGuest(msg) ? '#2E7D32' : '#1565C0') }"
+                  :style="{ color: isOwn(msg) ? '#999' : (isGuest(msg) ? '#2E7D32' : '#1565C0') }"
                   style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: default"
                 >
                   {{ msg.sender_display_name }}
@@ -497,7 +497,7 @@
 
               <div
                 class="row no-wrap items-center"
-                :class="isOwnVisual(msg) ? 'justify-end' : 'justify-start'"
+                :class="isOwn(msg) ? 'justify-end' : 'justify-start'"
                 :style="(msg.message_type === 'image' || (isPdf(msg) && pdfThumbnails[msg.id])) ? 'padding:2px 10px 6px;color:#888;font-size:10px' : 'margin-top:4px;color:#888;font-size:10px'"
               >
                 <span v-if="msg.is_edited" class="text-caption text-grey-5 q-mr-xs" style="font-size: 9px">изм.</span>
@@ -1301,11 +1301,6 @@ function isOwn(msg) {
 
 function isForwarded(msg) {
   return typeof msg.sender_display_name === 'string' && msg.sender_display_name.includes('(переслано)')
-}
-
-function isOwnVisual(msg) {
-  if (isForwarded(msg)) return false
-  return isOwn(msg)
 }
 
 function startEdit(msg) {
@@ -2167,6 +2162,9 @@ onUnmounted(() => {
   border-radius: 12px 12px 2px 12px;
   padding: 8px 12px;
   max-width: 75%;
+}
+.bubble-forwarded {
+  background: #EEEEEE !important;
 }
 .bubble-other {
   background: #fff;

@@ -63,7 +63,7 @@
             :id="`msg-${msg.id}`"
             :data-msg-id="msg.id"
             class="q-mb-sm"
-            :class="isOwnVisual(msg) ? 'row justify-end' : 'row justify-start'"
+            :class="isOwn(msg) ? 'row justify-end' : 'row justify-start'"
           >
             <!-- Системные сообщения -->
             <div v-if="msg.message_type === 'system'" class="text-center full-width">
@@ -75,9 +75,9 @@
             <!-- Обычные -->
             <div
               v-else
-              :class="(msg.message_type === 'image' || (isPdf(msg) && pdfThumbnails[msg.id]))
-                ? (isOwnVisual(msg) ? 'bubble-img-own' : 'bubble-img-staff')
-                : (isOwnVisual(msg) ? 'bubble-own' : 'bubble-staff')"
+              :class="[(msg.message_type === 'image' || (isPdf(msg) && pdfThumbnails[msg.id]))
+                ? (isOwn(msg) ? 'bubble-img-own' : 'bubble-img-staff')
+                : (isOwn(msg) ? 'bubble-own' : 'bubble-staff'), { 'bubble-forwarded': isForwarded(msg) }]"
               :style="pdfBubbleStyle(msg)"
             >
               <!-- Верхняя строка: имя отправителя + кнопка меню -->
@@ -87,9 +87,9 @@
               >
                 <div
                   class="text-caption text-weight-bold"
-                  :style="{ color: isOwnVisual(msg) ? '#1B5E20' : '#1565C0', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }"
+                  :style="{ color: isOwn(msg) ? '#1B5E20' : '#1565C0', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }"
                 >
-                  {{ msg.sender_display_name || (isOwnVisual(msg) ? clientName : '') }}
+                  {{ msg.sender_display_name || (isOwn(msg) ? clientName : '') }}
                 </div>
                 <q-btn
                   v-if="!msg.is_deleted"
@@ -310,7 +310,7 @@
               <!-- Нижняя строка: время -->
               <div
                 class="row no-wrap items-center"
-                :class="isOwnVisual(msg) ? 'justify-end' : 'justify-start'"
+                :class="isOwn(msg) ? 'justify-end' : 'justify-start'"
                 :style="(msg.message_type === 'image' || (isPdf(msg) && pdfThumbnails[msg.id])) ? 'padding:2px 10px 6px;margin-top:0' : 'margin-top:4px'"
               >
                 <span v-if="msg.is_edited" class="text-caption text-grey-5 q-mr-xs" style="font-size: 9px">изм.</span>
@@ -614,9 +614,8 @@ function isOwn(msg) {
   return msg.sender_guest_token === mainToken
 }
 
-function isOwnVisual(msg) {
-  if (typeof msg.sender_display_name === 'string' && msg.sender_display_name.includes('(переслано)')) return false
-  return isOwn(msg)
+function isForwarded(msg) {
+  return typeof msg.sender_display_name === 'string' && msg.sender_display_name.includes('(переслано)')
 }
 
 function imgStreamUrl(msg) {
@@ -1098,6 +1097,9 @@ async function _uploadGuestVoice(file) {
   background: #E8F5E9;
   border-radius: 12px 12px 2px 12px;
   padding: 8px 12px;
+}
+.bubble-forwarded {
+  background: #EEEEEE !important;
 }
 .bubble-staff {
   background: #fff;

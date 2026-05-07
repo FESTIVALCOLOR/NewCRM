@@ -51,6 +51,20 @@ _STYLE_OTHER = """
         border-bottom-left-radius: 2px;
     }
 """
+_STYLE_FORWARDED_OWN = """
+    QFrame#bubble {
+        background-color: #EEEEEE;
+        border-radius: 12px;
+        border-bottom-right-radius: 2px;
+    }
+"""
+_STYLE_FORWARDED_OTHER = """
+    QFrame#bubble {
+        background-color: #EEEEEE;
+        border-radius: 12px;
+        border-bottom-left-radius: 2px;
+    }
+"""
 
 
 class ChatMessageBubble(QWidget):
@@ -79,10 +93,11 @@ class ChatMessageBubble(QWidget):
     copy_to_card_requested = pyqtSignal(dict)
     height_changed = pyqtSignal(int)  # delta px когда async-загрузка меняет высоту пузыря
 
-    def __init__(self, message: dict, is_own: bool, parent=None, token: str = "", base_url: str = "", show_phone: bool = True):
+    def __init__(self, message: dict, is_own: bool, parent=None, token: str = "", base_url: str = "", show_phone: bool = True, is_forwarded: bool = False):
         super().__init__(parent)
         self._msg = message
         self._is_own = is_own
+        self._is_forwarded = is_forwarded
         self._token = token
         self._base_url = base_url.rstrip("/")
         self._show_phone = show_phone
@@ -163,7 +178,10 @@ class ChatMessageBubble(QWidget):
 
         bubble = QFrame()
         bubble.setObjectName("bubble")
-        bubble.setStyleSheet(_STYLE_OWN if self._is_own else _STYLE_OTHER)
+        if self._is_forwarded:
+            bubble.setStyleSheet(_STYLE_FORWARDED_OWN if self._is_own else _STYLE_FORWARDED_OTHER)
+        else:
+            bubble.setStyleSheet(_STYLE_OWN if self._is_own else _STYLE_OTHER)
         bubble.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
         bubble.setMinimumWidth(120)
         bubble.setMaximumWidth(420)

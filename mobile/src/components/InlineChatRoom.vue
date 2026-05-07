@@ -226,16 +226,16 @@
             <div
               :data-msg-id="item.msgs[0].id"
               class="q-mb-sm"
-              :class="isOwnVisual(item.msgs[0]) ? 'row justify-end' : 'row justify-start'"
+              :class="isOwn(item.msgs[0]) ? 'row justify-end' : 'row justify-start'"
             >
               <div
-                :class="isOwnVisual(item.msgs[0]) ? 'bubble-img-own' : 'bubble-img-other'"
+                :class="[isOwn(item.msgs[0]) ? 'bubble-img-own' : 'bubble-img-other', { 'bubble-forwarded': isForwarded(item.msgs[0]) }]"
                 :style="galleryBubbleStyle(item.msgs.length)"
               >
                 <div class="row no-wrap items-center justify-between" style="padding: 5px 8px 3px; min-height: 16px; gap: 2px">
                   <div
                     class="text-caption text-weight-bold"
-                    :style="{ color: isOwnVisual(item.msgs[0]) ? '#999' : '#1565C0' }"
+                    :style="{ color: isOwn(item.msgs[0]) ? '#999' : '#1565C0' }"
                     style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap"
                   >
                     {{ item.msgs[0].sender_display_name }}
@@ -419,7 +419,7 @@
                 :id="`msg-${msg.id}`"
                 :data-msg-id="msg.id"
                 class="q-mb-sm"
-                :class="isOwnVisual(msg) ? 'row justify-end' : 'row justify-start'"
+                :class="isOwn(msg) ? 'row justify-end' : 'row justify-start'"
               >
                 <!-- Системные -->
                 <div v-if="msg.message_type === 'system'" class="text-center full-width">
@@ -431,9 +431,9 @@
                 <!-- Обычные -->
                 <div
                   v-else
-                  :class="(msg.message_type === 'image' || (isPdf(msg) && pdfThumbnails[msg.id]))
-                    ? (isOwnVisual(msg) ? 'bubble-img-own' : 'bubble-img-other')
-                    : (isOwnVisual(msg) ? 'bubble-own' : 'bubble-other')"
+                  :class="[(msg.message_type === 'image' || (isPdf(msg) && pdfThumbnails[msg.id]))
+                    ? (isOwn(msg) ? 'bubble-img-own' : 'bubble-img-other')
+                    : (isOwn(msg) ? 'bubble-own' : 'bubble-other'), { 'bubble-forwarded': isForwarded(msg) }]"
                   :style="pdfBubbleStyle(msg)"
                 >
                   <!-- Верхняя строка: имя отправителя + кнопка меню -->
@@ -443,7 +443,7 @@
                   >
                     <div
                       class="text-caption text-weight-bold"
-                      :style="{ color: isOwnVisual(msg) ? '#999' : (msg.sender_guest_token ? '#2E7D32' : '#1565C0') }"
+                      :style="{ color: isOwn(msg) ? '#999' : (msg.sender_guest_token ? '#2E7D32' : '#1565C0') }"
                       style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap"
                     >
                       {{ msg.sender_display_name }}
@@ -701,7 +701,7 @@
                   <!-- Нижняя строка: время + реакции -->
                   <div
                     class="row no-wrap items-center"
-                    :class="isOwnVisual(msg) ? 'justify-end' : 'justify-start'"
+                    :class="isOwn(msg) ? 'justify-end' : 'justify-start'"
                     :style="(msg.message_type === 'image' || (isPdf(msg) && pdfThumbnails[msg.id])) ? 'padding: 2px 10px 6px; margin-top: 0' : 'margin-top: 4px'"
                   >
                     <span v-if="msg.is_edited" class="text-caption text-grey-5 q-mr-xs" style="font-size: 9px">изм.</span>
@@ -820,8 +820,26 @@
           style="display: none"
           @change="onFileSelected"
         >
+        <!-- Кнопка микрофона (если нет ожидающих файлов и нет текста) -->
+        <q-btn
+          v-if="!pendingFiles.length && !inputText.trim()"
+          round
+          dense
+          size="sm"
+          icon="mic"
+          :color="isRecording ? 'red-6' : 'grey-6'"
+          @pointerdown.prevent="onVoiceBtnDown"
+          @pointerup="onVoiceBtnUp"
+          @pointercancel="onVoiceBtnCancel"
+          @contextmenu.prevent
+        >
+          <q-tooltip>Удерживайте для записи голосового</q-tooltip>
+        </q-btn>
+        <div v-if="isRecording" class="text-caption text-red-6 q-mx-xs" style="flex: 1">
+          ● {{ recordSeconds }}с — отпустите для отправки
+        </div>
         <q-input
-          v-if="pendingFiles.length"
+          v-if="pendingFiles.length && !isRecording"
           v-model="pendingCaption"
           outlined
           dense
@@ -833,7 +851,7 @@
           @input="onTyping"
         />
         <q-input
-          v-else
+          v-else-if="!isRecording"
           v-model="inputText"
           outlined
           dense
@@ -845,6 +863,7 @@
           @input="onTyping"
         />
         <q-btn
+          v-if="!isRecording"
           round
           dense
           size="sm"
@@ -1306,10 +1325,20 @@ async function goToSearchResult(msg) {
   setTimeout(() => el.classList.remove('msg-highlight'), 1500)
 }
 
-// Голосовые сообщения
+// Голосовые сообщения — воспроизведение
 const voicePlaying = reactive({})
 const voiceCurrent = reactive({})
 const _voiceRefs = {}
+
+// Голосовая запись
+const isRecording = ref(false)
+const recordSeconds = ref(0)
+let _mediaRecorder = null
+let _audioChunks = []
+let _recordTimer = null
+let _cancelRequested = false
+let _holdTimer = null
+let _pressStartTime = 0
 
 function fmtDuration(sec) {
   const s = parseInt(sec) || 0
@@ -1334,6 +1363,125 @@ function voiceProgressPct(msg) {
   const dur = parseInt(msg.content) || 0
   if (!dur) return 0
   return Math.min(100, ((voiceCurrent[msg.id] || 0) / dur) * 100)
+}
+
+function _getVoiceMimeType() {
+  if (!window.MediaRecorder?.isTypeSupported) return ''
+  const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4']
+  return candidates.find(t => MediaRecorder.isTypeSupported(t)) || ''
+}
+
+async function _fixWebmDuration(blob, durationSec) {
+  try {
+    const buf = await blob.arrayBuffer()
+    const u8 = new Uint8Array(buf)
+    for (let i = 0; i < u8.length - 11; i++) {
+      if (u8[i] === 0x44 && u8[i + 1] === 0x89 && u8[i + 2] === 0x88) {
+        const view = new DataView(buf)
+        view.setFloat64(i + 3, durationSec * 1000, false)
+        return new Blob([buf], { type: blob.type })
+      }
+    }
+  } catch {}
+  return blob
+}
+
+function onVoiceBtnDown(e) {
+  try { e?.currentTarget?.setPointerCapture(e.pointerId) } catch {}
+  _pressStartTime = Date.now()
+  _cancelRequested = false
+  _holdTimer = setTimeout(() => {
+    _holdTimer = null
+    startRecording()
+  }, 300)
+}
+
+function onVoiceBtnUp() {
+  if (_holdTimer !== null) {
+    clearTimeout(_holdTimer)
+    _holdTimer = null
+    return
+  }
+  if (!isRecording.value) {
+    _cancelRequested = true
+    return
+  }
+  stopRecording()
+}
+
+function onVoiceBtnCancel() {
+  if (_holdTimer !== null) {
+    clearTimeout(_holdTimer)
+    _holdTimer = null
+    return
+  }
+  if (isRecording.value) cancelRecording()
+}
+
+function cancelRecording() {
+  clearInterval(_recordTimer)
+  isRecording.value = false
+  _audioChunks = []
+  _cancelRequested = true
+  if (_mediaRecorder && _mediaRecorder.state !== 'inactive') _mediaRecorder.stop()
+}
+
+async function startRecording() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    if (_cancelRequested) { stream.getTracks().forEach(t => t.stop()); return }
+    _audioChunks = []
+    const mimeType = _getVoiceMimeType()
+    _mediaRecorder = new MediaRecorder(stream, ...(mimeType ? [{ mimeType }] : []))
+    _mediaRecorder.ondataavailable = e => { if (e.data.size > 0) _audioChunks.push(e.data) }
+    _mediaRecorder.onstop = async () => {
+      stream.getTracks().forEach(t => t.stop())
+      if (_cancelRequested) return
+      const mt = _mediaRecorder.mimeType || mimeType || 'audio/webm'
+      const rawBlob = new Blob(_audioChunks, { type: mt })
+      if (rawBlob.size === 0) {
+        $q.notify({ type: 'negative', message: 'Запись пуста — попробуйте ещё раз', timeout: 2000 })
+        return
+      }
+      const blob = await _fixWebmDuration(rawBlob, recordSeconds.value)
+      const ext = mt.includes('ogg') ? '.ogg' : mt.includes('mp4') ? '.m4a' : '.webm'
+      const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+      const file = new File([blob], `voice_${ts}${ext}`, { type: mt })
+      await _uploadVoice(file)
+    }
+    _mediaRecorder.start()
+    isRecording.value = true
+    recordSeconds.value = 0
+    _recordTimer = setInterval(() => { recordSeconds.value++ }, 1000)
+  } catch {
+    $q.notify({ type: 'negative', message: 'Нет доступа к микрофону', timeout: 2000 })
+  }
+}
+
+function stopRecording() {
+  clearInterval(_recordTimer)
+  isRecording.value = false
+  if (_mediaRecorder && _mediaRecorder.state !== 'inactive') _mediaRecorder.stop()
+}
+
+async function _uploadVoice(file) {
+  if (!chat.value) return
+  const fd = new FormData()
+  fd.append('file', file)
+  fd.append('message_type', 'voice')
+  fd.append('caption', String(recordSeconds.value))
+  const dismiss = $q.notify({ group: false, spinner: true, message: 'Отправка голосового…', timeout: 0 })
+  try {
+    const { data } = await api.post(`/api/v1/chats/${chat.value.id}/files`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    dismiss()
+    const exists = messages.value.some(m => m.id === data.id)
+    if (!exists) { messages.value.push(data); scrollToBottom() }
+  } catch {
+    dismiss()
+    $q.notify({ type: 'negative', message: 'Ошибка загрузки голосового', timeout: 2000 })
+  }
 }
 
 // Группировка сообщений: consecutive messages с одинаковым group_id → медиа-группа
@@ -1541,11 +1689,6 @@ function isOwn(msg) {
 
 function isForwarded(msg) {
   return typeof msg.sender_display_name === 'string' && msg.sender_display_name.includes('(переслано)')
-}
-
-function isOwnVisual(msg) {
-  if (isForwarded(msg)) return false
-  return isOwn(msg)
 }
 
 const QUICK_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥']
@@ -2207,6 +2350,9 @@ onUnmounted(() => {
   border-radius: 12px 12px 2px 12px;
   padding: 6px 10px;
   max-width: 80%;
+}
+.bubble-forwarded {
+  background: #EEEEEE !important;
 }
 .bubble-other {
   background: #fff;
