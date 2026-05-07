@@ -157,14 +157,18 @@ const todayDate = computed(() => new Date().toLocaleDateString('ru-RU', { weekda
 
 const kpiCards = computed(() => {
   const crm = dashboard.crmStats || {}
+  const crmT = dashboard.crmTemplateStats || {}
+  const crmN = dashboard.crmNadzorStats || {}
   const cli = dashboard.clientsStats || {}
+  const con = dashboard.contractsStats || {}
   const emp = dashboard.employeesStats || {}
+  const totalContracts = (con.individual_orders ?? 0) + (con.template_orders ?? 0)
   return [
     { label: 'Индивидуальные', value: crm.active_orders ?? '—', border: '#ffd93c' },
-    { label: 'Шаблонные', value: crm.agent_active_orders ?? '—', border: '#F39C12' },
-    { label: 'Авт. надзор', value: crm.archive_orders ?? '—', border: '#27AE60' },
+    { label: 'Шаблонные', value: crmT.active_orders ?? '—', border: '#F39C12' },
+    { label: 'Авт. надзор', value: crmN.active_orders ?? '—', border: '#27AE60' },
     { label: 'Клиентов', value: cli.total_clients ?? '—', border: '#9B59B6' },
-    { label: 'Договоров', value: cli.clients_by_year ?? '—', border: '#E74C3C' },
+    { label: 'Договоров', value: totalContracts || '—', border: '#E74C3C' },
     { label: 'Сотрудников', value: emp.active_employees ?? '—', border: '#1ABC9C' },
   ]
 })

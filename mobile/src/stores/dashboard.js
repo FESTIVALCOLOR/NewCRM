@@ -8,16 +8,20 @@ export const useDashboardStore = defineStore('dashboard', () => {
   const clientsStats = ref(null)
   const contractsStats = ref(null)
   const crmStats = ref(null)
+  const crmTemplateStats = ref(null)
+  const crmNadzorStats = ref(null)
   const employeesStats = ref(null)
 
   async function loadAll() {
     loading.value = true
     try {
       const year = new Date().getFullYear()
-      const [clients, contracts, crmIndiv, employees, general] = await Promise.allSettled([
+      const [clients, contracts, crmIndiv, crmTemplate, crmNadzor, employees, general] = await Promise.allSettled([
         dashboardApi.getClients({ year }),
         dashboardApi.getContracts({ year }),
         dashboardApi.getCrm({ project_type: 'Индивидуальный' }),
+        dashboardApi.getCrm({ project_type: 'Шаблонный' }),
+        dashboardApi.getCrm({ project_type: 'Авторский надзор' }),
         dashboardApi.getEmployees(),
         statisticsApi.getGeneral({ year }),
       ])
@@ -25,6 +29,8 @@ export const useDashboardStore = defineStore('dashboard', () => {
       if (clients.status === 'fulfilled') clientsStats.value = clients.value.data
       if (contracts.status === 'fulfilled') contractsStats.value = contracts.value.data
       if (crmIndiv.status === 'fulfilled') crmStats.value = crmIndiv.value.data
+      if (crmTemplate.status === 'fulfilled') crmTemplateStats.value = crmTemplate.value.data
+      if (crmNadzor.status === 'fulfilled') crmNadzorStats.value = crmNadzor.value.data
       if (employees.status === 'fulfilled') employeesStats.value = employees.value.data
       if (general.status === 'fulfilled') stats.value = general.value.data
     } finally {
@@ -32,5 +38,5 @@ export const useDashboardStore = defineStore('dashboard', () => {
     }
   }
 
-  return { loading, stats, clientsStats, contractsStats, crmStats, employeesStats, loadAll }
+  return { loading, stats, clientsStats, contractsStats, crmStats, crmTemplateStats, crmNadzorStats, employeesStats, loadAll }
 })
