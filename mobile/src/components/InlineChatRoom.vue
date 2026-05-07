@@ -126,7 +126,7 @@
         >
           <q-item-section>
             <q-item-label class="text-caption text-weight-bold">
-              {{ r.sender_name || '?' }}
+              {{ r.sender_display_name || '?' }}
               <span class="text-grey-5 text-weight-regular q-ml-xs">{{ formatTime(r.created_at) }}</span>
             </q-item-label>
             <q-item-label caption class="ellipsis">
@@ -226,16 +226,16 @@
             <div
               :data-msg-id="item.msgs[0].id"
               class="q-mb-sm"
-              :class="isOwn(item.msgs[0]) ? 'row justify-end' : 'row justify-start'"
+              :class="isOwnVisual(item.msgs[0]) ? 'row justify-end' : 'row justify-start'"
             >
               <div
-                :class="isOwn(item.msgs[0]) ? 'bubble-img-own' : 'bubble-img-other'"
+                :class="isOwnVisual(item.msgs[0]) ? 'bubble-img-own' : 'bubble-img-other'"
                 :style="galleryBubbleStyle(item.msgs.length)"
               >
                 <div class="row no-wrap items-center justify-between" style="padding: 5px 8px 3px; min-height: 16px; gap: 2px">
                   <div
                     class="text-caption text-weight-bold"
-                    :style="{ color: isOwn(item.msgs[0]) ? '#999' : '#1565C0' }"
+                    :style="{ color: isOwnVisual(item.msgs[0]) ? '#999' : '#1565C0' }"
                     style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap"
                   >
                     {{ item.msgs[0].sender_display_name }}
@@ -419,7 +419,7 @@
                 :id="`msg-${msg.id}`"
                 :data-msg-id="msg.id"
                 class="q-mb-sm"
-                :class="isOwn(msg) ? 'row justify-end' : 'row justify-start'"
+                :class="isOwnVisual(msg) ? 'row justify-end' : 'row justify-start'"
               >
                 <!-- Системные -->
                 <div v-if="msg.message_type === 'system'" class="text-center full-width">
@@ -432,8 +432,8 @@
                 <div
                   v-else
                   :class="(msg.message_type === 'image' || (isPdf(msg) && pdfThumbnails[msg.id]))
-                    ? (isOwn(msg) ? 'bubble-img-own' : 'bubble-img-other')
-                    : (isOwn(msg) ? 'bubble-own' : 'bubble-other')"
+                    ? (isOwnVisual(msg) ? 'bubble-img-own' : 'bubble-img-other')
+                    : (isOwnVisual(msg) ? 'bubble-own' : 'bubble-other')"
                   :style="pdfBubbleStyle(msg)"
                 >
                   <!-- Верхняя строка: имя отправителя + кнопка меню -->
@@ -443,7 +443,7 @@
                   >
                     <div
                       class="text-caption text-weight-bold"
-                      :style="{ color: isOwn(msg) ? '#999' : (msg.sender_guest_token ? '#2E7D32' : '#1565C0') }"
+                      :style="{ color: isOwnVisual(msg) ? '#999' : (msg.sender_guest_token ? '#2E7D32' : '#1565C0') }"
                       style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap"
                     >
                       {{ msg.sender_display_name }}
@@ -469,6 +469,21 @@
                     >
                       <q-menu auto-close>
                         <q-list dense style="min-width: 210px; font-size: 12px; white-space: nowrap">
+                          <!-- Быстрые реакции -->
+                          <q-item dense style="padding: 4px 8px 2px">
+                            <div class="row items-center">
+                              <button
+                                v-for="em in QUICK_EMOJIS"
+                                :key="em"
+                                class="react-quick-btn"
+                                :class="{ 'react-quick-btn--active': isOwnReaction(msg, em) }"
+                                @click.stop="sendReaction(msg, em)"
+                              >
+                                {{ em }}
+                              </button>
+                            </div>
+                          </q-item>
+                          <q-separator />
                           <q-item clickable dense @click="togglePin(msg)">
                             <q-item-section avatar style="min-width: 28px">
                               <q-icon name="push_pin" size="14px" :color="msg.is_pinned ? 'orange-8' : 'grey-8'" />
@@ -683,16 +698,28 @@
                     </div>
                   </div>
 
-                  <!-- Нижняя строка: время -->
+                  <!-- Нижняя строка: время + реакции -->
                   <div
                     class="row no-wrap items-center"
-                    :class="isOwn(msg) ? 'justify-end' : 'justify-start'"
+                    :class="isOwnVisual(msg) ? 'justify-end' : 'justify-start'"
                     :style="(msg.message_type === 'image' || (isPdf(msg) && pdfThumbnails[msg.id])) ? 'padding: 2px 10px 6px; margin-top: 0' : 'margin-top: 4px'"
                   >
                     <span v-if="msg.is_edited" class="text-caption text-grey-5 q-mr-xs" style="font-size: 9px">изм.</span>
                     <div class="text-caption" style="color: #888; font-size: 10px">
                       {{ formatTime(msg.created_at) }}
                     </div>
+                  </div>
+                  <!-- Чипсы реакций -->
+                  <div v-if="msg.reactions && Object.keys(msg.reactions).length" class="row items-center q-gutter-xs" style="margin-top: 4px; flex-wrap: wrap">
+                    <button
+                      v-for="(reactors, emoji) in msg.reactions"
+                      :key="emoji"
+                      class="reaction-chip"
+                      :class="{ 'reaction-chip--own': isOwnReaction(msg, emoji) }"
+                      @click="sendReaction(msg, emoji)"
+                    >
+                      {{ emoji }} {{ reactors.length }}
+                    </button>
                   </div>
                 </div>
               </div>
@@ -1512,6 +1539,31 @@ function isOwn(msg) {
   return Number(msg.sender_employee_id) === Number(myId)
 }
 
+function isForwarded(msg) {
+  return typeof msg.sender_display_name === 'string' && msg.sender_display_name.includes('(переслано)')
+}
+
+function isOwnVisual(msg) {
+  if (isForwarded(msg)) return false
+  return isOwn(msg)
+}
+
+const QUICK_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥']
+
+async function sendReaction(msg, emoji) {
+  if (!chat.value) return
+  try {
+    const { data } = await api.post(`/api/v1/chats/${chat.value.id}/messages/${msg.id}/react`, { emoji })
+    const idx = messages.value.findIndex(m => m.id === msg.id)
+    if (idx !== -1) messages.value[idx] = { ...messages.value[idx], reactions: data.reactions }
+  } catch (e) { console.warn('[reaction]', e) }
+}
+
+function isOwnReaction(msg, emoji) {
+  const reactors = msg.reactions?.[emoji] || []
+  return reactors.some(r => r.employee_id === authStore.user?.id)
+}
+
 function imgStreamUrl(msg) {
   if (msg._previewUrl) return msg._previewUrl  // локальный blob во время загрузки
   if (!msg.yandex_path) return ''
@@ -1666,6 +1718,10 @@ async function openChat(chatId) {
           if (evt.member_id) {
             chatMembers.value = chatMembers.value.filter(m => m.id !== evt.member_id)
           }
+        },
+        onReactionUpdated: (evt) => {
+          const idx = messages.value.findIndex(m => m.id === evt.message_id)
+          if (idx !== -1) messages.value[idx] = { ...messages.value[idx], reactions: evt.reactions }
         },
       })
     }
@@ -2197,5 +2253,14 @@ onUnmounted(() => {
 }
 .msg-highlight { animation: msg-highlight-pulse 1.5s ease-out; border-radius: 8px; }
 .gallery-open-btn :deep(.q-focus-helper) { display: none; }
+.reaction-chip {
+  display: inline-flex; align-items: center; gap: 3px; padding: 2px 7px;
+  border-radius: 12px; border: 1px solid #E0E0E0; background: #F5F5F5;
+  font-size: 13px; cursor: pointer; line-height: 1.4;
+}
+.reaction-chip--own { background: #E3F2FD; border-color: #90CAF9; }
+.react-quick-btn { font-size: 20px; background: none; border: none; cursor: pointer; padding: 2px 5px; border-radius: 6px; line-height: 1.3; transition: background 0.15s; }
+.react-quick-btn:hover { background: #F0F0F0; }
+.react-quick-btn--active { background: #E3F2FD; }
 .gallery-open-btn :deep(.q-btn__content) { gap: 3px; }
 </style>

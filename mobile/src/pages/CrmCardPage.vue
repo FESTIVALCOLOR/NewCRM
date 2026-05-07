@@ -1458,19 +1458,6 @@
               class="q-mb-sm"
               @filter="filterAssignEmployees"
             />
-            <template v-if="assignNeedsDeadline">
-              <q-input
-                v-model="assignDeadline"
-                label="Дедлайн"
-                outlined
-                dense
-                type="date"
-                class="q-mb-xs"
-              />
-              <div v-if="assignNormDays > 0" style="font-size: 11px; color: #2F5496; font-weight: 600; margin-bottom: 4px">
-                Норма дней: {{ assignNormDays }} раб. дн.<span v-if="assignSubstepName" style="font-weight: 400; color: #666"> · {{ assignSubstepName }}</span>
-              </div>
-            </template>
           </q-card-section>
           <q-card-section v-if="otherStageExecutors.length > 0" class="q-pt-none">
             <div class="text-caption text-grey-7 q-mb-xs">

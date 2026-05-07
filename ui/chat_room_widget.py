@@ -551,7 +551,7 @@ class ChatRoomWidget(QWidget):
 
     def _make_bubble(self, msg: dict) -> ChatMessageBubble:
         my_id = self._employee.get("id")
-        is_own = msg.get("sender_employee_id") == my_id
+        is_own = msg.get("sender_employee_id") == my_id and "(переслано)" not in (msg.get("sender_display_name") or "")
         token = getattr(self._api, "token", "") or ""
         base_url = getattr(self._api, "base_url", "") or ""
         bubble = ChatMessageBubble(msg, is_own, token=token, base_url=base_url, show_phone=self._show_phone)
@@ -621,7 +621,7 @@ class ChatRoomWidget(QWidget):
 
     def _make_gallery(self, msgs: list) -> ChatGalleryWidget:
         my_id = self._employee.get("id")
-        is_own = msgs[0].get("sender_employee_id") == my_id
+        is_own = msgs[0].get("sender_employee_id") == my_id and "(переслано)" not in (msgs[0].get("sender_display_name") or "")
         token = getattr(self._api, "token", "") or ""
         base_url = getattr(self._api, "base_url", "") or ""
         gallery = ChatGalleryWidget(msgs, is_own, token=token, base_url=base_url, chat_id=self._chat_id, crm_card_id=self._crm_card_id or 0, parent=self)
