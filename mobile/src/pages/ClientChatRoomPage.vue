@@ -1520,7 +1520,9 @@ function formatTime(dt) {
 
 function scrollToBottom() {
   nextTick(() => {
-    if (messagesEl.value) messagesEl.value.scrollTop = messagesEl.value.scrollHeight
+    requestAnimationFrame(() => {
+      if (messagesEl.value) messagesEl.value.scrollTop = messagesEl.value.scrollHeight
+    })
   })
 }
 
@@ -1542,19 +1544,21 @@ function scrollToMsg(id) {
 
 function scrollToFirstUnread() {
   nextTick(() => {
-    const container = messagesEl.value
-    if (!container) return
-    if (firstUnreadId.value) {
-      const divider = container.querySelector('[data-unread-divider]')
-      const target = divider || container.querySelector(`[data-msg-id="${firstUnreadId.value}"]`)
-      if (target) {
-        const containerRect = container.getBoundingClientRect()
-        const targetRect = target.getBoundingClientRect()
-        container.scrollTop = container.scrollTop + (targetRect.top - containerRect.top) - 8
-        return
+    requestAnimationFrame(() => {
+      const container = messagesEl.value
+      if (!container) return
+      if (firstUnreadId.value) {
+        const divider = container.querySelector('[data-unread-divider]')
+        const target = divider || container.querySelector(`[data-msg-id="${firstUnreadId.value}"]`)
+        if (target) {
+          const containerRect = container.getBoundingClientRect()
+          const targetRect = target.getBoundingClientRect()
+          container.scrollTop = container.scrollTop + (targetRect.top - containerRect.top) - 8
+          return
+        }
       }
-    }
-    container.scrollTop = container.scrollHeight
+      container.scrollTop = container.scrollHeight
+    })
   })
 }
 
@@ -1810,7 +1814,12 @@ async function sendReaction(msg, emoji) {
   try {
     const { data } = await api.post(`/api/v1/chats/${chatId}/messages/${msg.id}/react`, { emoji })
     const idx = messages.value.findIndex(m => m.id === msg.id)
-    if (idx !== -1) messages.value[idx] = { ...messages.value[idx], reactions: data.reactions }
+    if (idx !== -1) {
+      const c = messagesEl.value
+      const atBottom = !c || (c.scrollHeight - c.scrollTop - c.clientHeight < 50)
+      messages.value[idx] = { ...messages.value[idx], reactions: data.reactions }
+      if (atBottom) nextTick(() => requestAnimationFrame(() => { if (c) c.scrollTop = c.scrollHeight }))
+    }
   } catch (e) {
     console.warn('[reaction]', e)
   }
@@ -2141,7 +2150,12 @@ onMounted(() => {
       },
       onReactionUpdated: (evt) => {
         const idx = messages.value.findIndex(m => m.id === evt.message_id)
-        if (idx !== -1) messages.value[idx] = { ...messages.value[idx], reactions: evt.reactions }
+        if (idx !== -1) {
+          const c = messagesEl.value
+          const atBottom = !c || (c.scrollHeight - c.scrollTop - c.clientHeight < 50)
+          messages.value[idx] = { ...messages.value[idx], reactions: evt.reactions }
+          if (atBottom) nextTick(() => requestAnimationFrame(() => { if (c) c.scrollTop = c.scrollHeight }))
+        }
       },
     })
   }

@@ -1698,7 +1698,12 @@ async function sendReaction(msg, emoji) {
   try {
     const { data } = await api.post(`/api/v1/chats/${chat.value.id}/messages/${msg.id}/react`, { emoji })
     const idx = messages.value.findIndex(m => m.id === msg.id)
-    if (idx !== -1) messages.value[idx] = { ...messages.value[idx], reactions: data.reactions }
+    if (idx !== -1) {
+      const c = messagesEl.value
+      const atBottom = !c || (c.scrollHeight - c.scrollTop - c.clientHeight < 50)
+      messages.value[idx] = { ...messages.value[idx], reactions: data.reactions }
+      if (atBottom) nextTick(() => requestAnimationFrame(() => { if (c) c.scrollTop = c.scrollHeight }))
+    }
   } catch (e) { console.warn('[reaction]', e) }
 }
 
@@ -1751,7 +1756,9 @@ function formatTime(dt) {
 
 function scrollToBottom() {
   nextTick(() => {
-    if (messagesEl.value) messagesEl.value.scrollTop = messagesEl.value.scrollHeight
+    requestAnimationFrame(() => {
+      if (messagesEl.value) messagesEl.value.scrollTop = messagesEl.value.scrollHeight
+    })
   })
 }
 
@@ -1766,28 +1773,23 @@ function scrollToMsg(id) {
   })
 }
 
-function _doScrollToFirstUnread() {
-  const container = messagesEl.value
-  if (!container) return false
-  if (firstUnreadId.value) {
-    const divider = container.querySelector('[data-unread-divider]')
-    const target = divider || container.querySelector(`[data-msg-id="${firstUnreadId.value}"]`)
-    if (target) {
-      const containerRect = container.getBoundingClientRect()
-      const targetRect = target.getBoundingClientRect()
-      container.scrollTop = container.scrollTop + (targetRect.top - containerRect.top) - 8
-      return true
-    }
-  }
-  container.scrollTop = container.scrollHeight
-  return true
-}
-
 function scrollToFirstUnread() {
   nextTick(() => {
-    if (!_doScrollToFirstUnread()) {
-      setTimeout(_doScrollToFirstUnread, 150)
-    }
+    requestAnimationFrame(() => {
+      const container = messagesEl.value
+      if (!container) return
+      if (firstUnreadId.value) {
+        const divider = container.querySelector('[data-unread-divider]')
+        const target = divider || container.querySelector(`[data-msg-id="${firstUnreadId.value}"]`)
+        if (target) {
+          const containerRect = container.getBoundingClientRect()
+          const targetRect = target.getBoundingClientRect()
+          container.scrollTop = container.scrollTop + (targetRect.top - containerRect.top) - 8
+          return
+        }
+      }
+      container.scrollTop = container.scrollHeight
+    })
   })
 }
 
@@ -1864,7 +1866,12 @@ async function openChat(chatId) {
         },
         onReactionUpdated: (evt) => {
           const idx = messages.value.findIndex(m => m.id === evt.message_id)
-          if (idx !== -1) messages.value[idx] = { ...messages.value[idx], reactions: evt.reactions }
+          if (idx !== -1) {
+            const c = messagesEl.value
+            const atBottom = !c || (c.scrollHeight - c.scrollTop - c.clientHeight < 50)
+            messages.value[idx] = { ...messages.value[idx], reactions: evt.reactions }
+            if (atBottom) nextTick(() => requestAnimationFrame(() => { if (c) c.scrollTop = c.scrollHeight }))
+          }
         },
       })
     }
