@@ -111,7 +111,7 @@ class EmployeeChatsTab(QWidget):
             QPushButton {
                 background: transparent; border: 1px solid transparent;
                 border-radius: 4px; font-size: 16px; color: #666;
-                padding: 0; qproperty-alignment: AlignCenter;
+                padding: 0;
             }
             QPushButton:hover { background: #f0f0f0; border-color: #d9d9d9; color: #333; }
         """)

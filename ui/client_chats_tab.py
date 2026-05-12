@@ -120,7 +120,7 @@ class ClientChatsTab(QWidget):
             QPushButton {
                 background: transparent; border: 1px solid transparent;
                 border-radius: 4px; font-size: 16px; color: #666;
-                padding: 0; qproperty-alignment: AlignCenter;
+                padding: 0;
             }
             QPushButton:hover { background: #f0f0f0; border-color: #d9d9d9; color: #333; }
         """)
@@ -523,6 +523,18 @@ class ScriptSendDialog(QDialog):
         self._text_edit.setStyleSheet("QTextEdit { border:1px solid #E0E0E0; border-radius:4px; font-size:12px; background:#fff; padding:4px; }")
         self._text_edit.setMinimumHeight(150)
         s2.addWidget(self._text_edit)
+
+        self._insert_file_btn = QPushButton("📎 Файлы из карточки")
+        self._insert_file_btn.setFixedHeight(26)
+        self._insert_file_btn.setStyleSheet(
+            "QPushButton { border:1px solid #d9d9d9; border-radius:4px; font-size:11px;"
+            " padding:0 10px; background:#fff; max-height:24px; }"
+            "QPushButton:hover { background:#f5f5f5; }"
+            "QPushButton:disabled { color:#aaa; }"
+        )
+        self._insert_file_btn.setEnabled(bool(self._crm_card_id))
+        self._insert_file_btn.clicked.connect(self._pick_card_file)
+        s2.addWidget(self._insert_file_btn)
         cl.addWidget(self._stage2)
 
         # ── Кнопки ───────────────────────────────────────────────
@@ -583,6 +595,20 @@ class ScriptSendDialog(QDialog):
                     card = self._api.get_crm_card(self._crm_card_id) or {}
                 except Exception:
                     pass
+            # Имя клиента из гостевых участников клиентского чата (приоритет над полем client)
+            try:
+                chat_data = self._api.get_internal_chat(self._chat_id) or {}
+                for m in chat_data.get("members", []):
+                    if m.get("member_type") == "guest" or not m.get("employee_id"):
+                        guest_name = m.get("guest_name") or m.get("display_name") or ""
+                        if guest_name:
+                            if "client" not in card or not isinstance(card.get("client"), dict):
+                                card["client"] = {}
+                            if not card["client"].get("full_name"):
+                                card["client"]["full_name"] = guest_name
+                            break
+            except Exception:
+                pass
             self._sig_data.emit(scripts, card)
 
         import threading as _t
@@ -692,6 +718,41 @@ class ScriptSendDialog(QDialog):
                 result.append(substituted)
 
         return "\n".join(result).strip()
+
+    # ── Файлы из карточки ────────────────────────────────────────
+
+    def _pick_card_file(self):
+        if not self._crm_card_id:
+            return
+        import threading as _t
+        from urllib.parse import quote as _quote
+
+        def _load():
+            try:
+                card = self._api.get_crm_card(self._crm_card_id) or {}
+                contract_id = card.get("contract_id")
+                files = self._api.get_project_files(contract_id) if contract_id else []
+                from PyQt5.QtCore import QTimer
+
+                QTimer.singleShot(0, lambda: self._show_file_picker(files or []))
+            except Exception:
+                pass
+
+        _t.Thread(target=_load, daemon=True).start()
+
+    def _show_file_picker(self, files: list):
+        from ui.chat_room_widget import CardFilesPickerDialog
+
+        if not files:
+            from ui.custom_message_box import CustomMessageBox
+
+            CustomMessageBox(self, "Файлы карточки", "У этой карточки нет загруженных файлов.", icon_type="info").exec_()
+            return
+        dlg = CardFilesPickerDialog(files, parent=self)
+        if dlg.exec_() and dlg.selected_link:
+            cur = self._text_edit.toPlainText()
+            sep = "\n" if cur.strip() else ""
+            self._text_edit.setPlainText(cur + sep + dlg.selected_link)
 
     # ── Отправка ─────────────────────────────────────────────────
 

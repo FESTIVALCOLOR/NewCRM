@@ -232,7 +232,7 @@ class ChatRoomWidget(QWidget):
         h_layout.setStretch(0, 1)
 
         # Кнопка папки Яндекс.Диска (скрыта, показывается если у чата есть yandex_folder_path)
-        self._yd_folder_btn = QPushButton("Папка ЯД")
+        self._yd_folder_btn = QPushButton("Файлы чата")
         self._yd_folder_btn.setFixedHeight(28)
         self._yd_folder_btn.setStyleSheet("""
             QPushButton {
@@ -472,6 +472,12 @@ class ChatRoomWidget(QWidget):
         attach_btn.clicked.connect(self._attach_file)
         row.addWidget(attach_btn)
 
+        self._card_files_btn = IconLoader.create_action_button("folder", tooltip="Файлы из карточки CRM", button_size=36, icon_size=18, icon_color="#666")
+        self._card_files_btn.setStyleSheet(self._card_files_btn.styleSheet() + "QPushButton { border-radius: 18px; }")
+        self._card_files_btn.clicked.connect(self._attach_card_file)
+        self._card_files_btn.setVisible(False)
+        row.addWidget(self._card_files_btn)
+
         voice_btn = IconLoader.create_action_button("message-circle", tooltip="Голосовое (только мобиль)", button_size=36, icon_size=18, icon_color="#888")
         voice_btn.setCheckable(True)
         voice_btn.setStyleSheet(voice_btn.styleSheet() + "QPushButton { border-radius: 18px; } QPushButton:checked { background: #ffd93c; border-color: #e6c535; }")
@@ -538,6 +544,7 @@ class ChatRoomWidget(QWidget):
             yd_path = chat.get("yandex_folder_path") or ""
             self._yd_folder_path = yd_path
             self._yd_folder_btn.setVisible(bool(yd_path))
+            self._card_files_btn.setVisible(bool(self._crm_card_id))
         self._on_ws_status(bool(self._ws_worker and self._ws_worker._running))
         self._messages = list(msgs) if msgs else []
         self._render_all_messages()
@@ -911,6 +918,7 @@ class ChatRoomWidget(QWidget):
             "_copy_to_card_pick",
             "_copy_success",
             "_copy_error",
+            "_card_files_ready",
         }
         if event in _internal:
             self._ws_internal(event, data)
@@ -950,6 +958,21 @@ class ChatRoomWidget(QWidget):
             CustomMessageBox(self, "Готово", "Файл скопирован в карточку CRM.", icon_type="success").exec_()
         elif event == "_copy_error":
             CustomMessageBox(self, "Ошибка", "Не удалось скопировать файл в карточку.", icon_type="error").exec_()
+        elif event == "_card_files_ready":
+            err = data.get("error")
+            if err:
+                CustomMessageBox(self, "Ошибка", f"Не удалось загрузить файлы карточки:\n{err}", icon_type="error").exec_()
+                return
+            files = data.get("files", [])
+            if not files:
+                CustomMessageBox(self, "Файлы карточки", "У этой карточки нет загруженных файлов.", icon_type="info").exec_()
+                return
+            dlg = CardFilesPickerDialog(files, parent=self)
+            if dlg.exec_() and dlg.selected_link:
+                cur = self._input.toPlainText()
+                sep = "\n" if cur.strip() else ""
+                self._input.setPlainText(cur + sep + dlg.selected_link)
+                self._input.moveCursor(self._input.textCursor().End)
 
     def _ws_on_message(self, event: str, data: dict):
         if event == "new_message":
@@ -1134,6 +1157,21 @@ class ChatRoomWidget(QWidget):
             msg_type = "image" if ext in {".jpg", ".jpeg", ".png", ".gif", ".webp"} else "file"
             self._pending_files.append({"path": path, "name": fname, "type": msg_type})
         self._refresh_pending_panel()
+
+    def _attach_card_file(self):
+        if not self._crm_card_id:
+            return
+
+        def _load():
+            try:
+                card = self._api.get_crm_card(self._crm_card_id)
+                contract_id = card.get("contract_id") if card else None
+                files = self._api.get_project_files(contract_id) if contract_id else []
+                self._sig_ws_data.emit({"type": "_card_files_ready", "files": files or []})
+            except Exception as e:
+                self._sig_ws_data.emit({"type": "_card_files_ready", "files": [], "error": str(e)})
+
+        threading.Thread(target=_load, daemon=True).start()
 
     def _refresh_pending_panel(self):
         from PyQt5.QtGui import QPixmap as _QPixmap
@@ -1325,9 +1363,9 @@ class ChatRoomWidget(QWidget):
         q = self._search_input.text().strip()
         if not q or len(q) < 2:
             return
-        if not self._chat_id or not self._api_client:
+        if not self._chat_id or not self._api:
             return
-        results = self._api_client.search_chat_messages(self._chat_id, q)
+        results = self._api.search_chat_messages(self._chat_id, q)
         if not results:
             self._search_result_lbl.setText("Ничего не найдено")
             self._search_result_lbl.setVisible(True)
@@ -1780,3 +1818,127 @@ class ChatRoomWidget(QWidget):
 
     def showEvent(self, event):
         super().showEvent(event)
+
+
+class CardFilesPickerDialog:
+    """Диалог выбора файла из данных CRM-карточки (Яндекс.Диск).
+
+    После exec_() атрибут selected_link содержит текст для вставки в чат
+    (имя файла + публичная ссылка) или пустую строку.
+    """
+
+    def __init__(self, files: list, parent=None):
+        from urllib.parse import quote as _quote
+
+        from PyQt5.QtCore import Qt
+        from PyQt5.QtWidgets import (
+            QDialog,
+            QFrame,
+            QHBoxLayout,
+            QLabel,
+            QListWidget,
+            QListWidgetItem,
+            QPushButton,
+            QVBoxLayout,
+        )
+
+        self._dialog = QDialog(parent)
+        self._dialog.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        self._dialog.setAttribute(Qt.WA_TranslucentBackground, True)
+        self._dialog.setMinimumWidth(460)
+        self.selected_link = ""
+
+        outer = QVBoxLayout(self._dialog)
+        outer.setContentsMargins(0, 0, 0, 0)
+
+        frame = QFrame()
+        frame.setObjectName("borderFrame")
+        frame.setStyleSheet("QFrame#borderFrame { background:#fff; border:1px solid #E0E0E0; border-radius:10px; }")
+        fl = QVBoxLayout(frame)
+        fl.setContentsMargins(0, 0, 0, 0)
+        fl.setSpacing(0)
+
+        from ui.custom_title_bar import CustomTitleBar
+
+        tb = CustomTitleBar(self._dialog, "Файлы из карточки CRM", simple_mode=True)
+        tb.setStyleSheet("CustomTitleBar { background:#fff; border-bottom:1px solid #E0E0E0; border-top-left-radius:10px; border-top-right-radius:10px; }")
+        fl.addWidget(tb)
+
+        content = QFrame()
+        content.setStyleSheet("background:#F9FAFB; border-bottom-left-radius:10px; border-bottom-right-radius:10px;")
+        cl = QVBoxLayout(content)
+        cl.setContentsMargins(14, 12, 14, 14)
+        cl.setSpacing(8)
+
+        hint = QLabel("Выберите файл — его ссылка будет вставлена в сообщение:")
+        hint.setStyleSheet("font-size: 11px; color: #555;")
+        cl.addWidget(hint)
+
+        lw = QListWidget()
+        lw.setFixedHeight(220)
+        lw.setStyleSheet(
+            "QListWidget { border:1px solid #E0E0E0; border-radius:4px; background:#fff; }"
+            "QListWidget::item { padding:5px 8px; }"
+            "QListWidget::item:selected { background:#FFF8DC; }"
+            "QListWidget::item:hover { background:#f5f5f5; }"
+        )
+        cl.addWidget(lw)
+
+        for f in files:
+            fname = f.get("file_name") or f.get("filename") or f.get("original_name") or "файл"
+            stage = f.get("stage") or ""
+            text = f"{fname}" + (f"  [{stage}]" if stage else "")
+            item = QListWidgetItem(text)
+
+            # Вычисляем ссылку
+            link = f.get("public_link") or ""
+            if not link:
+                yd_path = f.get("yandex_path") or ""
+                if yd_path:
+                    clean = yd_path[len("disk:") :] if yd_path.startswith("disk:") else yd_path
+                    link = f"https://disk.yandex.ru/client/disk{_quote(clean, safe='/')}"
+            item.setData(Qt.UserRole, {"name": fname, "link": link})
+            lw.addItem(item)
+
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+
+        cancel_btn = QPushButton("Отмена")
+        cancel_btn.setFixedHeight(28)
+        cancel_btn.setStyleSheet(
+            "QPushButton { border:1px solid #d9d9d9; border-radius:4px; padding:0 14px; font-size:12px; background:#fff; max-height:26px; }QPushButton:hover { background:#f5f5f5; }"
+        )
+        cancel_btn.clicked.connect(self._dialog.reject)
+        btn_row.addWidget(cancel_btn)
+
+        select_btn = QPushButton("Вставить ссылку")
+        select_btn.setFixedHeight(28)
+        select_btn.setStyleSheet(
+            "QPushButton { background:#ffd93c; border:none; border-radius:4px; padding:0 14px; font-size:12px; font-weight:bold; max-height:26px; }QPushButton:hover { background:#f5c800; }"
+        )
+        select_btn.clicked.connect(lambda: self._on_select(lw))
+        btn_row.addWidget(select_btn)
+
+        lw.itemDoubleClicked.connect(lambda _: self._on_select(lw))
+
+        cl.addLayout(btn_row)
+        fl.addWidget(content)
+        outer.addWidget(frame)
+
+    def _on_select(self, lw):
+        from PyQt5.QtCore import Qt
+
+        item = lw.currentItem()
+        if not item:
+            return
+        d = item.data(Qt.UserRole)
+        name = d.get("name", "файл")
+        link = d.get("link", "")
+        if link:
+            self.selected_link = f"{name}: {link}"
+        else:
+            self.selected_link = name
+        self._dialog.accept()
+
+    def exec_(self):
+        return self._dialog.exec_()

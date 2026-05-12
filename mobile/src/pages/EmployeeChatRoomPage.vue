@@ -791,6 +791,18 @@
           class="hidden"
           @change="onFileSelected"
         >
+        <!-- Файлы из карточки CRM -->
+        <q-btn
+          v-if="chatCrmCardId"
+          flat
+          round
+          dense
+          icon="folder_open"
+          color="grey-6"
+          @click="showCardFilesDialog = true; loadCardFiles()"
+        >
+          <q-tooltip>Файлы из карточки CRM</q-tooltip>
+        </q-btn>
 
         <!-- Запись голоса (когда нет текста и нет файлов): удерживать для записи -->
         <q-btn
@@ -1268,6 +1280,63 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
+
+    <!-- Диалог: файлы из карточки CRM -->
+    <q-dialog v-model="showCardFilesDialog" persistent>
+      <q-card style="min-width: 320px; max-width: 480px; width: 100%">
+        <q-card-section class="row items-center q-pb-none">
+          <div class="text-subtitle1 text-weight-medium">
+            Файлы из карточки CRM
+          </div>
+          <q-space />
+          <q-btn
+            v-close-popup
+            icon="close"
+            flat
+            round
+            dense
+          />
+        </q-card-section>
+        <q-card-section>
+          <div v-if="cardFilesLoading" class="flex flex-center q-pa-md">
+            <q-spinner size="28px" color="grey" />
+          </div>
+          <div v-else-if="!cardFiles.length" class="text-grey-6 text-caption q-pa-sm">
+            Файлы не найдены
+          </div>
+          <q-list v-else dense separator>
+            <q-item
+              v-for="f in cardFiles"
+              :key="f.id || f.yandex_path"
+              clickable
+              @click="insertCardFileLink(f)"
+            >
+              <q-item-section avatar>
+                <q-icon :name="f.file_type === 'image' ? 'image' : 'insert_drive_file'" color="blue-5" />
+              </q-item-section>
+              <q-item-section>
+                <q-item-label>{{ f.file_name || f.filename || 'файл' }}</q-item-label>
+                <q-item-label v-if="f.stage" caption>
+                  {{ f.stage }}
+                </q-item-label>
+              </q-item-section>
+              <q-item-section side>
+                <q-icon name="add_link" color="blue-5" size="18px" />
+              </q-item-section>
+            </q-item>
+          </q-list>
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn
+            v-close-popup
+            flat
+            no-caps
+            label="Закрыть"
+            color="grey-7"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
@@ -1318,6 +1387,40 @@ function pdfBubbleStyle(msg) {
   if (!isPdf(msg) || !pdfThumbnails.value[msg.id]) return 'min-width: 0'
   const w = pdfImgWidths[msg.id]
   return w ? `width: ${w}px; min-width: 0` : 'width: fit-content; max-width: min(85vw, 440px); min-width: 0'
+}
+
+// ── Файлы из карточки CRM ─────────────────────────────────────
+const showCardFilesDialog = ref(false)
+const cardFiles = ref([])
+const cardFilesLoading = ref(false)
+
+async function loadCardFiles() {
+  if (!chatCrmCardId.value || cardFiles.value.length) return
+  cardFilesLoading.value = true
+  try {
+    const { data: card } = await api.get(`/api/v1/crm/cards/${chatCrmCardId.value}`)
+    const contractId = card?.contract_id
+    if (contractId) {
+      const { data: files } = await api.get(`/api/v1/files/contract/${contractId}`)
+      cardFiles.value = Array.isArray(files) ? files : (files?.items || [])
+    }
+  } catch {
+    cardFiles.value = []
+  } finally {
+    cardFilesLoading.value = false
+  }
+}
+
+function insertCardFileLink(f) {
+  const name = f.file_name || f.filename || 'файл'
+  let link = f.public_link || ''
+  if (!link && f.yandex_path) {
+    const clean = f.yandex_path.startsWith('disk:') ? f.yandex_path.slice(5) : f.yandex_path
+    link = 'https://disk.yandex.ru/client/disk' + encodeURIComponent(clean).replace(/%2F/g, '/')
+  }
+  const text = link ? `${name}: ${link}` : name
+  inputText.value = inputText.value ? inputText.value + '\n' + text : text
+  showCardFilesDialog.value = false
 }
 // Emoji реакции
 const QUICK_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥']
