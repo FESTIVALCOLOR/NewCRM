@@ -1992,7 +1992,7 @@ class CardFilesPickerDialog:
 
     def __init__(self, files: list, parent=None):
         from PyQt5.QtCore import QSize, Qt
-        from PyQt5.QtGui import QColor, QFont, QPixmap
+        from PyQt5.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
         from PyQt5.QtWidgets import (
             QDialog,
             QFrame,
@@ -2037,13 +2037,12 @@ class CardFilesPickerDialog:
         hint.setStyleSheet("font-size: 11px; color: #555;")
         cl.addWidget(hint)
 
-        from PyQt5.QtGui import QColor, QFont, QPixmap
-
         lw = QListWidget()
         lw.setFixedHeight(340)
+        lw.setIconSize(QSize(56, 42))
         lw.setStyleSheet(
             "QListWidget { border:1px solid #E0E0E0; border-radius:4px; background:#fff; }"
-            "QListWidget::item { padding:0; }"
+            "QListWidget::item { padding:2px 4px; }"
             "QListWidget::item:selected { background:#FFF8DC; }"
             "QListWidget::item:hover:!disabled { background:#f5f5f5; }"
         )
@@ -2066,6 +2065,31 @@ class CardFilesPickerDialog:
         def _is_image_ext(fname: str) -> bool:
             ext = fname.rsplit(".", 1)[-1].lower() if "." in fname else ""
             return ext in ("jpg", "jpeg", "png", "gif", "webp", "bmp", "tiff")
+
+        _ICON_COLORS = {
+            "IMG": ("#C8E6C9", "#2E7D32"),
+            "PDF": ("#FFCDD2", "#B71C1C"),
+            "XLS": ("#C8E6C9", "#1B5E20"),
+            "DOC": ("#BBDEFB", "#0D47A1"),
+            "ZIP": ("#E1BEE7", "#4A148C"),
+            "FILE": ("#E0E0E0", "#424242"),
+        }
+
+        def _make_file_icon(fname: str) -> QIcon:
+            """Цветной плейсхолдер с аббревиатурой типа файла."""
+            text = _file_icon_text(fname)
+            bg_hex, fg_hex = _ICON_COLORS.get(text, _ICON_COLORS["FILE"])
+            pix = QPixmap(56, 42)
+            pix.fill(QColor(bg_hex))
+            painter = QPainter(pix)
+            painter.setPen(QColor(fg_hex))
+            fnt = QFont()
+            fnt.setBold(True)
+            fnt.setPointSize(9)
+            painter.setFont(fnt)
+            painter.drawText(pix.rect(), Qt.AlignCenter, text)
+            painter.end()
+            return QIcon(pix)
 
         # Собираем файлы по стадиям
         by_stage: dict[str, list] = {}
@@ -2120,40 +2144,22 @@ class CardFilesPickerDialog:
                     yandex_path = f.get("yandex_path") or ""
                     preview_path = f.get("preview_cache_path") or ""
 
-                    item = QListWidgetItem()
+                    item = QListWidgetItem(fname)
                     item.setData(Qt.UserRole, {"name": fname, "link": link, "yandex_path": yandex_path})
                     item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+                    item.setSizeHint(QSize(0, 54))
 
-                    # Строим виджет-строку с миниатюрой
-                    row_w = QWidget()
-                    row_w.setAttribute(Qt.WA_TransparentForMouseEvents, True)
-                    rl = QHBoxLayout(row_w)
-                    rl.setContentsMargins(8, 4, 8, 4)
-                    rl.setSpacing(8)
+                    # Иконка: реальная миниатюра или цветной плейсхолдер
+                    icon_set = False
+                    if _is_image_ext(fname) and preview_path and os.path.exists(preview_path):
+                        pix = QPixmap(preview_path).scaled(56, 42, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                        if not pix.isNull():
+                            item.setIcon(QIcon(pix))
+                            icon_set = True
+                    if not icon_set:
+                        item.setIcon(_make_file_icon(fname))
 
-                    thumb = QLabel()
-                    thumb.setFixedSize(56, 42)
-                    thumb.setAlignment(Qt.AlignCenter)
-                    loaded = False
-                    if _is_image_ext(fname) and preview_path:
-                        if os.path.exists(preview_path):
-                            pix = QPixmap(preview_path).scaled(56, 42, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-                            if not pix.isNull():
-                                thumb.setPixmap(pix)
-                                loaded = True
-                    if not loaded:
-                        thumb.setText(_file_icon_text(fname))
-                        thumb.setStyleSheet("font-size:9px; font-weight:bold; color:#888;background:#f0f0f0; border:1px solid #ddd; border-radius:3px;")
-                    rl.addWidget(thumb)
-
-                    name_lbl = QLabel(fname)
-                    name_lbl.setStyleSheet("font-size:11px; background:transparent;")
-                    name_lbl.setWordWrap(True)
-                    rl.addWidget(name_lbl, stretch=1)
-
-                    item.setSizeHint(QSize(0, 58))
                     lw.addItem(item)
-                    lw.setItemWidget(item, row_w)
 
         btn_row = QHBoxLayout()
         btn_row.addStretch()

@@ -173,28 +173,7 @@ class ChatMembersDialog(QDialog):
         def _worker():
             chat = self._api.get_internal_chat(self._chat_id)
             members = chat.get("members", []) if chat else []
-            employees = []
-            if self._crm_card_id:
-                try:
-                    card = self._api.get_crm_card(self._crm_card_id) or {}
-                    # Собираем ID сотрудников, привязанных к карточке
-                    card_emp_ids: set[int] = set()
-                    for field in ("senior_manager_id", "sdp_id", "gap_id", "manager_id", "surveyor_id"):
-                        v = card.get(field)
-                        if v:
-                            card_emp_ids.add(v)
-                    for se in card.get("stage_executors", []):
-                        eid = se.get("executor_id") or se.get("employee_id")
-                        if eid:
-                            card_emp_ids.add(eid)
-                    all_emps = self._api.get_employees(limit=500) or []
-                    # Только сотрудники из состава карточки
-                    employees = [e for e in all_emps if e.get("id") in card_emp_ids]
-                except Exception:
-                    pass
-            if not employees:
-                # Запасной вариант: все сотрудники
-                employees = self._api.get_employees(limit=500) or []
+            employees = self._api.get_employees(limit=500) or []
             try:
                 _sig.emit(members, employees)
             except Exception:
