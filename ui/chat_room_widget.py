@@ -112,7 +112,7 @@ class ChatWebSocketWorker(threading.Thread):
                 logger.warning(f"WS error: {e}")
             if self._running:
                 time.sleep(delay)
-                delay = 1 if _connected[0] else min(delay * 2, 30)
+                delay = 3 if _connected[0] else min(delay * 2, 30)
 
     def send(self, data: dict):
         if self._ws:
@@ -882,14 +882,14 @@ class ChatRoomWidget(QWidget):
             logger.debug(f"Chat WS closed: chat_id={self._chat_id}")
             try:
                 _sig_status.emit(False)
-            except RuntimeError:
+            except Exception:
                 pass
 
         def on_open():
             logger.debug(f"Chat WS opened: chat_id={self._chat_id}")
             try:
                 _sig_status.emit(True)
-            except RuntimeError:
+            except Exception:
                 pass
 
         self._ws_worker = ChatWebSocketWorker(ws_url, on_message, on_error, on_close, on_open)
@@ -919,6 +919,7 @@ class ChatRoomWidget(QWidget):
             "_copy_success",
             "_copy_error",
             "_card_files_ready",
+            "_search_results",
         }
         if event in _internal:
             self._ws_internal(event, data)
@@ -973,6 +974,17 @@ class ChatRoomWidget(QWidget):
                 sep = "\n" if cur.strip() else ""
                 self._input.setPlainText(cur + sep + dlg.selected_link)
                 self._input.moveCursor(self._input.textCursor().End)
+        elif event == "_search_results":
+            results = data.get("results", [])
+            if not results:
+                self._search_result_lbl.setText("Ничего не найдено")
+                self._search_result_lbl.setVisible(True)
+                return
+            self._search_result_lbl.setText(f"Найдено: {len(results)} сообщ. — переход к последнему")
+            self._search_result_lbl.setVisible(True)
+            target_id = results[-1].get("id")
+            if target_id:
+                self._scroll_to_msg_id(target_id)
 
     def _ws_on_message(self, event: str, data: dict):
         if event == "new_message":
@@ -1365,17 +1377,20 @@ class ChatRoomWidget(QWidget):
             return
         if not self._chat_id or not self._api:
             return
-        results = self._api.search_chat_messages(self._chat_id, q)
-        if not results:
-            self._search_result_lbl.setText("Ничего не найдено")
-            self._search_result_lbl.setVisible(True)
-            return
-        self._search_result_lbl.setText(f"Найдено: {len(results)} сообщ. — переход к последнему")
+        self._search_result_lbl.setText("Поиск…")
         self._search_result_lbl.setVisible(True)
-        # Прокрутить к последнему результату (самому новому после reverse на сервере)
-        target_id = results[-1].get("id")
-        if target_id:
-            self._scroll_to_msg_id(target_id)
+
+        def _worker():
+            try:
+                results = self._api.search_chat_messages(self._chat_id, q) or []
+            except Exception:
+                results = []
+            try:
+                self._sig_ws_data.emit({"type": "_search_results", "results": results})
+            except Exception:
+                pass
+
+        threading.Thread(target=_worker, daemon=True).start()
 
     def _scroll_to_msg_id(self, msg_id: int):
         """Найти пузырь с данным msg_id и прокрутить к нему."""
@@ -1825,12 +1840,49 @@ class CardFilesPickerDialog:
 
     После exec_() атрибут selected_link содержит текст для вставки в чат
     (имя файла + публичная ссылка) или пустую строку.
+
+    Файлы группируются по стадиям: секции-заголовки в списке, файлы внутри.
     """
+
+    # Метки стадий для отображения (код → читаемое название)
+    _STAGE_LABELS = {
+        "measurement": "Замер",
+        "stage1": "Стадия 1 — Планировочное решение",
+        "stage2_concept": "Стадия 2 — Концепция / коллажи",
+        "stage2_3d": "Стадия 2 — 3D визуализация",
+        "stage3": "Стадия 3 — Чертежный проект",
+        "supervision": "Авторский надзор",
+        "references": "Референсы",
+        "photo_documentation": "Фотофиксация",
+        "tech_task": "Техническое задание",
+        "documents": "Документы",
+        "acts": "Акты",
+        "info_letters": "Информационные письма",
+        "questionnaire": "Анкета",
+    }
+
+    # Порядок отображения стадий
+    _STAGE_ORDER = [
+        "measurement",
+        "stage1",
+        "stage2_concept",
+        "stage2_3d",
+        "stage3",
+        "supervision",
+        "tech_task",
+        "documents",
+        "acts",
+        "info_letters",
+        "references",
+        "photo_documentation",
+        "questionnaire",
+    ]
 
     def __init__(self, files: list, parent=None):
         from urllib.parse import quote as _quote
 
         from PyQt5.QtCore import Qt
+        from PyQt5.QtGui import QColor, QFont
         from PyQt5.QtWidgets import (
             QDialog,
             QFrame,
@@ -1845,7 +1897,7 @@ class CardFilesPickerDialog:
         self._dialog = QDialog(parent)
         self._dialog.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self._dialog.setAttribute(Qt.WA_TranslucentBackground, True)
-        self._dialog.setMinimumWidth(460)
+        self._dialog.setMinimumWidth(480)
         self.selected_link = ""
 
         outer = QVBoxLayout(self._dialog)
@@ -1875,30 +1927,57 @@ class CardFilesPickerDialog:
         cl.addWidget(hint)
 
         lw = QListWidget()
-        lw.setFixedHeight(220)
+        lw.setFixedHeight(280)
         lw.setStyleSheet(
             "QListWidget { border:1px solid #E0E0E0; border-radius:4px; background:#fff; }"
-            "QListWidget::item { padding:5px 8px; }"
+            "QListWidget::item { padding:4px 8px; }"
             "QListWidget::item:selected { background:#FFF8DC; }"
-            "QListWidget::item:hover { background:#f5f5f5; }"
+            "QListWidget::item:hover:!disabled { background:#f5f5f5; }"
         )
         cl.addWidget(lw)
 
-        for f in files:
-            fname = f.get("file_name") or f.get("filename") or f.get("original_name") or "файл"
-            stage = f.get("stage") or ""
-            text = f"{fname}" + (f"  [{stage}]" if stage else "")
-            item = QListWidgetItem(text)
-
-            # Вычисляем ссылку
+        # Группировка файлов по стадиям
+        def _build_link(f):
             link = f.get("public_link") or ""
             if not link:
                 yd_path = f.get("yandex_path") or ""
                 if yd_path:
                     clean = yd_path[len("disk:") :] if yd_path.startswith("disk:") else yd_path
                     link = f"https://disk.yandex.ru/client/disk{_quote(clean, safe='/')}"
-            item.setData(Qt.UserRole, {"name": fname, "link": link})
-            lw.addItem(item)
+            return link
+
+        # Собираем файлы по группам: сначала по известному порядку, потом остальные
+        by_stage: dict[str, list] = {}
+        for f in files:
+            s = f.get("stage") or "documents"
+            by_stage.setdefault(s, []).append(f)
+
+        ordered_stages = [s for s in self._STAGE_ORDER if s in by_stage]
+        extra_stages = [s for s in by_stage if s not in self._STAGE_ORDER]
+        all_stages = ordered_stages + extra_stages
+
+        for stage in all_stages:
+            stage_files = by_stage[stage]
+            stage_label = self._STAGE_LABELS.get(stage, stage)
+
+            # Заголовок секции
+            header = QListWidgetItem(f"▶ {stage_label}")
+            header.setFlags(Qt.ItemIsEnabled)  # не кликабельный
+            header.setBackground(QColor("#F0F0F0"))
+            font = QFont()
+            font.setBold(True)
+            font.setPointSize(9)
+            header.setFont(font)
+            header.setForeground(QColor("#555"))
+            header.setData(Qt.UserRole, None)  # нет ссылки
+            lw.addItem(header)
+
+            for f in stage_files:
+                fname = f.get("file_name") or f.get("filename") or f.get("original_name") or "файл"
+                link = _build_link(f)
+                item = QListWidgetItem(f"    {fname}")
+                item.setData(Qt.UserRole, {"name": fname, "link": link})
+                lw.addItem(item)
 
         btn_row = QHBoxLayout()
         btn_row.addStretch()
@@ -1932,6 +2011,8 @@ class CardFilesPickerDialog:
         if not item:
             return
         d = item.data(Qt.UserRole)
+        if not d:  # заголовок секции — не выбираем
+            return
         name = d.get("name", "файл")
         link = d.get("link", "")
         if link:

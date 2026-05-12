@@ -437,6 +437,7 @@ class ScriptSendDialog(QDialog):
     """Двухэтапный диалог отправки скрипта: выбор из списка → редактирование → отправка."""
 
     _sig_data = pyqtSignal(object, object)  # (scripts_list, card_dict)
+    _sig_card_files = pyqtSignal(object)  # list[dict] — файлы карточки из фонового потока
 
     def __init__(self, chat_id: int, api_client, employee: dict = None, crm_card_id: int = None, parent=None):
         super().__init__(parent)
@@ -451,6 +452,7 @@ class ScriptSendDialog(QDialog):
         self.setMinimumWidth(500)
 
         self._sig_data.connect(self._fill_data)
+        self._sig_card_files.connect(self._show_file_picker)
         self._setup_ui()
         self._load_data()
 
@@ -609,6 +611,18 @@ class ScriptSendDialog(QDialog):
                             break
             except Exception:
                 pass
+            # Руководитель студии для переменных скрипта {director}, {director_username}
+            try:
+                all_emps = self._api.get_employees(limit=200) or []
+                director = next(
+                    (e for e in all_emps if (e.get("position") or "") == "Руководитель студии"),
+                    None,
+                )
+                if director:
+                    card["_director_name"] = director.get("full_name", "")
+                    card["_director_username"] = director.get("telegram_username", "") or director.get("login", "")
+            except Exception:
+                pass
             self._sig_data.emit(scripts, card)
 
         import threading as _t
@@ -678,22 +692,53 @@ class ScriptSendDialog(QDialog):
         client_first = parts[1] if len(parts) > 1 else (parts[0] if parts else "")
 
         area = d.get("area")
+        area_str = f"{area} м²" if area else ""
+
+        director_name = d.get("_director_name", "")
+        director_uname = d.get("_director_username", "")
+        director_at = f"@{director_uname}" if director_uname else director_name
+
         vars_map = {
+            # Клиент
             "client_name": client_name,
             "client_first_name": client_first,
+            "client_name_dat": "",
+            # Проект
             "address": d.get("address", ""),
-            "area": f"{area} м²" if area else "",
+            "city": d.get("city", ""),
+            "area": area_str,
             "contract_number": d.get("contract_number", ""),
+            "project_type": d.get("project_type", ""),
+            "stage_name": d.get("column_name", ""),
             "deadline": d.get("deadline", ""),
             "deadline_date": d.get("deadline", ""),
+            "revision_count": str(d.get("revision_count", "")) if d.get("revision_count") else "",
+            # Финансы / прочее
+            "amount": "",
+            "stage_files": "",
+            "review_link": "",
+            "visit_date": "",
+            "pause_reason": "",
+            # Команда проекта
             "senior_manager": d.get("senior_manager_name", ""),
             "senior_manager_username": d.get("senior_manager_name", ""),
+            "senior_manager_dat": "",
             "manager_name": d.get("manager_name", ""),
             "manager_username": d.get("manager_name", ""),
+            "manager_name_dat": "",
             "sdp": d.get("sdp_name", ""),
             "sdp_username": d.get("sdp_name", ""),
+            "sdp_dat": "",
             "gap": d.get("gap_name", ""),
             "surveyor": d.get("surveyor_name", ""),
+            # Руководитель студии
+            "director": director_name,
+            "director_username": director_at,
+            "director_dat": "",
+            # ДАН
+            "dan": "",
+            "dan_username": "",
+            # Отправитель
             "sender_name": self._employee.get("full_name", ""),
             "role_name": self._employee.get("position", ""),
         }
@@ -725,16 +770,16 @@ class ScriptSendDialog(QDialog):
         if not self._crm_card_id:
             return
         import threading as _t
-        from urllib.parse import quote as _quote
 
         def _load():
             try:
                 card = self._api.get_crm_card(self._crm_card_id) or {}
                 contract_id = card.get("contract_id")
                 files = self._api.get_project_files(contract_id) if contract_id else []
-                from PyQt5.QtCore import QTimer
-
-                QTimer.singleShot(0, lambda: self._show_file_picker(files or []))
+                try:
+                    self._sig_card_files.emit(files or [])
+                except Exception:
+                    pass
             except Exception:
                 pass
 
