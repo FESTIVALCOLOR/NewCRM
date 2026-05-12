@@ -179,6 +179,10 @@ class ChatRoomWidget(QWidget):
         # Файлы, ожидающие отправки
         self._pending_files: list = []
 
+        # Поиск по сообщениям: хранение результатов и текущей позиции
+        self._search_results: list = []
+        self._search_idx: int = 0
+
         # Строка с количеством участников для subtitle
         self._members_count_str: str = ""
 
@@ -289,6 +293,36 @@ class ChatRoomWidget(QWidget):
         self._search_result_lbl.setStyleSheet("font-size: 10px; color: #888;")
         self._search_result_lbl.setVisible(False)
         sp_layout.addWidget(self._search_result_lbl)
+
+        # Навигация по результатам поиска (скрыта пока нет результатов)
+        self._search_nav_row = QWidget()
+        nav_h = QHBoxLayout(self._search_nav_row)
+        nav_h.setContentsMargins(0, 0, 0, 0)
+        nav_h.setSpacing(4)
+        _nav_btn_style = (
+            "QPushButton { border: 1px solid #d9d9d9; border-radius: 4px; background: #fff; "
+            "font-size: 12px; padding: 0 8px; min-width: 26px; max-width: 26px; min-height: 22px; max-height: 22px; }"
+            "QPushButton:hover { background: #f5f5f5; }"
+            "QPushButton:disabled { color: #ccc; }"
+        )
+        self._search_prev_btn = QPushButton("▲")
+        self._search_prev_btn.setToolTip("Предыдущее найденное")
+        self._search_prev_btn.setStyleSheet(_nav_btn_style)
+        self._search_prev_btn.clicked.connect(lambda: self._search_navigate(-1))
+        nav_h.addWidget(self._search_prev_btn)
+        self._search_nav_lbl = QLabel("0 / 0")
+        self._search_nav_lbl.setStyleSheet("font-size: 10px; color: #555; min-width: 40px; text-align: center;")
+        self._search_nav_lbl.setAlignment(Qt.AlignCenter)
+        nav_h.addWidget(self._search_nav_lbl)
+        self._search_next_btn = QPushButton("▼")
+        self._search_next_btn.setToolTip("Следующее найденное")
+        self._search_next_btn.setStyleSheet(_nav_btn_style)
+        self._search_next_btn.clicked.connect(lambda: self._search_navigate(1))
+        nav_h.addWidget(self._search_next_btn)
+        nav_h.addStretch()
+        self._search_nav_row.setVisible(False)
+        sp_layout.addWidget(self._search_nav_row)
+
         main_layout.addWidget(self._search_panel)
 
         self._build_pinned_bar(main_layout)
@@ -524,11 +558,15 @@ class ChatRoomWidget(QWidget):
 
     def _load_messages(self):
         """Загрузить историю через REST. Результат передаётся через сигнал."""
+        _sig = self._sig_messages_ready
 
         def _worker():
             chat = self._api.get_internal_chat(self._chat_id)
             msgs = self._api.get_chat_messages(self._chat_id, limit=50)
-            self._sig_messages_ready.emit(chat, msgs or [])
+            try:
+                _sig.emit(chat, msgs or [])
+            except Exception:
+                pass
 
         threading.Thread(target=_worker, daemon=True).start()
 
@@ -920,6 +958,7 @@ class ChatRoomWidget(QWidget):
             "_copy_error",
             "_card_files_ready",
             "_search_results",
+            "_upload_error",
         }
         if event in _internal:
             self._ws_internal(event, data)
@@ -969,22 +1008,25 @@ class ChatRoomWidget(QWidget):
                 CustomMessageBox(self, "Файлы карточки", "У этой карточки нет загруженных файлов.", icon_type="info").exec_()
                 return
             dlg = CardFilesPickerDialog(files, parent=self)
-            if dlg.exec_() and dlg.selected_link:
-                cur = self._input.toPlainText()
-                sep = "\n" if cur.strip() else ""
-                self._input.setPlainText(cur + sep + dlg.selected_link)
-                self._input.moveCursor(self._input.textCursor().End)
+            if dlg.exec_() and dlg.selected_file:
+                self._upload_card_file(dlg.selected_file)
         elif event == "_search_results":
             results = data.get("results", [])
             if not results:
                 self._search_result_lbl.setText("Ничего не найдено")
                 self._search_result_lbl.setVisible(True)
+                self._search_nav_row.setVisible(False)
                 return
-            self._search_result_lbl.setText(f"Найдено: {len(results)} сообщ. — переход к последнему")
+            self._search_results = results
+            # Начинаем с самого последнего (самого нового) результата
+            self._search_idx = len(results) - 1
+            self._search_result_lbl.setText(f"Найдено: {len(results)}")
             self._search_result_lbl.setVisible(True)
-            target_id = results[-1].get("id")
-            if target_id:
-                self._scroll_to_msg_id(target_id)
+            self._search_nav_row.setVisible(True)
+            self._search_update_nav()
+            self._scroll_to_msg_id(results[self._search_idx].get("id"))
+        elif event == "_upload_error":
+            CustomMessageBox(self, "Ошибка загрузки", f"Не удалось загрузить файл:\n{data.get('msg', '')}", icon_type="error").exec_()
 
     def _ws_on_message(self, event: str, data: dict):
         if event == "new_message":
@@ -1185,6 +1227,64 @@ class ChatRoomWidget(QWidget):
 
         threading.Thread(target=_load, daemon=True).start()
 
+    def _upload_card_file(self, file_info: dict):
+        """Скачать файл с YD по публичной ссылке и загрузить в чат как вложение."""
+        fname = file_info.get("name") or "файл"
+        public_link = file_info.get("link") or ""
+        yandex_path = file_info.get("yandex_path") or ""
+        if not public_link and not yandex_path:
+            CustomMessageBox(self, "Ошибка", "Нет ссылки для скачивания файла.", icon_type="error").exec_()
+            return
+
+        self._upload_progress.setVisible(True)
+        _sig_new = self._sig_new_msg
+        _sig_ws = self._sig_ws_data
+        _api = self._api
+        _chat_id = self._chat_id
+
+        def _worker():
+            try:
+                import requests as _req
+
+                if public_link:
+                    # Получаем прямую ссылку через публичный API Яндекс.Диска (без OAuth)
+                    r = _req.get(
+                        "https://cloud-api.yandex.net/v1/disk/public/resources/download",
+                        params={"public_key": public_link},
+                        timeout=20,
+                    )
+                    r.raise_for_status()
+                    href = r.json().get("href") or ""
+                    if not href:
+                        raise ValueError("Нет ссылки для скачивания")
+                    r2 = _req.get(href, timeout=120)
+                    r2.raise_for_status()
+                    file_bytes = r2.content
+                else:
+                    # Запасной путь: скачиваем через YD API сервера
+                    raise ValueError("Публичная ссылка недоступна — прикрепите файл вручную")
+
+                ext = os.path.splitext(fname)[1].lower()
+                msg_type = "image" if ext in {".jpg", ".jpeg", ".png", ".gif", ".webp"} else "file"
+                result = _api.upload_chat_file(_chat_id, file_bytes, fname, message_type=msg_type)
+                if result:
+                    try:
+                        _sig_new.emit(result)
+                    except Exception:
+                        pass
+            except Exception as e:
+                try:
+                    _sig_ws.emit({"type": "_upload_error", "msg": str(e)})
+                except Exception:
+                    pass
+            finally:
+                try:
+                    _sig_ws.emit({"type": "_hide_progress"})
+                except Exception:
+                    pass
+
+        threading.Thread(target=_worker, daemon=True).start()
+
     def _refresh_pending_panel(self):
         from PyQt5.QtGui import QPixmap as _QPixmap
 
@@ -1369,7 +1469,10 @@ class ChatRoomWidget(QWidget):
             self._search_input.selectAll()
         else:
             self._search_input.clear()
+            self._search_results = []
+            self._search_idx = 0
             self._search_result_lbl.setVisible(False)
+            self._search_nav_row.setVisible(False)
 
     def _do_search(self):
         q = self._search_input.text().strip()
@@ -1407,6 +1510,24 @@ class ChatRoomWidget(QWidget):
                 return
         # Если не нашли (может быть вне загруженных) — показываем подсказку
         self._search_result_lbl.setText(f"Сообщение #{msg_id} вне загруженной истории")
+
+    def _search_update_nav(self):
+        """Обновить счётчик навигации поиска и состояние кнопок."""
+        total = len(self._search_results)
+        idx = self._search_idx
+        self._search_nav_lbl.setText(f"{idx + 1} / {total}")
+        self._search_prev_btn.setEnabled(idx > 0)
+        self._search_next_btn.setEnabled(idx < total - 1)
+
+    def _search_navigate(self, direction: int):
+        """Перейти к следующему (direction=1) или предыдущему (direction=-1) результату поиска."""
+        if not self._search_results:
+            return
+        self._search_idx = max(0, min(self._search_idx + direction, len(self._search_results) - 1))
+        self._search_update_nav()
+        msg_id = self._search_results[self._search_idx].get("id")
+        if msg_id:
+            self._scroll_to_msg_id(msg_id)
 
     # ===========================================================
     # Диалог участников
@@ -1838,10 +1959,10 @@ class ChatRoomWidget(QWidget):
 class CardFilesPickerDialog:
     """Диалог выбора файла из данных CRM-карточки (Яндекс.Диск).
 
-    После exec_() атрибут selected_link содержит текст для вставки в чат
-    (имя файла + публичная ссылка) или пустую строку.
+    После exec_() атрибут selected_file содержит dict {name, link, yandex_path}
+    или None если пользователь отменил.
 
-    Файлы группируются по стадиям: секции-заголовки в списке, файлы внутри.
+    Файлы группируются по стадиям и сортируются по вариациям.
     """
 
     # Метки стадий для отображения (код → читаемое название)
@@ -1897,8 +2018,8 @@ class CardFilesPickerDialog:
         self._dialog = QDialog(parent)
         self._dialog.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self._dialog.setAttribute(Qt.WA_TranslucentBackground, True)
-        self._dialog.setMinimumWidth(480)
-        self.selected_link = ""
+        self._dialog.setMinimumWidth(520)
+        self.selected_file = None  # dict {name, link, yandex_path} или None
 
         outer = QVBoxLayout(self._dialog)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -1922,7 +2043,7 @@ class CardFilesPickerDialog:
         cl.setContentsMargins(14, 12, 14, 14)
         cl.setSpacing(8)
 
-        hint = QLabel("Выберите файл — его ссылка будет вставлена в сообщение:")
+        hint = QLabel("Выберите файл — он будет прикреплён к сообщению:")
         hint.setStyleSheet("font-size: 11px; color: #555;")
         cl.addWidget(hint)
 
@@ -1936,15 +2057,35 @@ class CardFilesPickerDialog:
         )
         cl.addWidget(lw)
 
+        # Иконка по расширению файла
+        def _file_icon(fname: str) -> str:
+            ext = fname.rsplit(".", 1)[-1].lower() if "." in fname else ""
+            if ext in ("jpg", "jpeg", "png", "gif", "webp", "bmp", "tiff"):
+                return "[img]"
+            if ext == "pdf":
+                return "[pdf]"
+            if ext in ("xls", "xlsx", "csv", "ods"):
+                return "[xls]"
+            if ext in ("doc", "docx", "odt", "rtf", "txt"):
+                return "[doc]"
+            if ext in ("zip", "rar", "7z", "tar", "gz"):
+                return "[zip]"
+            return "[file]"
+
         # Группировка файлов по стадиям
         def _build_link(f):
-            link = f.get("public_link") or ""
-            if not link:
-                yd_path = f.get("yandex_path") or ""
-                if yd_path:
-                    clean = yd_path[len("disk:") :] if yd_path.startswith("disk:") else yd_path
-                    link = f"https://disk.yandex.ru/client/disk{_quote(clean, safe='/')}"
-            return link
+            return f.get("public_link") or ""
+
+        # Сортировка вариации: None/пустое → 0, потом по строке
+        def _variation_key(f):
+            v = f.get("variation") or ""
+            if not v:
+                return ("", "")
+            # Числа в строке вариации для правильной сортировки (Вариант 1 < Вариант 10)
+            import re as _re
+
+            nums = _re.findall(r"\d+", v)
+            return (v, int(nums[0]) if nums else 0)
 
         # Собираем файлы по группам: сначала по известному порядку, потом остальные
         by_stage: dict[str, list] = {}
@@ -1957,26 +2098,32 @@ class CardFilesPickerDialog:
         all_stages = ordered_stages + extra_stages
 
         for stage in all_stages:
-            stage_files = by_stage[stage]
+            stage_files = sorted(by_stage[stage], key=_variation_key)
             stage_label = self._STAGE_LABELS.get(stage, stage)
 
             # Заголовок секции
-            header = QListWidgetItem(f"▶ {stage_label}")
+            header = QListWidgetItem(f"  {stage_label}")
             header.setFlags(Qt.ItemIsEnabled)  # не кликабельный
-            header.setBackground(QColor("#F0F0F0"))
+            header.setBackground(QColor("#E8EEF6"))
             font = QFont()
             font.setBold(True)
             font.setPointSize(9)
             header.setFont(font)
-            header.setForeground(QColor("#555"))
+            header.setForeground(QColor("#1a3a6b"))
             header.setData(Qt.UserRole, None)  # нет ссылки
             lw.addItem(header)
 
             for f in stage_files:
                 fname = f.get("file_name") or f.get("filename") or f.get("original_name") or "файл"
+                variation = f.get("variation") or ""
                 link = _build_link(f)
-                item = QListWidgetItem(f"    {fname}")
-                item.setData(Qt.UserRole, {"name": fname, "link": link})
+                yandex_path = f.get("yandex_path") or ""
+                icon = _file_icon(fname)
+                display = f"    {icon} {fname}"
+                if variation:
+                    display += f"  —  {variation}"
+                item = QListWidgetItem(display)
+                item.setData(Qt.UserRole, {"name": fname, "link": link, "yandex_path": yandex_path})
                 lw.addItem(item)
 
         btn_row = QHBoxLayout()
@@ -1990,7 +2137,7 @@ class CardFilesPickerDialog:
         cancel_btn.clicked.connect(self._dialog.reject)
         btn_row.addWidget(cancel_btn)
 
-        select_btn = QPushButton("Вставить ссылку")
+        select_btn = QPushButton("Прикрепить файл")
         select_btn.setFixedHeight(28)
         select_btn.setStyleSheet(
             "QPushButton { background:#ffd93c; border:none; border-radius:4px; padding:0 14px; font-size:12px; font-weight:bold; max-height:26px; }QPushButton:hover { background:#f5c800; }"
@@ -2013,12 +2160,7 @@ class CardFilesPickerDialog:
         d = item.data(Qt.UserRole)
         if not d:  # заголовок секции — не выбираем
             return
-        name = d.get("name", "файл")
-        link = d.get("link", "")
-        if link:
-            self.selected_link = f"{name}: {link}"
-        else:
-            self.selected_link = name
+        self.selected_file = d  # {name, link, yandex_path}
         self._dialog.accept()
 
     def exec_(self):

@@ -167,18 +167,15 @@ class ChatMembersDialog(QDialog):
 
     # ----------------------------------------------------------
 
-    # Должности с доступом к чатам любой карточки
+    # Только администраторы студии всегда видны в списке участников
     _ADMIN_POSITIONS = {
         "Руководитель студии",
         "Старший менеджер проектов",
-        "СДП",
-        "ГАП",
-        "Менеджер",
-        "ДАН",
-        "Дизайнер авторского надзора",
     }
 
     def _load_data(self):
+        _sig = self._sig_data
+
         def _worker():
             chat = self._api.get_internal_chat(self._chat_id)
             members = chat.get("members", []) if chat else []
@@ -197,14 +194,17 @@ class ChatMembersDialog(QDialog):
                         if eid:
                             card_emp_ids.add(eid)
                     all_emps = self._api.get_employees(limit=500) or []
-                    # Показываем сотрудников карточки + всех с административными должностями
+                    # Показываем сотрудников карточки + руководителей студии
                     employees = [e for e in all_emps if e.get("id") in card_emp_ids or e.get("position") in self._ADMIN_POSITIONS]
                 except Exception:
                     pass
             if not employees:
                 # Запасной вариант: все сотрудники
                 employees = self._api.get_employees(limit=500) or []
-            self._sig_data.emit(members, employees)
+            try:
+                _sig.emit(members, employees)
+            except Exception:
+                pass
 
         threading.Thread(target=_worker, daemon=True).start()
 
