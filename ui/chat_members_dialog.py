@@ -167,12 +167,6 @@ class ChatMembersDialog(QDialog):
 
     # ----------------------------------------------------------
 
-    # Только администраторы студии всегда видны в списке участников
-    _ADMIN_POSITIONS = {
-        "Руководитель студии",
-        "Старший менеджер проектов",
-    }
-
     def _load_data(self):
         _sig = self._sig_data
 
@@ -194,8 +188,8 @@ class ChatMembersDialog(QDialog):
                         if eid:
                             card_emp_ids.add(eid)
                     all_emps = self._api.get_employees(limit=500) or []
-                    # Показываем сотрудников карточки + руководителей студии
-                    employees = [e for e in all_emps if e.get("id") in card_emp_ids or e.get("position") in self._ADMIN_POSITIONS]
+                    # Только сотрудники из состава карточки
+                    employees = [e for e in all_emps if e.get("id") in card_emp_ids]
                 except Exception:
                     pass
             if not employees:

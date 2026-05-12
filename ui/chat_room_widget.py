@@ -1228,12 +1228,12 @@ class ChatRoomWidget(QWidget):
         threading.Thread(target=_load, daemon=True).start()
 
     def _upload_card_file(self, file_info: dict):
-        """Скачать файл с YD по публичной ссылке и загрузить в чат как вложение."""
+        """Прикрепить существующий файл проекта в чат (через сервер, без скачивания байт)."""
         fname = file_info.get("name") or "файл"
         public_link = file_info.get("link") or ""
         yandex_path = file_info.get("yandex_path") or ""
-        if not public_link and not yandex_path:
-            CustomMessageBox(self, "Ошибка", "Нет ссылки для скачивания файла.", icon_type="error").exec_()
+        if not yandex_path:
+            CustomMessageBox(self, "Ошибка", "Нет пути к файлу на Яндекс.Диске.", icon_type="error").exec_()
             return
 
         self._upload_progress.setVisible(True)
@@ -1244,32 +1244,23 @@ class ChatRoomWidget(QWidget):
 
         def _worker():
             try:
-                import requests as _req
-
-                if public_link:
-                    # Получаем прямую ссылку через публичный API Яндекс.Диска (без OAuth)
-                    r = _req.get(
-                        "https://cloud-api.yandex.net/v1/disk/public/resources/download",
-                        params={"public_key": public_link},
-                        timeout=20,
-                    )
-                    r.raise_for_status()
-                    href = r.json().get("href") or ""
-                    if not href:
-                        raise ValueError("Нет ссылки для скачивания")
-                    r2 = _req.get(href, timeout=120)
-                    r2.raise_for_status()
-                    file_bytes = r2.content
-                else:
-                    # Запасной путь: скачиваем через YD API сервера
-                    raise ValueError("Публичная ссылка недоступна — прикрепите файл вручную")
-
                 ext = os.path.splitext(fname)[1].lower()
                 msg_type = "image" if ext in {".jpg", ".jpeg", ".png", ".gif", ".webp"} else "file"
-                result = _api.upload_chat_file(_chat_id, file_bytes, fname, message_type=msg_type)
+                result = _api.link_project_file_to_chat(
+                    _chat_id,
+                    yandex_path,
+                    fname,
+                    public_link=public_link,
+                    message_type=msg_type,
+                )
                 if result:
                     try:
                         _sig_new.emit(result)
+                    except Exception:
+                        pass
+                else:
+                    try:
+                        _sig_ws.emit({"type": "_upload_error", "msg": "Сервер не вернул результат — проверьте права доступа"})
                     except Exception:
                         pass
             except Exception as e:
@@ -2000,10 +1991,8 @@ class CardFilesPickerDialog:
     ]
 
     def __init__(self, files: list, parent=None):
-        from urllib.parse import quote as _quote
-
-        from PyQt5.QtCore import Qt
-        from PyQt5.QtGui import QColor, QFont
+        from PyQt5.QtCore import QSize, Qt
+        from PyQt5.QtGui import QColor, QFont, QPixmap
         from PyQt5.QtWidgets import (
             QDialog,
             QFrame,
@@ -2013,6 +2002,7 @@ class CardFilesPickerDialog:
             QListWidgetItem,
             QPushButton,
             QVBoxLayout,
+            QWidget,
         )
 
         self._dialog = QDialog(parent)
@@ -2047,46 +2037,37 @@ class CardFilesPickerDialog:
         hint.setStyleSheet("font-size: 11px; color: #555;")
         cl.addWidget(hint)
 
+        from PyQt5.QtGui import QColor, QFont, QPixmap
+
         lw = QListWidget()
-        lw.setFixedHeight(280)
+        lw.setFixedHeight(340)
         lw.setStyleSheet(
             "QListWidget { border:1px solid #E0E0E0; border-radius:4px; background:#fff; }"
-            "QListWidget::item { padding:4px 8px; }"
+            "QListWidget::item { padding:0; }"
             "QListWidget::item:selected { background:#FFF8DC; }"
             "QListWidget::item:hover:!disabled { background:#f5f5f5; }"
         )
         cl.addWidget(lw)
 
-        # Иконка по расширению файла
-        def _file_icon(fname: str) -> str:
+        def _file_icon_text(fname: str) -> str:
             ext = fname.rsplit(".", 1)[-1].lower() if "." in fname else ""
             if ext in ("jpg", "jpeg", "png", "gif", "webp", "bmp", "tiff"):
-                return "[img]"
+                return "IMG"
             if ext == "pdf":
-                return "[pdf]"
+                return "PDF"
             if ext in ("xls", "xlsx", "csv", "ods"):
-                return "[xls]"
+                return "XLS"
             if ext in ("doc", "docx", "odt", "rtf", "txt"):
-                return "[doc]"
+                return "DOC"
             if ext in ("zip", "rar", "7z", "tar", "gz"):
-                return "[zip]"
-            return "[file]"
+                return "ZIP"
+            return "FILE"
 
-        # Группировка файлов по стадиям
-        def _build_link(f):
-            return f.get("public_link") or ""
+        def _is_image_ext(fname: str) -> bool:
+            ext = fname.rsplit(".", 1)[-1].lower() if "." in fname else ""
+            return ext in ("jpg", "jpeg", "png", "gif", "webp", "bmp", "tiff")
 
-        # Сортировка вариации: None/пустое → первыми, потом по строке с числовым ключом
-        def _variation_key(f):
-            v = str(f.get("variation") or "")
-            if not v:
-                return ("", 0)
-            import re as _re
-
-            nums = _re.findall(r"\d+", v)
-            return (v, int(nums[0]) if nums else 0)
-
-        # Собираем файлы по группам: сначала по известному порядку, потом остальные
+        # Собираем файлы по стадиям
         by_stage: dict[str, list] = {}
         for f in files:
             s = f.get("stage") or "documents"
@@ -2097,33 +2078,82 @@ class CardFilesPickerDialog:
         all_stages = ordered_stages + extra_stages
 
         for stage in all_stages:
-            stage_files = sorted(by_stage[stage], key=_variation_key)
             stage_label = self._STAGE_LABELS.get(stage, stage)
 
-            # Заголовок секции
-            header = QListWidgetItem(f"  {stage_label}")
-            header.setFlags(Qt.ItemIsEnabled)  # не кликабельный
-            header.setBackground(QColor("#E8EEF6"))
-            font = QFont()
-            font.setBold(True)
-            font.setPointSize(9)
-            header.setFont(font)
-            header.setForeground(QColor("#1a3a6b"))
-            header.setData(Qt.UserRole, None)  # нет ссылки
-            lw.addItem(header)
+            # Заголовок стадии
+            hdr = QListWidgetItem(f"  {stage_label}")
+            hdr.setFlags(Qt.ItemIsEnabled)
+            hdr.setBackground(QColor("#E8EEF6"))
+            hf = QFont()
+            hf.setBold(True)
+            hf.setPointSize(9)
+            hdr.setFont(hf)
+            hdr.setForeground(QColor("#1a3a6b"))
+            hdr.setData(Qt.UserRole, None)
+            hdr.setSizeHint(QSize(0, 26))
+            lw.addItem(hdr)
 
-            for f in stage_files:
-                fname = f.get("file_name") or f.get("filename") or f.get("original_name") or "файл"
-                variation = str(f.get("variation") or "")
-                link = _build_link(f)
-                yandex_path = f.get("yandex_path") or ""
-                icon = _file_icon(fname)
-                display = f"    {icon} {fname}"
-                if variation:
-                    display += f"  —  {variation}"
-                item = QListWidgetItem(display)
-                item.setData(Qt.UserRole, {"name": fname, "link": link, "yandex_path": yandex_path})
-                lw.addItem(item)
+            # Группируем по вариации
+            by_var: dict[int, list] = {}
+            for f in by_stage[stage]:
+                v = f.get("variation") or 1
+                by_var.setdefault(v, []).append(f)
+            show_var_headers = len(by_var) > 1 or (len(by_var) == 1 and list(by_var.keys())[0] != 1)
+
+            for var_num in sorted(by_var.keys()):
+                if show_var_headers:
+                    vhdr = QListWidgetItem(f"      Вариант {var_num}")
+                    vhdr.setFlags(Qt.ItemIsEnabled)
+                    vhdr.setBackground(QColor("#F3F3F3"))
+                    vf = QFont()
+                    vf.setItalic(True)
+                    vf.setPointSize(8)
+                    vhdr.setFont(vf)
+                    vhdr.setForeground(QColor("#666"))
+                    vhdr.setData(Qt.UserRole, None)
+                    vhdr.setSizeHint(QSize(0, 22))
+                    lw.addItem(vhdr)
+
+                for f in sorted(by_var[var_num], key=lambda x: x.get("file_order", 0)):
+                    fname = f.get("file_name") or f.get("filename") or f.get("original_name") or "файл"
+                    link = f.get("public_link") or ""
+                    yandex_path = f.get("yandex_path") or ""
+                    preview_path = f.get("preview_cache_path") or ""
+
+                    item = QListWidgetItem()
+                    item.setData(Qt.UserRole, {"name": fname, "link": link, "yandex_path": yandex_path})
+                    item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+
+                    # Строим виджет-строку с миниатюрой
+                    row_w = QWidget()
+                    row_w.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+                    rl = QHBoxLayout(row_w)
+                    rl.setContentsMargins(8, 4, 8, 4)
+                    rl.setSpacing(8)
+
+                    thumb = QLabel()
+                    thumb.setFixedSize(56, 42)
+                    thumb.setAlignment(Qt.AlignCenter)
+                    loaded = False
+                    if _is_image_ext(fname) and preview_path:
+                        if os.path.exists(preview_path):
+                            pix = QPixmap(preview_path).scaled(56, 42, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                            if not pix.isNull():
+                                thumb.setPixmap(pix)
+                                loaded = True
+                    if not loaded:
+                        thumb.setText(_file_icon_text(fname))
+                        thumb.setStyleSheet("font-size:9px; font-weight:bold; color:#888;background:#f0f0f0; border:1px solid #ddd; border-radius:3px;")
+                    rl.addWidget(thumb)
+
+                    name_lbl = QLabel(fname)
+                    name_lbl.setStyleSheet("font-size:11px; background:transparent;")
+                    name_lbl.setWordWrap(True)
+                    rl.addWidget(name_lbl, stretch=1)
+
+                    item.setSizeHint(QSize(0, 58))
+                    lw.addItem(item)
+                    lw.setItemWidget(item, row_w)
 
         btn_row = QHBoxLayout()
         btn_row.addStretch()
