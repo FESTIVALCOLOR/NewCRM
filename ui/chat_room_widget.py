@@ -2076,12 +2076,11 @@ class CardFilesPickerDialog:
         def _build_link(f):
             return f.get("public_link") or ""
 
-        # Сортировка вариации: None/пустое → 0, потом по строке
+        # Сортировка вариации: None/пустое → первыми, потом по строке с числовым ключом
         def _variation_key(f):
-            v = f.get("variation") or ""
+            v = str(f.get("variation") or "")
             if not v:
-                return ("", "")
-            # Числа в строке вариации для правильной сортировки (Вариант 1 < Вариант 10)
+                return ("", 0)
             import re as _re
 
             nums = _re.findall(r"\d+", v)
@@ -2115,7 +2114,7 @@ class CardFilesPickerDialog:
 
             for f in stage_files:
                 fname = f.get("file_name") or f.get("filename") or f.get("original_name") or "файл"
-                variation = f.get("variation") or ""
+                variation = str(f.get("variation") or "")
                 link = _build_link(f)
                 yandex_path = f.get("yandex_path") or ""
                 icon = _file_icon(fname)
