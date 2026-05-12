@@ -25,7 +25,7 @@ from utils.permissions import _has_perm
 class ChatMembersDialog(QDialog):
     """Просмотр и управление участниками чата."""
 
-    _sig_data = pyqtSignal(object, object)  # (members_list, employees_list)
+    _sig_data = pyqtSignal(object, object, object)  # (members_list, employees_list, card_emp_ids_or_None)
     _sig_reload = pyqtSignal()
 
     def __init__(self, chat_id: int, chat_type: str, employee: dict, api_client, parent=None, crm_card_id: int = None):
@@ -169,19 +169,41 @@ class ChatMembersDialog(QDialog):
 
     def _load_data(self):
         _sig = self._sig_data
+        crm_card_id = self._crm_card_id
 
         def _worker():
             chat = self._api.get_internal_chat(self._chat_id)
             members = chat.get("members", []) if chat else []
             employees = self._api.get_employees(limit=500) or []
+
+            # Если чат привязан к карточке — берём только её сотрудников
+            card_emp_ids = None
+            if crm_card_id:
+                try:
+                    card = self._api.get_crm_card(crm_card_id)
+                    if card:
+                        ids = set()
+                        for field in ("senior_manager_id", "sdp_id", "gap_id", "manager_id", "surveyor_id", "dan_id", "designer_id", "draftsman_id"):
+                            v = card.get(field)
+                            if v:
+                                ids.add(v)
+                        for ex in card.get("stage_executors") or []:
+                            v = ex.get("executor_id")
+                            if v:
+                                ids.add(v)
+                        if ids:
+                            card_emp_ids = ids
+                except Exception:
+                    pass
+
             try:
-                _sig.emit(members, employees)
+                _sig.emit(members, employees, card_emp_ids)
             except Exception:
                 pass
 
         threading.Thread(target=_worker, daemon=True).start()
 
-    def _fill_data(self, members, employees):
+    def _fill_data(self, members, employees, card_emp_ids):
         self._members = members
         self._all_employees = employees
 
@@ -275,12 +297,16 @@ class ChatMembersDialog(QDialog):
         self._add_list.clear()
         available = 0
         for emp in employees:
-            if emp.get("id") not in member_ids:
-                name = emp.get("full_name") or emp.get("login") or f"Сотрудник #{emp.get('id')}"
-                item = QListWidgetItem(name)
-                item.setData(Qt.UserRole, emp.get("id"))
-                self._add_list.addItem(item)
-                available += 1
+            eid = emp.get("id")
+            if eid in member_ids:
+                continue  # уже в чате
+            if card_emp_ids is not None and eid not in card_emp_ids:
+                continue  # не назначен на данную карточку
+            name = emp.get("full_name") or emp.get("login") or f"Сотрудник #{eid}"
+            item = QListWidgetItem(name)
+            item.setData(Qt.UserRole, eid)
+            self._add_list.addItem(item)
+            available += 1
 
         hint = "Выберите сотрудника:" if available else "Все сотрудники уже в чате"
         self._add_hint.setText(hint)
