@@ -303,6 +303,50 @@ def search_messages(
     return list(reversed(msgs))
 
 
+class LinkProjectFileRequest(PydanticBaseModel):
+    yandex_path: str
+    file_name: str
+    public_link: Optional[str] = None
+    message_type: str = "file"
+
+
+@router.post("/{chat_id}/messages/from-project-file", response_model=InternalMessageResponse)
+async def link_project_file_to_chat(
+    chat_id: int,
+    body: LinkProjectFileRequest,
+    current_user: Employee = Depends(require_permission("chat.employee.send")),
+    db: Session = Depends(get_db),
+):
+    """Создать сообщение-ссылку на существующий файл проекта (без повторной загрузки байт)."""
+    _get_chat_or_404(db, chat_id)
+    _check_member(db, chat_id, current_user.id)
+
+    public_url = body.public_link or ""
+    if not public_url:
+        yd_path_clean = body.yandex_path.removeprefix("disk:")
+        try:
+            from yandex_disk_service import get_yandex_disk_service
+
+            yd = get_yandex_disk_service()
+            if yd and yd.token:
+                public_url = yd.get_public_link(yd_path_clean) or ""
+        except Exception:
+            pass
+
+    msg = add_file_message(
+        db,
+        chat_id,
+        file_url=public_url,
+        file_name=body.file_name,
+        yandex_path=body.yandex_path,
+        file_size=None,
+        message_type=body.message_type,
+        sender_employee_id=current_user.id,
+    )
+    await ws_manager.broadcast(chat_id, {"type": "new_message", "message": _message_to_dict(msg)})
+    return msg
+
+
 @router.delete("/{chat_id}/messages/{msg_id}")
 async def remove_message(
     chat_id: int,
@@ -560,50 +604,6 @@ def get_card_stage_variations(
         "variations": [{"variation": v, "files": fnames} for v, fnames in sorted(var_dict.items())],
         "next_variation": next_var,
     }
-
-
-class LinkProjectFileRequest(PydanticBaseModel):
-    yandex_path: str
-    file_name: str
-    public_link: Optional[str] = None
-    message_type: str = "file"
-
-
-@router.post("/{chat_id}/messages/from-project-file", response_model=InternalMessageResponse)
-async def link_project_file_to_chat(
-    chat_id: int,
-    body: LinkProjectFileRequest,
-    current_user: Employee = Depends(require_permission("chat.employee.send")),
-    db: Session = Depends(get_db),
-):
-    """Создать сообщение-ссылку на существующий файл проекта (без повторной загрузки байт)."""
-    _get_chat_or_404(db, chat_id)
-    _check_member(db, chat_id, current_user.id)
-
-    public_url = body.public_link or ""
-    if not public_url:
-        yd_path_clean = body.yandex_path.removeprefix("disk:")
-        try:
-            from yandex_disk_service import get_yandex_disk_service
-
-            yd = get_yandex_disk_service()
-            if yd and yd.token:
-                public_url = yd.get_public_link(yd_path_clean) or ""
-        except Exception:
-            pass
-
-    msg = add_file_message(
-        db,
-        chat_id,
-        file_url=public_url,
-        file_name=body.file_name,
-        yandex_path=body.yandex_path,
-        file_size=None,
-        message_type=body.message_type,
-        sender_employee_id=current_user.id,
-    )
-    await ws_manager.broadcast(chat_id, {"type": "new_message", "message": _message_to_dict(msg)})
-    return msg
 
 
 @router.post("/{chat_id}/messages/{msg_id}/read")
