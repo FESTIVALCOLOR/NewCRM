@@ -1283,8 +1283,8 @@
 
     <!-- Диалог: файлы из карточки CRM -->
     <q-dialog v-model="showCardFilesDialog" persistent>
-      <q-card style="min-width: 320px; max-width: 480px; width: 100%">
-        <q-card-section class="row items-center q-pb-none">
+      <q-card style="min-width: 320px; max-width: 96vw; width: 480px; max-height: 85vh; display: flex; flex-direction: column">
+        <q-card-section class="row items-center q-pb-none" style="flex-shrink: 0">
           <div class="text-subtitle1 text-weight-medium">
             Файлы из карточки CRM
           </div>
@@ -1297,36 +1297,68 @@
             dense
           />
         </q-card-section>
-        <q-card-section>
+
+        <q-card-section style="overflow-y: auto; flex: 1; padding: 8px 0">
           <div v-if="cardFilesLoading" class="flex flex-center q-pa-md">
             <q-spinner size="28px" color="grey" />
           </div>
-          <div v-else-if="!cardFiles.length" class="text-grey-6 text-caption q-pa-sm">
+          <div v-else-if="!cardFiles.length" class="text-grey-6 text-caption q-pa-sm q-px-md">
             Файлы не найдены
           </div>
-          <q-list v-else dense separator>
-            <q-item
-              v-for="f in cardFiles"
-              :key="f.id || f.yandex_path"
-              clickable
-              @click="insertCardFileLink(f)"
-            >
-              <q-item-section avatar>
-                <q-icon :name="f.file_type === 'image' ? 'image' : 'insert_drive_file'" color="blue-5" />
-              </q-item-section>
-              <q-item-section>
-                <q-item-label>{{ f.file_name || f.filename || 'файл' }}</q-item-label>
-                <q-item-label v-if="f.stage" caption>
-                  {{ f.stage }}
-                </q-item-label>
-              </q-item-section>
-              <q-item-section side>
-                <q-icon name="add_link" color="blue-5" size="18px" />
-              </q-item-section>
-            </q-item>
-          </q-list>
+          <template v-else>
+            <template v-for="stage in orderedCardStages" :key="stage">
+              <!-- Заголовок стадии -->
+              <div
+                class="q-px-md q-py-xs text-weight-bold"
+                style="background: #E8EEF6; color: #1a3a6b; font-size: 11px; letter-spacing: 0.3px"
+              >
+                {{ STAGE_LABELS[stage] || stage }}
+              </div>
+              <!-- Вариации -->
+              <template v-for="varNum in sortedCardVariations(stage)" :key="varNum">
+                <div
+                  v-if="sortedCardVariations(stage).length > 1 || varNum !== 1"
+                  class="q-px-lg q-py-xs"
+                  style="background: #F3F3F3; color: #666; font-style: italic; font-size: 10px"
+                >
+                  Вариант {{ varNum }}
+                </div>
+                <q-item
+                  v-for="f in (groupedCardFiles[stage]?.[varNum] || [])"
+                  :key="f.id || f.yandex_path"
+                  clickable
+                  :disable="sendingCardFile"
+                  style="min-height: 52px"
+                  @click="sendCardFileToChat(f)"
+                >
+                  <q-item-section avatar style="min-width: 60px">
+                    <div
+                      :style="{
+                        width: '52px', height: '40px', borderRadius: '4px',
+                        background: cardFileIconColor(f).bg,
+                        color: cardFileIconColor(f).text,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontWeight: 'bold', fontSize: '11px', flexShrink: '0'
+                      }"
+                    >
+                      {{ cardFileIconLabel(f) }}
+                    </div>
+                  </q-item-section>
+                  <q-item-section>
+                    <q-item-label style="font-size: 12px; word-break: break-word; white-space: normal">
+                      {{ f.file_name || f.filename || 'файл' }}
+                    </q-item-label>
+                  </q-item-section>
+                  <q-item-section side>
+                    <q-icon name="send" color="blue-5" size="16px" />
+                  </q-item-section>
+                </q-item>
+              </template>
+            </template>
+          </template>
         </q-card-section>
-        <q-card-actions align="right">
+
+        <q-card-actions align="right" style="flex-shrink: 0; border-top: 1px solid #eee">
           <q-btn
             v-close-popup
             flat
@@ -1390,12 +1422,73 @@ function pdfBubbleStyle(msg) {
 }
 
 // ── Файлы из карточки CRM ─────────────────────────────────────
+const STAGE_LABELS = {
+  measurement: 'Замер',
+  stage1: 'Стадия 1 — Планировочное решение',
+  stage2_concept: 'Стадия 2 — Концепция / коллажи',
+  stage2_3d: 'Стадия 2 — 3D визуализация',
+  stage3: 'Стадия 3 — Чертёжный проект',
+  supervision: 'Авторский надзор',
+  references: 'Референсы',
+  photo_documentation: 'Фотофиксация',
+  tech_task: 'Техническое задание',
+  documents: 'Документы',
+  acts: 'Акты',
+  info_letters: 'Информационные письма',
+  questionnaire: 'Анкета',
+}
+const STAGE_ORDER = [
+  'measurement', 'stage1', 'stage2_concept', 'stage2_3d', 'stage3', 'supervision',
+  'tech_task', 'documents', 'acts', 'info_letters', 'references', 'photo_documentation', 'questionnaire',
+]
+const _IMG_EXTS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'tiff'])
+const _ICON_PALETTE = {
+  IMG:  { bg: '#C8E6C9', text: '#2E7D32' },
+  PDF:  { bg: '#FFCDD2', text: '#B71C1C' },
+  XLS:  { bg: '#C8E6C9', text: '#1B5E20' },
+  DOC:  { bg: '#BBDEFB', text: '#0D47A1' },
+  ZIP:  { bg: '#E1BEE7', text: '#4A148C' },
+  FILE: { bg: '#E0E0E0', text: '#424242' },
+}
+function _cfExt(name) { const d = name.lastIndexOf('.'); return d >= 0 ? name.slice(d + 1).toLowerCase() : '' }
+function cardFileIconLabel(f) {
+  const e = _cfExt(f.file_name || f.filename || '')
+  if (_IMG_EXTS.has(e)) return 'IMG'
+  if (e === 'pdf') return 'PDF'
+  if (['xls', 'xlsx', 'csv', 'ods'].includes(e)) return 'XLS'
+  if (['doc', 'docx', 'odt', 'rtf', 'txt'].includes(e)) return 'DOC'
+  if (['zip', 'rar', '7z', 'tar', 'gz'].includes(e)) return 'ZIP'
+  return 'FILE'
+}
+function cardFileIconColor(f) { return _ICON_PALETTE[cardFileIconLabel(f)] || _ICON_PALETTE.FILE }
+
 const showCardFilesDialog = ref(false)
 const cardFiles = ref([])
 const cardFilesLoading = ref(false)
+const sendingCardFile = ref(false)
+
+const groupedCardFiles = computed(() => {
+  const m = {}
+  for (const f of cardFiles.value) {
+    const s = f.stage || 'documents'
+    const v = f.variation ?? 1
+    if (!m[s]) m[s] = {}
+    if (!m[s][v]) m[s][v] = []
+    m[s][v].push(f)
+  }
+  return m
+})
+const orderedCardStages = computed(() => {
+  const stages = new Set(cardFiles.value.map(f => f.stage || 'documents'))
+  return [...STAGE_ORDER.filter(s => stages.has(s)), ...[...stages].filter(s => !STAGE_ORDER.includes(s))]
+})
+function sortedCardVariations(stage) {
+  return Object.keys(groupedCardFiles.value[stage] || {}).map(Number).sort((a, b) => a - b)
+}
 
 async function loadCardFiles() {
-  if (!chatCrmCardId.value || cardFiles.value.length) return
+  if (!chatCrmCardId.value) return
+  cardFiles.value = []
   cardFilesLoading.value = true
   try {
     const { data: card } = await api.get(`/api/v1/crm/cards/${chatCrmCardId.value}`)
@@ -1411,16 +1504,22 @@ async function loadCardFiles() {
   }
 }
 
-function insertCardFileLink(f) {
-  const name = f.file_name || f.filename || 'файл'
-  let link = f.public_link || ''
-  if (!link && f.yandex_path) {
-    const clean = f.yandex_path.startsWith('disk:') ? f.yandex_path.slice(5) : f.yandex_path
-    link = 'https://disk.yandex.ru/client/disk' + encodeURIComponent(clean).replace(/%2F/g, '/')
-  }
-  const text = link ? `${name}: ${link}` : name
-  inputText.value = inputText.value ? inputText.value + '\n' + text : text
+async function sendCardFileToChat(f) {
+  const fname = f.file_name || f.filename || 'файл'
+  const yandex_path = f.yandex_path || ''
+  const public_link = f.public_link || ''
+  const message_type = _IMG_EXTS.has(_cfExt(fname)) ? 'image' : 'file'
   showCardFilesDialog.value = false
+  sendingCardFile.value = true
+  try {
+    await api.post(`/api/v1/chats/${chatId}/messages/from-project-file`, {
+      yandex_path, file_name: fname, public_link, message_type,
+    })
+  } catch {
+    $q.notify({ type: 'negative', message: 'Не удалось прикрепить файл из карточки' })
+  } finally {
+    sendingCardFile.value = false
+  }
 }
 // Emoji реакции
 const QUICK_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥']
