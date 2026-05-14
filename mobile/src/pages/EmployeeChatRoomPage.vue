@@ -1405,7 +1405,7 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, onBeforeRouteUpdate } from 'vue-router'
 import { api } from 'src/boot/axios'
 import { useChatWebSocket } from 'src/composables/useChatWebSocket'
 import { getPdfThumbnail } from 'src/composables/usePdfThumbnail'
@@ -1418,7 +1418,7 @@ const route = useRoute()
 const authStore = useAuthStore()
 const chatUnreadStore = useChatUnreadStore()
 const $q = useQuasar()
-const chatId = Number(route.params.chatId)
+let chatId = Number(route.params.chatId)
 
 const { isConnected: wsConnected, connectEmployee, disconnect, sendMessage, sendTypingStart, sendTypingStop, sendRead, typingUsers } = useChatWebSocket()
 const { can } = usePermission()
@@ -2747,75 +2747,103 @@ async function removeMember(m) {
   }
 }
 
+function connectWs() {
+  const token = localStorage.getItem('access_token')
+  if (!token) return
+  connectEmployee(chatId, token, {
+    onMessage: (msg) => {
+      const exists = messages.value.some(m => m.id === msg.id)
+      if (!exists) {
+        messages.value.push(msg)
+        if (isPdf(msg)) loadPdfThumbnail(msg)
+        scrollToBottom()
+        sendRead(msg.id)
+      }
+    },
+    onMessageGroup: (msgs) => {
+      msgs.forEach(msg => {
+        const exists = messages.value.some(m => m.id === msg.id)
+        if (!exists) {
+          messages.value.push(msg)
+          if (isPdf(msg)) loadPdfThumbnail(msg)
+        }
+      })
+      scrollToBottom()
+      if (msgs.length) sendRead(msgs[msgs.length - 1].id)
+    },
+    onMessageUpdated: (msg) => {
+      const idx = messages.value.findIndex(m => m.id === msg.id)
+      if (idx !== -1) messages.value.splice(idx, 1, msg)
+    },
+    onMessageDeleted: (msgId) => {
+      const idx = messages.value.findIndex(m => m.id === msgId)
+      if (idx !== -1) {
+        messages.value[idx] = { ...messages.value[idx], is_deleted: true, content: '[Сообщение удалено]', message_type: 'text' }
+      }
+    },
+    onMemberAdded: async () => {
+      try {
+        const { data } = await api.get(`/api/v1/chats/${chatId}`)
+        members.value = data.members || []
+      } catch { }
+    },
+    onMemberRemoved: (evt) => {
+      if (evt.member_id) {
+        members.value = members.value.filter(m => m.id !== evt.member_id)
+      }
+    },
+    onPinned: (evt) => {
+      const idx = messages.value.findIndex(m => m.id === evt.message_id)
+      if (idx !== -1) messages.value[idx] = { ...messages.value[idx], is_pinned: evt.pinned }
+      if (evt.pinned && evt.message) {
+        if (!pinnedMsgs.value.some(p => p.id === evt.message_id)) pinnedMsgs.value.push(evt.message)
+      } else {
+        pinnedMsgs.value = pinnedMsgs.value.filter(p => p.id !== evt.message_id)
+      }
+    },
+    onReactionUpdated: (evt) => {
+      const idx = messages.value.findIndex(m => m.id === evt.message_id)
+      if (idx !== -1) {
+        const c = messagesEl.value
+        const atBottom = !c || (c.scrollHeight - c.scrollTop - c.clientHeight < 50)
+        messages.value[idx] = { ...messages.value[idx], reactions: evt.reactions }
+        if (atBottom) nextTick(() => requestAnimationFrame(() => { if (c) c.scrollTop = c.scrollHeight }))
+      }
+    },
+  })
+}
+
 onMounted(() => {
   recalcChatH()
   window.addEventListener('resize', recalcChatH)
   window.visualViewport?.addEventListener('resize', recalcChatH)
   loadMessages()
-  const token = localStorage.getItem('access_token')
-  if (token) {
-    connectEmployee(chatId, token, {
-      onMessage: (msg) => {
-        const exists = messages.value.some(m => m.id === msg.id)
-        if (!exists) {
-          messages.value.push(msg)
-          if (isPdf(msg)) loadPdfThumbnail(msg)
-          scrollToBottom()
-          sendRead(msg.id)
-        }
-      },
-      onMessageGroup: (msgs) => {
-        msgs.forEach(msg => {
-          const exists = messages.value.some(m => m.id === msg.id)
-          if (!exists) {
-            messages.value.push(msg)
-            if (isPdf(msg)) loadPdfThumbnail(msg)
-          }
-        })
-        scrollToBottom()
-        if (msgs.length) sendRead(msgs[msgs.length - 1].id)
-      },
-      onMessageUpdated: (msg) => {
-        const idx = messages.value.findIndex(m => m.id === msg.id)
-        if (idx !== -1) messages.value.splice(idx, 1, msg)
-      },
-      onMessageDeleted: (msgId) => {
-        const idx = messages.value.findIndex(m => m.id === msgId)
-        if (idx !== -1) {
-          messages.value[idx] = { ...messages.value[idx], is_deleted: true, content: '[Сообщение удалено]', message_type: 'text' }
-        }
-      },
-      onMemberAdded: async () => {
-        try {
-          const { data } = await api.get(`/api/v1/chats/${chatId}`)
-          members.value = data.members || []
-        } catch { }
-      },
-      onMemberRemoved: (evt) => {
-        if (evt.member_id) {
-          members.value = members.value.filter(m => m.id !== evt.member_id)
-        }
-      },
-      onPinned: (evt) => {
-        const idx = messages.value.findIndex(m => m.id === evt.message_id)
-        if (idx !== -1) messages.value[idx] = { ...messages.value[idx], is_pinned: evt.pinned }
-        if (evt.pinned && evt.message) {
-          if (!pinnedMsgs.value.some(p => p.id === evt.message_id)) pinnedMsgs.value.push(evt.message)
-        } else {
-          pinnedMsgs.value = pinnedMsgs.value.filter(p => p.id !== evt.message_id)
-        }
-      },
-      onReactionUpdated: (evt) => {
-        const idx = messages.value.findIndex(m => m.id === evt.message_id)
-        if (idx !== -1) {
-          const c = messagesEl.value
-          const atBottom = !c || (c.scrollHeight - c.scrollTop - c.clientHeight < 50)
-          messages.value[idx] = { ...messages.value[idx], reactions: evt.reactions }
-          if (atBottom) nextTick(() => requestAnimationFrame(() => { if (c) c.scrollTop = c.scrollHeight }))
-        }
-      },
-    })
+  connectWs()
+})
+
+onBeforeRouteUpdate((to, from, next) => {
+  const newChatId = Number(to.params.chatId)
+  if (newChatId !== chatId) {
+    chatId = newChatId
+    disconnect()
+    if (_topObserver) _topObserver.disconnect()
+    messages.value = []
+    members.value = []
+    pinnedMsgs.value = []
+    pinnedIdx.value = 0
+    chatTitle.value = 'Чат сотрудников'
+    inputText.value = ''
+    hasMoreMessages.value = false
+    chatCrmCardId.value = null
+    chatYdFolder.value = null
+    clientChatId.value = null
+    firstUnreadId.value = null
+    searchQuery.value = ''
+    searchResults.value = []
+    loadMessages()
+    connectWs()
   }
+  next()
 })
 
 onUnmounted(() => {
