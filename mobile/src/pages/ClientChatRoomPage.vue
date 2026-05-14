@@ -197,331 +197,471 @@
       </div>
 
       <template v-else>
-        <template v-for="msg in messages" :key="msg.id">
-          <!-- Разделитель «Непрочитанные сообщения» -->
-          <div
-            v-if="firstUnreadId && msg.id === firstUnreadId"
-            data-unread-divider
-            class="row items-center q-my-sm"
-          >
-            <div class="col" style="height: 1px; background: #E53935" />
-            <span class="q-px-sm text-caption text-negative text-weight-medium">Непрочитанные сообщения</span>
-            <div class="col" style="height: 1px; background: #E53935" />
-          </div>
-          <div
-            :id="`msg-${msg.id}`"
-            :data-msg-id="msg.id"
-            class="q-mb-sm"
-            :class="isOwn(msg) ? 'row justify-end' : 'row justify-start'"
-          >
-            <!-- Системные -->
-            <div v-if="msg.message_type === 'system'" class="text-center full-width">
-              <q-chip dense size="sm" color="grey-3" text-color="grey-7">
-                {{ msg.content }}
-              </q-chip>
-            </div>
-
+        <template v-for="item in renderedItems" :key="item.key">
+          <!-- Галерея (несколько изображений одной отправкой) -->
+          <template v-if="item.type === 'group'">
             <div
-              v-else
-              :class="[(msg.message_type === 'image' || (isPdf(msg) && pdfThumbnails[msg.id]))
-                ? (isOwn(msg) ? 'bubble-img-own' : 'bubble-img-other')
-                : (isOwn(msg) ? 'bubble-own' : 'bubble-other'), { 'bubble-forwarded': isForwarded(msg) }]"
-              :style="pdfBubbleStyle(msg)"
+              :data-msg-id="item.msgs[0].id"
+              class="q-mb-sm"
+              :class="isOwn(item.msgs[0]) ? 'row justify-end' : 'row justify-start'"
             >
-              <!-- Верхняя строка: имя + меню -->
               <div
-                class="row no-wrap items-center justify-between q-mb-xs"
-                :style="(msg.message_type === 'image' || (isPdf(msg) && pdfThumbnails[msg.id])) ? 'min-height:16px;gap:2px;padding:6px 10px 4px' : 'min-height:16px;gap:2px'"
+                :class="[isOwn(item.msgs[0]) ? 'bubble-img-own' : 'bubble-img-other', { 'bubble-forwarded': isForwarded(item.msgs[0]) }]"
+                :style="galleryBubbleStyle(item.msgs.length)"
               >
-                <div
-                  class="text-caption text-weight-bold"
-                  :style="{ color: isOwn(msg) ? '#999' : (isGuest(msg) ? '#2E7D32' : '#1565C0') }"
-                  style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: default"
-                >
-                  {{ msg.sender_display_name }}
-                  <q-chip
-                    v-if="isGuest(msg)"
+                <div class="row no-wrap items-center justify-between" style="padding: 6px 10px 4px; min-height: 16px; gap: 2px">
+                  <div
+                    class="text-caption text-weight-bold"
+                    :style="{ color: isOwn(item.msgs[0]) ? '#999' : (isGuest(item.msgs[0]) ? '#2E7D32' : '#1565C0') }"
+                    style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap"
+                  >
+                    {{ item.msgs[0].sender_display_name }}
+                    <q-chip
+                      v-if="isGuest(item.msgs[0])"
+                      dense
+                      size="xs"
+                      color="green-2"
+                      text-color="green-9"
+                    >
+                      клиент
+                    </q-chip>
+                  </div>
+                  <q-btn
+                    flat
+                    round
                     dense
                     size="xs"
-                    color="green-2"
-                    text-color="green-9"
+                    icon="more_vert"
+                    color="grey-6"
+                    style="margin: -4px -6px -2px 2px; flex-shrink: 0"
                   >
-                    клиент
-                  </q-chip>
-                  <!-- Телефон клиента (только при наличии прав) -->
-                  <q-tooltip
-                    v-if="isGuest(msg) && canShowPhone && guestPhone(msg)"
-                    anchor="top middle"
-                    self="bottom middle"
-                  >
-                    <q-icon name="phone" size="12px" class="q-mr-xs" />{{ guestPhone(msg) }}
-                  </q-tooltip>
+                    <q-menu auto-close>
+                      <q-list dense style="min-width: 210px; font-size: 12px; white-space: nowrap">
+                        <q-item clickable dense @click="togglePin(item.msgs[0])">
+                          <q-item-section avatar style="min-width: 28px">
+                            <q-icon name="push_pin" size="14px" :color="item.msgs[0].is_pinned ? 'orange-8' : 'grey-8'" />
+                          </q-item-section>
+                          <q-item-section style="font-size: 12px">
+                            {{ item.msgs[0].is_pinned ? 'Открепить' : 'Закрепить' }}
+                          </q-item-section>
+                        </q-item>
+                        <q-separator />
+                        <q-item clickable dense @click="openForwardDialog(item.msgs)">
+                          <q-item-section avatar style="min-width: 28px">
+                            <q-icon name="forward" size="14px" color="grey-8" />
+                          </q-item-section>
+                          <q-item-section style="font-size: 12px">
+                            Переслать
+                          </q-item-section>
+                        </q-item>
+                        <q-item v-if="isOwn(item.msgs[0])" clickable dense @click="deleteMsg(item.msgs[0])">
+                          <q-item-section avatar style="min-width: 28px">
+                            <q-icon name="delete_outline" size="14px" color="grey-8" />
+                          </q-item-section>
+                          <q-item-section class="text-red-7" style="font-size: 12px">
+                            Удалить
+                          </q-item-section>
+                        </q-item>
+                      </q-list>
+                    </q-menu>
+                  </q-btn>
                 </div>
-                <!-- 3-точечное меню для ВСЕХ сообщений (не только своих) -->
-                <q-btn
-                  v-if="!msg.is_deleted && !msg._uploading"
-                  flat
-                  round
-                  dense
-                  size="xs"
-                  icon="more_vert"
-                  color="grey-6"
-                  style="margin: -4px -6px -2px 2px; flex-shrink: 0"
-                >
-                  <q-menu auto-close>
-                    <q-list dense style="min-width: 210px; font-size: 12px; white-space: nowrap">
-                      <!-- Быстрые реакции -->
-                      <q-item dense style="padding: 4px 8px 2px">
-                        <div class="row items-center">
-                          <button
-                            v-for="em in QUICK_EMOJIS"
-                            :key="em"
-                            class="react-quick-btn"
-                            :class="{ 'react-quick-btn--active': isOwnReaction(msg, em) }"
-                            @click.stop="sendReaction(msg, em)"
-                          >
-                            {{ em }}
-                          </button>
-                        </div>
-                      </q-item>
-                      <q-separator />
-                      <q-item clickable dense @click="togglePin(msg)">
-                        <q-item-section avatar style="min-width: 28px">
-                          <q-icon name="push_pin" size="14px" :color="msg.is_pinned ? 'orange-8' : 'grey-8'" />
-                        </q-item-section>
-                        <q-item-section style="font-size: 12px">
-                          {{ msg.is_pinned ? 'Открепить' : 'Закрепить' }}
-                        </q-item-section>
-                      </q-item>
-                      <q-item clickable dense @click="replyingTo = msg">
-                        <q-item-section avatar style="min-width: 28px">
-                          <q-icon name="reply" size="14px" color="grey-8" />
-                        </q-item-section>
-                        <q-item-section style="font-size: 12px">
-                          Ответить
-                        </q-item-section>
-                      </q-item>
-                      <q-separator />
-                      <q-item v-if="isOwn(msg) && msg.message_type === 'text'" clickable dense @click="startEdit(msg)">
-                        <q-item-section avatar style="min-width: 28px">
-                          <q-icon name="edit" size="14px" color="grey-8" />
-                        </q-item-section>
-                        <q-item-section style="font-size: 12px">
-                          Редактировать
-                        </q-item-section>
-                      </q-item>
-                      <q-item clickable dense @click="openForwardDialog(msg)">
-                        <q-item-section avatar style="min-width: 28px">
-                          <q-icon name="forward" size="14px" color="grey-8" />
-                        </q-item-section>
-                        <q-item-section style="font-size: 12px">
-                          Переслать
-                        </q-item-section>
-                      </q-item>
-                      <q-item v-if="msg.yandex_path && chatCrmCardId" clickable dense @click="openCopyToCard(msg)">
-                        <q-item-section avatar style="min-width: 28px">
-                          <q-icon name="drive_file_move" size="14px" color="grey-8" />
-                        </q-item-section>
-                        <q-item-section style="font-size: 12px">
-                          Скопировать в карточку
-                        </q-item-section>
-                      </q-item>
-                      <q-separator v-if="isOwn(msg)" />
-                      <q-item v-if="isOwn(msg)" clickable dense @click="deleteMsg(msg)">
-                        <q-item-section avatar style="min-width: 28px">
-                          <q-icon name="delete_outline" size="14px" color="grey-8" />
-                        </q-item-section>
-                        <q-item-section class="text-red-7" style="font-size: 12px">
-                          Удалить
-                        </q-item-section>
-                      </q-item>
-                    </q-list>
-                  </q-menu>
-                </q-btn>
-              </div>
-
-              <template v-if="msg._uploading">
-                <div v-if="msg._previewUrl">
-                  <q-img :src="msg._previewUrl" style="width:100%;max-height:200px;display:block" fit="cover" />
-                  <div class="row items-center q-gutter-xs" style="padding:3px 8px 2px;opacity:0.7">
-                    <q-spinner size="10px" color="grey-5" />
-                    <span class="text-caption text-grey-6">{{ msg.file_name }}</span>
-                  </div>
-                </div>
-                <div v-else class="row items-center q-gutter-xs">
-                  <q-icon :name="isPdf(msg) ? 'picture_as_pdf' : 'upload'" size="16px" :color="isPdf(msg) ? 'red-5' : 'grey-5'" />
-                  <span class="text-caption text-grey-6" style="word-break:break-word">{{ msg.file_name }}…</span>
-                  <q-spinner size="12px" color="grey-5" />
-                </div>
-              </template>
-              <template v-else>
-                <!-- Цитата (ответ на сообщение) -->
-                <div
-                  v-if="msg.reply_preview"
-                  class="reply-quote q-mb-xs"
-                  style="border-left: 3px solid #1565C0; background: rgba(21,101,192,0.07); border-radius: 4px; padding: 4px 8px; cursor: pointer"
-                  @click="scrollToMsg(msg.reply_preview.id)"
-                >
-                  <div class="row no-wrap items-center" style="gap: 6px">
-                    <q-img
-                      v-if="msg.reply_preview.message_type === 'image' && msg.reply_preview.yandex_path"
-                      :src="imgStreamUrl({ yandex_path: msg.reply_preview.yandex_path })"
-                      style="width: 36px; height: 36px; border-radius: 3px; flex-shrink: 0"
-                      fit="cover"
-                      spinner-size="12px"
-                    />
-                    <div style="min-width: 0">
-                      <div class="text-caption text-weight-bold" style="color: #1565C0; font-size: 11px">
-                        {{ msg.reply_preview.sender_display_name }}
-                      </div>
-                      <div class="text-caption text-grey-7 ellipsis" style="font-size: 11px">
-                        {{ msg.reply_preview.message_type === 'image' ? '[Изображение]' : msg.reply_preview.message_type === 'file' ? '[Файл]' : msg.reply_preview.content }}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <template v-if="msg.message_type === 'image'">
-                  <a :href="msg.file_url" target="_blank" style="display: block; text-decoration: none; color: inherit">
-                    <q-img
-                      v-if="imgStreamUrl(msg)"
-                      :src="imgStreamUrl(msg)"
-                      style="width: 100%; max-height: clamp(160px, 35vh, 480px); display: block; cursor: pointer; min-height: 80px"
-                      fit="contain"
-                      spinner-color="grey-4"
-                      spinner-size="28px"
-                    />
-                    <div class="row items-center q-gutter-xs" style="padding: 4px 10px 2px">
-                      <q-icon name="image" size="14px" color="grey-6" />
-                      <span class="text-caption text-grey-7 ellipsis" style="max-width: 220px">
-                        {{ msg.file_name || 'Изображение' }}
-                      </span>
-                    </div>
-                  </a>
-                </template>
-                <template v-else-if="msg.message_type === 'file'">
-                  <div v-if="isPdf(msg) && pdfThumbnails[msg.id]">
-                    <a :href="msg.file_url" target="_blank" style="display:block;text-decoration:none">
-                      <img
-                        :src="pdfThumbnails[msg.id]"
-                        style="display:block;max-height:200px;width:auto;max-width:min(85vw,440px);cursor:pointer"
-                        @load="(e) => { pdfImgWidths[msg.id] = e.target.offsetWidth }"
-                      >
+                <template v-if="item.msgs.length < 4">
+                  <div :class="galleryGridClass(item.msgs.length)" :style="galleryGridStyle(item.msgs.length)">
+                    <a
+                      v-for="(gm, gi) in item.msgs"
+                      :key="gm.id"
+                      :href="gm.file_url"
+                      target="_blank"
+                      style="display: block; text-decoration: none; overflow: hidden"
+                    >
+                      <q-img
+                        v-if="imgStreamUrl(gm)"
+                        :src="imgStreamUrl(gm)"
+                        :style="galleryImgStyle(item.msgs.length, gi)"
+                        fit="cover"
+                        spinner-color="grey-4"
+                        spinner-size="20px"
+                      />
                     </a>
-                    <div style="padding:3px 8px 2px;display:flex;align-items:center;gap:4px;overflow:hidden">
-                      <q-icon name="picture_as_pdf" size="14px" color="red-6" style="flex-shrink:0" />
-                      <a :href="msg.file_url" target="_blank" class="text-caption ellipsis" style="flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:inherit">{{ msg.file_name || 'Документ' }}</a>
-                    </div>
-                  </div>
-                  <div v-else class="row items-center q-gutter-xs">
-                    <q-icon :name="isPdf(msg) ? 'picture_as_pdf' : 'attach_file'" :size="isPdf(msg) ? '28px' : '18px'" :color="isPdf(msg) ? 'red-6' : 'grey-7'" />
-                    <a :href="msg.file_url" target="_blank" class="text-body2 ellipsis" style="max-width:200px;color:inherit">{{ msg.file_name || 'Файл' }}</a>
                   </div>
                 </template>
+                <template v-else>
+                  <div style="display: flex; flex-direction: column; gap: 2px">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2px">
+                      <a
+                        v-for="gm in item.msgs.slice(0, 2)"
+                        :key="gm.id"
+                        :href="gm.file_url"
+                        target="_blank"
+                        style="display: block; text-decoration: none; overflow: hidden"
+                      >
+                        <q-img
+                          v-if="imgStreamUrl(gm)"
+                          :src="imgStreamUrl(gm)"
+                          style="width: 100%; display: block; height: 180px"
+                          fit="cover"
+                          spinner-color="grey-4"
+                          spinner-size="20px"
+                        />
+                      </a>
+                    </div>
+                    <div v-if="item.msgs.length > 2" :style="galleryThumbGridStyle(item.msgs.length)">
+                      <a
+                        v-for="(gm, gi) in item.msgs.slice(2)"
+                        :key="gm.id"
+                        :href="gm.file_url"
+                        target="_blank"
+                        style="display: block; text-decoration: none; overflow: hidden"
+                        :style="galleryItemSpanStyle(item.msgs.length - 2, gi)"
+                      >
+                        <q-img
+                          v-if="imgStreamUrl(gm)"
+                          :src="imgStreamUrl(gm)"
+                          style="width: 100%; display: block; height: 90px"
+                          fit="cover"
+                          spinner-color="grey-4"
+                          spinner-size="20px"
+                        />
+                      </a>
+                    </div>
+                  </div>
+                </template>
+                <div class="row no-wrap items-center justify-end" style="padding: 2px 8px 4px; color: #888; font-size: 10px">
+                  <span class="text-caption">{{ formatTime(item.msgs[item.msgs.length - 1].created_at) }}</span>
+                </div>
+              </div>
+            </div>
+          </template>
+          <!-- Одиночное сообщение -->
+          <template v-else>
+            <template v-for="msg in [item.msg]" :key="msg.id">
+              <!-- Разделитель «Непрочитанные сообщения» -->
+              <div
+                v-if="firstUnreadId && msg.id === firstUnreadId"
+                data-unread-divider
+                class="row items-center q-my-sm"
+              >
+                <div class="col" style="height: 1px; background: #E53935" />
+                <span class="q-px-sm text-caption text-negative text-weight-medium">Непрочитанные сообщения</span>
+                <div class="col" style="height: 1px; background: #E53935" />
+              </div>
+              <div
+                :id="`msg-${msg.id}`"
+                :data-msg-id="msg.id"
+                class="q-mb-sm"
+                :class="isOwn(msg) ? 'row justify-end' : 'row justify-start'"
+              >
+                <!-- Системные -->
+                <div v-if="msg.message_type === 'system'" class="text-center full-width">
+                  <q-chip dense size="sm" color="grey-3" text-color="grey-7">
+                    {{ msg.content }}
+                  </q-chip>
+                </div>
 
-                <!-- Голосовое -->
-                <template v-else-if="msg.message_type === 'voice'">
-                  <audio
-                    :ref="el => { if (el) _voiceRefs[msg.id] = el }"
-                    :src="imgStreamUrl(msg)"
-                    preload="none"
-                    style="display: none"
-                    @timeupdate="voiceCurrent[msg.id] = $event.target.currentTime"
-                    @ended="voicePlaying[msg.id] = false; voiceCurrent[msg.id] = 0"
-                    @play="voicePlaying[msg.id] = true"
-                    @pause="voicePlaying[msg.id] = false"
-                  />
-                  <div class="row items-center" style="gap: 6px; width: 220px; padding: 4px 0">
+                <div
+                  v-else
+                  :class="[(msg.message_type === 'image' || (isPdf(msg) && pdfThumbnails[msg.id]))
+                    ? (isOwn(msg) ? 'bubble-img-own' : 'bubble-img-other')
+                    : (isOwn(msg) ? 'bubble-own' : 'bubble-other'), { 'bubble-forwarded': isForwarded(msg) }]"
+                  :style="pdfBubbleStyle(msg)"
+                >
+                  <!-- Верхняя строка: имя + меню -->
+                  <div
+                    class="row no-wrap items-center justify-between q-mb-xs"
+                    :style="(msg.message_type === 'image' || (isPdf(msg) && pdfThumbnails[msg.id])) ? 'min-height:16px;gap:2px;padding:6px 10px 4px' : 'min-height:16px;gap:2px'"
+                  >
+                    <div
+                      class="text-caption text-weight-bold"
+                      :style="{ color: isOwn(msg) ? '#999' : (isGuest(msg) ? '#2E7D32' : '#1565C0') }"
+                      style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: default"
+                    >
+                      {{ msg.sender_display_name }}
+                      <q-chip
+                        v-if="isGuest(msg)"
+                        dense
+                        size="xs"
+                        color="green-2"
+                        text-color="green-9"
+                      >
+                        клиент
+                      </q-chip>
+                      <!-- Телефон клиента (только при наличии прав) -->
+                      <q-tooltip
+                        v-if="isGuest(msg) && canShowPhone && guestPhone(msg)"
+                        anchor="top middle"
+                        self="bottom middle"
+                      >
+                        <q-icon name="phone" size="12px" class="q-mr-xs" />{{ guestPhone(msg) }}
+                      </q-tooltip>
+                    </div>
+                    <!-- 3-точечное меню для ВСЕХ сообщений (не только своих) -->
                     <q-btn
+                      v-if="!msg.is_deleted && !msg._uploading"
                       flat
                       round
                       dense
-                      :icon="voicePlaying[msg.id] ? 'pause' : 'play_arrow'"
-                      color="primary"
-                      size="sm"
-                      @click="toggleVoice(msg)"
-                    />
-                    <div class="column" style="flex: 1; min-width: 0; gap: 3px">
-                      <div style="height: 3px; background: #e0e0e0; border-radius: 2px; overflow: hidden">
-                        <div :style="{ width: voiceProgressPct(msg) + '%', background: '#1976d2', height: '100%' }" />
-                      </div>
-                      <div class="text-caption text-grey-6" style="font-size: 10px">
-                        {{ voicePlaying[msg.id] ? fmtDuration(voiceCurrent[msg.id]) : fmtDuration(msg.content) }}
+                      size="xs"
+                      icon="more_vert"
+                      color="grey-6"
+                      style="margin: -4px -6px -2px 2px; flex-shrink: 0"
+                    >
+                      <q-menu auto-close>
+                        <q-list dense style="min-width: 210px; font-size: 12px; white-space: nowrap">
+                          <!-- Быстрые реакции -->
+                          <q-item dense style="padding: 4px 8px 2px">
+                            <div class="row items-center">
+                              <button
+                                v-for="em in QUICK_EMOJIS"
+                                :key="em"
+                                class="react-quick-btn"
+                                :class="{ 'react-quick-btn--active': isOwnReaction(msg, em) }"
+                                @click.stop="sendReaction(msg, em)"
+                              >
+                                {{ em }}
+                              </button>
+                            </div>
+                          </q-item>
+                          <q-separator />
+                          <q-item clickable dense @click="togglePin(msg)">
+                            <q-item-section avatar style="min-width: 28px">
+                              <q-icon name="push_pin" size="14px" :color="msg.is_pinned ? 'orange-8' : 'grey-8'" />
+                            </q-item-section>
+                            <q-item-section style="font-size: 12px">
+                              {{ msg.is_pinned ? 'Открепить' : 'Закрепить' }}
+                            </q-item-section>
+                          </q-item>
+                          <q-item clickable dense @click="replyingTo = msg">
+                            <q-item-section avatar style="min-width: 28px">
+                              <q-icon name="reply" size="14px" color="grey-8" />
+                            </q-item-section>
+                            <q-item-section style="font-size: 12px">
+                              Ответить
+                            </q-item-section>
+                          </q-item>
+                          <q-separator />
+                          <q-item v-if="isOwn(msg) && msg.message_type === 'text'" clickable dense @click="startEdit(msg)">
+                            <q-item-section avatar style="min-width: 28px">
+                              <q-icon name="edit" size="14px" color="grey-8" />
+                            </q-item-section>
+                            <q-item-section style="font-size: 12px">
+                              Редактировать
+                            </q-item-section>
+                          </q-item>
+                          <q-item clickable dense @click="openForwardDialog(msg)">
+                            <q-item-section avatar style="min-width: 28px">
+                              <q-icon name="forward" size="14px" color="grey-8" />
+                            </q-item-section>
+                            <q-item-section style="font-size: 12px">
+                              Переслать
+                            </q-item-section>
+                          </q-item>
+                          <q-item v-if="msg.yandex_path && chatCrmCardId" clickable dense @click="openCopyToCard(msg)">
+                            <q-item-section avatar style="min-width: 28px">
+                              <q-icon name="drive_file_move" size="14px" color="grey-8" />
+                            </q-item-section>
+                            <q-item-section style="font-size: 12px">
+                              Скопировать в карточку
+                            </q-item-section>
+                          </q-item>
+                          <q-separator v-if="isOwn(msg)" />
+                          <q-item v-if="isOwn(msg)" clickable dense @click="deleteMsg(msg)">
+                            <q-item-section avatar style="min-width: 28px">
+                              <q-icon name="delete_outline" size="14px" color="grey-8" />
+                            </q-item-section>
+                            <q-item-section class="text-red-7" style="font-size: 12px">
+                              Удалить
+                            </q-item-section>
+                          </q-item>
+                        </q-list>
+                      </q-menu>
+                    </q-btn>
+                  </div>
+
+                  <template v-if="msg._uploading">
+                    <div v-if="msg._previewUrl">
+                      <q-img :src="msg._previewUrl" style="width:100%;max-height:200px;display:block" fit="cover" />
+                      <div class="row items-center q-gutter-xs" style="padding:3px 8px 2px;opacity:0.7">
+                        <q-spinner size="10px" color="grey-5" />
+                        <span class="text-caption text-grey-6">{{ msg.file_name }}</span>
                       </div>
                     </div>
-                  </div>
-                </template>
+                    <div v-else class="row items-center q-gutter-xs">
+                      <q-icon :name="isPdf(msg) ? 'picture_as_pdf' : 'upload'" size="16px" :color="isPdf(msg) ? 'red-5' : 'grey-5'" />
+                      <span class="text-caption text-grey-6" style="word-break:break-word">{{ msg.file_name }}…</span>
+                      <q-spinner size="12px" color="grey-5" />
+                    </div>
+                  </template>
+                  <template v-else>
+                    <!-- Цитата (ответ на сообщение) -->
+                    <div
+                      v-if="msg.reply_preview"
+                      class="reply-quote q-mb-xs"
+                      style="border-left: 3px solid #1565C0; background: rgba(21,101,192,0.07); border-radius: 4px; padding: 4px 8px; cursor: pointer"
+                      @click="scrollToMsg(msg.reply_preview.id)"
+                    >
+                      <div class="row no-wrap items-center" style="gap: 6px">
+                        <q-img
+                          v-if="msg.reply_preview.message_type === 'image' && msg.reply_preview.yandex_path"
+                          :src="imgStreamUrl({ yandex_path: msg.reply_preview.yandex_path })"
+                          style="width: 36px; height: 36px; border-radius: 3px; flex-shrink: 0"
+                          fit="cover"
+                          spinner-size="12px"
+                        />
+                        <div style="min-width: 0">
+                          <div class="text-caption text-weight-bold" style="color: #1565C0; font-size: 11px">
+                            {{ msg.reply_preview.sender_display_name }}
+                          </div>
+                          <div class="text-caption text-grey-7 ellipsis" style="font-size: 11px">
+                            {{ msg.reply_preview.message_type === 'image' ? '[Изображение]' : msg.reply_preview.message_type === 'file' ? '[Файл]' : msg.reply_preview.content }}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
 
-                <template v-else>
-                  <div class="text-body2" style="white-space: pre-wrap; word-break: break-word; font-size: 13px">
-                    {{ msg.content }}
-                  </div>
-                </template>
-              </template>
+                    <template v-if="msg.message_type === 'image'">
+                      <a :href="msg.file_url" target="_blank" style="display: block; text-decoration: none; color: inherit">
+                        <q-img
+                          v-if="imgStreamUrl(msg)"
+                          :src="imgStreamUrl(msg)"
+                          style="width: 100%; max-height: clamp(160px, 35vh, 480px); display: block; cursor: pointer; min-height: 80px"
+                          fit="contain"
+                          spinner-color="grey-4"
+                          spinner-size="28px"
+                        />
+                        <div class="row items-center q-gutter-xs" style="padding: 4px 10px 2px">
+                          <q-icon name="image" size="14px" color="grey-6" />
+                          <span class="text-caption text-grey-7 ellipsis" style="max-width: 220px">
+                            {{ msg.file_name || 'Изображение' }}
+                          </span>
+                        </div>
+                      </a>
+                    </template>
+                    <template v-else-if="msg.message_type === 'file'">
+                      <div v-if="isPdf(msg) && pdfThumbnails[msg.id]">
+                        <a :href="msg.file_url" target="_blank" style="display:block;text-decoration:none">
+                          <img
+                            :src="pdfThumbnails[msg.id]"
+                            style="display:block;max-height:200px;width:auto;max-width:min(85vw,440px);cursor:pointer"
+                            @load="(e) => { pdfImgWidths[msg.id] = e.target.offsetWidth }"
+                          >
+                        </a>
+                        <div style="padding:3px 8px 2px;display:flex;align-items:center;gap:4px;overflow:hidden">
+                          <q-icon name="picture_as_pdf" size="14px" color="red-6" style="flex-shrink:0" />
+                          <a :href="msg.file_url" target="_blank" class="text-caption ellipsis" style="flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:inherit">{{ msg.file_name || 'Документ' }}</a>
+                        </div>
+                      </div>
+                      <div v-else class="row items-center q-gutter-xs">
+                        <q-icon :name="isPdf(msg) ? 'picture_as_pdf' : 'attach_file'" :size="isPdf(msg) ? '28px' : '18px'" :color="isPdf(msg) ? 'red-6' : 'grey-7'" />
+                        <a :href="msg.file_url" target="_blank" class="text-body2 ellipsis" style="max-width:200px;color:inherit">{{ msg.file_name || 'Файл' }}</a>
+                      </div>
+                    </template>
 
-              <!-- Редактирование сообщения -->
-              <div v-if="editingMsgId === msg.id" class="q-mt-xs">
-                <q-input
-                  v-model="editContent"
-                  dense
-                  outlined
-                  autofocus
-                  autogrow
-                  hide-bottom-space
-                  style="font-size: 13px"
-                  @keydown.enter.exact.prevent="saveEdit"
-                  @keydown.escape="cancelEdit"
-                />
-                <div class="row justify-end q-gutter-xs q-mt-xs">
-                  <q-btn
-                    flat
-                    dense
-                    no-caps
-                    size="sm"
-                    label="Отмена"
-                    color="grey-6"
-                    @click="cancelEdit"
-                  />
-                  <q-btn
-                    unelevated
-                    dense
-                    no-caps
-                    size="sm"
-                    label="Сохранить"
-                    color="blue-6"
-                    :loading="savingEdit"
-                    @click="saveEdit"
-                  />
+                    <!-- Голосовое -->
+                    <template v-else-if="msg.message_type === 'voice'">
+                      <audio
+                        :ref="el => { if (el) _voiceRefs[msg.id] = el }"
+                        :src="imgStreamUrl(msg)"
+                        preload="none"
+                        style="display: none"
+                        @timeupdate="voiceCurrent[msg.id] = $event.target.currentTime"
+                        @ended="voicePlaying[msg.id] = false; voiceCurrent[msg.id] = 0"
+                        @play="voicePlaying[msg.id] = true"
+                        @pause="voicePlaying[msg.id] = false"
+                      />
+                      <div class="row items-center" style="gap: 6px; width: 220px; padding: 4px 0">
+                        <q-btn
+                          flat
+                          round
+                          dense
+                          :icon="voicePlaying[msg.id] ? 'pause' : 'play_arrow'"
+                          color="primary"
+                          size="sm"
+                          @click="toggleVoice(msg)"
+                        />
+                        <div class="column" style="flex: 1; min-width: 0; gap: 3px">
+                          <div style="height: 3px; background: #e0e0e0; border-radius: 2px; overflow: hidden">
+                            <div :style="{ width: voiceProgressPct(msg) + '%', background: '#1976d2', height: '100%' }" />
+                          </div>
+                          <div class="text-caption text-grey-6" style="font-size: 10px">
+                            {{ voicePlaying[msg.id] ? fmtDuration(voiceCurrent[msg.id]) : fmtDuration(msg.content) }}
+                          </div>
+                        </div>
+                      </div>
+                    </template>
+
+                    <template v-else>
+                      <div class="text-body2" style="white-space: pre-wrap; word-break: break-word; font-size: 13px">
+                        {{ msg.content }}
+                      </div>
+                    </template>
+                  </template>
+
+                  <!-- Редактирование сообщения -->
+                  <div v-if="editingMsgId === msg.id" class="q-mt-xs">
+                    <q-input
+                      v-model="editContent"
+                      dense
+                      outlined
+                      autofocus
+                      autogrow
+                      hide-bottom-space
+                      style="font-size: 13px"
+                      @keydown.enter.exact.prevent="saveEdit"
+                      @keydown.escape="cancelEdit"
+                    />
+                    <div class="row justify-end q-gutter-xs q-mt-xs">
+                      <q-btn
+                        flat
+                        dense
+                        no-caps
+                        size="sm"
+                        label="Отмена"
+                        color="grey-6"
+                        @click="cancelEdit"
+                      />
+                      <q-btn
+                        unelevated
+                        dense
+                        no-caps
+                        size="sm"
+                        label="Сохранить"
+                        color="blue-6"
+                        :loading="savingEdit"
+                        @click="saveEdit"
+                      />
+                    </div>
+                  </div>
+
+                  <div
+                    class="row no-wrap items-center"
+                    :class="isOwn(msg) ? 'justify-end' : 'justify-start'"
+                    :style="(msg.message_type === 'image' || (isPdf(msg) && pdfThumbnails[msg.id])) ? 'padding:2px 10px 6px;color:#888;font-size:10px' : 'margin-top:4px;color:#888;font-size:10px'"
+                  >
+                    <span v-if="msg.is_edited" class="text-caption text-grey-5 q-mr-xs" style="font-size: 9px">изм.</span>
+                    <span class="text-caption">{{ formatTime(msg.created_at) }}</span>
+                  </div>
+                  <!-- Реакции -->
+                  <div
+                    v-if="msg.reactions && Object.keys(msg.reactions).length"
+                    class="row items-center q-gutter-xs"
+                    :style="(msg.message_type === 'image' || (isPdf(msg) && pdfThumbnails[msg.id])) ? 'margin-top: 0; padding: 0 10px 4px; flex-wrap: wrap' : 'margin-top: 4px; flex-wrap: wrap'"
+                  >
+                    <button
+                      v-for="(reactors, emoji) in msg.reactions"
+                      :key="emoji"
+                      class="reaction-chip"
+                      :class="{ 'reaction-chip--own': isOwnReaction(msg, emoji) }"
+                      @click="sendReaction(msg, emoji)"
+                    >
+                      {{ emoji }} {{ reactors.length }}
+                    </button>
+                  </div>
                 </div>
               </div>
-
-              <div
-                class="row no-wrap items-center"
-                :class="isOwn(msg) ? 'justify-end' : 'justify-start'"
-                :style="(msg.message_type === 'image' || (isPdf(msg) && pdfThumbnails[msg.id])) ? 'padding:2px 10px 6px;color:#888;font-size:10px' : 'margin-top:4px;color:#888;font-size:10px'"
-              >
-                <span v-if="msg.is_edited" class="text-caption text-grey-5 q-mr-xs" style="font-size: 9px">изм.</span>
-                <span class="text-caption">{{ formatTime(msg.created_at) }}</span>
-              </div>
-              <!-- Реакции -->
-              <div
-                v-if="msg.reactions && Object.keys(msg.reactions).length"
-                class="row items-center q-gutter-xs"
-                :style="(msg.message_type === 'image' || (isPdf(msg) && pdfThumbnails[msg.id])) ? 'margin-top: 0; padding: 0 10px 4px; flex-wrap: wrap' : 'margin-top: 4px; flex-wrap: wrap'"
-              >
-                <button
-                  v-for="(reactors, emoji) in msg.reactions"
-                  :key="emoji"
-                  class="reaction-chip"
-                  :class="{ 'reaction-chip--own': isOwnReaction(msg, emoji) }"
-                  @click="sendReaction(msg, emoji)"
-                >
-                  {{ emoji }} {{ reactors.length }}
-                </button>
-              </div>
-            </div>
-          </div>
-        </template>
+            </template><!-- /single msg loop -->
+          </template><!-- /single -->
+        </template><!-- /renderedItems loop -->
       </template>
     </div>
 
@@ -1228,6 +1368,31 @@ const { isConnected, connectEmployee, disconnect, sendMessage, sendTypingStart, 
 
 const chatTitle = ref('Чат с клиентом')
 const messages = ref([])
+
+const renderedItems = computed(() => {
+  const items = []
+  let i = 0
+  const msgs = messages.value
+  while (i < msgs.length) {
+    const msg = msgs[i]
+    if (msg.group_id && msg.message_type === 'image' && !msg.is_deleted && !msg._uploading) {
+      const group = [msg]
+      let j = i + 1
+      while (j < msgs.length && msgs[j].group_id === msg.group_id && !msgs[j].is_deleted) {
+        group.push(msgs[j])
+        j++
+      }
+      if (group.length > 1) {
+        items.push({ type: 'group', msgs: group, key: `g_${msg.group_id}` })
+        i = j
+        continue
+      }
+    }
+    items.push({ type: 'single', msg, key: `s_${msg.id ?? i}` })
+    i++
+  }
+  return items
+})
 const members = ref([])
 const inputText = ref('')
 const loadingMessages = ref(false)
@@ -1632,6 +1797,69 @@ async function loadPdfThumbnail(msg) {
 
 function isGuest(msg) {
   return !!msg.sender_guest_token
+}
+
+function galleryGridClass(count) {
+  if (count <= 1) return 'media-grid-1'
+  if (count === 2) return 'media-grid-2'
+  if (count === 3) return 'media-grid-3'
+  return 'media-grid-dynamic'
+}
+
+function galleryCols(count) {
+  const minCols = Math.max(2, Math.ceil(count / 4))
+  const maxCols = Math.min(4, count)
+  let best = null
+  for (let c = minCols; c <= maxCols; c++) {
+    const r = count % c
+    const priority = r === 0 ? 0 : r === 1 ? 2 : 1
+    if (!best || priority < best.priority || (priority === best.priority && c > best.c)) {
+      best = { c, priority }
+    }
+  }
+  return best ? best.c : minCols
+}
+
+function galleryBubbleStyle(count) {
+  if (count <= 3) return 'min-width: 0; width: min(50vw, 282px); max-width: min(50vw, 282px)'
+  const thumbCount = count - 2
+  const cols = thumbCount > 0 ? galleryCols(thumbCount) : 2
+  const effectiveCols = Math.max(2, cols)
+  const targetW = effectiveCols * 140 + (effectiveCols - 1) * 2
+  return `min-width: 0; width: min(50vw, ${targetW}px); max-width: min(50vw, ${targetW}px)`
+}
+
+function galleryGridStyle(count) {
+  if (count === 2) return 'display: grid; grid-template-columns: 1fr 1fr; gap: 2px;'
+  if (count === 3) return 'display: grid; grid-template-columns: 2fr 1fr; gap: 2px;'
+  return undefined
+}
+
+function galleryThumbGridStyle(count) {
+  const thumbCount = count - 2
+  if (thumbCount <= 0) return undefined
+  const cols = galleryCols(thumbCount)
+  return `display: grid; grid-template-columns: repeat(${cols}, 1fr); gap: 2px;`
+}
+
+function galleryItemSpanStyle(thumbCount, index) {
+  if (thumbCount <= 0) return undefined
+  const cols = galleryCols(thumbCount)
+  const remainder = thumbCount % cols
+  if (remainder === 0) return undefined
+  if (index < thumbCount - remainder) return undefined
+  const pos = index - (thumbCount - remainder)
+  const baseSpan = Math.floor(cols / remainder)
+  const extra = cols - baseSpan * remainder
+  return { gridColumn: `span ${pos < extra ? baseSpan + 1 : baseSpan}` }
+}
+
+function galleryImgStyle(count, index) {
+  const base = 'width: 100%; display: block;'
+  if (count <= 1) return `${base} height: clamp(140px, 42vw, 340px);`
+  if (count === 2) return `${base} height: 170px;`
+  if (count === 3) return index === 0 ? `${base} height: 184px;` : `${base} height: 91px;`
+  return base
 }
 
 function formatTime(dt) {
