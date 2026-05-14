@@ -563,10 +563,10 @@
     <div class="q-pa-sm bg-white" style="border-top: 1px solid #E0E0E0; flex-shrink: 0">
       <div class="row items-center q-gutter-xs">
         <q-btn
-          flat
           round
           dense
           icon="attach_file"
+          color="grey-6"
           :loading="uploadProgress > 0 && uploadProgress < 100"
           @click="pickFile"
         >
@@ -576,7 +576,6 @@
         <!-- Файлы из карточки CRM -->
         <q-btn
           v-if="chatCrmCardId"
-          flat
           round
           dense
           icon="folder_open"
@@ -2004,23 +2003,36 @@ async function sendSelectedCardFiles() {
   sendingCardFile.value = true
   const groupId = files.length > 1 ? crypto.randomUUID() : null
   const errors = []
+  let lastMsgId = null
   for (const f of files) {
     try {
       const fname = f.file_name || f.filename || 'файл'
       const message_type = cfIsPreviewImg(f) ? 'image' : 'file'
-      await api.post(`/api/v1/chats/${chatId}/messages/from-project-file`, {
+      const { data: msgData } = await api.post(`/api/v1/chats/${chatId}/messages/from-project-file`, {
         yandex_path: f.yandex_path || '',
         file_name: fname,
         public_link: f.public_link || '',
         message_type,
         ...(groupId ? { group_id: groupId } : {}),
       })
+      if (msgData?.id) {
+        const exists = messages.value.some(m => m.id === msgData.id)
+        if (!exists) {
+          messages.value.push(msgData)
+          if (isPdf(msgData)) loadPdfThumbnail(msgData)
+        }
+        lastMsgId = msgData.id
+      }
     } catch {
       errors.push(f.file_name || f.filename || 'файл')
     }
   }
   sendingCardFile.value = false
   selectedCardFiles.value = []
+  if (lastMsgId) {
+    scrollToBottom()
+    sendRead(lastMsgId)
+  }
   if (errors.length) {
     $q.notify({ type: 'negative', message: `Не удалось прикрепить: ${errors.join(', ')}` })
   }
