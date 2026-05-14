@@ -1306,54 +1306,77 @@
             Файлы не найдены
           </div>
           <template v-else>
-            <template v-for="stage in orderedCardStages" :key="stage">
+            <template v-for="item in cardFileItems" :key="item.key">
               <!-- Заголовок стадии -->
               <div
+                v-if="item.type === 'stage'"
                 class="q-px-md q-py-xs text-weight-bold"
                 style="background: #E8EEF6; color: #1a3a6b; font-size: 11px; letter-spacing: 0.3px"
               >
-                {{ STAGE_LABELS[stage] || stage }}
+                {{ item.label }}
               </div>
-              <!-- Вариации -->
-              <template v-for="varNum in sortedCardVariations(stage)" :key="varNum">
-                <div
-                  v-if="sortedCardVariations(stage).length > 1 || varNum !== 1"
-                  class="q-px-lg q-py-xs"
-                  style="background: #F3F3F3; color: #666; font-style: italic; font-size: 10px"
-                >
-                  Вариант {{ varNum }}
-                </div>
-                <q-item
-                  v-for="f in (groupedCardFiles[stage]?.[varNum] || [])"
-                  :key="f.id || f.yandex_path"
-                  clickable
-                  :disable="sendingCardFile"
-                  style="min-height: 52px"
-                  @click="sendCardFileToChat(f)"
-                >
-                  <q-item-section avatar style="min-width: 60px">
-                    <div
-                      :style="{
-                        width: '52px', height: '40px', borderRadius: '4px',
-                        background: cardFileIconColor(f).bg,
-                        color: cardFileIconColor(f).text,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontWeight: 'bold', fontSize: '11px', flexShrink: '0'
-                      }"
-                    >
-                      {{ cardFileIconLabel(f) }}
-                    </div>
-                  </q-item-section>
-                  <q-item-section>
-                    <q-item-label style="font-size: 12px; word-break: break-word; white-space: normal">
-                      {{ f.file_name || f.filename || 'файл' }}
-                    </q-item-label>
-                  </q-item-section>
-                  <q-item-section side>
-                    <q-icon name="send" color="blue-5" size="16px" />
-                  </q-item-section>
-                </q-item>
-              </template>
+              <!-- Подзаголовок вариации -->
+              <div
+                v-else-if="item.type === 'var'"
+                class="q-px-lg q-py-xs"
+                style="background: #F3F3F3; color: #666; font-style: italic; font-size: 10px"
+              >
+                Вариант {{ item.varNum }}
+              </div>
+              <!-- Файл -->
+              <q-item
+                v-else-if="item.type === 'file'"
+                clickable
+                :disable="sendingCardFile"
+                style="min-height: 52px"
+                @click="sendCardFileToChat(item.file)"
+              >
+                <q-item-section avatar style="min-width: 64px">
+                  <q-img
+                    v-if="cfIsImg(item.file) && item.file.public_link"
+                    :src="item.file.public_link"
+                    fit="cover"
+                    style="width: 56px; height: 42px; border-radius: 4px; flex-shrink: 0"
+                  >
+                    <template #error>
+                      <div
+                        :style="{
+                          width: '56px', height: '42px', borderRadius: '4px',
+                          background: cfBadgeColor(item.file).bg,
+                          color: cfBadgeColor(item.file).text,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontWeight: 'bold', fontSize: '11px', flexShrink: '0'
+                        }"
+                      >
+                        {{ cfBadgeText(item.file) }}
+                      </div>
+                    </template>
+                  </q-img>
+                  <div
+                    v-else
+                    :style="{
+                      width: '56px', height: '42px', borderRadius: '4px',
+                      background: cfBadgeColor(item.file).bg,
+                      color: cfBadgeColor(item.file).text,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontWeight: 'bold', fontSize: '11px', flexShrink: '0'
+                    }"
+                  >
+                    {{ cfBadgeText(item.file) }}
+                  </div>
+                </q-item-section>
+                <q-item-section style="overflow: hidden; min-width: 0">
+                  <q-item-label
+                    style="font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap"
+                    :title="item.fname"
+                  >
+                    {{ cfTrunc(item.fname) }}
+                  </q-item-label>
+                </q-item-section>
+                <q-item-section side>
+                  <q-icon name="send" color="blue-5" size="16px" />
+                </q-item-section>
+              </q-item>
             </template>
           </template>
         </q-card-section>
@@ -1422,7 +1445,7 @@ function pdfBubbleStyle(msg) {
 }
 
 // ── Файлы из карточки CRM ─────────────────────────────────────
-const STAGE_LABELS = {
+const _CF_STAGE_LABELS = {
   measurement: 'Замер',
   stage1: 'Стадия 1 — Планировочное решение',
   stage2_concept: 'Стадия 2 — Концепция / коллажи',
@@ -1437,54 +1460,79 @@ const STAGE_LABELS = {
   info_letters: 'Информационные письма',
   questionnaire: 'Анкета',
 }
-const STAGE_ORDER = [
+const _CF_STAGE_ORDER = [
   'measurement', 'stage1', 'stage2_concept', 'stage2_3d', 'stage3', 'supervision',
   'tech_task', 'documents', 'acts', 'info_letters', 'references', 'photo_documentation', 'questionnaire',
 ]
-const _IMG_EXTS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'tiff'])
-const _ICON_PALETTE = {
-  IMG:  { bg: '#C8E6C9', text: '#2E7D32' },
-  PDF:  { bg: '#FFCDD2', text: '#B71C1C' },
-  XLS:  { bg: '#C8E6C9', text: '#1B5E20' },
-  DOC:  { bg: '#BBDEFB', text: '#0D47A1' },
-  ZIP:  { bg: '#E1BEE7', text: '#4A148C' },
-  FILE: { bg: '#E0E0E0', text: '#424242' },
+const _CF_IMG_EXTS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'tiff'])
+const _CF_PALETTE = {
+  img:  { bg: '#C8E6C9', text: '#2E7D32' },
+  pdf:  { bg: '#FFCDD2', text: '#B71C1C' },
+  xls:  { bg: '#C8E6C9', text: '#1B5E20' },
+  doc:  { bg: '#BBDEFB', text: '#0D47A1' },
+  zip:  { bg: '#E1BEE7', text: '#4A148C' },
+  def:  { bg: '#E0E0E0', text: '#424242' },
 }
-function _cfExt(name) { const d = name.lastIndexOf('.'); return d >= 0 ? name.slice(d + 1).toLowerCase() : '' }
-function cardFileIconLabel(f) {
+function _cfExt(name) { const d = (name || '').lastIndexOf('.'); return d >= 0 ? name.slice(d + 1).toLowerCase() : '' }
+function cfBadgeColor(f) {
   const e = _cfExt(f.file_name || f.filename || '')
-  if (_IMG_EXTS.has(e)) return 'IMG'
-  if (e === 'pdf') return 'PDF'
-  if (['xls', 'xlsx', 'csv', 'ods'].includes(e)) return 'XLS'
-  if (['doc', 'docx', 'odt', 'rtf', 'txt'].includes(e)) return 'DOC'
-  if (['zip', 'rar', '7z', 'tar', 'gz'].includes(e)) return 'ZIP'
-  return 'FILE'
+  if (_CF_IMG_EXTS.has(e)) return _CF_PALETTE.img
+  if (e === 'pdf') return _CF_PALETTE.pdf
+  if (['xls', 'xlsx', 'csv', 'ods'].includes(e)) return _CF_PALETTE.xls
+  if (['doc', 'docx', 'odt', 'rtf', 'txt'].includes(e)) return _CF_PALETTE.doc
+  if (['zip', 'rar', '7z', 'tar', 'gz'].includes(e)) return _CF_PALETTE.zip
+  return _CF_PALETTE.def
 }
-function cardFileIconColor(f) { return _ICON_PALETTE[cardFileIconLabel(f)] || _ICON_PALETTE.FILE }
+function cfBadgeText(f) {
+  const e = _cfExt(f.file_name || f.filename || '')
+  return e ? e.toUpperCase().slice(0, 4) : 'FILE'
+}
+function cfIsImg(f) { return _CF_IMG_EXTS.has(_cfExt(f.file_name || f.filename || '')) }
+function cfTrunc(name, max = 30) {
+  if (!name || name.length <= max) return name || ''
+  const dot = name.lastIndexOf('.')
+  const ext = dot >= 0 ? name.slice(dot) : ''
+  const keep = Math.max(max - 3 - ext.length, 8)
+  return name.slice(0, keep) + '…' + ext
+}
 
 const showCardFilesDialog = ref(false)
 const cardFiles = ref([])
 const cardFilesLoading = ref(false)
 const sendingCardFile = ref(false)
 
-const groupedCardFiles = computed(() => {
-  const m = {}
+// Плоский массив элементов: stage-заголовки, variation-заголовки, файлы
+const cardFileItems = computed(() => {
+  const byStage = {}
   for (const f of cardFiles.value) {
     const s = f.stage || 'documents'
-    const v = f.variation ?? 1
-    if (!m[s]) m[s] = {}
-    if (!m[s][v]) m[s][v] = []
-    m[s][v].push(f)
+    const v = f.variation || 1  // treat 0/null/undefined → 1
+    if (!byStage[s]) byStage[s] = {}
+    if (!byStage[s][v]) byStage[s][v] = []
+    byStage[s][v].push(f)
   }
-  return m
+  const stageSet = new Set(Object.keys(byStage))
+  const ordered = [
+    ..._CF_STAGE_ORDER.filter(s => stageSet.has(s)),
+    ...[...stageSet].filter(s => !_CF_STAGE_ORDER.includes(s)),
+  ]
+  const items = []
+  for (const stage of ordered) {
+    items.push({ type: 'stage', key: 's:' + stage, label: _CF_STAGE_LABELS[stage] || stage })
+    const byVar = byStage[stage]
+    const varNums = Object.keys(byVar).map(Number).sort((a, b) => a - b)
+    const showVarHdr = varNums.length > 1 || (varNums.length === 1 && varNums[0] !== 1)
+    for (const vn of varNums) {
+      if (showVarHdr) items.push({ type: 'var', key: `v:${stage}:${vn}`, varNum: vn })
+      const sorted = [...byVar[vn]].sort((a, b) => (a.file_order || 0) - (b.file_order || 0))
+      for (const f of sorted) {
+        const fname = f.file_name || f.filename || 'файл'
+        items.push({ type: 'file', key: `f:${f.id || f.yandex_path}`, file: f, fname })
+      }
+    }
+  }
+  return items
 })
-const orderedCardStages = computed(() => {
-  const stages = new Set(cardFiles.value.map(f => f.stage || 'documents'))
-  return [...STAGE_ORDER.filter(s => stages.has(s)), ...[...stages].filter(s => !STAGE_ORDER.includes(s))]
-})
-function sortedCardVariations(stage) {
-  return Object.keys(groupedCardFiles.value[stage] || {}).map(Number).sort((a, b) => a - b)
-}
 
 async function loadCardFiles() {
   if (!chatCrmCardId.value) return
@@ -1508,7 +1556,7 @@ async function sendCardFileToChat(f) {
   const fname = f.file_name || f.filename || 'файл'
   const yandex_path = f.yandex_path || ''
   const public_link = f.public_link || ''
-  const message_type = _IMG_EXTS.has(_cfExt(fname)) ? 'image' : 'file'
+  const message_type = _CF_IMG_EXTS.has(_cfExt(fname)) ? 'image' : 'file'
   showCardFilesDialog.value = false
   sendingCardFile.value = true
   try {
