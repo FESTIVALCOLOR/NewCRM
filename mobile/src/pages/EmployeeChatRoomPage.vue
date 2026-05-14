@@ -1432,6 +1432,7 @@ const hasMoreMessages = ref(false)
 const loadingOlder = ref(false)
 const showMembers = ref(false)
 const messagesEl = ref(null)
+let _scrollBottomObs = null
 const topSentinelEl = ref(null)
 let _topObserver = null
 const availableEmployees = ref(null)
@@ -1985,10 +1986,19 @@ function formatTime(dt) {
   return `${day}.${month}.${year} ${time}`
 }
 
+function _anchorToBottom(container) {
+  container.scrollTop = container.scrollHeight
+  if (_scrollBottomObs) { _scrollBottomObs.disconnect(); _scrollBottomObs = null }
+  const obs = new ResizeObserver(() => { if (container) container.scrollTop = container.scrollHeight })
+  obs.observe(container)
+  _scrollBottomObs = obs
+  setTimeout(() => { obs.disconnect(); if (_scrollBottomObs === obs) _scrollBottomObs = null }, 2500)
+}
+
 function scrollToBottom() {
   nextTick(() => {
     requestAnimationFrame(() => {
-      if (messagesEl.value) messagesEl.value.scrollTop = messagesEl.value.scrollHeight
+      if (messagesEl.value) _anchorToBottom(messagesEl.value)
     })
   })
 }
@@ -2024,7 +2034,7 @@ function scrollToFirstUnread() {
           return
         }
       }
-      container.scrollTop = container.scrollHeight
+      _anchorToBottom(container)
     })
   })
 }
@@ -2111,11 +2121,15 @@ function setupTopObserver() {
 }
 
 async function scrollToPinnedMsg(msg) {
+  const highlightEl = (el) => {
+    el.classList.add('msg-highlight')
+    setTimeout(() => el.classList.remove('msg-highlight'), 1500)
+  }
   const found = messages.value.find(m => m.id === msg.id)
   if (found) {
     await nextTick()
-    const el = document.getElementById(`msg-${msg.id}`)
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    const el = document.getElementById(`msg-${msg.id}`) || document.querySelector(`[data-msg-id="${msg.id}"]`)
+    if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); highlightEl(el) }
     return
   }
   let attempts = 0
@@ -2124,8 +2138,8 @@ async function scrollToPinnedMsg(msg) {
     attempts++
   }
   await nextTick()
-  const el = document.getElementById(`msg-${msg.id}`)
-  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  const el = document.getElementById(`msg-${msg.id}`) || document.querySelector(`[data-msg-id="${msg.id}"]`)
+  if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); highlightEl(el) }
 }
 
 async function loadClientChat(cardId) {

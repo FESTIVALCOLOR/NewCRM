@@ -1323,6 +1323,7 @@ const messages = ref([])
 const firstUnreadId = ref(null)
 const inputText = ref('')
 const messagesEl = ref(null)
+let _scrollBottomObs = null
 const fileInput = ref(null)
 const chatContainerEl = ref(null)
 const containerHeight = ref('calc(100vh - 270px)')
@@ -1859,10 +1860,19 @@ function formatTime(dt) {
   return `${day}.${month}.${year} ${time}`
 }
 
+function _anchorToBottom(container) {
+  container.scrollTop = container.scrollHeight
+  if (_scrollBottomObs) { _scrollBottomObs.disconnect(); _scrollBottomObs = null }
+  const obs = new ResizeObserver(() => { if (container) container.scrollTop = container.scrollHeight })
+  obs.observe(container)
+  _scrollBottomObs = obs
+  setTimeout(() => { obs.disconnect(); if (_scrollBottomObs === obs) _scrollBottomObs = null }, 2500)
+}
+
 function scrollToBottom() {
   nextTick(() => {
     requestAnimationFrame(() => {
-      if (messagesEl.value) messagesEl.value.scrollTop = messagesEl.value.scrollHeight
+      if (messagesEl.value) _anchorToBottom(messagesEl.value)
     })
   })
 }
@@ -1893,7 +1903,7 @@ function scrollToFirstUnread() {
           return
         }
       }
-      container.scrollTop = container.scrollHeight
+      _anchorToBottom(container)
     })
   })
 }
@@ -2407,7 +2417,11 @@ function cyclePinned() {
   pinnedIdx.value = (pinnedIdx.value + 1) % pinnedMsgs.value.length
   nextTick(() => {
     const el = messagesEl.value?.querySelector(`[data-msg-id="${pinnedMsgs.value[pinnedIdx.value]?.id}"]`)
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      el.classList.add('msg-highlight')
+      setTimeout(() => el.classList.remove('msg-highlight'), 1500)
+    }
   })
 }
 
