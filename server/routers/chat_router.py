@@ -308,6 +308,7 @@ class LinkProjectFileRequest(PydanticBaseModel):
     file_name: str
     public_link: Optional[str] = None
     message_type: str = "file"
+    group_id: Optional[str] = None
 
 
 @router.post("/{chat_id}/messages/from-project-file", response_model=InternalMessageResponse)
@@ -342,6 +343,7 @@ async def link_project_file_to_chat(
         file_size=None,
         message_type=body.message_type,
         sender_employee_id=current_user.id,
+        group_id=body.group_id or None,
     )
     await ws_manager.broadcast(chat_id, {"type": "new_message", "message": _message_to_dict(msg)})
     return msg

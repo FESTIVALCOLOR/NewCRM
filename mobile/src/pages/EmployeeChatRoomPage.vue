@@ -1329,21 +1329,44 @@
                 clickable
                 :disable="sendingCardFile"
                 style="min-height: 52px"
-                @click="sendCardFileToChat(item.file)"
+                :style="isCardFileSelected(item.file) ? 'background: #EBF2FF' : ''"
+                @click="toggleCardFileSelection(item.file)"
               >
-                <q-item-section avatar style="min-width: 64px">
-                  <div
-                    :style="{
-                      width: '56px', height: '42px', borderRadius: '4px',
-                      background: cfBadgeColor(item.file).bg,
-                      color: cfBadgeColor(item.file).text,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontWeight: 'bold', fontSize: '11px', flexShrink: '0'
-                    }"
+                <!-- Чекбокс -->
+                <q-item-section side style="min-width: 36px; padding-right: 0">
+                  <q-checkbox
+                    dense
+                    color="blue-6"
+                    :model-value="isCardFileSelected(item.file)"
+                    @click.stop
+                    @update:model-value="toggleCardFileSelection(item.file)"
+                  />
+                </q-item-section>
+                <!-- Превью -->
+                <q-item-section avatar style="min-width: 64px; padding-left: 4px">
+                  <q-img
+                    v-if="cfIsPreviewImg(item.file) && item.file.yandex_path"
+                    :src="cfImgStreamUrl(item.file)"
+                    fit="cover"
+                    style="width: 56px; height: 42px; border-radius: 4px; flex-shrink: 0"
+                    spinner-color="grey-4"
                   >
+                    <template #error>
+                      <div :style="cfBadgeStyle(item.file)">
+                        {{ cfBadgeText(item.file) }}
+                      </div>
+                    </template>
+                  </q-img>
+                  <img
+                    v-else-if="cfIsPdf(item.file) && cfPdfThumbs[String(item.file.id)]"
+                    :src="cfPdfThumbs[String(item.file.id)]"
+                    style="width: 56px; height: 42px; border-radius: 4px; object-fit: cover; flex-shrink: 0"
+                  >
+                  <div v-else :style="cfBadgeStyle(item.file)">
                     {{ cfBadgeText(item.file) }}
                   </div>
                 </q-item-section>
+                <!-- Имя файла -->
                 <q-item-section style="overflow: hidden; min-width: 0">
                   <q-item-label
                     style="font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap"
@@ -1352,21 +1375,28 @@
                     {{ cfTrunc(item.fname) }}
                   </q-item-label>
                 </q-item-section>
-                <q-item-section side>
-                  <q-icon name="send" color="blue-5" size="16px" />
-                </q-item-section>
               </q-item>
             </template>
           </template>
         </q-card-section>
 
-        <q-card-actions align="right" style="flex-shrink: 0; border-top: 1px solid #eee">
+        <q-card-actions style="flex-shrink: 0; border-top: 1px solid #eee; justify-content: space-between; padding: 8px 12px">
           <q-btn
             v-close-popup
             flat
             no-caps
             label="Закрыть"
             color="grey-7"
+          />
+          <q-btn
+            v-if="selectedCardFiles.length"
+            unelevated
+            no-caps
+            color="blue-6"
+            :label="`Отправить (${selectedCardFiles.length})`"
+            :loading="sendingCardFile"
+            :disable="sendingCardFile"
+            @click="sendSelectedCardFiles()"
           />
         </q-card-actions>
       </q-card>
@@ -1443,7 +1473,7 @@ const _CF_STAGE_ORDER = [
   'measurement', 'stage1', 'stage2_concept', 'stage2_3d', 'stage3', 'supervision',
   'tech_task', 'documents', 'acts', 'info_letters', 'references', 'photo_documentation', 'questionnaire',
 ]
-const _CF_IMG_EXTS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'tiff'])
+const _CF_IMG_EXTS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'tiff', 'heic'])
 const _CF_PALETTE = {
   img:  { bg: '#C8E6C9', text: '#2E7D32' },
   pdf:  { bg: '#FFCDD2', text: '#B71C1C' },
@@ -1466,7 +1496,19 @@ function cfBadgeText(f) {
   const e = _cfExt(f.file_name || f.filename || '')
   return e ? e.toUpperCase().slice(0, 4) : 'FILE'
 }
-function _cfIsImg(f) { return _CF_IMG_EXTS.has(_cfExt(f.file_name || f.filename || '')) }
+function cfBadgeStyle(f) {
+  const c = cfBadgeColor(f)
+  return { width: '56px', height: '42px', borderRadius: '4px', background: c.bg, color: c.text, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '11px', flexShrink: '0' }
+}
+function cfIsPreviewImg(f) { return _CF_IMG_EXTS.has(_cfExt(f.file_name || f.filename || '')) }
+function cfIsPdf(f) { return _cfExt(f.file_name || f.filename || '') === 'pdf' }
+function cfImgStreamUrl(f) {
+  const raw = f?.yandex_path || ''
+  if (!raw) return ''
+  const path = raw.replace(/^disk:/, '')
+  const token = localStorage.getItem('access_token') || ''
+  return `/api/v1/files/stream?yandex_path=${encodeURIComponent(path)}&token=${encodeURIComponent(token)}`
+}
 function cfTrunc(name, max = 30) {
   if (!name || name.length <= max) return name || ''
   const dot = name.lastIndexOf('.')
@@ -1479,13 +1521,26 @@ const showCardFilesDialog = ref(false)
 const cardFiles = ref([])
 const cardFilesLoading = ref(false)
 const sendingCardFile = ref(false)
+const selectedCardFiles = ref([])
+const cfPdfThumbs = reactive({})
+
+function isCardFileSelected(f) {
+  const key = f.id || f.yandex_path
+  return selectedCardFiles.value.some(sf => (sf.id || sf.yandex_path) === key)
+}
+function toggleCardFileSelection(f) {
+  const key = f.id || f.yandex_path
+  const idx = selectedCardFiles.value.findIndex(sf => (sf.id || sf.yandex_path) === key)
+  if (idx >= 0) selectedCardFiles.value.splice(idx, 1)
+  else selectedCardFiles.value.push(f)
+}
 
 // Плоский массив элементов: stage-заголовки, variation-заголовки, файлы
 const cardFileItems = computed(() => {
   const byStage = {}
   for (const f of cardFiles.value) {
     const s = f.stage || 'documents'
-    const v = f.variation || 1  // treat 0/null/undefined → 1
+    const v = f.variation || 1
     if (!byStage[s]) byStage[s] = {}
     if (!byStage[s][v]) byStage[s][v] = []
     byStage[s][v].push(f)
@@ -1516,6 +1571,7 @@ const cardFileItems = computed(() => {
 async function loadCardFiles() {
   if (!chatCrmCardId.value) return
   cardFiles.value = []
+  selectedCardFiles.value = []
   cardFilesLoading.value = true
   try {
     const { data: card } = await api.get(`/api/v1/crm/cards/${chatCrmCardId.value}`)
@@ -1523,6 +1579,14 @@ async function loadCardFiles() {
     if (contractId) {
       const { data: files } = await api.get(`/api/v1/files/contract/${contractId}`)
       cardFiles.value = Array.isArray(files) ? files : (files?.items || [])
+      // Загружаем PDF-миниатюры асинхронно
+      for (const f of cardFiles.value) {
+        if (cfIsPdf(f) && f.yandex_path && !cfPdfThumbs[String(f.id)]) {
+          getPdfThumbnail(cfImgStreamUrl(f), String(f.id)).then(thumb => {
+            if (thumb) cfPdfThumbs[String(f.id)] = thumb
+          })
+        }
+      }
     }
   } catch {
     cardFiles.value = []
@@ -1531,21 +1595,29 @@ async function loadCardFiles() {
   }
 }
 
-async function sendCardFileToChat(f) {
-  const fname = f.file_name || f.filename || 'файл'
-  const yandex_path = f.yandex_path || ''
-  const public_link = f.public_link || ''
-  const message_type = _CF_IMG_EXTS.has(_cfExt(fname)) ? 'image' : 'file'
+async function sendSelectedCardFiles() {
+  if (!selectedCardFiles.value.length) return
+  const files = [...selectedCardFiles.value]
   showCardFilesDialog.value = false
   sendingCardFile.value = true
+  const groupId = files.length > 1 ? crypto.randomUUID() : null
   try {
-    await api.post(`/api/v1/chats/${chatId}/messages/from-project-file`, {
-      yandex_path, file_name: fname, public_link, message_type,
-    })
+    for (const f of files) {
+      const fname = f.file_name || f.filename || 'файл'
+      const message_type = cfIsPreviewImg(f) ? 'image' : 'file'
+      await api.post(`/api/v1/chats/${chatId}/messages/from-project-file`, {
+        yandex_path: f.yandex_path || '',
+        file_name: fname,
+        public_link: f.public_link || '',
+        message_type,
+        ...(groupId ? { group_id: groupId } : {}),
+      })
+    }
   } catch {
-    $q.notify({ type: 'negative', message: 'Не удалось прикрепить файл из карточки' })
+    $q.notify({ type: 'negative', message: 'Не удалось прикрепить файлы' })
   } finally {
     sendingCardFile.value = false
+    selectedCardFiles.value = []
   }
 }
 // Emoji реакции
