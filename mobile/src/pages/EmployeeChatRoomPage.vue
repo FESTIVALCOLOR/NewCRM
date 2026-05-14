@@ -1332,28 +1332,7 @@
                 @click="sendCardFileToChat(item.file)"
               >
                 <q-item-section avatar style="min-width: 64px">
-                  <q-img
-                    v-if="cfIsImg(item.file) && item.file.public_link"
-                    :src="item.file.public_link"
-                    fit="cover"
-                    style="width: 56px; height: 42px; border-radius: 4px; flex-shrink: 0"
-                  >
-                    <template #error>
-                      <div
-                        :style="{
-                          width: '56px', height: '42px', borderRadius: '4px',
-                          background: cfBadgeColor(item.file).bg,
-                          color: cfBadgeColor(item.file).text,
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontWeight: 'bold', fontSize: '11px', flexShrink: '0'
-                        }"
-                      >
-                        {{ cfBadgeText(item.file) }}
-                      </div>
-                    </template>
-                  </q-img>
                   <div
-                    v-else
                     :style="{
                       width: '56px', height: '42px', borderRadius: '4px',
                       background: cfBadgeColor(item.file).bg,
@@ -1487,7 +1466,7 @@ function cfBadgeText(f) {
   const e = _cfExt(f.file_name || f.filename || '')
   return e ? e.toUpperCase().slice(0, 4) : 'FILE'
 }
-function cfIsImg(f) { return _CF_IMG_EXTS.has(_cfExt(f.file_name || f.filename || '')) }
+function _cfIsImg(f) { return _CF_IMG_EXTS.has(_cfExt(f.file_name || f.filename || '')) }
 function cfTrunc(name, max = 30) {
   if (!name || name.length <= max) return name || ''
   const dot = name.lastIndexOf('.')
