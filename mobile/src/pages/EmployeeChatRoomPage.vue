@@ -1601,8 +1601,9 @@ async function sendSelectedCardFiles() {
   showCardFilesDialog.value = false
   sendingCardFile.value = true
   const groupId = files.length > 1 ? crypto.randomUUID() : null
-  try {
-    for (const f of files) {
+  const errors = []
+  for (const f of files) {
+    try {
       const fname = f.file_name || f.filename || 'файл'
       const message_type = cfIsPreviewImg(f) ? 'image' : 'file'
       await api.post(`/api/v1/chats/${chatId}/messages/from-project-file`, {
@@ -1612,12 +1613,14 @@ async function sendSelectedCardFiles() {
         message_type,
         ...(groupId ? { group_id: groupId } : {}),
       })
+    } catch {
+      errors.push(f.file_name || f.filename || 'файл')
     }
-  } catch {
-    $q.notify({ type: 'negative', message: 'Не удалось прикрепить файлы' })
-  } finally {
-    sendingCardFile.value = false
-    selectedCardFiles.value = []
+  }
+  sendingCardFile.value = false
+  selectedCardFiles.value = []
+  if (errors.length) {
+    $q.notify({ type: 'negative', message: `Не удалось прикрепить: ${errors.join(', ')}` })
   }
 }
 // Emoji реакции

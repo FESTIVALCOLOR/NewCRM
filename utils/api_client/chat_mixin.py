@@ -130,13 +130,16 @@ class ChatMixin:
         except Exception:
             return None
 
-    def link_project_file_to_chat(self, chat_id: int, yandex_path: str, file_name: str, public_link: str = "", message_type: str = "file") -> Optional[dict[str, Any]]:
+    def link_project_file_to_chat(self, chat_id: int, yandex_path: str, file_name: str, public_link: str = "", message_type: str = "file", group_id: Optional[str] = None) -> Optional[dict[str, Any]]:
         """Прикрепить существующий файл проекта к чату (без загрузки байт)."""
         try:
+            payload: dict = {"yandex_path": yandex_path, "file_name": file_name, "public_link": public_link, "message_type": message_type}
+            if group_id:
+                payload["group_id"] = group_id
             r = self._request(
                 "POST",
                 f"{self.base_url}/api/v1/chats/{chat_id}/messages/from-project-file",
-                json={"yandex_path": yandex_path, "file_name": file_name, "public_link": public_link, "message_type": message_type},
+                json=payload,
             )
             return self._handle_response(r)
         except Exception:
