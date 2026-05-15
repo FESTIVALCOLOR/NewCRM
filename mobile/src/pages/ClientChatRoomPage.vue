@@ -1030,7 +1030,7 @@
               <q-spinner size="20px" color="grey" />
             </div>
             <div v-else-if="!availableEmployees.length" class="text-caption text-grey-5 q-py-xs" style="font-style: italic">
-              Все сотрудники карточки уже в чате
+              Все сотрудники уже в чате
             </div>
             <q-list v-else dense>
               <q-item
@@ -2597,31 +2597,14 @@ function copyText(text) {
 }
 
 async function onMembersDialogOpen() {
-  if (!chatCrmCardId.value) return
   availableEmployees.value = null
   loadingAvailableEmps.value = true
   try {
-    const { data } = await api.get(`/api/v1/crm/cards/${chatCrmCardId.value}`)
-    const emps = new Map()
-    const roles = [
-      { id: data.senior_manager_id, name: data.senior_manager_name, role: 'Старший менеджер' },
-      { id: data.sdp_id, name: data.sdp_name, role: 'СДП' },
-      { id: data.gap_id, name: data.gap_name, role: 'ГАП' },
-      { id: data.manager_id, name: data.manager_name, role: 'Менеджер' },
-      { id: data.surveyor_id, name: data.surveyor_name, role: 'Замерщик' },
-    ]
-    for (const r of roles) {
-      if (r.id && r.name) emps.set(r.id, { name: r.name, role: r.role })
-    }
-    for (const se of (data.stage_executors || [])) {
-      if (se.executor_id && se.executor_name) {
-        emps.set(se.executor_id, { name: se.executor_name, role: se.stage_name || 'Исполнитель' })
-      }
-    }
+    const { data } = await api.get('/api/v1/employees')
     const memberIds = new Set(members.value.filter(m => m.employee_id).map(m => m.employee_id))
-    availableEmployees.value = [...emps.entries()]
-      .filter(([id]) => !memberIds.has(id))
-      .map(([id, info]) => ({ id, name: info.name, role: info.role }))
+    availableEmployees.value = data
+      .filter(e => e.status !== 'уволен' && !memberIds.has(e.id))
+      .map(e => ({ id: e.id, name: e.full_name || e.login, role: e.position || 'Сотрудник' }))
   } catch {
     availableEmployees.value = []
   } finally {
