@@ -1861,14 +1861,14 @@ function formatTime(dt) {
 }
 
 function _anchorToBottom(container) {
-  let target = container.scrollHeight
-  container.scrollTop = target
+  container.scrollTop = container.scrollHeight
+  let expected = container.scrollTop
   if (_scrollBottomTimer) { clearInterval(_scrollBottomTimer); _scrollBottomTimer = null }
   const tick = setInterval(() => {
     if (!container) { clearInterval(tick); _scrollBottomTimer = null; return }
-    if (container.scrollTop >= target - 50) {
-      target = container.scrollHeight
-      container.scrollTop = target
+    if (container.scrollTop >= expected - 50) {
+      container.scrollTop = container.scrollHeight
+      expected = container.scrollTop
     } else {
       clearInterval(tick)
       _scrollBottomTimer = null
@@ -2424,16 +2424,7 @@ async function togglePin(msg) {
 function cyclePinned() {
   if (!pinnedMsgs.value.length) return
   pinnedIdx.value = (pinnedIdx.value + 1) % pinnedMsgs.value.length
-  nextTick(() => {
-    const c = messagesEl.value
-    const id = pinnedMsgs.value[pinnedIdx.value]?.id
-    const el = c ? (c.querySelector(`#msg-${id}`) || c.querySelector(`[data-msg-id="${id}"]`)) : null
-    if (el) {
-      el.scrollIntoView({ behavior: 'instant', block: 'center' })
-      el.classList.add('msg-highlight')
-      setTimeout(() => el.classList.remove('msg-highlight'), 1500)
-    }
-  })
+  scrollToMsg(pinnedMsgs.value[pinnedIdx.value]?.id)
 }
 
 async function openInGallery(msg) {

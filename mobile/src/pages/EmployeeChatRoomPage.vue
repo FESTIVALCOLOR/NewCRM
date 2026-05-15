@@ -1987,14 +1987,14 @@ function formatTime(dt) {
 }
 
 function _anchorToBottom(container) {
-  let target = container.scrollHeight
-  container.scrollTop = target
+  container.scrollTop = container.scrollHeight
+  let expected = container.scrollTop  // фактическое значение после клампинга браузером
   if (_scrollBottomTimer) { clearInterval(_scrollBottomTimer); _scrollBottomTimer = null }
   const tick = setInterval(() => {
     if (!container) { clearInterval(tick); _scrollBottomTimer = null; return }
-    if (container.scrollTop >= target - 50) {
-      target = container.scrollHeight
-      container.scrollTop = target
+    if (container.scrollTop >= expected - 50) {
+      container.scrollTop = container.scrollHeight
+      expected = container.scrollTop
     } else {
       clearInterval(tick)
       _scrollBottomTimer = null
@@ -2130,30 +2130,14 @@ function setupTopObserver() {
 }
 
 async function scrollToPinnedMsg(msg) {
-  const findEl = (id) => {
-    const c = messagesEl.value
-    return c ? (c.querySelector(`#msg-${id}`) || c.querySelector(`[data-msg-id="${id}"]`)) : null
+  if (!messages.value.find(m => m.id === msg.id)) {
+    let attempts = 0
+    while (hasMoreMessages.value && !messages.value.find(m => m.id === msg.id) && attempts < 20) {
+      await loadOlderMessages()
+      attempts++
+    }
   }
-  const doScrollAndHighlight = (el) => {
-    el.scrollIntoView({ behavior: 'instant', block: 'center' })
-    el.classList.add('msg-highlight')
-    setTimeout(() => el.classList.remove('msg-highlight'), 1500)
-  }
-  const found = messages.value.find(m => m.id === msg.id)
-  if (found) {
-    await nextTick()
-    const el = findEl(msg.id)
-    if (el) doScrollAndHighlight(el)
-    return
-  }
-  let attempts = 0
-  while (hasMoreMessages.value && !messages.value.find(m => m.id === msg.id) && attempts < 20) {
-    await loadOlderMessages()
-    attempts++
-  }
-  await nextTick()
-  const el = findEl(msg.id)
-  if (el) doScrollAndHighlight(el)
+  scrollToMsg(msg.id)
 }
 
 async function loadClientChat(cardId) {
