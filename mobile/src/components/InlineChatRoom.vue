@@ -1323,7 +1323,7 @@ const messages = ref([])
 const firstUnreadId = ref(null)
 const inputText = ref('')
 const messagesEl = ref(null)
-let _scrollBottomObs = null
+let _scrollBottomTimer = null
 const fileInput = ref(null)
 const chatContainerEl = ref(null)
 const containerHeight = ref('calc(100vh - 270px)')
@@ -1861,12 +1861,21 @@ function formatTime(dt) {
 }
 
 function _anchorToBottom(container) {
-  container.scrollTop = container.scrollHeight
-  if (_scrollBottomObs) { _scrollBottomObs.disconnect(); _scrollBottomObs = null }
-  const obs = new ResizeObserver(() => { if (container) container.scrollTop = container.scrollHeight })
-  obs.observe(container)
-  _scrollBottomObs = obs
-  setTimeout(() => { obs.disconnect(); if (_scrollBottomObs === obs) _scrollBottomObs = null }, 2500)
+  let target = container.scrollHeight
+  container.scrollTop = target
+  if (_scrollBottomTimer) { clearInterval(_scrollBottomTimer); _scrollBottomTimer = null }
+  const tick = setInterval(() => {
+    if (!container) { clearInterval(tick); _scrollBottomTimer = null; return }
+    if (container.scrollTop >= target - 50) {
+      target = container.scrollHeight
+      container.scrollTop = target
+    } else {
+      clearInterval(tick)
+      _scrollBottomTimer = null
+    }
+  }, 150)
+  _scrollBottomTimer = tick
+  setTimeout(() => { clearInterval(tick); if (_scrollBottomTimer === tick) _scrollBottomTimer = null }, 3000)
 }
 
 function scrollToBottom() {
@@ -2416,9 +2425,11 @@ function cyclePinned() {
   if (!pinnedMsgs.value.length) return
   pinnedIdx.value = (pinnedIdx.value + 1) % pinnedMsgs.value.length
   nextTick(() => {
-    const el = messagesEl.value?.querySelector(`[data-msg-id="${pinnedMsgs.value[pinnedIdx.value]?.id}"]`)
+    const c = messagesEl.value
+    const id = pinnedMsgs.value[pinnedIdx.value]?.id
+    const el = c ? (c.querySelector(`#msg-${id}`) || c.querySelector(`[data-msg-id="${id}"]`)) : null
     if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      el.scrollIntoView({ behavior: 'instant', block: 'center' })
       el.classList.add('msg-highlight')
       setTimeout(() => el.classList.remove('msg-highlight'), 1500)
     }
