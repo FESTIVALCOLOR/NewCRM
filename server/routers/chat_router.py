@@ -33,6 +33,7 @@ WebSocket:
   WS  /ws/client-chat/{access_token}                   — клиент
 """
 
+from datetime import datetime, timedelta
 import logging
 import os
 from typing import List, Optional
@@ -1238,7 +1239,8 @@ def _chat_to_detail_response(db: Session, chat: InternalChat, employee_id: int, 
             if emp:
                 display = _get_employee_display_name(emp)
                 role_in_project = emp.position or emp.secondary_position
-                is_online = bool(emp.is_online)
+                activity_threshold = datetime.utcnow() - timedelta(minutes=2)
+                is_online = bool(emp.is_online and emp.last_activity and emp.last_activity > activity_threshold)
                 last_login = emp.last_login
         elif m.member_type == "guest":
             role_in_project = "Клиент"
