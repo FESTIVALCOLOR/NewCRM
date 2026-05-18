@@ -103,51 +103,41 @@
         </div>
       </template>
 
-      <!-- Ландшафт: таблица -->
-      <q-table
-        v-else-if="!clientsStore.loading && $q.screen.landscape"
-        :rows="displayedClients"
-        :columns="clientTableColumns"
-        row-key="id"
-        flat
-        dense
-        :rows-per-page-options="[0]"
-        hide-pagination
-        class="clients-table"
-        :table-style="{ fontSize: '12px' }"
-      >
-        <template #body="props">
-          <q-tr :props="props" class="cursor-pointer" @click="openClient(props.row.id)">
-            <q-td key="name" :props="props">
-              <div class="row items-center no-wrap">
-                <q-icon :name="props.row.organization_name ? 'business' : 'person'" :color="props.row.organization_name ? 'blue-6' : 'green-6'" size="16px" class="q-mr-xs" />
-                <span>{{ clientDisplayName(props.row) }}</span>
-              </div>
-            </q-td>
-            <q-td key="phone" :props="props">
-              {{ props.row.phone || '—' }}
-            </q-td>
-            <q-td key="email" :props="props" style="max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
-              {{ props.row.email || '—' }}
-            </q-td>
-            <q-td key="type" :props="props">
-              <q-badge
-                :color="props.row.organization_name ? 'blue-3' : 'green-3'"
-                :text-color="props.row.organization_name ? 'blue-9' : 'green-9'"
-                :label="props.row.organization_name ? 'Юр.' : 'Физ.'"
-                dense
-                style="font-size: 9px"
-              />
-            </q-td>
-          </q-tr>
-        </template>
-        <template #no-data>
-          <div class="text-center q-pa-xl text-grey-5" style="width: 100%">
-            <q-icon name="people_outline" size="48px" class="q-mb-sm" />
-            <div>{{ clientsStore.search ? 'Ничего не найдено' : 'Нет клиентов' }}</div>
-          </div>
-        </template>
-      </q-table>
+      <!-- Ландшафт: 1 строка на клиента -->
+      <template v-else-if="!clientsStore.loading && $q.screen.landscape">
+        <div class="landscape-header">
+          <span class="clh-name">Имя / Организация</span>
+          <span class="clh-phone">Телефон</span>
+          <span class="clh-email">Email</span>
+          <span class="clh-type">Тип</span>
+        </div>
+        <div
+          v-for="client in displayedClients"
+          :key="client.id"
+          class="client-row-ls"
+          @click="openClient(client.id)"
+        >
+          <span class="clh-name cls-name">
+            <q-icon :name="client.organization_name ? 'business' : 'person'" :color="client.organization_name ? 'blue-6' : 'green-6'" size="14px" style="margin-right:4px;flex-shrink:0" />
+            {{ clientDisplayName(client) }}
+          </span>
+          <span class="clh-phone cls-meta">{{ client.phone || '—' }}</span>
+          <span class="clh-email cls-meta">{{ client.email || '—' }}</span>
+          <span class="clh-type">
+            <q-badge
+              :color="client.organization_name ? 'blue-3' : 'green-3'"
+              :text-color="client.organization_name ? 'blue-9' : 'green-9'"
+              :label="client.organization_name ? 'Юр.' : 'Физ.'"
+              dense
+              style="font-size: 9px"
+            />
+          </span>
+        </div>
+        <div v-if="displayedClients.length === 0" class="text-center q-pa-xl text-grey-5">
+          <q-icon name="people_outline" size="48px" class="q-mb-sm" />
+          <div>{{ clientsStore.search ? 'Ничего не найдено' : 'Нет клиентов' }}</div>
+        </div>
+      </template>
     </q-pull-to-refresh>
 
     <!-- Круглая жёлтая кнопка добавления (если есть право) -->
@@ -182,13 +172,6 @@ const dashItems = computed(() => [
   { label: 'Физ. лица', value: clientsStore.items?.filter(c => !c.organization_name).length || 0, color: '#27AE60' },
   { label: 'Юр. лица', value: clientsStore.items?.filter(c => c.organization_name).length || 0, color: '#3498DB' },
 ])
-const clientTableColumns = [
-  { name: 'name', label: 'Имя / Организация', field: row => clientDisplayName(row), sortable: true, align: 'left', style: 'min-width: 130px' },
-  { name: 'phone', label: 'Телефон', field: 'phone', align: 'left', style: 'min-width: 100px' },
-  { name: 'email', label: 'Email', field: 'email', align: 'left', style: 'min-width: 80px; max-width: 130px' },
-  { name: 'type', label: 'Тип', field: row => row.organization_name ? 'Юр.' : 'Физ.', align: 'left', style: 'min-width: 45px; max-width: 60px' },
-]
-
 const clientType = ref('Все')
 const sortBy = ref('name')
 
@@ -274,25 +257,40 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.clients-table {
-  border: 1px solid #E0E0E0;
-  border-radius: 8px;
-  overflow: hidden;
-}
-.clients-table :deep(thead tr th) {
-  font-size: 11px;
-  font-weight: bold;
-  color: #666;
+/* Ландшафт — шапка + 1-строчные строки */
+.landscape-header {
+  display: flex;
+  align-items: center;
+  padding: 4px 10px;
   background: #F5F5F5;
-  padding: 6px 8px;
+  border: 1px solid #E0E0E0;
+  border-radius: 8px 8px 0 0;
+  font-size: 10px;
+  font-weight: bold;
+  color: #888;
+  gap: 6px;
 }
-.clients-table :deep(tbody tr td) {
-  padding: 6px 8px;
-  font-size: 12px;
+.client-row-ls {
+  display: flex;
+  align-items: center;
+  padding: 5px 10px;
+  border: 1px solid #E0E0E0;
+  border-top: none;
+  gap: 6px;
+  cursor: pointer;
+  background: #fff;
+  min-height: 32px;
 }
-.clients-table :deep(tbody tr:hover) {
-  background: #F9F9F9 !important;
-}
+.client-row-ls:last-of-type { border-radius: 0 0 8px 8px; }
+.client-row-ls:hover { background: #F9F9F9; }
+/* колонки ландшафта клиентов */
+.clh-name  { flex: 1; min-width: 0; display: flex; align-items: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.clh-phone { width: 110px; flex-shrink: 0; font-size: 11px; }
+.clh-email { width: 160px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.clh-type  { width: 46px; flex-shrink: 0; }
+/* значения */
+.cls-name  { font-size: 12px; font-weight: 500; color: #333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cls-meta  { color: #666; }
 
 /* Портретные карточки клиентов */
 .client-card {

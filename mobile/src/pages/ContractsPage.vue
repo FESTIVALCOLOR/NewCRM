@@ -106,41 +106,36 @@
         </div>
       </template>
 
-      <!-- Ландшафт: таблица -->
+      <!-- Ландшафт: 1 строка на договор -->
       <template v-else>
-        <q-table
-          :rows="filtered"
-          :columns="tableColumns"
-          row-key="id"
-          flat
-          dense
-          :rows-per-page-options="[0]"
-          hide-pagination
-          class="contracts-table"
-          :table-style="{ fontSize: '12px' }"
+        <div class="landscape-header">
+          <span class="lh-num">№</span>
+          <span class="lh-addr">Адрес</span>
+          <span class="lh-type">Тип</span>
+          <span class="lh-status">Статус</span>
+          <span class="lh-agent">Агент</span>
+        </div>
+        <div
+          v-for="contract in filtered"
+          :key="contract.id"
+          class="contract-row-ls"
+          :style="cardBgStyle(contract)"
+          @click="$router.push(`/contracts/${contract.id}`)"
         >
-          <template #body="props">
-            <q-tr :props="props" :style="cardBgStyle(props.row)" class="cursor-pointer" @click="$router.push(`/contracts/${props.row.id}`)">
-              <q-td v-for="col in props.cols" :key="col.name" :props="props">
-                <template v-if="col.name === 'status'">
-                  <q-badge :color="statusColor(props.row.status)" :label="props.row.status || '—'" style="font-size: 10px; padding: 3px 6px" />
-                </template>
-                <template v-else-if="col.name === 'agent_type'">
-                  <span v-if="props.row.agent_type" :style="{ background: agentColor(props.row.agent_type), color: 'white', fontSize: '10px', padding: '2px 6px', borderRadius: '4px', whiteSpace: 'nowrap' }">{{ props.row.agent_type }}</span>
-                </template>
-                <template v-else>
-                  {{ col.value }}
-                </template>
-              </q-td>
-            </q-tr>
-          </template>
-          <template #no-data>
-            <div class="text-center q-pa-xl text-grey-5" style="width: 100%">
-              <q-icon name="description" size="48px" class="q-mb-sm" />
-              <div>{{ search ? 'Ничего не найдено' : 'Нет договоров' }}</div>
-            </div>
-          </template>
-        </q-table>
+          <span class="lh-num ls-num">{{ contract.contract_number }}</span>
+          <span class="lh-addr ls-addr">{{ contract.address || '—' }}</span>
+          <span class="lh-type ls-meta">{{ contract.project_type === 'Индивидуальный' ? 'Инд.' : contract.project_type === 'Шаблонный' ? 'Шабл.' : (contract.project_type || '—') }}</span>
+          <span class="lh-status">
+            <q-badge :color="statusColor(contract.status)" :label="contract.status || '—'" style="font-size: 10px; padding: 2px 5px" />
+          </span>
+          <span class="lh-agent">
+            <span v-if="contract.agent_type" class="contract-agent" :style="{ background: agentColor(contract.agent_type) }">{{ contract.agent_type }}</span>
+          </span>
+        </div>
+        <div v-if="filtered.length === 0" class="text-center q-pa-xl text-grey-5">
+          <q-icon name="description" size="48px" class="q-mb-sm" />
+          <div>{{ search ? 'Ничего не найдено' : 'Нет договоров' }}</div>
+        </div>
       </template>
     </q-pull-to-refresh>
     <!-- FAB создания (если есть право) -->
@@ -177,14 +172,6 @@ const dashItems = computed(() => {
     { label: 'Сдано', value: done, color: '#27AE60' },
   ]
 })
-const tableColumns = [
-  { name: 'contract_number', label: '№', field: 'contract_number', sortable: true, align: 'left', style: 'min-width: 60px; max-width: 80px' },
-  { name: 'address', label: 'Адрес', field: 'address', sortable: true, align: 'left', style: 'min-width: 120px' },
-  { name: 'project_type', label: 'Тип', field: row => row.project_type ? (row.project_type === 'Индивидуальный' ? 'Инд.' : row.project_type === 'Шаблонный' ? 'Шабл.' : row.project_type) : '—', sortable: true, align: 'left', style: 'min-width: 50px; max-width: 70px' },
-  { name: 'status', label: 'Статус', field: 'status', sortable: true, align: 'left', style: 'min-width: 90px' },
-  { name: 'agent_type', label: 'Агент', field: 'agent_type', sortable: true, align: 'left', style: 'min-width: 70px' },
-]
-
 const contracts = ref([])
 const loading = ref(false)
 const search = ref('')
@@ -283,25 +270,42 @@ onMounted(() => loadContracts())
 </script>
 
 <style scoped>
-.contracts-table {
-  border: 1px solid #E0E0E0;
-  border-radius: 8px;
-  overflow: hidden;
-}
-.contracts-table :deep(thead tr th) {
-  font-size: 11px;
-  font-weight: bold;
-  color: #666;
+/* Ландшафт — шапка + 1-строчные строки */
+.landscape-header {
+  display: flex;
+  align-items: center;
+  padding: 4px 10px;
   background: #F5F5F5;
-  padding: 6px 8px;
+  border: 1px solid #E0E0E0;
+  border-radius: 8px 8px 0 0;
+  font-size: 10px;
+  font-weight: bold;
+  color: #888;
+  gap: 6px;
 }
-.contracts-table :deep(tbody tr td) {
-  padding: 6px 8px;
-  font-size: 12px;
+.contract-row-ls {
+  display: flex;
+  align-items: center;
+  padding: 5px 10px;
+  border: 1px solid #E0E0E0;
+  border-top: none;
+  gap: 6px;
+  cursor: pointer;
+  background: #fff;
+  min-height: 32px;
 }
-.contracts-table :deep(tbody tr:hover) {
-  background: #F9F9F9 !important;
-}
+.contract-row-ls:last-of-type { border-radius: 0 0 8px 8px; }
+.contract-row-ls:hover { background: #F9F9F9; }
+/* колонки ландшафта */
+.lh-num   { width: 72px; flex-shrink: 0; font-size: 11px; }
+.lh-addr  { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.lh-type  { width: 44px; flex-shrink: 0; font-size: 11px; }
+.lh-status { width: 100px; flex-shrink: 0; }
+.lh-agent { width: 80px; flex-shrink: 0; }
+/* значения в строках */
+.ls-num   { font-weight: bold; color: #333; }
+.ls-addr  { color: #444; }
+.ls-meta  { color: #888; }
 
 /* Портретные карточки договоров */
 .contract-card {
