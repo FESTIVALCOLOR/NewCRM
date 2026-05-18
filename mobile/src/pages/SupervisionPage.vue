@@ -396,8 +396,8 @@ onMounted(() => loadCards())
 .column-nav button .count { display: inline-block; background: rgba(255,255,255,0.2); border-radius: 8px; padding: 0 4px; margin-left: 3px; font-size: 9px }
 .column-nav button.active .count { background: rgba(255,255,255,0.3) }
 .column-frame { border: 1px solid #d9d9d9; border-radius: 8px; margin: 8px; background: #FAFAFA; min-height: calc(100vh - 260px); display: flex; flex-direction: column }
-.column-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-bottom: 1px solid #E0E0E0; background: white; border-radius: 8px 8px 0 0 }
-.column-title { font-size: 13px; font-weight: bold; color: #333 }
+.column-header { display: flex; align-items: flex-start; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #E0E0E0; background: white; border-radius: 8px 8px 0 0; min-height: 52px; box-sizing: border-box; }
+.column-title { font-size: 13px; font-weight: bold; color: #333; flex: 1; white-space: normal; line-height: 1.35; }
 .column-body { padding: 8px; flex: 1; overflow-y: auto }
 .column-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #bbb; font-size: 12px; padding: 40px 0 }
 .landscape-board { display: flex; overflow-x: auto; padding: 8px; gap: 8px; height: calc(100vh - 110px); -webkit-overflow-scrolling: touch; scrollbar-width: thin }

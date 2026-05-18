@@ -126,7 +126,7 @@
           <span class="lh-addr ls-addr">{{ contract.address || '—' }}</span>
           <span class="lh-type ls-meta">{{ contract.project_type === 'Индивидуальный' ? 'Инд.' : contract.project_type === 'Шаблонный' ? 'Шабл.' : (contract.project_type || '—') }}</span>
           <span class="lh-status">
-            <q-badge :color="statusColor(contract.status)" :label="contract.status || '—'" style="font-size: 10px; padding: 2px 5px" />
+            <q-badge :color="statusColor(contract.status)" :label="shortStatus(contract.status)" style="font-size: 10px; padding: 2px 5px" />
           </span>
           <span class="lh-agent">
             <span v-if="contract.agent_type" class="contract-agent" :style="{ background: agentColor(contract.agent_type) }">{{ contract.agent_type }}</span>
@@ -240,6 +240,12 @@ const filtered = computed(() => {
   else if (sortBy.value === 'area') items.sort((a, b) => (b.area || 0) - (a.area || 0))
   return items
 })
+
+function shortStatus(status) {
+  if (!status) return '—'
+  if (status.includes('НАДЗОР') || status.includes('надзор')) return 'Автор. надзор'
+  return status
+}
 
 function statusColor(status) {
   if (!status) return 'grey'

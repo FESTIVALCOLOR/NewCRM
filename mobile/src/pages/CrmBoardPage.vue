@@ -930,17 +930,22 @@ onMounted(async () => {
 }
 .column-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  padding: 10px 12px;
+  padding: 8px 12px;
   border-bottom: 1px solid #E0E0E0;
   background: white;
   border-radius: 8px 8px 0 0;
+  min-height: 52px;
+  box-sizing: border-box;
 }
 .column-title {
   font-size: 13px;
   font-weight: bold;
   color: #333;
+  flex: 1;
+  white-space: normal;
+  line-height: 1.35;
 }
 .column-body {
   padding: 8px;
