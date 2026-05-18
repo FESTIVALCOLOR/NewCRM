@@ -2057,6 +2057,10 @@ async function onMembersDialogOpen() {
   cardEmployees.value = null
   loadingCardEmployees.value = true
   try {
+    // Свежий статус участников (is_online, last_login)
+    const { data: chatData } = await api.get(`/api/v1/chats/${chat.value.id}`)
+    chatMembers.value = chatData.members || []
+
     const { data } = await api.get(`/api/v1/crm/cards/${props.cardId}`)
     const emps = new Map()
     // Менеджеры и другие роли из полей карточки

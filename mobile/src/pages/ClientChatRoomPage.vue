@@ -2649,6 +2649,10 @@ async function onMembersDialogOpen() {
   availableEmployees.value = null
   loadingAvailableEmps.value = true
   try {
+    // Свежий статус участников (is_online, last_login)
+    const { data: chatData } = await api.get(`/api/v1/chats/${chatId}`)
+    members.value = chatData.members || []
+
     const { data } = await api.get(`/api/v1/crm/cards/${chatCrmCardId.value}`)
     const emps = new Map()
     const roles = [
