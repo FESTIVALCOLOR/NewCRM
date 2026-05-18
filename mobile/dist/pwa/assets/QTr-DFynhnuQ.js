@@ -1,0 +1,1 @@
+import{q as o,J as s,L as a,O as n}from"./index-BtEX1930.js";const p=o({name:"QTr",props:{props:Object,noHover:Boolean},setup(e,{slots:r}){const t=n(()=>"q-tr"+(e.props===void 0||e.props.header===!0?"":" "+e.props.__trClass)+(e.noHover===!0?" q-tr--no-hover":""));return()=>s("tr",{style:e.props?.__trStyle,class:t.value},a(r.default))}});export{p as Q};

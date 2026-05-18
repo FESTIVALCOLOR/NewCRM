@@ -82,7 +82,31 @@
         </q-card>
       </div>
 
-      <!-- Таблица договоров -->
+      <!-- Портрет: компактные карточки (2 строки, без скролла) -->
+      <template v-else-if="!$q.screen.landscape">
+        <div
+          v-for="contract in filtered"
+          :key="contract.id"
+          class="contract-card"
+          :style="cardBgStyle(contract)"
+          @click="$router.push(`/contracts/${contract.id}`)"
+        >
+          <div class="contract-row1">
+            <span class="contract-num">{{ contract.contract_number }}</span>
+            <q-badge :color="statusColor(contract.status)" :label="contract.status" style="font-size: 10px; padding: 2px 6px" />
+          </div>
+          <div class="contract-row2">
+            <span class="contract-addr">{{ contract.address || 'Без адреса' }}</span>
+            <span v-if="contract.agent_type" class="contract-agent" :style="{ background: agentColor(contract.agent_type) }">{{ contract.agent_type }}</span>
+          </div>
+        </div>
+        <div v-if="filtered.length === 0" class="text-center q-pa-xl text-grey-5">
+          <q-icon name="description" size="48px" class="q-mb-sm" />
+          <div>{{ search ? 'Ничего не найдено' : 'Нет договоров' }}</div>
+        </div>
+      </template>
+
+      <!-- Ландшафт: таблица -->
       <template v-else>
         <q-table
           :rows="filtered"
@@ -94,18 +118,7 @@
           hide-pagination
           class="contracts-table"
           :table-style="{ fontSize: '12px' }"
-          @row-click="(_, row) => $router.push(`/contracts/${row.id}`)"
         >
-          <template #body-cell-status="props">
-            <q-td :props="props">
-              <q-badge :color="statusColor(props.value)" :label="props.value" style="font-size: 10px; padding: 3px 6px" />
-            </q-td>
-          </template>
-          <template #body-cell-agent_type="props">
-            <q-td :props="props">
-              <span v-if="props.value" :style="{ background: agentColor(props.value), color: 'white', fontSize: '10px', padding: '2px 6px', borderRadius: '4px', whiteSpace: 'nowrap' }">{{ props.value }}</span>
-            </q-td>
-          </template>
           <template #body="props">
             <q-tr :props="props" :style="cardBgStyle(props.row)" class="cursor-pointer" @click="$router.push(`/contracts/${props.row.id}`)">
               <q-td v-for="col in props.cols" :key="col.name" :props="props">
@@ -288,5 +301,50 @@ onMounted(() => loadContracts())
 }
 .contracts-table :deep(tbody tr:hover) {
   background: #F9F9F9 !important;
+}
+
+/* Портретные карточки договоров */
+.contract-card {
+  border: 1px solid #E0E0E0;
+  border-radius: 8px;
+  margin-bottom: 6px;
+  padding: 8px 12px;
+  cursor: pointer;
+  background: #fff;
+}
+.contract-card:active { background: #f5f5f5; }
+.contract-row1 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.contract-num {
+  font-size: 12px;
+  font-weight: bold;
+  color: #333;
+}
+.contract-row2 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.contract-addr {
+  font-size: 12px;
+  color: #555;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.contract-agent {
+  color: #fff;
+  font-size: 10px;
+  font-weight: bold;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 </style>

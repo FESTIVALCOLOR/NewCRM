@@ -67,9 +67,45 @@
         </q-card>
       </div>
 
-      <!-- Таблица клиентов -->
+      <!-- Портрет: компактные карточки (2 строки, без скролла) -->
+      <template v-if="!clientsStore.loading && !$q.screen.landscape">
+        <div
+          v-for="client in displayedClients"
+          :key="client.id"
+          class="client-card"
+          @click="openClient(client.id)"
+        >
+          <div class="client-row1">
+            <q-icon
+              :name="client.organization_name ? 'business' : 'person'"
+              :color="client.organization_name ? 'blue-6' : 'green-6'"
+              size="16px"
+              class="q-mr-xs"
+              style="flex-shrink:0"
+            />
+            <span class="client-name">{{ clientDisplayName(client) }}</span>
+            <q-badge
+              :color="client.organization_name ? 'blue-3' : 'green-3'"
+              :text-color="client.organization_name ? 'blue-9' : 'green-9'"
+              :label="client.organization_name ? 'Юр.' : 'Физ.'"
+              dense
+              style="font-size: 9px; flex-shrink: 0"
+            />
+          </div>
+          <div class="client-row2">
+            <span class="client-phone">{{ client.phone || '—' }}</span>
+            <span v-if="client.email" class="client-email">{{ client.email }}</span>
+          </div>
+        </div>
+        <div v-if="displayedClients.length === 0" class="text-center q-pa-xl text-grey-5">
+          <q-icon name="people_outline" size="48px" class="q-mb-sm" />
+          <div>{{ clientsStore.search ? 'Ничего не найдено' : 'Нет клиентов' }}</div>
+        </div>
+      </template>
+
+      <!-- Ландшафт: таблица -->
       <q-table
-        v-if="!clientsStore.loading"
+        v-else-if="!clientsStore.loading && $q.screen.landscape"
         :rows="displayedClients"
         :columns="clientTableColumns"
         row-key="id"
@@ -79,7 +115,6 @@
         hide-pagination
         class="clients-table"
         :table-style="{ fontSize: '12px' }"
-        @row-click="(_, row) => openClient(row.id)"
       >
         <template #body="props">
           <q-tr :props="props" class="cursor-pointer" @click="openClient(props.row.id)">
@@ -92,7 +127,7 @@
             <q-td key="phone" :props="props">
               {{ props.row.phone || '—' }}
             </q-td>
-            <q-td key="email" :props="props" style="max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
+            <q-td key="email" :props="props" style="max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
               {{ props.row.email || '—' }}
             </q-td>
             <q-td key="type" :props="props">
@@ -257,5 +292,48 @@ onMounted(() => {
 }
 .clients-table :deep(tbody tr:hover) {
   background: #F9F9F9 !important;
+}
+
+/* Портретные карточки клиентов */
+.client-card {
+  border: 1px solid #E0E0E0;
+  border-radius: 8px;
+  margin-bottom: 6px;
+  padding: 8px 12px;
+  cursor: pointer;
+  background: #fff;
+}
+.client-card:active { background: #f5f5f5; }
+.client-row1 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 3px;
+}
+.client-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: #333;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.client-row2 {
+  display: flex;
+  gap: 12px;
+  padding-left: 22px;
+}
+.client-phone {
+  font-size: 11px;
+  color: #666;
+}
+.client-email {
+  font-size: 11px;
+  color: #888;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 160px;
 }
 </style>
