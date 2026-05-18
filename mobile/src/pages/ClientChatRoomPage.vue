@@ -991,7 +991,7 @@
                   size="28px"
                 />
                 <span
-                  v-if="m.member_type === 'employee'"
+                  v-if="m.is_online !== null && m.is_online !== undefined"
                   :style="{
                     position: 'absolute', bottom: '0', right: '0',
                     width: '9px', height: '9px', borderRadius: '50%',
@@ -1007,7 +1007,7 @@
                 {{ m.role_in_project || (m.member_type === 'employee' ? 'Сотрудник' : 'Клиент') }}
               </q-item-label>
               <q-item-label
-                v-if="canShowLastLogin && m.member_type === 'employee'"
+                v-if="canShowLastLogin && (m.member_type === 'employee' || m.last_login)"
                 caption
                 style="font-size: 10px; color: #aaa"
               >

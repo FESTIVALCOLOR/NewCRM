@@ -256,7 +256,7 @@ class ChatMembersDialog(QDialog):
         )
         rl.addWidget(dot)
 
-        if not is_guest:
+        if is_online is not None:
             online_dot = QLabel()
             online_dot.setFixedSize(8, 8)
             color = "#4CAF50" if is_online else "#9E9E9E"
@@ -275,7 +275,7 @@ class ChatMembersDialog(QDialog):
             ph_lbl.setStyleSheet("font-size: 10px; color: #666; background: transparent;")
             ph_lbl.setToolTip(f"Телефон клиента: {phone}")
             name_col.addWidget(ph_lbl)
-        if not is_guest and self._show_last_login:
+        if self._show_last_login and last_login_raw is not None:
             login_lbl = QLabel(self._format_last_login(is_online, last_login_raw))
             login_lbl.setStyleSheet("font-size: 10px; color: #aaa; background: transparent;")
             name_col.addWidget(login_lbl)
@@ -296,7 +296,7 @@ class ChatMembersDialog(QDialog):
             revoke_btn.clicked.connect(lambda checked, mid=member_id: self._revoke_guest(mid))
             rl.addWidget(revoke_btn, 0, Qt.AlignVCenter)
 
-        has_extra = (phone and is_guest and self._show_phone) or (not is_guest and self._show_last_login)
+        has_extra = (phone and is_guest and self._show_phone) or (self._show_last_login and last_login_raw is not None)
         row_h = 56 if has_extra else 40
         return row, row_h, emp_id
 
