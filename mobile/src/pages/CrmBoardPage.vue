@@ -62,7 +62,7 @@
       </div>
 
       <!-- АКТИВНЫЕ (ландшафт) — все колонки рядом -->
-      <template v-if="!crmStore.showArchive && $q.screen.landscape">
+      <template v-if="!crmStore.showArchive && ($q.screen.width > $q.screen.height)">
         <div class="landscape-board">
           <div v-for="col in crmStore.columns" :key="col.name" class="landscape-column">
             <div class="column-frame" style="margin: 0; height: 100%">
@@ -100,7 +100,7 @@
       </template>
 
       <!-- АКТИВНЫЕ (мобильный) — свайпабельные колонки -->
-      <template v-if="!crmStore.showArchive && $q.screen.lt.md && !$q.screen.landscape">
+      <template v-if="!crmStore.showArchive && $q.screen.lt.md && !($q.screen.width > $q.screen.height)">
         <!-- Мини-навигация колонок: горизонтальный скролл -->
         <div class="column-nav">
           <button
@@ -160,7 +160,7 @@
       </template>
 
       <!-- Планшет — тоже свайп (карусель) -->
-      <template v-if="$q.screen.gt.sm && !crmStore.showArchive && !$q.screen.landscape">
+      <template v-if="$q.screen.gt.sm && !crmStore.showArchive && !($q.screen.width > $q.screen.height)">
         <div class="column-nav">
           <button v-for="(col, idx) in crmStore.columns" :key="col.name" :class="{ active: currentSlide === idx }" @click="currentSlide = idx">
             {{ col.shortName }} <span class="count">{{ col.count }}</span>

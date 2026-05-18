@@ -83,7 +83,7 @@
       </div>
 
       <!-- Портрет: компактные карточки (2 строки, без скролла) -->
-      <template v-else-if="!$q.screen.landscape">
+      <template v-else-if="!($q.screen.width > $q.screen.height)">
         <div
           v-for="contract in filtered"
           :key="contract.id"

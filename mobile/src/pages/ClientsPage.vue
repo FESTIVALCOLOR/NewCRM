@@ -68,7 +68,7 @@
       </div>
 
       <!-- Портрет: компактные карточки (2 строки, без скролла) -->
-      <template v-if="!clientsStore.loading && !$q.screen.landscape">
+      <template v-if="!clientsStore.loading && !($q.screen.width > $q.screen.height)">
         <div
           v-for="client in displayedClients"
           :key="client.id"
@@ -104,7 +104,7 @@
       </template>
 
       <!-- Ландшафт: 1 строка на клиента -->
-      <template v-else-if="!clientsStore.loading && $q.screen.landscape">
+      <template v-else-if="!clientsStore.loading && ($q.screen.width > $q.screen.height)">
         <div class="landscape-header">
           <span class="clh-name">Имя / Организация</span>
           <span class="clh-phone">Телефон</span>

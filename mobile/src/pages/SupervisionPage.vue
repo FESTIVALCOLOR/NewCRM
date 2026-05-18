@@ -49,7 +49,7 @@
       </div>
 
       <!-- Активные — ландшафт: все колонки рядом -->
-      <template v-else-if="$q.screen.landscape">
+      <template v-else-if="($q.screen.width > $q.screen.height)">
         <div class="landscape-board">
           <div v-for="col in columns" :key="col.name" class="landscape-column">
             <div class="column-frame" style="margin: 0; height: 100%">
