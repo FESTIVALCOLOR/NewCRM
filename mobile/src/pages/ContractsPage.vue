@@ -82,43 +82,52 @@
         </q-card>
       </div>
 
-      <!-- Список -->
+      <!-- Таблица договоров -->
       <template v-else>
-        <q-card
-          v-for="contract in filtered"
-          :key="contract.id"
-          class="is-card q-mb-sm cursor-pointer"
-          :style="cardBgStyle(contract)"
-          @click="$router.push(`/contracts/${contract.id}`)"
+        <q-table
+          :rows="filtered"
+          :columns="tableColumns"
+          row-key="id"
+          flat
+          dense
+          :rows-per-page-options="[0]"
+          hide-pagination
+          class="contracts-table"
+          :table-style="{ fontSize: '12px' }"
+          @row-click="(_, row) => $router.push(`/contracts/${row.id}`)"
         >
-          <q-card-section class="q-pa-md">
-            <div class="row items-start justify-between q-mb-xs">
-              <div style="flex: 1">
-                <div class="text-subtitle2 text-weight-bold" style="color: #333">
-                  {{ contract.contract_number }}
-                </div>
-                <div class="text-body2 q-mt-xs" style="color: #333">
-                  {{ contract.address || 'Без адреса' }}
-                </div>
-              </div>
-              <div class="column items-end q-gutter-xs q-ml-sm" style="flex-shrink: 0">
-                <q-badge :color="statusColor(contract.status)" :label="contract.status" style="min-width: 100px; justify-content: center; padding: 5px 8px; font-size: 11px" />
-                <q-badge v-if="contract.agent_type" text-color="white" :style="{ background: agentColor(contract.agent_type), minWidth: '100px', justifyContent: 'center', padding: '5px 8px', fontSize: '11px' }" :label="contract.agent_type" />
-              </div>
+          <template #body-cell-status="props">
+            <q-td :props="props">
+              <q-badge :color="statusColor(props.value)" :label="props.value" style="font-size: 10px; padding: 3px 6px" />
+            </q-td>
+          </template>
+          <template #body-cell-agent_type="props">
+            <q-td :props="props">
+              <span v-if="props.value" :style="{ background: agentColor(props.value), color: 'white', fontSize: '10px', padding: '2px 6px', borderRadius: '4px', whiteSpace: 'nowrap' }">{{ props.value }}</span>
+            </q-td>
+          </template>
+          <template #body="props">
+            <q-tr :props="props" :style="cardBgStyle(props.row)" class="cursor-pointer" @click="$router.push(`/contracts/${props.row.id}`)">
+              <q-td v-for="col in props.cols" :key="col.name" :props="props">
+                <template v-if="col.name === 'status'">
+                  <q-badge :color="statusColor(props.row.status)" :label="props.row.status || '—'" style="font-size: 10px; padding: 3px 6px" />
+                </template>
+                <template v-else-if="col.name === 'agent_type'">
+                  <span v-if="props.row.agent_type" :style="{ background: agentColor(props.row.agent_type), color: 'white', fontSize: '10px', padding: '2px 6px', borderRadius: '4px', whiteSpace: 'nowrap' }">{{ props.row.agent_type }}</span>
+                </template>
+                <template v-else>
+                  {{ col.value }}
+                </template>
+              </q-td>
+            </q-tr>
+          </template>
+          <template #no-data>
+            <div class="text-center q-pa-xl text-grey-5" style="width: 100%">
+              <q-icon name="description" size="48px" class="q-mb-sm" />
+              <div>{{ search ? 'Ничего не найдено' : 'Нет договоров' }}</div>
             </div>
-            <div class="row q-gutter-md text-caption" style="color: #888">
-              <span>{{ contract.project_type }}</span>
-              <span v-if="contract.project_subtype"> · {{ contract.project_subtype }}</span>
-              <span v-if="contract.area">{{ contract.area }} м²</span>
-              <span v-if="contract.city">{{ contract.city }}</span>
-            </div>
-          </q-card-section>
-        </q-card>
-
-        <div v-if="filtered.length === 0" class="text-center q-pa-xl text-grey-5">
-          <q-icon name="description" size="48px" class="q-mb-sm" />
-          <div>{{ search ? 'Ничего не найдено' : 'Нет договоров' }}</div>
-        </div>
+          </template>
+        </q-table>
       </template>
     </q-pull-to-refresh>
     <!-- FAB создания (если есть право) -->
@@ -155,6 +164,14 @@ const dashItems = computed(() => {
     { label: 'Сдано', value: done, color: '#27AE60' },
   ]
 })
+const tableColumns = [
+  { name: 'contract_number', label: '№', field: 'contract_number', sortable: true, align: 'left', style: 'min-width: 60px; max-width: 80px' },
+  { name: 'address', label: 'Адрес', field: 'address', sortable: true, align: 'left', style: 'min-width: 120px' },
+  { name: 'project_type', label: 'Тип', field: row => row.project_type ? (row.project_type === 'Индивидуальный' ? 'Инд.' : row.project_type === 'Шаблонный' ? 'Шабл.' : row.project_type) : '—', sortable: true, align: 'left', style: 'min-width: 50px; max-width: 70px' },
+  { name: 'status', label: 'Статус', field: 'status', sortable: true, align: 'left', style: 'min-width: 90px' },
+  { name: 'agent_type', label: 'Агент', field: 'agent_type', sortable: true, align: 'left', style: 'min-width: 70px' },
+]
+
 const contracts = ref([])
 const loading = ref(false)
 const search = ref('')
@@ -251,3 +268,25 @@ function onRefresh(done) {
 
 onMounted(() => loadContracts())
 </script>
+
+<style scoped>
+.contracts-table {
+  border: 1px solid #E0E0E0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.contracts-table :deep(thead tr th) {
+  font-size: 11px;
+  font-weight: bold;
+  color: #666;
+  background: #F5F5F5;
+  padding: 6px 8px;
+}
+.contracts-table :deep(tbody tr td) {
+  padding: 6px 8px;
+  font-size: 12px;
+}
+.contracts-table :deep(tbody tr:hover) {
+  background: #F9F9F9 !important;
+}
+</style>

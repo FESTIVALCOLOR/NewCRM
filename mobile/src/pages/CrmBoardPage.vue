@@ -61,8 +61,46 @@
         </div>
       </div>
 
+      <!-- АКТИВНЫЕ (ландшафт) — все колонки рядом -->
+      <template v-if="!crmStore.showArchive && $q.screen.landscape">
+        <div class="landscape-board">
+          <div v-for="col in crmStore.columns" :key="col.name" class="landscape-column">
+            <div class="column-frame" style="margin: 0; height: 100%">
+              <div class="column-header">
+                <span class="column-title">{{ col.name }}</span>
+                <span style="color: #888; font-size: 11px">{{ col.count }}</span>
+              </div>
+              <div v-if="col.cards.length > 0" class="column-body">
+                <crm-card-item
+                  v-for="card in col.cards"
+                  :key="card.id"
+                  :card="card"
+                  @click="openCard(card.id)"
+                  @longpress="showMoveDialog(card)"
+                  @submit-work="doCardAction(card.id, 'submit')"
+                  @accept="doCardAction(card.id, 'accept')"
+                  @reject="doCardAction(card.id, 'reject')"
+                  @client-send="doCardAction(card.id, 'client-send')"
+                  @client-approved="doCardAction(card.id, 'client-approved')"
+                  @advance-round="doCardAction(card.id, 'advance-round')"
+                  @close-stage="doCardAction(card.id, 'close-stage')"
+                  @add-extra-round="doCardAction(card.id, 'add-extra-round')"
+                  @sign-act="doCardAction(card.id, 'sign-act')"
+                  @add-measurement="openMeasurementDialog(card)"
+                  @add-tech-task="openTechTaskDialog(card)"
+                />
+              </div>
+              <div v-else class="column-empty">
+                <q-icon name="inbox" size="32px" color="grey-4" />
+                <div>Нет карточек</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
+
       <!-- АКТИВНЫЕ (мобильный) — свайпабельные колонки -->
-      <template v-if="!crmStore.showArchive && $q.screen.lt.md">
+      <template v-if="!crmStore.showArchive && $q.screen.lt.md && !$q.screen.landscape">
         <!-- Мини-навигация колонок: горизонтальный скролл -->
         <div class="column-nav">
           <button
@@ -122,7 +160,7 @@
       </template>
 
       <!-- Планшет — тоже свайп (карусель) -->
-      <template v-if="$q.screen.gt.sm && !crmStore.showArchive">
+      <template v-if="$q.screen.gt.sm && !crmStore.showArchive && !$q.screen.landscape">
         <div class="column-nav">
           <button v-for="(col, idx) in crmStore.columns" :key="col.name" :class="{ active: currentSlide === idx }" @click="currentSlide = idx">
             {{ col.shortName }} <span class="count">{{ col.count }}</span>
@@ -918,5 +956,30 @@ onMounted(async () => {
   color: #bbb;
   font-size: 12px;
   padding: 40px 0;
+}
+
+/* Ландшафтная доска — все колонки рядом */
+.landscape-board {
+  display: flex;
+  overflow-x: auto;
+  padding: 8px;
+  gap: 8px;
+  height: calc(100vh - 110px);
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+.landscape-column {
+  flex: 1 0 240px;
+  max-width: 320px;
+  display: flex;
+  flex-direction: column;
+}
+.landscape-column .column-frame {
+  flex: 1;
+  overflow: hidden;
+}
+.landscape-column .column-body {
+  overflow-y: auto;
+  max-height: calc(100vh - 200px);
 }
 </style>

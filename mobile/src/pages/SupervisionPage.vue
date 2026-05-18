@@ -48,6 +48,71 @@
         </div>
       </div>
 
+      <!-- Активные — ландшафт: все колонки рядом -->
+      <template v-else-if="$q.screen.landscape">
+        <div class="landscape-board">
+          <div v-for="col in columns" :key="col.name" class="landscape-column">
+            <div class="column-frame" style="margin: 0; height: 100%">
+              <div class="column-header">
+                <span class="column-title">{{ col.name }}</span>
+                <span style="color: #888; font-size: 11px">{{ col.count }}</span>
+              </div>
+              <div v-if="col.cards.length > 0" class="column-body" style="overflow-y: auto; flex: 1">
+                <q-card v-for="card in col.cards" :key="card.id" class="crm-card q-mb-sm" :style="card.is_paused ? { background: '#FFF8E1', borderColor: '#F39C12' } : {}">
+                  <q-card-section class="q-pa-sm">
+                    <div class="row items-center justify-between q-mb-xs">
+                      <div style="color: #888; font-size: 10px">
+                        {{ card.contract_number || `#${card.id}` }}
+                      </div>
+                      <q-badge
+                        v-if="!card.is_paused"
+                        color="blue-grey-3"
+                        text-color="blue-grey-9"
+                        :label="card.column_name"
+                        dense
+                        style="font-size: 9px"
+                      />
+                      <q-badge
+                        v-else
+                        color="warning"
+                        label="Приостановлено"
+                        dense
+                        style="font-size: 9px"
+                      />
+                    </div>
+                    <div class="text-weight-bold q-mb-xs" style="font-size: 13px; color: #222">
+                      {{ card.address || 'Без адреса' }}
+                    </div>
+                    <div class="row items-center justify-between q-mb-xs">
+                      <div style="font-size: 11px; color: #888">
+                        <span v-if="card.area">{{ card.area }} м²</span>
+                        <span v-if="card.area && card.city"> | </span>
+                        <span v-if="card.city">{{ card.city }}</span>
+                      </div>
+                      <span v-if="card.agent_type" :style="{ background: agentColorFor(card.agent_type), color: 'white', fontSize: '10px', fontWeight: 'bold', padding: '3px 8px', borderRadius: '4px' }">{{ card.agent_type }}</span>
+                    </div>
+                    <div style="border-top: 1px solid #E0E0E0; padding-top: 6px">
+                      <q-btn
+                        flat
+                        dense
+                        no-caps
+                        icon="open_in_new"
+                        label="Данные карточки"
+                        style="color: #333; font-size: 11px; height: 28px; width: 100%; background: #F5F5F5; border-radius: 4px"
+                        @click="openCard(card)"
+                      />
+                    </div>
+                  </q-card-section>
+                </q-card>
+              </div>
+              <div v-else class="column-empty">
+                <q-icon name="inbox" size="32px" color="grey-4" /><div>Нет карточек</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
+
       <!-- Активные — QCarousel свайп как CRM -->
       <template v-else>
         <div class="column-nav">
@@ -335,4 +400,8 @@ onMounted(() => loadCards())
 .column-title { font-size: 13px; font-weight: bold; color: #333 }
 .column-body { padding: 8px; flex: 1; overflow-y: auto }
 .column-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #bbb; font-size: 12px; padding: 40px 0 }
+.landscape-board { display: flex; overflow-x: auto; padding: 8px; gap: 8px; height: calc(100vh - 110px); -webkit-overflow-scrolling: touch; scrollbar-width: thin }
+.landscape-column { flex: 1 0 240px; max-width: 320px; display: flex; flex-direction: column }
+.landscape-column .column-frame { flex: 1; margin: 0; overflow: hidden }
+.landscape-column .column-body { overflow-y: auto; max-height: calc(100vh - 200px) }
 </style>
