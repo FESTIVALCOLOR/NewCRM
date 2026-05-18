@@ -12,6 +12,7 @@
   WS   /api/v1/ws/client-chat/{access_token}    — клиент
 """
 
+from datetime import datetime
 import logging
 import os
 from typing import Optional
@@ -560,12 +561,18 @@ async def ws_client_chat(
     participant_key = f"guest_{access_token[:8]}"
     await ws_manager.connect(chat.id, participant_key, websocket)
 
+    # Отмечаем активность гостя при подключении
+    guest.last_guest_activity = datetime.utcnow()
+    db.commit()
+
     try:
         while True:
             data = await websocket.receive_json()
             event_type = data.get("type")
 
             if event_type == "ping":
+                guest.last_guest_activity = datetime.utcnow()
+                db.commit()
                 await websocket.send_json({"type": "pong"})
 
             elif event_type == "message":

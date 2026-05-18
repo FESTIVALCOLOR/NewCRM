@@ -177,6 +177,17 @@ async def startup_event():
         if "duplicate" not in str(e).lower() and "already" not in str(e).lower():
             logger.debug(f"supervision_visits migration note: {e}")
 
+    # Миграция: last_guest_activity в internal_chat_members
+    try:
+        from sqlalchemy import text as _text4
+
+        with engine.begin() as conn:
+            conn.execute(_text4("ALTER TABLE internal_chat_members ADD COLUMN IF NOT EXISTS last_guest_activity TIMESTAMP"))
+            logger.info("Migrated internal_chat_members: added last_guest_activity column")
+    except Exception as e:
+        if "duplicate" not in str(e).lower() and "already" not in str(e).lower():
+            logger.debug(f"internal_chat_members migration note: {e}")
+
     # Seed дефолтных прав и admin-пользователя
     from auth import get_password_hash
 

@@ -1138,6 +1138,9 @@ class InternalChatMember(Base):
     # ID последнего прочитанного сообщения (для подсчёта непрочитанных)
     last_read_message_id = Column(Integer, nullable=True)
 
+    # Последняя активность гостя (обновляется при WS-подключении и пинге)
+    last_guest_activity = Column(DateTime, nullable=True)
+
     joined_at = Column(DateTime, default=datetime.utcnow)
     is_active = Column(Boolean, default=True)
 

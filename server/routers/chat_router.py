@@ -1244,6 +1244,10 @@ def _chat_to_detail_response(db: Session, chat: InternalChat, employee_id: int, 
                 last_login = emp.last_login
         elif m.member_type == "guest":
             role_in_project = "Клиент"
+            if m.last_guest_activity:
+                activity_threshold = datetime.utcnow() - timedelta(minutes=2)
+                is_online = m.last_guest_activity > activity_threshold
+                last_login = m.last_guest_activity
         member_responses.append(
             InternalChatMemberResponse(
                 id=m.id,
