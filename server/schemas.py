@@ -1470,6 +1470,9 @@ class InternalChatMemberResponse(BaseModel):
     # Вычисляемые поля (заполняются сервисом)
     display_name: Optional[str] = None
     role_in_project: Optional[str] = None
+    # Онлайн-статус (только для сотрудников)
+    is_online: Optional[bool] = None
+    last_login: Optional[datetime] = None
 
     class Config:
         from_attributes = True

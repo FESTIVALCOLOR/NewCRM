@@ -35,16 +35,6 @@
         </div>
       </div>
       <q-btn
-        v-if="canScript"
-        flat
-        round
-        dense
-        icon="text_snippet"
-        @click="showScriptDialog = true"
-      >
-        <q-tooltip>Отправить скрипт</q-tooltip>
-      </q-btn>
-      <q-btn
         flat
         round
         dense
@@ -1193,17 +1183,35 @@
         <q-list dense>
           <q-item v-for="m in members" :key="m.id">
             <q-item-section avatar>
-              <q-avatar
-                :color="m.member_type === 'employee' ? 'blue-2' : 'green-2'"
-                :text-color="m.member_type === 'employee' ? 'blue-9' : 'green-9'"
-                icon="person"
-                size="28px"
-              />
+              <div style="position: relative; display: inline-block">
+                <q-avatar
+                  :color="m.member_type === 'employee' ? 'blue-2' : 'green-2'"
+                  :text-color="m.member_type === 'employee' ? 'blue-9' : 'green-9'"
+                  icon="person"
+                  size="28px"
+                />
+                <span
+                  v-if="m.member_type === 'employee'"
+                  :style="{
+                    position: 'absolute', bottom: '0', right: '0',
+                    width: '9px', height: '9px', borderRadius: '50%',
+                    background: m.is_online ? '#4CAF50' : '#9E9E9E',
+                    border: '1.5px solid #fff',
+                  }"
+                />
+              </div>
             </q-item-section>
             <q-item-section>
               <q-item-label>{{ m.display_name || m.guest_name || `#${m.id}` }}</q-item-label>
               <q-item-label caption>
                 {{ m.role_in_project || (m.member_type === 'employee' ? 'Сотрудник' : 'Клиент') }}
+              </q-item-label>
+              <q-item-label
+                v-if="canShowLastLogin && m.member_type === 'employee'"
+                caption
+                style="font-size: 10px; color: #aaa"
+              >
+                {{ m.is_online ? 'В сети' : (m.last_login ? `Был(а): ${fmtLastLogin(m.last_login)}` : 'Не входил(а)') }}
               </q-item-label>
             </q-item-section>
             <q-item-section side>
@@ -1468,6 +1476,28 @@ const _CF_STAGE_LABELS = {
   acts: 'Акты',
   info_letters: 'Информационные письма',
   questionnaire: 'Анкета',
+  // Акты (неподписанные)
+  act_planning_yandex_path: 'Акт планировочного решения',
+  act_concept_yandex_path: 'Акт концептуального дизайна',
+  act_final_yandex_path: 'Акт финального дизайна',
+  info_letter_yandex_path: 'Информационное письмо',
+  // Акты (подписанные)
+  act_planning_signed_yandex_path: 'Акт планировочного (подписанный)',
+  act_concept_signed_yandex_path: 'Акт концептуального (подписанный)',
+  act_final_signed_yandex_path: 'Акт финального (подписанный)',
+  info_letter_signed_yandex_path: 'Информационное письмо (подписанное)',
+  // Договор
+  contract_file_yandex_path: 'Договор',
+  additional_agreement_yandex_path: 'Дополнительное соглашение',
+  // Чеки
+  advance_receipt_yandex_path: 'Чек аванса',
+  additional_receipt_yandex_path: 'Чек доплаты',
+  third_receipt_yandex_path: 'Чек (3-й платёж)',
+  // Прочие поля карточки
+  tech_task_yandex_path: 'Техническое задание',
+  photo_documentation_yandex_path: 'Фотофиксация',
+  references_yandex_path: 'Референсы',
+  measurement_yandex_path: 'Замер',
 }
 const _CF_STAGE_ORDER = [
   'measurement', 'stage1', 'stage2_concept', 'stage2_3d', 'stage3', 'supervision',
@@ -1703,6 +1733,14 @@ const selectedScript = ref(null)
 const scriptText = ref('')
 const cardData = ref(null)
 const canScript = computed(() => can('chat.client.send_script') && !!chatCrmCardId.value)
+const canShowLastLogin = computed(() => can('chat.members.show_last_login'))
+
+function fmtLastLogin(dt) {
+  if (!dt) return ''
+  const d = new Date(dt)
+  const pad = n => String(n).padStart(2, '0')
+  return `${d.getDate()}.${pad(d.getMonth() + 1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
 
 // Диалог пересылки
 const showForwardDialog = ref(false)

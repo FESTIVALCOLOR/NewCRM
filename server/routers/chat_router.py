@@ -1231,11 +1231,15 @@ def _chat_to_detail_response(db: Session, chat: InternalChat, employee_id: int, 
     for m in members:
         display = m.guest_name or ""
         role_in_project = None
+        is_online = None
+        last_login = None
         if m.employee_id:
             emp = db.query(Employee).filter(Employee.id == m.employee_id).first()
             if emp:
                 display = _get_employee_display_name(emp)
                 role_in_project = emp.position or emp.secondary_position
+                is_online = bool(emp.is_online)
+                last_login = emp.last_login
         elif m.member_type == "guest":
             role_in_project = "Клиент"
         member_responses.append(
@@ -1249,6 +1253,8 @@ def _chat_to_detail_response(db: Session, chat: InternalChat, employee_id: int, 
                 is_active=m.is_active,
                 display_name=display,
                 role_in_project=role_in_project,
+                is_online=is_online,
+                last_login=last_login,
             )
         )
     first_unread_id = get_first_unread_message_id(db, chat.id, employee_id)

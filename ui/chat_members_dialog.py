@@ -38,6 +38,7 @@ class ChatMembersDialog(QDialog):
         self._members = []
         self._all_employees = []
         self._show_phone = _has_perm(employee, api_client, "chat.client.show_phone") if chat_type == "client" else False
+        self._show_last_login = _has_perm(employee, api_client, "chat.members.show_last_login")
 
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
@@ -203,6 +204,102 @@ class ChatMembersDialog(QDialog):
 
         threading.Thread(target=_worker, daemon=True).start()
 
+    @staticmethod
+    def _format_last_login(is_online, last_login_raw):
+        from datetime import datetime
+
+        if is_online:
+            return "В сети"
+        if not last_login_raw:
+            return "Не входил(а)"
+        try:
+            dt = datetime.fromisoformat(last_login_raw.replace("Z", "+00:00"))
+            return f"Был(а): {dt.strftime('%d.%m.%Y %H:%M')}"
+        except Exception:
+            return f"Был(а): {last_login_raw[:16]}"
+
+    _DEL_STYLE = """
+        QPushButton {
+            background: transparent; border: 1px solid #ffcccc;
+            border-radius: 4px; color: #cc0000; font-size: 16px;
+            font-weight: bold; padding: 0;
+            min-width: 28px; max-width: 28px;
+            min-height: 28px; max-height: 28px;
+        }
+        QPushButton:hover { background: #ffeeee; }
+    """
+
+    def _build_member_row(self, m):
+        display = m.get("display_name") or m.get("guest_name") or "—"
+        role = m.get("role_in_project", "")
+        is_guest = m.get("member_type") == "guest" or not m.get("employee_id")
+        is_online = m.get("is_online")
+        last_login_raw = m.get("last_login")
+        phone = m.get("guest_phone") or ""
+        member_id = m.get("id")
+        emp_id = m.get("employee_id")
+
+        row = QWidget()
+        row.setStyleSheet("background: #F0FFF0;" if is_guest else "background: transparent;")
+        rl = QHBoxLayout(row)
+        rl.setContentsMargins(8, 4, 8, 4)
+        rl.setSpacing(6)
+        rl.setAlignment(Qt.AlignVCenter)
+
+        dot = QLabel("К" if is_guest else "С")
+        dot.setFixedSize(20, 20)
+        dot.setAlignment(Qt.AlignCenter)
+        dot.setStyleSheet(
+            "background: #43A047; color: #fff; border-radius: 10px; font-size: 9px; font-weight: bold;"
+            if is_guest
+            else "background: #1565C0; color: #fff; border-radius: 10px; font-size: 9px; font-weight: bold;"
+        )
+        rl.addWidget(dot)
+
+        if not is_guest:
+            online_dot = QLabel()
+            online_dot.setFixedSize(8, 8)
+            color = "#4CAF50" if is_online else "#9E9E9E"
+            online_dot.setStyleSheet(f"background: {color}; border-radius: 4px;")
+            online_dot.setToolTip("В сети" if is_online else "Не в сети")
+            rl.addWidget(online_dot)
+
+        name_col = QVBoxLayout()
+        name_col.setSpacing(0)
+        name_col.setContentsMargins(0, 0, 0, 0)
+        lbl = QLabel(f"{display}  ({role})" if role else display)
+        lbl.setStyleSheet("font-size: 12px; background: transparent;")
+        name_col.addWidget(lbl)
+        if phone and is_guest and self._show_phone:
+            ph_lbl = QLabel(phone)
+            ph_lbl.setStyleSheet("font-size: 10px; color: #666; background: transparent;")
+            ph_lbl.setToolTip(f"Телефон клиента: {phone}")
+            name_col.addWidget(ph_lbl)
+        if not is_guest and self._show_last_login:
+            login_lbl = QLabel(self._format_last_login(is_online, last_login_raw))
+            login_lbl.setStyleSheet("font-size: 10px; color: #aaa; background: transparent;")
+            name_col.addWidget(login_lbl)
+        rl.addLayout(name_col, stretch=1)
+
+        if member_id and emp_id and emp_id != self._employee.get("id"):
+            del_btn = QPushButton("×")
+            del_btn.setFixedSize(28, 28)
+            del_btn.setToolTip("Удалить из чата")
+            del_btn.setStyleSheet(self._DEL_STYLE)
+            del_btn.clicked.connect(lambda checked, mid=member_id: self._remove_member(mid))
+            rl.addWidget(del_btn, 0, Qt.AlignVCenter)
+        elif member_id and is_guest and self._chat_type == "client":
+            revoke_btn = QPushButton("×")
+            revoke_btn.setFixedSize(28, 28)
+            revoke_btn.setToolTip("Аннулировать доступ клиента")
+            revoke_btn.setStyleSheet(self._DEL_STYLE)
+            revoke_btn.clicked.connect(lambda checked, mid=member_id: self._revoke_guest(mid))
+            rl.addWidget(revoke_btn, 0, Qt.AlignVCenter)
+
+        has_extra = (phone and is_guest and self._show_phone) or (not is_guest and self._show_last_login)
+        row_h = 56 if has_extra else 40
+        return row, row_h, emp_id
+
     def _fill_data(self, members, employees, card_emp_ids):
         self._members = members
         self._all_employees = employees
@@ -210,86 +307,18 @@ class ChatMembersDialog(QDialog):
         self._members_list.clear()
         member_ids = set()
 
-        # Сортировка: сотрудники первыми, гости (клиенты) последними; внутри — по роли
         def _member_sort_key(m):
             is_guest = m.get("member_type") == "guest" or not m.get("employee_id")
-            role = (m.get("role_in_project") or "").lower()
-            return (1 if is_guest else 0, role)
+            return (1 if is_guest else 0, (m.get("role_in_project") or "").lower())
 
         for m in sorted(members, key=_member_sort_key):
-            display = m.get("display_name") or m.get("guest_name") or "—"
-            role = m.get("role_in_project", "")
-            is_guest = m.get("member_type") == "guest" or not m.get("employee_id")
-
-            row = QWidget()
-            row.setStyleSheet("background: #F0FFF0;" if is_guest else "background: transparent;")
-            rl = QHBoxLayout(row)
-            rl.setContentsMargins(8, 4, 8, 4)
-            rl.setSpacing(6)
-            rl.setAlignment(Qt.AlignVCenter)
-
-            # Цветной маркер типа участника
-            dot = QLabel("К" if is_guest else "С")
-            dot.setFixedSize(20, 20)
-            dot.setAlignment(Qt.AlignCenter)
-            dot.setStyleSheet(
-                "background: #43A047; color: #fff; border-radius: 10px; font-size: 9px; font-weight: bold;"
-                if is_guest
-                else "background: #1565C0; color: #fff; border-radius: 10px; font-size: 9px; font-weight: bold;"
-            )
-            rl.addWidget(dot)
-
-            name_col = QVBoxLayout()
-            name_col.setSpacing(0)
-            name_col.setContentsMargins(0, 0, 0, 0)
-            label_text = f"{display}  ({role})" if role else display
-            lbl = QLabel(label_text)
-            lbl.setStyleSheet("font-size: 12px; background: transparent;")
-            name_col.addWidget(lbl)
-            phone = m.get("guest_phone") or ""
-            if phone and is_guest and self._show_phone:
-                ph_lbl = QLabel(phone)
-                ph_lbl.setStyleSheet("font-size: 10px; color: #666; background: transparent;")
-                ph_lbl.setToolTip(f"Телефон клиента: {phone}")
-                name_col.addWidget(ph_lbl)
-            rl.addLayout(name_col, stretch=1)
-
-            member_id = m.get("id")
-            emp_id = m.get("employee_id")
-            _del_style = """
-                QPushButton {
-                    background: transparent; border: 1px solid #ffcccc;
-                    border-radius: 4px; color: #cc0000; font-size: 16px;
-                    font-weight: bold; padding: 0;
-                    min-width: 28px; max-width: 28px;
-                    min-height: 28px; max-height: 28px;
-                }
-                QPushButton:hover { background: #ffeeee; }
-            """
-            if member_id and emp_id and emp_id != self._employee.get("id"):
-                del_btn = QPushButton("×")
-                del_btn.setFixedSize(28, 28)
-                del_btn.setToolTip("Удалить из чата")
-                del_btn.setStyleSheet(_del_style)
-                del_btn.clicked.connect(lambda checked, mid=member_id: self._remove_member(mid))
-                rl.addWidget(del_btn, 0, Qt.AlignVCenter)
-            elif member_id and is_guest and self._chat_type == "client":
-                # Кнопка аннулирования доступа клиента
-                revoke_btn = QPushButton("×")
-                revoke_btn.setFixedSize(28, 28)
-                revoke_btn.setToolTip("Аннулировать доступ клиента")
-                revoke_btn.setStyleSheet(_del_style)
-                revoke_btn.clicked.connect(lambda checked, mid=member_id: self._revoke_guest(mid))
-                rl.addWidget(revoke_btn, 0, Qt.AlignVCenter)
-
-            row_h = 52 if (phone and is_guest and self._show_phone) else 40
+            row, row_h, emp_id = self._build_member_row(m)
             item = QListWidgetItem()
             item.setData(Qt.UserRole, m)
-            item.setSizeHint(QSize(0, row_h + 1))  # +1 для border-bottom разделителя
+            item.setSizeHint(QSize(0, row_h + 1))
             row.setFixedHeight(row_h)
             self._members_list.addItem(item)
             self._members_list.setItemWidget(item, row)
-
             if emp_id:
                 member_ids.add(emp_id)
 

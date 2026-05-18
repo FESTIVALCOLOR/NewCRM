@@ -119,6 +119,7 @@ PERMISSION_NAMES: dict[str, str] = {
     "chat.client.manage": "Управление клиентским чатом (создание, ссылки, участники)",
     "chat.client.send_script": "Отправка скриптов клиенту через чат",
     "chat.client.show_phone": "Просмотр номера телефона клиента в чате",
+    "chat.members.show_last_login": "Просмотр даты и времени последнего входа участников чата",
     # === Уведомления (видимость блоков настроек) ===
     "notifications.settings_projects": "Настройка каналов по типам проектов",
     "notifications.settings_duplication": "Настройка дублирования уведомлений",
@@ -225,6 +226,7 @@ _BASE_MANAGER = {
     "chat.client.manage",
     "chat.client.send_script",
     "chat.client.show_phone",
+    "chat.members.show_last_login",
 }
 
 DEFAULT_ROLE_PERMISSIONS: dict[str, set[str]] = {
@@ -279,6 +281,7 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, set[str]] = {
         "chat.client.send",
         "chat.client.send_script",
         "chat.client.show_phone",
+        "chat.members.show_last_login",
         "notifications.settings_projects",
     },
     POSITION_GAP: {
@@ -305,6 +308,7 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, set[str]] = {
         "chat.client.send",
         "chat.client.send_script",
         "chat.client.show_phone",
+        "chat.members.show_last_login",
         "notifications.settings_projects",
     },
     POSITION_MANAGER: {
@@ -336,6 +340,7 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, set[str]] = {
         "chat.client.manage",
         "chat.client.send_script",
         "chat.client.show_phone",
+        "chat.members.show_last_login",
         "notifications.settings_projects",
         "notifications.settings_supervision",
     },
@@ -656,6 +661,12 @@ def _migrate_new_permissions(db: Session):
             POSITION_MANAGER,
         ],
         "chat.client.show_phone": [
+            POSITION_SENIOR_MANAGER,
+            POSITION_SDP,
+            POSITION_GAP,
+            POSITION_MANAGER,
+        ],
+        "chat.members.show_last_login": [
             POSITION_SENIOR_MANAGER,
             POSITION_SDP,
             POSITION_GAP,
