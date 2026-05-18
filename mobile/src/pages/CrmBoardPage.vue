@@ -974,8 +974,8 @@ onMounted(async () => {
   scrollbar-width: thin;
 }
 .landscape-column {
-  flex: 1 0 240px;
-  max-width: 320px;
+  flex: 1 0 264px;
+  max-width: 352px;
   display: flex;
   flex-direction: column;
 }
