@@ -2039,12 +2039,12 @@ async function onMembersDialogOpen() {
       { id: data.surveyor_id, name: data.surveyor_name, role: 'Замерщик' },
     ]
     for (const r of roles) {
-      if (r.id && r.name) emps.set(r.id, { name: r.name, role: r.role })
+      if (r.id) emps.set(r.id, { name: r.name || `Сотрудник #${r.id}`, role: r.role })
     }
     // Исполнители этапов
     for (const se of (data.stage_executors || [])) {
-      if (se.executor_id && se.executor_name) {
-        emps.set(se.executor_id, { name: se.executor_name, role: se.stage_name || 'Исполнитель' })
+      if (se.executor_id) {
+        emps.set(se.executor_id, { name: se.executor_name || `Сотрудник #${se.executor_id}`, role: se.stage_name || 'Исполнитель' })
       }
     }
     // Исключаем тех, кто уже в чате
