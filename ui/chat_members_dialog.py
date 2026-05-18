@@ -375,7 +375,11 @@ class ChatMembersDialog(QDialog):
         threading.Thread(target=_worker, daemon=True).start()
 
     def _revoke_guest(self, member_id: int):
-        dlg = CustomQuestionBox(self, "Аннулировать доступ", "Аннулировать ссылку-приглашение и удалить клиента из чата?")
+        dlg = CustomQuestionBox(
+            self,
+            "Аннулировать доступ клиента",
+            "Клиент потеряет доступ к чату.\n\nДля повторного доступа потребуется создать новую ссылку и передать её клиенту заново.\n\nАннулировать?",
+        )
         if dlg.exec_() != dlg.Accepted:
             return
 

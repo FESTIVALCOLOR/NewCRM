@@ -2789,11 +2789,21 @@ async function addMemberToChat(emp) {
 
 async function removeMember(m) {
   if (removingMemberId.value) return
+  const name = m.display_name || 'Участник'
+  const confirmed = await new Promise(resolve => {
+    $q.dialog({
+      title: 'Удалить из чата?',
+      message: `Удалить «${name}» из чата?`,
+      ok: { label: 'Удалить', color: 'negative', flat: true },
+      cancel: { label: 'Отмена', flat: true },
+    }).onOk(() => resolve(true)).onCancel(() => resolve(false))
+  })
+  if (!confirmed) return
   removingMemberId.value = m.id
   try {
     await api.delete(`/api/v1/chats/${chatId}/members/${m.id}`)
     members.value = members.value.filter(mb => mb.id !== m.id)
-    $q.notify({ type: 'positive', message: `${m.display_name || 'Участник'} удалён из чата` })
+    $q.notify({ type: 'positive', message: `${name} удалён из чата` })
   } catch (e) {
     $q.notify({ type: 'negative', message: e.response?.data?.detail || 'Ошибка удаления' })
   } finally {
