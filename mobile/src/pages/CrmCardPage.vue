@@ -1517,7 +1517,7 @@
       <ContractFormDialog
         v-model="showContractEdit"
         :contract="contractData"
-        @saved="() => { contractsApi.getById(card?.contract_id).then(({ data }) => { contractData.value = data }) }"
+        @saved="() => reloadCard()"
       />
 
       <!-- FAB кнопки (скрыты в архиве и на вкладках чата) -->
