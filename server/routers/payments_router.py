@@ -804,13 +804,36 @@ def _recalculate_payments_for_contract(db: Session, contract_id: int) -> int:
                 new_amount = new_amount / 2
 
             if new_amount != payment.calculated_amount:
-                old_amount = payment.calculated_amount
+                old_final = payment.final_amount or 0
                 payment.calculated_amount = new_amount
-                # S-08: ручные оплаты — пересчитываем только calculated, не final
-                if not payment.is_manual:
+
+                if payment.is_paid:
+                    # Уже оплаченный платёж — final_amount не трогаем.
+                    # Если сумма выросла — создаём дополнительный платёж на разницу.
+                    delta = new_amount - old_final
+                    if delta > 0:
+                        extra = Payment(
+                            contract_id=payment.contract_id,
+                            crm_card_id=payment.crm_card_id,
+                            supervision_card_id=payment.supervision_card_id,
+                            employee_id=payment.employee_id,
+                            employee_name=payment.employee_name,
+                            role=payment.role,
+                            stage_name=payment.stage_name,
+                            calculated_amount=delta,
+                            final_amount=delta,
+                            payment_type=payment.payment_type,
+                            report_month=payment.report_month,
+                            is_paid=False,
+                            is_manual=False,
+                        )
+                        db.add(extra)
+                        logger.info(f"AREA_RECALC: платёж {payment.id} уже оплачен, создан доп. платёж на разницу {delta:.2f} (сотрудник {payment.employee_id})")
+                elif not payment.is_manual:
                     payment.final_amount = new_amount
+
                 updated += 1
-                logger.debug(f"AREA_RECALC Payment {payment.id}: {old_amount} → {new_amount} (manual={payment.is_manual})")
+                logger.debug(f"AREA_RECALC Payment {payment.id}: {old_final} → {new_amount} (paid={payment.is_paid}, manual={payment.is_manual})")
 
         except Exception as e:
             logger.warning(f"Ошибка пересчёта платежа {payment.id}: {e}")
