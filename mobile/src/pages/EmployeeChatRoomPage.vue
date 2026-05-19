@@ -1630,41 +1630,64 @@ async function sendSelectedCardFiles() {
   const files = [...selectedCardFiles.value]
   showCardFilesDialog.value = false
   sendingCardFile.value = true
-  const groupId = files.length > 1 ? crypto.randomUUID() : null
-  const errors = []
-  let lastMsgId = null
-  for (const f of files) {
-    try {
-      const fname = f.file_name || f.filename || 'файл'
-      const message_type = cfIsPreviewImg(f) ? 'image' : 'file'
-      const { data: msgData } = await api.post(`/api/v1/chats/${chatId}/messages/from-project-file`, {
-        yandex_path: f.yandex_path || '',
-        file_name: fname,
-        public_link: f.public_link || '',
-        message_type,
-        ...(groupId ? { group_id: groupId } : {}),
-      })
-      if (msgData?.id) {
-        const exists = messages.value.some(m => m.id === msgData.id)
-        if (!exists) {
-          messages.value.push(msgData)
-          if (isPdf(msgData)) loadPdfThumbnail(msgData)
-        }
-        lastMsgId = msgData.id
-      }
-    } catch {
-      errors.push(f.file_name || f.filename || 'файл')
-    }
-  }
-  sendingCardFile.value = false
   selectedCardFiles.value = []
-  if (lastMsgId) {
-    scrollToBottom()
-    sendRead(lastMsgId)
+
+  const allImages = files.every(f => cfIsPreviewImg(f))
+  const useGallery = files.length > 1 && allImages && !!chatYdFolder.value
+
+  if (useGallery) {
+    // Копируем файлы в изолированную подпапку чата — галерея откроет только её
+    const groupId = crypto.randomUUID()
+    try {
+      const { data: savedMsgs } = await api.post(`/api/v1/chats/${chatId}/card-files-gallery`, {
+        group_id: groupId,
+        files: files.map(f => ({
+          yandex_path: f.yandex_path || '',
+          file_name: f.file_name || f.filename || 'файл',
+          file_size: f.file_size || null,
+        })),
+      })
+      for (const msg of savedMsgs) {
+        if (!messages.value.some(m => m.id === msg.id)) {
+          messages.value.push(msg)
+          if (isPdf(msg)) loadPdfThumbnail(msg)
+        }
+      }
+      scrollToBottom()
+      if (savedMsgs.length) sendRead(savedMsgs[savedMsgs.length - 1].id)
+    } catch {
+      $q.notify({ type: 'negative', message: 'Не удалось отправить файлы в галерею' })
+    }
+  } else {
+    // Одиночный файл или смешанные типы — отправляем как ссылки
+    const errors = []
+    let lastMsgId = null
+    for (const f of files) {
+      try {
+        const fname = f.file_name || f.filename || 'файл'
+        const message_type = cfIsPreviewImg(f) ? 'image' : 'file'
+        const { data: msgData } = await api.post(`/api/v1/chats/${chatId}/messages/from-project-file`, {
+          yandex_path: f.yandex_path || '',
+          file_name: fname,
+          public_link: f.public_link || '',
+          message_type,
+        })
+        if (msgData?.id) {
+          if (!messages.value.some(m => m.id === msgData.id)) {
+            messages.value.push(msgData)
+            if (isPdf(msgData)) loadPdfThumbnail(msgData)
+          }
+          lastMsgId = msgData.id
+        }
+      } catch {
+        errors.push(f.file_name || f.filename || 'файл')
+      }
+    }
+    if (lastMsgId) { scrollToBottom(); sendRead(lastMsgId) }
+    if (errors.length) $q.notify({ type: 'negative', message: `Не удалось прикрепить: ${errors.join(', ')}` })
   }
-  if (errors.length) {
-    $q.notify({ type: 'negative', message: `Не удалось прикрепить: ${errors.join(', ')}` })
-  }
+
+  sendingCardFile.value = false
 }
 // Emoji реакции
 const QUICK_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥']

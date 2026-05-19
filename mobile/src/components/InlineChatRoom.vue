@@ -317,7 +317,7 @@
                           </q-item-section>
                         </q-item>
                         <q-item
-                          v-if="isUploadedGroup(item.msgs)"
+                          v-if="item.msgs.some(m => m.yandex_path)"
                           clickable
                           dense
                           @click="openInGallery(item.msgs.find(m => m.yandex_path))"
@@ -427,7 +427,7 @@
                 </div>
                 <div class="row no-wrap items-center justify-between" style="padding: 2px 8px 4px 2px; margin-top: 0">
                   <q-btn
-                    v-if="isUploadedGroup(item.msgs)"
+                    v-if="item.msgs.some(m => m.yandex_path)"
                     flat
                     dense
                     no-caps
@@ -1536,21 +1536,42 @@ function toggleCardFile(f) {
 }
 
 async function sendSelectedCardFiles() {
-  if (!selectedCardFiles.value.size) return
+  if (!selectedCardFiles.value.size || !chat.value) return
   showCardFilesDialog.value = false
   const keys = new Set(selectedCardFiles.value)
   selectedCardFiles.value = new Set()
   const toSend = cardFiles.value.filter(f => keys.has(cfFileKey(f)))
 
-  // Генерируем group_id если несколько изображений — отправятся галереей
-  const allImages = toSend.every(f => {
-    const ext = (f.file_name || f.filename || '').split('.').pop()?.toLowerCase() || ''
-    return IMAGE_EXTS.includes(ext)
-  })
-  const groupId = (toSend.length > 1 && allImages) ? crypto.randomUUID() : null
+  const allImages = toSend.every(f => IMAGE_EXTS.includes((f.file_name || f.filename || '').split('.').pop()?.toLowerCase() || ''))
+  const useGallery = toSend.length > 1 && allImages && !!chat.value.yandex_folder_path
 
-  for (const f of toSend) {
-    await insertCardFileLink(f, groupId)
+  if (useGallery) {
+    // Копируем файлы в изолированную подпапку чата на ЯД — галерея откроет только её
+    const groupId = crypto.randomUUID()
+    try {
+      const { data: savedMsgs } = await api.post(`/api/v1/chats/${chat.value.id}/card-files-gallery`, {
+        group_id: groupId,
+        files: toSend.map(f => ({
+          yandex_path: f.yandex_path,
+          file_name: f.file_name || f.filename || 'файл',
+          file_size: f.file_size || null,
+        })),
+      })
+      // WS broadcast уже добавит сообщения, но добавим оптимистично если ещё нет
+      for (const msg of savedMsgs) {
+        if (!messages.value.some(m => m.id === msg.id)) {
+          messages.value.push(msg)
+        }
+      }
+      scrollToBottom()
+    } catch {
+      $q.notify({ type: 'negative', message: 'Не удалось отправить файлы в галерею' })
+    }
+  } else {
+    // Одиночный файл или смешанные типы — отправляем как ссылки без копирования
+    for (const f of toSend) {
+      await insertCardFileLink(f, null)
+    }
   }
 }
 
@@ -2880,17 +2901,6 @@ async function openInGallery(msg) {
   }
 }
 
-// Возвращает true только если сообщения группы были загружены в папку чата на ЯД
-// (а не являются ссылками на файлы карточки из общей папки договора)
-function isUploadedGroup(msgs) {
-  if (!chat.value?.yandex_folder_path) return false
-  const chatFolder = chat.value.yandex_folder_path.replace(/^disk:/, '').replace(/\/+$/, '')
-  return msgs.some(m => {
-    if (!m.yandex_path) return false
-    const msgPath = m.yandex_path.replace(/^disk:/, '')
-    return msgPath.startsWith(chatFolder + '/')
-  })
-}
 
 function copyClientLink() {
   if (!clientLink.value) return

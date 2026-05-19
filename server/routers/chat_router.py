@@ -773,6 +773,94 @@ async def get_gallery_public_link(
 
 
 # ==============================================================
+# REST — копирование файлов карточки в группу-галерею чата
+# ==============================================================
+
+
+class _CardFileItem(PydanticBaseModel):
+    yandex_path: str
+    file_name: str
+    file_size: Optional[int] = None
+
+
+class _CardFilesGalleryRequest(PydanticBaseModel):
+    group_id: str
+    files: list[_CardFileItem]
+
+
+_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"}
+
+
+@router.post("/{chat_id}/card-files-gallery", response_model=list[InternalMessageResponse])
+async def create_card_files_gallery(
+    chat_id: int,
+    body: _CardFilesGalleryRequest,
+    current_user: Employee = Depends(require_permission("chat.employee.send")),
+    db: Session = Depends(get_db),
+):
+    """Скопировать файлы карточки в изолированную подпапку галереи чата на ЯД."""
+    chat = _get_chat_or_404(db, chat_id)
+    _check_member(db, chat_id, current_user.id)
+
+    if not body.files:
+        raise HTTPException(400, "Список файлов не может быть пустым")
+    if not body.group_id or len(body.group_id) < 8:
+        raise HTTPException(400, "Некорректный group_id")
+
+    folder_clean = chat.yandex_folder_path.replace("disk:", "").rstrip("/") if chat.yandex_folder_path else f"/CRM/Chats/{chat_id}"
+    group_prefix = body.group_id[:8]
+    target_folder = f"{folder_clean}/{group_prefix}"
+
+    try:
+        from yandex_disk_service import get_yandex_disk_service
+
+        yd = get_yandex_disk_service()
+        if not yd or not yd.token:
+            raise HTTPException(503, "Яндекс.Диск не настроен")
+        _ensure_yd_folder(f"disk:{target_folder}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Ошибка создания папки галереи: {e}")
+        raise HTTPException(500, "Ошибка создания папки на Яндекс.Диск")
+
+    created_msgs = []
+    for file_item in body.files:
+        safe_name = os.path.basename(file_item.file_name)
+        if not safe_name:
+            continue
+        dst_disk_path = f"disk:{target_folder}/{safe_name}"
+        try:
+            yd.copy_file(file_item.yandex_path, dst_disk_path, overwrite=True)
+            public_url = yd.get_public_link(dst_disk_path) or ""
+        except Exception as e:
+            logger.warning(f"Не удалось скопировать {file_item.yandex_path}: {e}")
+            continue
+
+        ext = os.path.splitext(safe_name)[1].lower()
+        msg_type = "image" if ext in _IMAGE_EXTENSIONS else "file"
+
+        msg = add_file_message(
+            db,
+            chat_id,
+            file_url=public_url,
+            file_name=safe_name,
+            yandex_path=dst_disk_path,
+            file_size=file_item.file_size,
+            message_type=msg_type,
+            sender_employee_id=current_user.id,
+            group_id=body.group_id,
+        )
+        created_msgs.append(msg)
+        await ws_manager.broadcast(chat_id, {"type": "new_message", "message": _message_to_dict(msg)})
+
+    if not created_msgs:
+        raise HTTPException(500, "Не удалось скопировать ни один файл")
+
+    return created_msgs
+
+
+# ==============================================================
 # REST — закрепление сообщения
 # ==============================================================
 
