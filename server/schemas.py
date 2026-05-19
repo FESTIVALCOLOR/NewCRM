@@ -1555,6 +1555,7 @@ class InternalMessageCreate(BaseModel):
     file_name: Optional[str] = None
     file_size: Optional[int] = None
     yandex_path: Optional[str] = None
+    group_id: Optional[str] = None
 
 
 class ForwardRequest(BaseModel):

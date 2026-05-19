@@ -291,6 +291,7 @@ async def send_message(
             sender_employee_id=current_user.id,
             content=data.content,
             reply_to_id=data.reply_to_id,
+            group_id=data.group_id or None,
         )
     else:
         msg = add_text_message(

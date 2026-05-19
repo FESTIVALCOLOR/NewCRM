@@ -1501,8 +1501,16 @@ async function sendSelectedCardFiles() {
   const keys = new Set(selectedCardFiles.value)
   selectedCardFiles.value = new Set()
   const toSend = cardFiles.value.filter(f => keys.has(f.id || f.yandex_path))
+
+  // Генерируем group_id если несколько изображений — отправятся галереей
+  const allImages = toSend.every(f => {
+    const ext = (f.file_name || f.filename || '').split('.').pop()?.toLowerCase() || ''
+    return IMAGE_EXTS.includes(ext)
+  })
+  const groupId = (toSend.length > 1 && allImages) ? crypto.randomUUID() : null
+
   for (const f of toSend) {
-    await insertCardFileLink(f)
+    await insertCardFileLink(f, groupId)
   }
 }
 
@@ -1628,7 +1636,7 @@ async function loadCardFiles() {
   }
 }
 
-async function insertCardFileLink(f) {
+async function insertCardFileLink(f, groupId = null) {
   if (!chat.value) return
 
   const name = f.file_name || f.filename || 'файл'
@@ -1656,6 +1664,7 @@ async function insertCardFileLink(f) {
     sender_display_name: authStore.user?.full_name || 'Вы',
     message_type: msgType,
     content: null,
+    group_id: groupId,
     file_url: fileUrl,
     file_name: name,
     file_size: f.file_size || null,
@@ -1677,6 +1686,7 @@ async function insertCardFileLink(f) {
       file_size: f.file_size || null,
       yandex_path: f.yandex_path || null,
       content: null,
+      group_id: groupId,
     })
     const idx = messages.value.findIndex(m => m.id === tempId)
     if (idx !== -1) {
