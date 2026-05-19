@@ -1495,6 +1495,7 @@ const noteText = ref('')
 const historyFilter = ref('all')
 const filteredSvHistory = computed(() => {
   if (historyFilter.value === 'all') return svHistory.value
+  if (historyFilter.value === 'site_visit') return svHistory.value.filter(h => h.entry_type === 'site_visit' || h.entry_type === 'site_visit_deleted')
   return svHistory.value.filter(h => h.entry_type === historyFilter.value)
 })
 
@@ -2107,15 +2108,15 @@ async function uploadFile(file) {
 }
 
 function historyIcon(type) {
-  const m = { pause: 'pause_circle', resume: 'play_circle', card_moved: 'swap_horiz', assignment_change: 'person', stage_completed: 'check_circle', payment_created: 'payments', auto_resume: 'refresh', note: 'note', voice_note: 'mic' }
+  const m = { pause: 'pause_circle', resume: 'play_circle', card_moved: 'swap_horiz', assignment_change: 'person', stage_completed: 'check_circle', payment_created: 'payments', auto_resume: 'refresh', note: 'note', voice_note: 'mic', site_visit: 'directions_walk', site_visit_deleted: 'remove_circle_outline' }
   return m[type] || 'history'
 }
 function historyColor(type) {
-  const m = { pause: 'warning', resume: 'positive', card_moved: 'primary', stage_completed: 'positive', payment_created: 'info', note: 'grey-7', voice_note: 'orange' }
+  const m = { pause: 'warning', resume: 'positive', card_moved: 'primary', stage_completed: 'positive', payment_created: 'info', note: 'grey-7', voice_note: 'orange', site_visit: 'blue-7', site_visit_deleted: 'red-4' }
   return m[type] || 'grey-6'
 }
 function historyLabel(type) {
-  const m = { pause: 'Пауза', resume: 'Возобновление', card_moved: 'Перемещение', assignment_change: 'Назначение', stage_completed: 'Стадия завершена', payment_created: 'Оплата', auto_resume: 'Авто-возобновление', note: 'Заметка', voice_note: 'Голос. заметка' }
+  const m = { pause: 'Пауза', resume: 'Возобновление', card_moved: 'Перемещение', assignment_change: 'Назначение', stage_completed: 'Стадия завершена', payment_created: 'Оплата', auto_resume: 'Авто-возобновление', note: 'Заметка', voice_note: 'Голос. заметка', site_visit: 'Выезд', site_visit_deleted: 'Удалён выезд' }
   return m[type] || type || ''
 }
 

@@ -63,46 +63,80 @@
         </q-card>
       </div>
 
-      <q-card v-else-if="filtered.length > 0" class="is-card">
-        <q-list separator>
-          <q-item
-            v-for="emp in filtered"
-            :key="emp.id"
-            v-ripple
-            clickable
-            @click="openEmployee(emp)"
-          >
-            <q-item-section avatar>
-              <q-avatar :color="statusColor(emp.status)" text-color="white" size="40px">
-                {{ emp.full_name ? emp.full_name[0] : '?' }}
-              </q-avatar>
-            </q-item-section>
-            <q-item-section>
-              <q-item-label class="text-weight-medium">
-                {{ emp.full_name }}
-              </q-item-label>
-              <q-item-label caption>
-                {{ emp.position }}{{ emp.secondary_position ? ' / ' + emp.secondary_position : '' }}
-              </q-item-label>
-              <q-item-label caption>
-                {{ emp.department }}
-              </q-item-label>
-            </q-item-section>
-            <q-item-section side>
-              <q-badge
-                :color="statusColor(emp.status)"
-                :label="emp.status"
-                dense
-              />
-            </q-item-section>
-          </q-item>
-        </q-list>
-      </q-card>
+      <!-- Портрет: карточки -->
+      <template v-if="!loading && !($q.screen.width > $q.screen.height)">
+        <q-card v-if="filtered.length > 0" class="is-card">
+          <q-list separator>
+            <q-item
+              v-for="emp in filtered"
+              :key="emp.id"
+              v-ripple
+              clickable
+              @click="openEmployee(emp)"
+            >
+              <q-item-section avatar>
+                <q-avatar :color="statusColor(emp.status)" text-color="white" size="40px">
+                  {{ emp.full_name ? emp.full_name[0] : '?' }}
+                </q-avatar>
+              </q-item-section>
+              <q-item-section>
+                <q-item-label class="text-weight-medium">
+                  {{ emp.full_name }}
+                </q-item-label>
+                <q-item-label caption>
+                  {{ emp.position }}{{ emp.secondary_position ? ' / ' + emp.secondary_position : '' }}
+                </q-item-label>
+                <q-item-label caption>
+                  {{ emp.department }}
+                </q-item-label>
+              </q-item-section>
+              <q-item-section side>
+                <q-badge
+                  :color="statusColor(emp.status)"
+                  :label="emp.status"
+                  dense
+                />
+              </q-item-section>
+            </q-item>
+          </q-list>
+        </q-card>
+        <div v-else class="text-center q-pa-xl text-grey-5">
+          <q-icon name="badge" size="48px" class="q-mb-sm" />
+          <div>Нет сотрудников</div>
+        </div>
+      </template>
 
-      <div v-else class="text-center q-pa-xl text-grey-5">
-        <q-icon name="badge" size="48px" class="q-mb-sm" />
-        <div>Нет сотрудников</div>
-      </div>
+      <!-- Ландшафт: таблица -->
+      <template v-else-if="!loading && ($q.screen.width > $q.screen.height)">
+        <div class="emp-landscape-header">
+          <span class="emph-name">ФИО</span>
+          <span class="emph-pos">Должность</span>
+          <span class="emph-dept">Отдел</span>
+          <span class="emph-status">Статус</span>
+        </div>
+        <div
+          v-for="emp in filtered"
+          :key="emp.id"
+          class="emp-row-ls"
+          @click="openEmployee(emp)"
+        >
+          <span class="emph-name empv-name">
+            <q-avatar :color="statusColor(emp.status)" text-color="white" size="22px" style="flex-shrink:0;font-size:11px;margin-right:6px">
+              {{ emp.full_name ? emp.full_name[0] : '?' }}
+            </q-avatar>
+            {{ emp.full_name }}
+          </span>
+          <span class="emph-pos empv-meta">{{ emp.position }}{{ emp.secondary_position ? ' / ' + emp.secondary_position : '' }}</span>
+          <span class="emph-dept empv-meta">{{ emp.department || '—' }}</span>
+          <span class="emph-status">
+            <q-badge :color="statusColor(emp.status)" :label="emp.status" dense style="font-size:9px" />
+          </span>
+        </div>
+        <div v-if="filtered.length === 0" class="text-center q-pa-xl text-grey-5">
+          <q-icon name="badge" size="48px" class="q-mb-sm" />
+          <div>Нет сотрудников</div>
+        </div>
+      </template>
     </q-pull-to-refresh>
 
     <q-page-sticky v-if="canCreate" position="bottom-right" :offset="[18, 80]">
@@ -256,7 +290,7 @@
             </div>
 
             <!-- Контакты (ч/б иконки как у клиентов) -->
-            <q-card flat bordered class="q-mb-md" style="border-radius: 10px">
+            <q-card flat bordered class="q-mb-md" style="border-radius: 8px">
               <q-list>
                 <q-item>
                   <q-item-section avatar>
@@ -366,7 +400,7 @@
               flat
               bordered
               class="q-mb-md"
-              style="border-radius: 10px"
+              style="border-radius: 8px"
             >
               <q-card-section class="q-pb-none">
                 <div class="text-subtitle2 text-weight-bold">
@@ -746,3 +780,37 @@ function onRefresh(done) { loadEmployees().finally(done) }
 
 onMounted(() => loadEmployees())
 </script>
+
+<style scoped>
+.emp-landscape-header {
+  display: flex;
+  align-items: center;
+  padding: 4px 10px;
+  background: #F5F5F5;
+  border: 1px solid #E0E0E0;
+  border-radius: 8px 8px 0 0;
+  font-size: 10px;
+  font-weight: bold;
+  color: #888;
+  gap: 6px;
+}
+.emp-row-ls {
+  display: flex;
+  align-items: center;
+  padding: 5px 10px;
+  border: 1px solid #E0E0E0;
+  border-top: none;
+  gap: 6px;
+  cursor: pointer;
+  background: #fff;
+  min-height: 34px;
+}
+.emp-row-ls:last-of-type { border-radius: 0 0 8px 8px; }
+.emp-row-ls:hover { background: #F9F9F9; }
+.emph-name   { flex: 1; min-width: 0; display: flex; align-items: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.emph-pos    { width: 180px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.emph-dept   { width: 110px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.emph-status { width: 60px; flex-shrink: 0; }
+.empv-name { font-size: 12px; font-weight: 500; color: #333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.empv-meta { color: #666; }
+</style>

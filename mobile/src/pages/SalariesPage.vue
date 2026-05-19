@@ -817,8 +817,8 @@ async function markPaid(p) {
 
 async function setPayStatus(p) {
   try {
-    // Toggle: если уже к оплате (есть report_month) → снять (убрать report_month)
-    if (p.report_month) {
+    // Toggle: если уже к оплате → снять статус
+    if (p.payment_status === 'to_pay') {
       if (p.source === 'Оклад') await salariesApi.update(p.id, { report_month: '', payment_status: 'pending' })
       else if (p.id) await paymentsApi.update(p.id, { payment_status: 'pending', report_month: '' })
       p.report_month = null

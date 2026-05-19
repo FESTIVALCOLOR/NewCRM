@@ -370,7 +370,7 @@ async def create_visit(
 
     # Запись в историю надзора (отдельная транзакция)
     try:
-        visit_date_display = str(data.visit_date) if data.visit_date else ""
+        visit_date_display = data.visit_date.strftime("%d.%m.%Y") if data.visit_date else ""
         stage_display = data.stage_name or ""
         visit_type_display = data.visit_type or "На объект"
         history_msg = f"Добавлен выезд ({visit_type_display}): {stage_display}, дата: {visit_date_display}"
@@ -544,7 +544,8 @@ async def delete_visit(
 
     # Запись в историю надзора перед удалением
     try:
-        history_msg = f"Удалён выезд: {visit.stage_name or ''}, дата: {visit.visit_date or ''}"
+        date_display = visit.visit_date.strftime("%d.%m.%Y") if visit.visit_date else ""
+        history_msg = f"Удалён выезд: {visit.stage_name or ''}, дата: {date_display}"
         history_entry = SupervisionProjectHistory(
             supervision_card_id=card_id,
             entry_type="site_visit_deleted",

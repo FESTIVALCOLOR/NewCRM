@@ -1319,27 +1319,34 @@
           <div v-else-if="!cardFiles.length" class="text-grey-6 text-caption q-pa-sm">
             Файлы не найдены
           </div>
-          <q-list v-else dense separator>
-            <q-item
-              v-for="f in cardFiles"
-              :key="f.id || f.yandex_path"
-              clickable
-              @click="insertCardFileLink(f)"
-            >
-              <q-item-section avatar>
-                <q-icon :name="f.file_type === 'image' ? 'image' : 'insert_drive_file'" color="blue-5" />
-              </q-item-section>
-              <q-item-section>
-                <q-item-label>{{ f.file_name || f.filename || 'файл' }}</q-item-label>
-                <q-item-label v-if="f.stage" caption>
-                  {{ f.stage }}
-                </q-item-label>
-              </q-item-section>
-              <q-item-section side>
-                <q-icon name="add_link" color="blue-5" size="18px" />
-              </q-item-section>
-            </q-item>
-          </q-list>
+          <div v-else>
+            <template v-for="group in groupedCardFiles" :key="group.stage">
+              <div
+                class="text-caption text-weight-bold q-px-sm q-pt-sm q-pb-xs"
+                style="color: #888; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px"
+              >
+                {{ group.stage }}
+              </div>
+              <q-list dense separator>
+                <q-item
+                  v-for="f in group.files"
+                  :key="f.id || f.yandex_path"
+                  clickable
+                  @click="insertCardFileLink(f)"
+                >
+                  <q-item-section avatar>
+                    <q-icon :name="f.file_type === 'folder' ? 'folder' : f.file_type === 'image' ? 'image' : 'insert_drive_file'" color="blue-5" />
+                  </q-item-section>
+                  <q-item-section>
+                    <q-item-label>{{ f.file_name || f.filename || 'файл' }}</q-item-label>
+                  </q-item-section>
+                  <q-item-section side>
+                    <q-icon name="add_link" color="blue-5" size="18px" />
+                  </q-item-section>
+                </q-item>
+              </q-list>
+            </template>
+          </div>
         </q-card-section>
         <q-card-actions align="right">
           <q-btn
@@ -1444,6 +1451,16 @@ function copySupervisionLink() {
 const showCardFilesDialog = ref(false)
 const cardFiles = ref([])
 const cardFilesLoading = ref(false)
+
+const groupedCardFiles = computed(() => {
+  const groups = {}
+  for (const f of cardFiles.value) {
+    const key = f.stage || 'Прочие файлы'
+    if (!groups[key]) groups[key] = []
+    groups[key].push(f)
+  }
+  return Object.entries(groups).map(([stage, files]) => ({ stage, files }))
+})
 
 async function loadCardFiles() {
   const isSupervision = props.chatType === 'supervision'

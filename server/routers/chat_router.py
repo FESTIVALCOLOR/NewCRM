@@ -897,7 +897,7 @@ def create_link(
     if chat.chat_type not in ("client", "employee"):
         raise HTTPException(400, "Только для чатов с клиентами или надзора")
     member = create_invite_link(db, chat_id)
-    base_url = os.environ.get("APP_BASE_URL", "https://crm.interior-studio.ru")
+    base_url = os.environ.get("APP_BASE_URL", "https://crm.festivalcolor.ru")
     return ChatInviteLinkResponse(
         token=member.guest_access_token,
         url=f"{base_url}/c/{member.guest_access_token}",
@@ -923,7 +923,7 @@ def list_links(
         )
         .all()
     )
-    base_url = os.environ.get("APP_BASE_URL", "https://crm.interior-studio.ru")
+    base_url = os.environ.get("APP_BASE_URL", "https://crm.festivalcolor.ru")
     return [
         ChatInviteLinkResponse(
             token=m.guest_access_token,
