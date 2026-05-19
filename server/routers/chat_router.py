@@ -279,13 +279,27 @@ async def send_message(
 ):
     _get_chat_or_404(db, chat_id)
     _check_member(db, chat_id, current_user.id)
-    msg = add_text_message(
-        db,
-        chat_id,
-        data.content,
-        sender_employee_id=current_user.id,
-        reply_to_id=getattr(data, "reply_to_id", None),
-    )
+    if data.file_url or data.yandex_path:
+        msg = add_file_message(
+            db,
+            chat_id,
+            file_url=data.file_url or "",
+            file_name=data.file_name or "",
+            yandex_path=data.yandex_path or "",
+            file_size=data.file_size,
+            message_type=data.message_type if data.message_type in ("file", "image") else "file",
+            sender_employee_id=current_user.id,
+            content=data.content,
+            reply_to_id=data.reply_to_id,
+        )
+    else:
+        msg = add_text_message(
+            db,
+            chat_id,
+            data.content or "",
+            sender_employee_id=current_user.id,
+            reply_to_id=data.reply_to_id,
+        )
     # Рассылка по WebSocket
     await ws_manager.broadcast(
         chat_id,

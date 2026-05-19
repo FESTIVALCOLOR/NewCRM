@@ -1545,11 +1545,16 @@ class InternalChatDetailResponse(InternalChatResponse):
 
 
 class InternalMessageCreate(BaseModel):
-    """Отправка текстового сообщения"""
+    """Отправка текстового или файл-ссылочного сообщения"""
 
-    content: str
+    content: Optional[str] = None
     message_type: str = "text"
     reply_to_id: Optional[int] = None
+    # Для ссылки на файл ЯД (без загрузки)
+    file_url: Optional[str] = None
+    file_name: Optional[str] = None
+    file_size: Optional[int] = None
+    yandex_path: Optional[str] = None
 
 
 class ForwardRequest(BaseModel):

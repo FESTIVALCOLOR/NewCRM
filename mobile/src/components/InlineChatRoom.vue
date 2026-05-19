@@ -1574,16 +1574,66 @@ async function loadCardFiles() {
   }
 }
 
-function insertCardFileLink(f) {
-  const name = f.file_name || f.filename || 'файл'
-  let link = f.public_link || ''
-  if (!link && f.yandex_path) {
-    const clean = f.yandex_path.startsWith('disk:') ? f.yandex_path.slice(5) : f.yandex_path
-    link = 'https://disk.yandex.ru/client/disk' + encodeURIComponent(clean).replace(/%2F/g, '/')
-  }
-  const text = link ? `${name}: ${link}` : name
-  inputText.value = inputText.value ? inputText.value + '\n' + text : text
+async function insertCardFileLink(f) {
+  if (!chat.value) return
   showCardFilesDialog.value = false
+
+  const name = f.file_name || f.filename || 'файл'
+  const ext = name.split('.').pop()?.toLowerCase() || ''
+  const isImg = IMAGE_EXTS.includes(ext)
+  const msgType = f.file_type === 'folder' ? 'file' : (isImg ? 'image' : 'file')
+
+  let fileUrl = f.public_link || ''
+  if (!fileUrl && f.yandex_path) {
+    const clean = f.yandex_path.startsWith('disk:') ? f.yandex_path.slice(5) : f.yandex_path
+    fileUrl = 'https://disk.yandex.ru/client/disk' + encodeURIComponent(clean).replace(/%2F/g, '/')
+    // Для изображений пытаемся получить прямую публичную ссылку ЯД
+    if (isImg) {
+      try {
+        const { data } = await api.get(`/api/v1/files/public-link?path=${encodeURIComponent(f.yandex_path)}`)
+        if (data?.public_link) fileUrl = data.public_link
+      } catch {}
+    }
+  }
+
+  const tempId = `temp_${Date.now()}_${Math.random()}`
+  messages.value.push({
+    id: tempId,
+    sender_employee_id: authStore.user?.id,
+    sender_display_name: authStore.user?.full_name || 'Вы',
+    message_type: msgType,
+    content: null,
+    file_url: fileUrl,
+    file_name: name,
+    file_size: f.file_size || null,
+    yandex_path: f.yandex_path || null,
+    is_deleted: false,
+    is_edited: false,
+    is_pinned: false,
+    created_at: new Date().toISOString(),
+    _uploading: true,
+    _previewUrl: isImg ? fileUrl : null,
+  })
+  scrollToBottom()
+
+  try {
+    const { data: savedMsg } = await api.post(`/api/v1/chats/${chat.value.id}/messages`, {
+      message_type: msgType,
+      file_url: fileUrl,
+      file_name: name,
+      file_size: f.file_size || null,
+      yandex_path: f.yandex_path || null,
+      content: null,
+    })
+    const idx = messages.value.findIndex(m => m.id === tempId)
+    if (idx !== -1) {
+      const alreadyAdded = messages.value.some(m => m.id === savedMsg.id)
+      alreadyAdded ? messages.value.splice(idx, 1) : messages.value.splice(idx, 1, savedMsg)
+    }
+  } catch {
+    messages.value = messages.value.filter(m => m.id !== tempId)
+    $q.notify({ type: 'negative', message: 'Не удалось отправить файл' })
+  }
 }
 
 
