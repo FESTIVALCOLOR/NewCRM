@@ -254,6 +254,19 @@
                             Переслать
                           </q-item-section>
                         </q-item>
+                        <q-item
+                          v-if="item.msgs.some(m => m.yandex_path)"
+                          clickable
+                          dense
+                          @click="openInGallery(item.msgs.find(m => m.yandex_path))"
+                        >
+                          <q-item-section avatar style="min-width: 28px">
+                            <q-icon name="photo_library" size="14px" color="grey-8" />
+                          </q-item-section>
+                          <q-item-section style="font-size: 12px">
+                            Открыть в галерее
+                          </q-item-section>
+                        </q-item>
                         <q-item v-if="isOwn(item.msgs[0])" clickable dense @click="deleteMsg(item.msgs[0])">
                           <q-item-section avatar style="min-width: 28px">
                             <q-icon name="delete_outline" size="14px" color="grey-8" />
@@ -327,7 +340,22 @@
                     </div>
                   </div>
                 </template>
-                <div class="row no-wrap items-center justify-end" style="padding: 2px 8px 4px; color: #888; font-size: 10px">
+                <div class="row no-wrap items-center justify-between" style="padding: 2px 8px 4px; color: #888; font-size: 10px">
+                  <q-btn
+                    v-if="item.msgs.some(m => m.yandex_path)"
+                    flat
+                    dense
+                    no-caps
+                    unelevated
+                    size="xs"
+                    icon="photo_library"
+                    label="Открыть в галерее"
+                    color="grey-6"
+                    class="gallery-open-btn"
+                    style="font-size: 10px; padding: 0 4px"
+                    @click.stop="openInGallery(item.msgs.find(m => m.yandex_path))"
+                  />
+                  <span v-else />
                   <span class="text-caption">{{ formatTime(item.msgs[item.msgs.length - 1].created_at) }}</span>
                 </div>
               </div>
@@ -1796,12 +1824,38 @@ async function confirmCopyToCard() {
   }
 }
 
+const _imgBlobCache = {}
+const _imgCacheVersion = ref(0)
+
 function imgStreamUrl(msg) {
   if (msg._previewUrl) return msg._previewUrl
   if (!msg.yandex_path) return ''
+  void _imgCacheVersion.value
+  const key = msg.yandex_path
+  if (_imgBlobCache[key]) return _imgBlobCache[key]
+  if (!_imgBlobCache[`${key}:loading`]) {
+    _imgBlobCache[`${key}:loading`] = true
+    const path = msg.yandex_path.replace(/^disk:/, '')
+    const token = localStorage.getItem('access_token') || ''
+    fetch(`/api/v1/files/stream?yandex_path=${encodeURIComponent(path)}&token=${encodeURIComponent(token)}`)
+      .then(r => r.ok ? r.blob() : Promise.reject(r.status))
+      .then(blob => { _imgBlobCache[key] = URL.createObjectURL(blob); _imgCacheVersion.value++ })
+      .catch(() => { delete _imgBlobCache[`${key}:loading`] })
+  }
   const path = msg.yandex_path.replace(/^disk:/, '')
   const token = localStorage.getItem('access_token') || ''
   return `/api/v1/files/stream?yandex_path=${encodeURIComponent(path)}&token=${encodeURIComponent(token)}`
+}
+
+async function openInGallery(msg) {
+  if (!msg?.id) return
+  try {
+    const { data } = await api.post(`/api/v1/chats/${chatId}/messages/${msg.id}/gallery-link`)
+    if (data.public_url) window.open(data.public_url, '_blank')
+    else $q.notify({ type: 'warning', message: 'Не удалось получить ссылку на галерею' })
+  } catch {
+    $q.notify({ type: 'negative', message: 'Ошибка публикации галереи' })
+  }
 }
 
 function isPdf(msg) {

@@ -2240,9 +2240,24 @@ function isOwnReaction(msg, emoji) {
   return reactors.some(r => r.employee_id === authStore.user?.id)
 }
 
+const _imgBlobCache = {}
+const _imgCacheVersion = ref(0)
+
 function imgStreamUrl(msg) {
   if (msg._previewUrl) return msg._previewUrl  // локальный blob во время загрузки
   if (!msg.yandex_path) return ''
+  void _imgCacheVersion.value
+  const key = msg.yandex_path
+  if (_imgBlobCache[key]) return _imgBlobCache[key]
+  if (!_imgBlobCache[`${key}:loading`]) {
+    _imgBlobCache[`${key}:loading`] = true
+    const path = msg.yandex_path.replace(/^disk:/, '')
+    const token = localStorage.getItem('access_token') || ''
+    fetch(`/api/v1/files/stream?yandex_path=${encodeURIComponent(path)}&token=${encodeURIComponent(token)}`)
+      .then(r => r.ok ? r.blob() : Promise.reject(r.status))
+      .then(blob => { _imgBlobCache[key] = URL.createObjectURL(blob); _imgCacheVersion.value++ })
+      .catch(() => { delete _imgBlobCache[`${key}:loading`] })
+  }
   const path = msg.yandex_path.replace(/^disk:/, '')
   const token = localStorage.getItem('access_token') || ''
   return `/api/v1/files/stream?yandex_path=${encodeURIComponent(path)}&token=${encodeURIComponent(token)}`
