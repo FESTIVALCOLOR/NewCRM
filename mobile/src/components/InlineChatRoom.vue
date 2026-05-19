@@ -317,7 +317,7 @@
                           </q-item-section>
                         </q-item>
                         <q-item
-                          v-if="item.msgs.some(m => m.yandex_path)"
+                          v-if="isUploadedGroup(item.msgs)"
                           clickable
                           dense
                           @click="openInGallery(item.msgs.find(m => m.yandex_path))"
@@ -427,7 +427,7 @@
                 </div>
                 <div class="row no-wrap items-center justify-between" style="padding: 2px 8px 4px 2px; margin-top: 0">
                   <q-btn
-                    v-if="item.msgs.some(m => m.yandex_path)"
+                    v-if="isUploadedGroup(item.msgs)"
                     flat
                     dense
                     no-caps
@@ -2878,6 +2878,18 @@ async function openInGallery(msg) {
   } catch {
     $q.notify({ type: 'negative', message: 'Ошибка публикации галереи' })
   }
+}
+
+// Возвращает true только если сообщения группы были загружены в папку чата на ЯД
+// (а не являются ссылками на файлы карточки из общей папки договора)
+function isUploadedGroup(msgs) {
+  if (!chat.value?.yandex_folder_path) return false
+  const chatFolder = chat.value.yandex_folder_path.replace(/^disk:/, '').replace(/\/+$/, '')
+  return msgs.some(m => {
+    if (!m.yandex_path) return false
+    const msgPath = m.yandex_path.replace(/^disk:/, '')
+    return msgPath.startsWith(chatFolder + '/')
+  })
 }
 
 function copyClientLink() {
