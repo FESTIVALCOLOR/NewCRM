@@ -367,6 +367,7 @@ async function save() {
   const valid = await formRef.value?.validate()
   if (!valid) return
   saving.value = true
+  const oldArea = props.contract?.area ?? null
   try {
     if (isEdit.value) {
       await contractsApi.update(props.contract.id, form.value)
@@ -413,7 +414,8 @@ async function save() {
           '3 стадия - Чертежный проект']
         for (const s of subs) { try { await api.post('/api/v1/files/folder', null, { params: { folder_path: `${newPath}/${s}` } }) } catch {} }
       }
-      $q.notify({ type: 'positive', message: 'Договор обновлён' })
+      const areaChanged = form.value.area != null && parseFloat(form.value.area) !== parseFloat(oldArea)
+      $q.notify({ type: 'positive', message: areaChanged ? 'Договор обновлён, оплаты пересчитаны' : 'Договор обновлён' })
     } else {
       const { data: newContract } = await contractsApi.create(form.value)
       // Создаём папку на ЯД сразу (как десктоп)
