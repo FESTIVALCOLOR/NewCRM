@@ -2483,11 +2483,11 @@ onMounted(async () => {
   // Блокировка карточки при редактировании
   try {
     const { data: existing } = await locksApi.check('supervision_card', cardId)
-    if (existing?.locked_by && existing.locked_by !== authStore.user?.id) {
-      $q.notify({ type: 'warning', message: `Карточка редактируется: ${existing.locked_by_name || 'другой пользователь'}`, timeout: 5000 })
+    if (existing?.is_locked && !existing.is_own_lock) {
+      $q.notify({ type: 'warning', message: `Карточка редактируется: ${existing.locked_by || 'другой пользователь'}`, timeout: 5000 })
     } else {
-      const { data } = await locksApi.lock('supervision_card', cardId)
-      if (data?.lock_id || data?.id) svLockId.value = data.lock_id || data.id
+      await locksApi.lock('supervision_card', cardId)
+      svLockId.value = cardId
     }
   } catch { /* блокировки опциональны */ }
 })
@@ -2495,7 +2495,7 @@ onMounted(async () => {
 const svLockId = ref(null)
 onBeforeUnmount(async () => {
   if (svLockId.value) {
-    try { await locksApi.unlock(svLockId.value) } catch {}
+    try { await locksApi.unlock('supervision_card', svLockId.value) } catch {}
   }
 })
 </script>
