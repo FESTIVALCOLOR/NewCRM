@@ -47,7 +47,11 @@
           <q-badge color="orange" floating style="font-size: 9px">
             {{ offlinePending }}
           </q-badge>
-          <q-tooltip>{{ offlinePending }} операций ожидают отправки</q-tooltip>
+          <q-tooltip>
+            <div style="white-space: pre-line; max-width: 300px; font-size: 12px; line-height: 1.5">
+              {{ offlineQueueTooltip }}
+            </div>
+          </q-tooltip>
         </q-btn>
         <!-- Обновить сервер (первая) -->
         <q-btn
@@ -469,7 +473,7 @@ import { useReferencesStore } from 'src/stores/references'
 import { useChatUnreadStore } from 'src/stores/chatUnread'
 import { usePermissionsStore } from 'src/stores/permissions'
 import { useWebSocket } from 'src/composables/useWebSocket'
-import { pendingCount as getOfflinePendingCount, syncAll as syncOfflineAll, clearAll as clearOfflineAll } from 'src/services/offlineQueue'
+import { pendingCount as getOfflinePendingCount, getPending, syncAll as syncOfflineAll, clearAll as clearOfflineAll } from 'src/services/offlineQueue'
 
 const $q = useQuasar()
 const route = useRoute()
@@ -493,12 +497,98 @@ function chatBadge(to) {
 
 // Offline-очередь: количество ожидающих операций
 const offlinePending = ref(0)
+const offlinePendingItems = ref([])
 let offlinePendingTimer = null
 
+function describeOperation(op) {
+  const url = op.url || ''
+  const m = (op.method || '').toUpperCase()
+  if (url.includes('/payments')) {
+    if (url.includes('/mark-paid')) return 'Отметить выплату'
+    if (m === 'POST') return 'Создание выплаты'
+    if (m === 'DELETE') return 'Удаление выплаты'
+    return 'Изменение выплаты'
+  }
+  if (url.includes('/clients')) {
+    if (m === 'POST') return 'Создание клиента'
+    if (m === 'DELETE') return 'Удаление клиента'
+    return 'Изменение клиента'
+  }
+  if (url.includes('/contracts')) {
+    if (m === 'POST') return 'Создание договора'
+    if (m === 'DELETE') return 'Удаление договора'
+    return 'Изменение договора'
+  }
+  if (url.includes('/crm/cards')) {
+    if (url.includes('/workflow')) return 'Действие workflow'
+    if (url.includes('/column')) return 'Перемещение карточки CRM'
+    if (url.includes('/stage-executor')) return 'Назначение исполнителя'
+    if (m === 'POST') return 'Создание карточки CRM'
+    if (m === 'DELETE') return 'Удаление карточки CRM'
+    return 'Изменение карточки CRM'
+  }
+  if (url.includes('/supervision')) {
+    if (url.includes('/column')) return 'Перемещение надзора'
+    if (url.includes('/complete-stage')) return 'Завершение этапа надзора'
+    if (url.includes('/pause')) return 'Приостановка надзора'
+    if (url.includes('/resume')) return 'Возобновление надзора'
+    if (m === 'POST') return 'Создание карточки надзора'
+    return 'Изменение надзора'
+  }
+  if (url.includes('/chats') && url.includes('/messages')) return 'Сообщение в чат'
+  if (url.includes('/employees')) {
+    if (m === 'POST') return 'Создание сотрудника'
+    if (m === 'DELETE') return 'Удаление сотрудника'
+    return 'Изменение сотрудника'
+  }
+  if (url.includes('/salaries')) {
+    if (m === 'POST') return 'Запись зарплаты'
+    return 'Изменение зарплаты'
+  }
+  return op.description || `${m} ${url}`
+}
+
+function formatAge(created_at) {
+  if (!created_at) return ''
+  const mins = Math.floor((Date.now() - new Date(created_at).getTime()) / 60000)
+  if (mins < 1) return 'только что'
+  if (mins < 60) return `${mins} мин`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs} ч`
+  return `${Math.floor(hrs / 24)} д`
+}
+
+const offlineQueueTooltip = computed(() => {
+  const items = offlinePendingItems.value
+  if (!items.length) return ''
+  const lines = items.slice(0, 5).map(op => {
+    const who = op.employee_name ? ` · ${op.employee_name.split(' ')[0]}` : ''
+    const age = formatAge(op.created_at)
+    return `• ${describeOperation(op)}${who}${age ? ' · ' + age : ''}`
+  })
+  const rest = items.length - lines.length
+  let text = `${items.length} в очереди:\n` + lines.join('\n')
+  if (rest > 0) text += `\n  ...и ещё ${rest}`
+  return text
+})
+
 async function handleOfflineQueue() {
+  const items = offlinePendingItems.value
+  const listHtml = items.length
+    ? '<ul style="margin:6px 0 0;padding-left:18px;text-align:left">' +
+      items.map(op => {
+        const who = op.employee_name ? `<span style="color:#888"> · ${op.employee_name}</span>` : ''
+        const age = formatAge(op.created_at)
+        const ageStr = age ? `<span style="color:#aaa"> · ${age} назад</span>` : ''
+        return `<li style="margin:3px 0;font-size:13px">${describeOperation(op)}${who}${ageStr}</li>`
+      }).join('') +
+      '</ul>'
+    : ''
+
   $q.dialog({
     title: `${offlinePending.value} операций в очереди`,
-    message: 'Эти операции были сохранены при отсутствии сети.',
+    message: `<div style="font-size:13px;color:#666;margin-bottom:4px">Сохранены при отсутствии сети. Будут отправлены автоматически при восстановлении подключения.</div>${listHtml}`,
+    html: true,
     options: {
       type: 'radio',
       model: 'sync',
@@ -513,6 +603,7 @@ async function handleOfflineQueue() {
     if (action === 'clear') {
       await clearOfflineAll()
       offlinePending.value = 0
+      offlinePendingItems.value = []
       $q.notify({ type: 'info', message: 'Очередь очищена' })
     } else {
       try {
@@ -525,7 +616,14 @@ async function handleOfflineQueue() {
 }
 
 async function refreshOfflinePending() {
-  try { offlinePending.value = await getOfflinePendingCount() } catch { offlinePending.value = 0 }
+  try {
+    const items = await getPending()
+    offlinePendingItems.value = items
+    offlinePending.value = items.length
+  } catch {
+    offlinePending.value = 0
+    offlinePendingItems.value = []
+  }
 }
 
 // Глобальный поиск

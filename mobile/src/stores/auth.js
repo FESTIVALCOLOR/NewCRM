@@ -78,6 +78,7 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const { data } = await api.get('/api/v1/auth/me')
       user.value = data
+      if (data.full_name) localStorage.setItem('user_full_name', data.full_name)
     } catch {
       // Если профиль не загрузился — используем данные из login
     }
@@ -97,6 +98,7 @@ export const useAuthStore = defineStore('auth', () => {
       user.value = null
       localStorage.removeItem('access_token')
       localStorage.removeItem('refresh_token')
+      localStorage.removeItem('user_full_name')
       window.location.href = '/login'
     }
   }

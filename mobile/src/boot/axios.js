@@ -121,6 +121,7 @@ api.interceptors.response.use(
         url: config.url,
         data: config.data ? JSON.parse(typeof config.data === 'string' ? config.data : JSON.stringify(config.data)) : null,
         description: `${method.toUpperCase()} ${config.url}`,
+        employee_name: localStorage.getItem('user_full_name') || null,
       })
       console.info(`[OfflineQueue] Операция сохранена: ${method.toUpperCase()} ${config.url}`)
     } catch (queueErr) {
