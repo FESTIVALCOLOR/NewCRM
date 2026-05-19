@@ -400,8 +400,8 @@ onMounted(() => loadCards())
 .column-title { font-size: 13px; font-weight: bold; color: #333; flex: 1; white-space: normal; line-height: 1.35; }
 .column-body { padding: 8px; flex: 1; overflow-y: auto }
 .column-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #bbb; font-size: 12px; padding: 40px 0 }
-.landscape-board { display: flex; overflow-x: auto; padding: 8px; gap: 8px; height: calc(100vh - 110px); -webkit-overflow-scrolling: touch; scrollbar-width: thin }
-.landscape-column { flex: 1 0 264px; max-width: 352px; display: flex; flex-direction: column }
+.landscape-board { display: flex; overflow-x: auto; overflow-y: hidden; padding: 8px; gap: 8px; height: calc(100vh - 110px); -webkit-overflow-scrolling: touch; scrollbar-width: auto }
+.landscape-column { flex: 0 0 280px; min-width: 280px; display: flex; flex-direction: column }
 .landscape-column .column-frame { flex: 1; margin: 0; overflow: hidden }
 .landscape-column .column-body { overflow-y: auto; max-height: calc(100vh - 200px) }
 </style>

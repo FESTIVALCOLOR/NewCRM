@@ -13,13 +13,13 @@
       class="q-mb-md"
     />
     <div class="text-grey-6 q-mb-md text-body2">
-      {{ chatType === 'client' ? 'Чат с клиентом не создан' : 'Чат сотрудников не создан' }}
+      {{ chatType === 'client' ? 'Чат с клиентом не создан' : chatType === 'supervision' ? 'Чат надзора не создан' : 'Чат сотрудников не создан' }}
     </div>
     <q-btn
       unelevated
       no-caps
       :color="chatType === 'client' ? 'green-7' : 'blue-7'"
-      :label="chatType === 'client' ? 'Создать чат с клиентом' : 'Создать чат сотрудников'"
+      :label="chatType === 'client' ? 'Создать чат с клиентом' : chatType === 'supervision' ? 'Создать чат надзора' : 'Создать чат сотрудников'"
       :loading="creating"
       @click="createChat"
     />
@@ -63,7 +63,7 @@
         </q-btn>
       </div>
       <span v-else class="text-caption text-grey-6" style="flex: 1 1 0%; min-width: 0">
-        {{ chatType === 'client' ? 'Чат с клиентом' : 'Чат сотрудников' }}
+        {{ chatType === 'client' ? 'Чат с клиентом' : chatType === 'supervision' ? 'Чат надзора' : 'Чат сотрудников' }}
       </span>
       <!-- Кнопка участников: всегда справа, никогда не сжимается -->
       <q-btn
@@ -808,6 +808,7 @@
           dense
           size="sm"
           icon="attach_file"
+          class="bg-grey-2"
           :loading="uploadProgress > 0 && uploadProgress < 100"
           @click="pickFile"
         >
@@ -829,6 +830,7 @@
           size="sm"
           icon="folder_open"
           color="grey-6"
+          class="bg-grey-2"
           @click="showCardFilesDialog = true; loadCardFiles()"
         >
           <q-tooltip>Файлы из карточки CRM</q-tooltip>
@@ -1322,9 +1324,13 @@ import { useQuasar } from 'quasar'
 const props = defineProps({
   chatType: {
     type: String,
-    required: true, // 'employee' | 'client'
+    required: true, // 'employee' | 'client' | 'supervision'
   },
   cardId: {
+    type: Number,
+    default: null,
+  },
+  supervisionCardId: {
     type: Number,
     default: null,
   },
@@ -1947,11 +1953,14 @@ function scrollToFirstUnread() {
 }
 
 async function loadChat() {
-  if (!props.cardId) return
+  const isSupervision = props.chatType === 'supervision'
+  const idKey = isSupervision ? 'supervision_card_id' : 'crm_card_id'
+  const idVal = isSupervision ? props.supervisionCardId : props.cardId
+  if (!idVal) return
   loading.value = true
   try {
     const { data } = await api.get('/api/v1/chats/', {
-      params: { chat_type: props.chatType, crm_card_id: props.cardId },
+      params: { chat_type: 'employee', [idKey]: idVal },
     })
     const list = Array.isArray(data) ? data : (data.items || [])
     if (list.length > 0) {
@@ -2174,13 +2183,18 @@ async function doForward() {
 }
 
 async function createChat() {
-  if (!props.cardId) return
+  const isSupervision = props.chatType === 'supervision'
+  const idVal = isSupervision ? props.supervisionCardId : props.cardId
+  if (!idVal) return
   creating.value = true
   try {
-    const { data } = await api.post('/api/v1/chats/', {
-      chat_type: props.chatType,
-      crm_card_id: props.cardId,
-    })
+    const payload = {
+      chat_type: 'employee',
+      ...(isSupervision
+        ? { supervision_card_id: idVal }
+        : { crm_card_id: idVal }),
+    }
+    const { data } = await api.post('/api/v1/chats/', payload)
     await openChat(data.id)
     $q.notify({ type: 'positive', message: 'Чат создан' })
   } catch (e) {

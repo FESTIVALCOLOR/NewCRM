@@ -71,6 +71,6 @@ onUnmounted(() => window.removeEventListener('scroll', onScroll))
 .dash-label { font-size: 9px; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
 
 @media (min-width: 1024px) {
-  .page-dashboard { bottom: 0; } /* На планшете нет нижнего меню */
+  .page-dashboard { bottom: 0; left: 260px; } /* На десктопе учитываем ширину sidebar */
 }
 </style>

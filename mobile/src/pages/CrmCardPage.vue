@@ -208,9 +208,6 @@
                     {{ m.role }}
                   </q-item-label>
                 </q-item-section>
-                <q-item-section v-if="m.deadline" side>
-                  <q-badge :color="dlBadgeColor(m.deadline)" :label="fmtDateShort(m.deadline)" dense />
-                </q-item-section>
                 <q-item-section v-if="!isArchived" side>
                   <div class="row q-gutter-xs">
                     <q-btn
@@ -552,7 +549,7 @@
                 </div>
               </div>
             </q-card-section>
-            <q-list v-if="filesByStage('tech_task').length > 0" dense>
+            <q-list v-if="filesByStage('tech_task').length > 0" dense class="q-pb-xs">
               <q-item v-for="f in filesByStage('tech_task')" :key="f.id">
                 <q-item-section avatar>
                   <q-icon :name="fileIcon(f)" :color="fileColor(f)" />
@@ -1038,42 +1035,25 @@
         </q-tab-panel>
 
         <!-- ====== ВКЛАДКА: Чат сотрудников ====== -->
-        <q-tab-panel name="notes" class="q-pa-none">
-          <InlineChatRoom
-            v-if="notesTabVisited && card?.id"
-            chat-type="employee"
-            :card-id="card.id"
-          />
+        <q-tab-panel name="notes" class="q-pa-sm">
+          <div style="border: 1px solid #E0E0E0; border-radius: 8px; overflow: hidden">
+            <InlineChatRoom
+              v-if="notesTabVisited && card?.id"
+              chat-type="employee"
+              :card-id="card.id"
+            />
+          </div>
         </q-tab-panel>
 
         <!-- ====== ВКЛАДКА: Чат с клиентом ====== -->
-        <q-tab-panel name="chat" class="q-pa-none">
-          <!-- Кнопка Telegram-чата — дополнительный канал, отдельно от внутреннего чата -->
-          <div
-            v-if="can('chat.client.manage')"
-            class="row items-center q-px-md q-py-xs"
-            style="background: #FFF9C4; border-bottom: 1px solid #FFE082; flex-shrink: 0"
-          >
-            <q-icon name="send" size="14px" color="amber-8" class="q-mr-xs" />
-            <span class="text-caption text-amber-9" style="flex: 1">Telegram-чат (дополнительный канал)</span>
-            <q-btn
-              flat
-              dense
-              size="xs"
-              no-caps
-              icon="add"
-              label="Создать"
-              color="amber-9"
-              :loading="chatCreating"
-              @click="openCreateChatDlg"
+        <q-tab-panel name="chat" class="q-pa-sm">
+          <div style="border: 1px solid #E0E0E0; border-radius: 8px; overflow: hidden">
+            <InlineChatRoom
+              v-if="chatTabVisited && card?.id"
+              chat-type="client"
+              :card-id="card.id"
             />
           </div>
-
-          <InlineChatRoom
-            v-if="chatTabVisited && card?.id"
-            chat-type="client"
-            :card-id="card.id"
-          />
         </q-tab-panel>
       </q-tab-panels>
 

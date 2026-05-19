@@ -61,6 +61,7 @@
         <q-tab name="payments" label="Оплаты" />
         <q-tab name="notes" label="Заметки" />
         <q-tab name="chat" label="Чат" />
+        <q-tab name="sv-chat" icon="chat" label="Чат надзора" />
       </q-tabs>
 
       <q-tab-panels v-model="activeTab" animated class="bg-transparent">
@@ -306,6 +307,7 @@
                 :key="entry.id"
                 v-ripple
                 clickable
+                :style="purchaseRowStyle(entry.status)"
                 @click="editTimelineEntry(entry)"
               >
                 <q-item-section avatar>
@@ -323,7 +325,7 @@
                     {{ entry.supplier }}
                   </q-item-label>
                   <q-item-label v-if="entry.budget_planned > 0" caption style="color: #888">
-                    Бюджет: {{ formatMoney(entry.budget_actual || 0) }} / {{ formatMoney(entry.budget_planned) }}
+                    Факт. {{ formatMoney(entry.budget_actual || 0) }} / План {{ formatMoney(entry.budget_planned) }}
                   </q-item-label>
                   <!-- Файлы стадии — кнопка папки ЯД -->
                   <div v-if="stageFiles(entry.stage_code).length > 0" class="q-mt-xs">
@@ -527,23 +529,21 @@
                     </div>
                   </div>
 
-                  <!-- Ссылка на папку ЯД с загруженными файлами -->
-                  <div v-if="visit.actual_date || visit.visit_date" class="q-mt-xs">
+                  <!-- Кнопки действий + ЯД папка в одной строке -->
+                  <div class="row q-gutter-xs q-mt-sm items-center">
                     <q-btn
+                      v-if="visit.actual_date || visit.visit_date"
                       flat
                       dense
                       size="xs"
                       icon="folder_open"
-                      :label="'Файлы на ЯД'"
+                      label="ЯД"
                       color="blue"
                       no-caps
-                      style="font-size: 10px"
+                      style="font-size: 10px; padding: 2px 8px; border-radius: 4px"
                       @click.stop="openVisitFolder(visit)"
                     />
-                  </div>
-
-                  <!-- Кнопки действий -->
-                  <div class="row q-gutter-xs q-mt-sm justify-end">
+                    <q-space />
                     <q-btn
                       outline
                       dense
@@ -749,7 +749,11 @@
                 </q-item-section>
               </q-item>
             </q-list>
-            <q-card-section v-else class="text-center" style="color: #999; font-size: 12px">
+            <div v-if="svPayments.length > 0" class="row items-center q-px-md q-py-xs" style="background: #F5F5F5; border-top: 1px solid #E0E0E0">
+              <span style="font-size: 12px; font-weight: bold; color: #333; flex: 1">Итого</span>
+              <span style="font-size: 13px; font-weight: bold; color: #333">{{ formatMoney(svPayments.reduce((s, p) => s + (p.final_amount || p.amount || 0), 0)) }}</span>
+            </div>
+            <q-card-section v-if="svPayments.length === 0" class="text-center" style="color: #999; font-size: 12px">
               Нет оплат
             </q-card-section>
           </q-card>
@@ -949,6 +953,15 @@
               </q-card-section>
             </q-card>
           </template>
+        </q-tab-panel>
+
+        <!-- ====== ВКЛАДКА 8: Чат надзора (InlineChatRoom) ====== -->
+        <q-tab-panel name="sv-chat" class="q-pa-none">
+          <InlineChatRoom
+            v-if="svChatTabVisited && card?.id"
+            chat-type="supervision"
+            :supervision-card-id="card.id"
+          />
         </q-tab-panel>
       </q-tab-panels>
     </template>
@@ -1546,6 +1559,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { supervisionApi, filesApi, employeesApi, paymentsApi, locksApi, messengerApi } from 'src/services/api'
 import VoiceRecorder from 'src/components/VoiceRecorder.vue'
+import InlineChatRoom from 'src/components/InlineChatRoom.vue'
 import { addToCalendar } from 'src/composables/useCalendar'
 import { usePermission } from 'src/composables/usePermission'
 import { useAuthStore } from 'src/stores/auth'
@@ -1572,6 +1586,7 @@ const totalCommission = computed(() => {
   return timeline.value.reduce((sum, e) => sum + (parseFloat(e.commission) || 0), 0)
 })
 const activeTab = ref('executors')
+const svChatTabVisited = ref(false)
 if (route.query.tab) activeTab.value = route.query.tab
 const svContractYdPath = ref('')
 const showAddVisit = ref(false)
@@ -1764,6 +1779,12 @@ function stageColor(status) {
     'Просрочено': 'negative',
   }
   return colors[status] || 'grey'
+}
+
+function purchaseRowStyle(status) {
+  if (status === 'Закуплено' || status === 'Доставлено') return { background: '#E8F5E9' }
+  if (status === 'Просрочено') return { background: '#FFEBEE' }
+  return {}
 }
 
 function voiceStreamUrl(path) {
@@ -2417,6 +2438,7 @@ async function doAddHistory() {
 watch(activeTab, (val) => {
   router.replace({ query: { ...route.query, tab: val } })
   if (val === 'chat' && !svChatData.value && !svChatLoading.value) loadSvChat()
+  if (val === 'sv-chat') svChatTabVisited.value = true
 })
 
 function tgDeepLink(link) {
