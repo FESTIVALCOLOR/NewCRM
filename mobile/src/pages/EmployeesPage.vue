@@ -277,9 +277,23 @@
           <template v-else>
             <!-- Профиль -->
             <div class="text-center q-mb-md">
-              <q-avatar size="64px" :color="statusColor(selected.status)" text-color="white">
-                <span class="text-h4">{{ selected.full_name ? selected.full_name[0] : '?' }}</span>
-              </q-avatar>
+              <div class="avatar-upload-wrap" style="display: inline-block; position: relative; cursor: pointer" @click="$refs.empPhotoInput.click()">
+                <q-avatar size="64px" :color="selected.photo_url ? 'grey-2' : statusColor(selected.status)" text-color="white">
+                  <img v-if="selected.photo_url" :src="selected.photo_url" style="width:100%;height:100%;object-fit:cover;border-radius:50%">
+                  <span v-else class="text-h4">{{ selected.full_name ? selected.full_name[0] : '?' }}</span>
+                </q-avatar>
+                <div class="avatar-cam-overlay">
+                  <q-spinner v-if="empPhotoUploading" size="20px" color="white" />
+                  <q-icon v-else name="photo_camera" size="20px" color="white" />
+                </div>
+              </div>
+              <input
+                ref="empPhotoInput"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                style="display:none"
+                @change="handleEmpPhotoUpload"
+              >
               <div class="text-h6 text-weight-bold q-mt-sm" style="color: #333">
                 {{ selected.full_name }}
               </div>
@@ -648,6 +662,7 @@ const roleOptions = computed(() => {
 })
 const selected = ref(null)
 const showDetail = ref(false)
+const empPhotoUploading = ref(false)
 const showCreate = ref(false)
 const editMode = ref(false)
 const createForm = ref(null)
@@ -712,6 +727,19 @@ function openEmployee(emp) {
   selected.value = emp
   showDetail.value = true
   editMode.value = false
+}
+
+async function handleEmpPhotoUpload(e) {
+  const file = e.target?.files?.[0]
+  if (!file || !selected.value) return
+  empPhotoUploading.value = true
+  try {
+    const { data } = await employeesApi.uploadPhoto(selected.value.id, file)
+    selected.value = { ...selected.value, photo_url: data.photo_url }
+    $q.notify({ type: 'positive', message: 'Фото загружено' })
+  } catch {
+    $q.notify({ type: 'negative', message: 'Ошибка загрузки фото' })
+  } finally { empPhotoUploading.value = false }
 }
 
 async function loadEmployees() {

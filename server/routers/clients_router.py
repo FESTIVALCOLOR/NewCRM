@@ -2,29 +2,39 @@
 Роутер для работы с клиентами.
 Все CRUD-операции по модели Client.
 """
-import logging
+
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, status, Response
-from sqlalchemy.orm import Session
-from sqlalchemy import func, or_
+import logging
 from typing import List, Optional
 
-from database import (
-    get_db, Client, ActivityLog, Employee,
-    Contract, CRMCard, StageExecutor, Payment,
-    SupervisionCard, SupervisionTimelineEntry,
-    SupervisionProjectHistory, ProjectFile,
-    ProjectTimelineEntry
-)
 from auth import get_current_user
+from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
 from permissions import require_permission
-from schemas import ClientResponse, ClientCreate, ClientUpdate, StatusResponse
+from schemas import ClientCreate, ClientResponse, ClientUpdate, StatusResponse
+from sqlalchemy import func, or_
+from sqlalchemy.orm import Session
+
+from database import (
+    ActivityLog,
+    Client,
+    Contract,
+    CRMCard,
+    Employee,
+    Payment,
+    ProjectFile,
+    ProjectTimelineEntry,
+    StageExecutor,
+    SupervisionCard,
+    SupervisionProjectHistory,
+    SupervisionTimelineEntry,
+    get_db,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["clients"])
 
 
-@router.get("/", response_model=List[ClientResponse])
+@router.get("/", response_model=list[ClientResponse])
 async def get_clients(
     skip: int = 0,
     limit: int = 100,
@@ -32,7 +42,7 @@ async def get_clients(
     search_type: str = "name",
     response: Response = None,
     current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Получить список клиентов с пагинацией и поиском.
     Заголовок X-Total-Count содержит общее количество записей.
@@ -73,11 +83,7 @@ async def get_clients(
 
 
 @router.get("/{client_id}", response_model=ClientResponse)
-async def get_client(
-    client_id: int,
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def get_client(client_id: int, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Получить клиента по ID"""
     client = db.query(Client).filter(Client.id == client_id).first()
     if not client:
@@ -86,11 +92,7 @@ async def get_client(
 
 
 @router.post("/", response_model=ClientResponse)
-async def create_client(
-    client_data: ClientCreate,
-    current_user: Employee = Depends(require_permission("clients.create")),
-    db: Session = Depends(get_db)
-):
+async def create_client(client_data: ClientCreate, current_user: Employee = Depends(require_permission("clients.create")), db: Session = Depends(get_db)):
     """Создать нового клиента"""
     client = Client(**client_data.model_dump())
     db.add(client)
@@ -98,12 +100,7 @@ async def create_client(
     db.refresh(client)
 
     # Лог
-    log = ActivityLog(
-        employee_id=current_user.id,
-        action_type="create",
-        entity_type="client",
-        entity_id=client.id
-    )
+    log = ActivityLog(employee_id=current_user.id, action_type="create", entity_type="client", entity_id=client.id)
     db.add(log)
     db.commit()
 
@@ -111,12 +108,7 @@ async def create_client(
 
 
 @router.put("/{client_id}", response_model=ClientResponse)
-async def update_client(
-    client_id: int,
-    client_data: ClientUpdate,
-    current_user: Employee = Depends(require_permission("clients.update")),
-    db: Session = Depends(get_db)
-):
+async def update_client(client_id: int, client_data: ClientUpdate, current_user: Employee = Depends(require_permission("clients.update")), db: Session = Depends(get_db)):
     """Обновить клиента"""
     client = db.query(Client).filter(Client.id == client_id).first()
     if not client:
@@ -131,12 +123,7 @@ async def update_client(
     db.refresh(client)
 
     # Лог
-    log = ActivityLog(
-        employee_id=current_user.id,
-        action_type="update",
-        entity_type="client",
-        entity_id=client.id
-    )
+    log = ActivityLog(employee_id=current_user.id, action_type="update", entity_type="client", entity_id=client.id)
     db.add(log)
     db.commit()
 
@@ -144,11 +131,7 @@ async def update_client(
 
 
 @router.delete("/{client_id}", response_model=StatusResponse)
-async def delete_client(
-    client_id: int,
-    current_user: Employee = Depends(require_permission("clients.delete")),
-    db: Session = Depends(get_db)
-):
+async def delete_client(client_id: int, current_user: Employee = Depends(require_permission("clients.delete")), db: Session = Depends(get_db)):
     """Удалить клиента и все связанные данные"""
     client = db.query(Client).filter(Client.id == client_id).first()
     if not client:
@@ -159,11 +142,7 @@ async def delete_client(
     if contracts:
         contract_numbers = [c.contract_number or f"ID {c.id}" for c in contracts]
         numbers_preview = ", ".join(contract_numbers[:5])
-        raise HTTPException(
-            status_code=400,
-            detail=f"Невозможно удалить клиента: есть {len(contracts)} связанных договоров "
-                   f"({numbers_preview}). Удалите сначала договоры."
-        )
+        raise HTTPException(status_code=400, detail=f"Невозможно удалить клиента: есть {len(contracts)} связанных договоров ({numbers_preview}). Удалите сначала договоры.")
 
     try:
         # Удаляем клиента (договоров нет, можно безопасно удалить)
@@ -192,12 +171,7 @@ async def delete_client(
             db.delete(contract)
 
         # Лог перед удалением
-        log = ActivityLog(
-            employee_id=current_user.id,
-            action_type="delete",
-            entity_type="client",
-            entity_id=client_id
-        )
+        log = ActivityLog(employee_id=current_user.id, action_type="delete", entity_type="client", entity_id=client_id)
         db.add(log)
 
         db.delete(client)
@@ -209,3 +183,57 @@ async def delete_client(
         db.rollback()
         logger.exception(f"Ошибка при удалении клиента {client_id}: {e}")
         raise HTTPException(status_code=500, detail="Внутренняя ошибка сервера")
+
+
+@router.post("/{client_id}/photo")
+async def upload_client_photo(
+    client_id: int,
+    file: UploadFile = File(...),
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Загрузить аватар клиента на Яндекс.Диск"""
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Клиент не найден")
+
+    content = await file.read()
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Файл слишком большой (макс. 5 МБ)")
+
+    ext = (file.filename or "photo.jpg").rsplit(".", 1)[-1].lower()
+    if ext not in ("jpg", "jpeg", "png", "webp"):
+        raise HTTPException(status_code=400, detail="Допустимые форматы: jpg, jpeg, png, webp")
+
+    try:
+        from yandex_disk_service import YandexDiskService
+
+        from config import settings
+
+        yd = YandexDiskService(settings.yandex_disk_token)
+        yd_path = f"/CRM/Аватары/Клиенты/{client_id}.{ext}"
+        yd.upload_file_from_bytes(content, yd_path)
+        public_url = yd.get_public_link(yd_path)
+    except Exception as e:
+        logger.error(f"Ошибка загрузки аватара клиента {client_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки на Яндекс.Диск: {e}")
+
+    client.photo_url = public_url
+    db.commit()
+    return {"photo_url": public_url}
+
+
+@router.delete("/{client_id}/photo")
+async def delete_client_photo(
+    client_id: int,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Удалить аватар клиента"""
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Клиент не найден")
+
+    client.photo_url = None
+    db.commit()
+    return {"status": "ok"}

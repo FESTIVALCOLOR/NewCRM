@@ -4,9 +4,24 @@
       <!-- Шапка -->
       <q-card class="is-card q-mb-md">
         <q-card-section class="text-center">
-          <q-avatar size="56px" :color="client.organization_name ? 'blue-2' : 'green-2'" :text-color="client.organization_name ? 'blue-8' : 'green-8'" class="q-mb-sm">
-            <q-icon :name="client.organization_name ? 'business' : 'person'" size="28px" />
-          </q-avatar>
+          <!-- Аватар с загрузкой фото при клике -->
+          <div class="avatar-upload-wrap q-mb-sm" style="display: inline-block; position: relative; cursor: pointer" @click="$refs.clientPhotoInput.click()">
+            <q-avatar size="64px" :color="clientPhotoUrl ? 'grey-2' : (client.organization_name ? 'blue-2' : 'green-2')" :text-color="client.organization_name ? 'blue-8' : 'green-8'">
+              <img v-if="clientPhotoUrl" :src="clientPhotoUrl" style="width:100%;height:100%;object-fit:cover;border-radius:50%">
+              <q-icon v-else :name="client.organization_name ? 'business' : 'person'" size="28px" />
+            </q-avatar>
+            <div class="avatar-cam-overlay">
+              <q-spinner v-if="photoUploading" size="20px" color="white" />
+              <q-icon v-else name="photo_camera" size="20px" color="white" />
+            </div>
+          </div>
+          <input
+            ref="clientPhotoInput"
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            style="display:none"
+            @change="handlePhotoUpload"
+          >
           <div class="text-h6 text-weight-bold" style="color: #333">
             <template v-if="client.organization_type === 'ИП'">
               ИП {{ client.full_name }}
@@ -234,15 +249,20 @@ import { useRoute } from 'vue-router'
 import { useClientsStore } from 'src/stores/clients'
 import { useReferencesStore } from 'src/stores/references'
 import { usePermission } from 'src/composables/usePermission'
+import { useQuasar } from 'quasar'
 import ClientFormDialog from 'src/components/ClientFormDialog.vue'
+import { clientsApi } from 'src/services/api'
 
 const { can } = usePermission()
+const $q = useQuasar()
 
 const route = useRoute()
 const clientsStore = useClientsStore()
 const refs = useReferencesStore()
 const loaded = ref(false)
 const showEdit = ref(false)
+const photoUploading = ref(false)
+const clientPhotoUrl = ref(null)
 
 const client = computed(() => clientsStore.selectedClient)
 
@@ -280,10 +300,24 @@ async function reloadClient() {
   }
 }
 
+async function handlePhotoUpload(e) {
+  const file = e.target?.files?.[0]
+  if (!file) return
+  photoUploading.value = true
+  try {
+    const { data } = await clientsApi.uploadPhoto(client.value.id, file)
+    clientPhotoUrl.value = data.photo_url
+    $q.notify({ type: 'positive', message: 'Фото загружено' })
+  } catch {
+    $q.notify({ type: 'negative', message: 'Ошибка загрузки фото' })
+  } finally { photoUploading.value = false }
+}
+
 onMounted(async () => {
   const clientId = route.params.id
   if (clientId) {
     await Promise.all([clientsStore.loadClient(clientId), clientsStore.loadClientContracts(clientId)])
+    clientPhotoUrl.value = client.value?.photo_url || null
   }
   loaded.value = true
 })

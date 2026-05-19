@@ -97,6 +97,9 @@ class Employee(Base):
     # Временный пароль для invite-письма (plaintext, очищается после первого входа)
     invite_temp_password = Column(String, nullable=True)
 
+    # Аватар (публичная ссылка с Яндекс.Диска)
+    photo_url = Column(String, nullable=True)
+
     # Даты
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -376,6 +379,9 @@ class Client(Base):
     ogrn = Column(String)
     account_details = Column(Text)
     responsible_person = Column(String)
+
+    # Аватар (публичная ссылка с Яндекс.Диска)
+    photo_url = Column(String, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

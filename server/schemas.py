@@ -174,6 +174,7 @@ class EmployeeResponse(EmployeeBase):
     created_at: datetime
     invite_temp_password: Optional[str] = None
     telegram_user_id: Optional[int] = None
+    photo_url: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -230,6 +231,7 @@ class ClientResponse(ClientBase):
     id: int
     created_at: datetime
     updated_at: datetime
+    photo_url: Optional[str] = None
 
     class Config:
         from_attributes = True

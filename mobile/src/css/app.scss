@@ -253,3 +253,26 @@ html { scroll-behavior: smooth; -webkit-overflow-scrolling: touch; }
   // Размер страницы
   @page { size: A4 portrait; margin: 10mm; }
 }
+
+// ===== АВАТАР С ЗАГРУЗКОЙ ФОТО =====
+.avatar-upload-wrap {
+  display: inline-block;
+  position: relative;
+  cursor: pointer;
+
+  .avatar-cam-overlay {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  &:hover .avatar-cam-overlay {
+    opacity: 1;
+  }
+}

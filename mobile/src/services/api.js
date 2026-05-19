@@ -158,6 +158,15 @@ export const clientsApi = {
 
   delete: (clientId) =>
     api.delete(`/api/v1/clients/${clientId}`),
+
+  uploadPhoto: (id, file) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    return api.post(`/api/v1/clients/${id}/photo`, fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+  },
+
+  deletePhoto: (id) =>
+    api.delete(`/api/v1/clients/${id}/photo`),
 }
 
 // === Contracts ===
@@ -258,6 +267,15 @@ export const employeesApi = {
 
   connectTelegram: (id, code) =>
     api.post(`/api/v1/employees/${id}/telegram-connect/${code}`),
+
+  uploadPhoto: (id, file) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    return api.post(`/api/v1/employees/${id}/photo`, fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+  },
+
+  deletePhoto: (id) =>
+    api.delete(`/api/v1/employees/${id}/photo`),
 }
 
 // === Payments ===

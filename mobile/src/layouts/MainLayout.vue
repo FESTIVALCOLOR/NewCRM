@@ -133,7 +133,10 @@
       <div class="q-pa-md">
         <div class="row items-center q-gutter-sm">
           <q-avatar color="grey-3" text-color="grey-8" size="42px">
-            {{ authStore.initials }}
+            <img v-if="authStore.user?.photo_url" :src="authStore.user.photo_url" style="width:100%;height:100%;object-fit:cover;border-radius:50%">
+            <template v-else>
+              {{ authStore.initials }}
+            </template>
           </q-avatar>
           <div>
             <div class="text-subtitle2 text-weight-bold" style="color: #333">
