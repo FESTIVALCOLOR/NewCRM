@@ -42,6 +42,9 @@ export const statisticsApi = {
 
   getEmployees: (params = {}) =>
     api.get('/api/v1/statistics/employees', { params }),
+
+  getSupervision: (params = {}) =>
+    api.get('/api/v1/statistics/supervision', { params }),
 }
 
 // === CRM ===

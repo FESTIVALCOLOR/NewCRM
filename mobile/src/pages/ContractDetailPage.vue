@@ -282,182 +282,185 @@
         </q-list>
       </q-card>
 
-      <!-- Файлы: Договор -->
-      <q-card class="is-card q-mb-md">
-        <q-card-section class="q-pb-none">
-          <div class="text-subtitle2 text-weight-bold" style="color: #333">
-            Договор
-          </div>
-        </q-card-section>
-        <q-list v-if="filesByGroup.documents.length > 0" dense>
-          <q-item v-for="f in filesByGroup.documents" :key="f.id" clickable @click="openFile(f)">
-            <q-item-section avatar>
-              <q-icon :name="fileIconByName(f.file_name)" :color="fileColorByName(f.file_name)" />
-            </q-item-section>
-            <q-item-section style="min-width: 0; overflow: hidden">
-              <q-item-label style="font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
-                {{ f.file_name }}
-              </q-item-label>
-            </q-item-section>
-            <q-item-section side>
-              <div class="row q-gutter-xs items-center">
-                <q-btn
-                  outline
-                  dense
-                  size="xs"
-                  icon="open_in_new"
-                  color="primary"
-                  no-caps
-                  label="Открыть"
-                  style="font-size: 10px; padding: 2px 8px; border-radius: 4px"
-                  @click.stop="openFile(f)"
-                />
-                <q-btn
-                  v-if="canDeleteFiles"
-                  outline
-                  dense
-                  size="xs"
-                  icon="delete_outline"
-                  color="negative"
-                  no-caps
-                  style="font-size: 10px; padding: 2px 6px; border-radius: 4px"
-                  @click.stop="deleteContractFile(f)"
-                />
-              </div>
-            </q-item-section>
-          </q-item>
-        </q-list>
-        <q-card-section class="q-pt-xs">
-          <q-btn
-            outline
-            color="grey-7"
-            icon="gavel"
-            label="Загрузить договор"
-            no-caps
-            class="full-width"
-            dense
-            @click="uploadFor('documents')"
-          />
-        </q-card-section>
-      </q-card>
+      <!-- Файлы: Договор / ТЗ / Доп.соглашения — в ландшафте 3 колонки -->
+      <div class="contract-files-grid">
+        <!-- Файлы: Договор -->
+        <q-card class="is-card q-mb-md">
+          <q-card-section class="q-pb-none">
+            <div class="text-subtitle2 text-weight-bold" style="color: #333">
+              Договор
+            </div>
+          </q-card-section>
+          <q-list v-if="filesByGroup.documents.length > 0" dense>
+            <q-item v-for="f in filesByGroup.documents" :key="f.id" clickable @click="openFile(f)">
+              <q-item-section avatar>
+                <q-icon :name="fileIconByName(f.file_name)" :color="fileColorByName(f.file_name)" />
+              </q-item-section>
+              <q-item-section style="min-width: 0; overflow: hidden">
+                <q-item-label style="font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
+                  {{ f.file_name }}
+                </q-item-label>
+              </q-item-section>
+              <q-item-section side>
+                <div class="row q-gutter-xs items-center">
+                  <q-btn
+                    outline
+                    dense
+                    size="xs"
+                    icon="open_in_new"
+                    color="primary"
+                    no-caps
+                    label="Открыть"
+                    style="font-size: 10px; padding: 2px 8px; border-radius: 4px"
+                    @click.stop="openFile(f)"
+                  />
+                  <q-btn
+                    v-if="canDeleteFiles"
+                    outline
+                    dense
+                    size="xs"
+                    icon="delete_outline"
+                    color="negative"
+                    no-caps
+                    style="font-size: 10px; padding: 2px 6px; border-radius: 4px"
+                    @click.stop="deleteContractFile(f)"
+                  />
+                </div>
+              </q-item-section>
+            </q-item>
+          </q-list>
+          <q-card-section class="q-pt-xs">
+            <q-btn
+              outline
+              color="grey-7"
+              icon="gavel"
+              label="Загрузить договор"
+              no-caps
+              class="full-width"
+              dense
+              @click="uploadFor('documents')"
+            />
+          </q-card-section>
+        </q-card>
 
-      <!-- Файлы: ТЗ -->
-      <q-card class="is-card q-mb-md">
-        <q-card-section class="q-pb-none">
-          <div class="text-subtitle2 text-weight-bold" style="color: #333">
-            Техническое задание
-          </div>
-        </q-card-section>
-        <q-list v-if="filesByGroup.tech_task.length > 0" dense>
-          <q-item v-for="f in filesByGroup.tech_task" :key="f.id" clickable @click="openFile(f)">
-            <q-item-section avatar>
-              <q-icon :name="fileIconByName(f.file_name)" :color="fileColorByName(f.file_name)" />
-            </q-item-section>
-            <q-item-section style="min-width: 0; overflow: hidden">
-              <q-item-label style="font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
-                {{ f.file_name }}
-              </q-item-label>
-            </q-item-section>
-            <q-item-section side>
-              <div class="row q-gutter-xs items-center">
-                <q-btn
-                  outline
-                  dense
-                  size="xs"
-                  icon="open_in_new"
-                  color="primary"
-                  no-caps
-                  label="Открыть"
-                  style="font-size: 10px; padding: 2px 8px; border-radius: 4px"
-                  @click.stop="openFile(f)"
-                />
-                <q-btn
-                  v-if="canDeleteFiles"
-                  outline
-                  dense
-                  size="xs"
-                  icon="delete_outline"
-                  color="negative"
-                  no-caps
-                  style="font-size: 10px; padding: 2px 6px; border-radius: 4px"
-                  @click.stop="deleteContractFile(f)"
-                />
-              </div>
-            </q-item-section>
-          </q-item>
-        </q-list>
-        <q-card-section class="q-pt-xs">
-          <q-btn
-            outline
-            color="grey-7"
-            icon="description"
-            label="Загрузить ТЗ"
-            no-caps
-            class="full-width"
-            dense
-            @click="uploadFor('tech_task')"
-          />
-        </q-card-section>
-      </q-card>
+        <!-- Файлы: ТЗ -->
+        <q-card class="is-card q-mb-md">
+          <q-card-section class="q-pb-none">
+            <div class="text-subtitle2 text-weight-bold" style="color: #333">
+              Техническое задание
+            </div>
+          </q-card-section>
+          <q-list v-if="filesByGroup.tech_task.length > 0" dense>
+            <q-item v-for="f in filesByGroup.tech_task" :key="f.id" clickable @click="openFile(f)">
+              <q-item-section avatar>
+                <q-icon :name="fileIconByName(f.file_name)" :color="fileColorByName(f.file_name)" />
+              </q-item-section>
+              <q-item-section style="min-width: 0; overflow: hidden">
+                <q-item-label style="font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
+                  {{ f.file_name }}
+                </q-item-label>
+              </q-item-section>
+              <q-item-section side>
+                <div class="row q-gutter-xs items-center">
+                  <q-btn
+                    outline
+                    dense
+                    size="xs"
+                    icon="open_in_new"
+                    color="primary"
+                    no-caps
+                    label="Открыть"
+                    style="font-size: 10px; padding: 2px 8px; border-radius: 4px"
+                    @click.stop="openFile(f)"
+                  />
+                  <q-btn
+                    v-if="canDeleteFiles"
+                    outline
+                    dense
+                    size="xs"
+                    icon="delete_outline"
+                    color="negative"
+                    no-caps
+                    style="font-size: 10px; padding: 2px 6px; border-radius: 4px"
+                    @click.stop="deleteContractFile(f)"
+                  />
+                </div>
+              </q-item-section>
+            </q-item>
+          </q-list>
+          <q-card-section class="q-pt-xs">
+            <q-btn
+              outline
+              color="grey-7"
+              icon="description"
+              label="Загрузить ТЗ"
+              no-caps
+              class="full-width"
+              dense
+              @click="uploadFor('tech_task')"
+            />
+          </q-card-section>
+        </q-card>
 
-      <!-- Файлы: Доп. соглашения -->
-      <q-card class="is-card q-mb-md">
-        <q-card-section class="q-pb-none">
-          <div class="text-subtitle2 text-weight-bold" style="color: #333">
-            Доп. соглашения
-          </div>
-        </q-card-section>
-        <q-list v-if="filesByGroup.supervision.length > 0" dense>
-          <q-item v-for="f in filesByGroup.supervision" :key="f.id" clickable @click="openFile(f)">
-            <q-item-section avatar>
-              <q-icon :name="fileIconByName(f.file_name)" :color="fileColorByName(f.file_name)" />
-            </q-item-section>
-            <q-item-section style="min-width: 0; overflow: hidden">
-              <q-item-label style="font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
-                {{ f.file_name }}
-              </q-item-label>
-            </q-item-section>
-            <q-item-section side>
-              <div class="row q-gutter-xs items-center">
-                <q-btn
-                  outline
-                  dense
-                  size="xs"
-                  icon="open_in_new"
-                  color="primary"
-                  no-caps
-                  label="Открыть"
-                  style="font-size: 10px; padding: 2px 8px; border-radius: 4px"
-                  @click.stop="openFile(f)"
-                />
-                <q-btn
-                  v-if="canDeleteFiles"
-                  outline
-                  dense
-                  size="xs"
-                  icon="delete_outline"
-                  color="negative"
-                  no-caps
-                  style="font-size: 10px; padding: 2px 6px; border-radius: 4px"
-                  @click.stop="deleteContractFile(f)"
-                />
-              </div>
-            </q-item-section>
-          </q-item>
-        </q-list>
-        <q-card-section class="q-pt-xs">
-          <q-btn
-            outline
-            color="grey-7"
-            icon="handshake"
-            label="Загрузить доп. соглашение"
-            no-caps
-            class="full-width"
-            dense
-            @click="uploadFor('supervision')"
-          />
-        </q-card-section>
-      </q-card>
+        <!-- Файлы: Доп. соглашения -->
+        <q-card class="is-card q-mb-md">
+          <q-card-section class="q-pb-none">
+            <div class="text-subtitle2 text-weight-bold" style="color: #333">
+              Доп. соглашения
+            </div>
+          </q-card-section>
+          <q-list v-if="filesByGroup.supervision.length > 0" dense>
+            <q-item v-for="f in filesByGroup.supervision" :key="f.id" clickable @click="openFile(f)">
+              <q-item-section avatar>
+                <q-icon :name="fileIconByName(f.file_name)" :color="fileColorByName(f.file_name)" />
+              </q-item-section>
+              <q-item-section style="min-width: 0; overflow: hidden">
+                <q-item-label style="font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
+                  {{ f.file_name }}
+                </q-item-label>
+              </q-item-section>
+              <q-item-section side>
+                <div class="row q-gutter-xs items-center">
+                  <q-btn
+                    outline
+                    dense
+                    size="xs"
+                    icon="open_in_new"
+                    color="primary"
+                    no-caps
+                    label="Открыть"
+                    style="font-size: 10px; padding: 2px 8px; border-radius: 4px"
+                    @click.stop="openFile(f)"
+                  />
+                  <q-btn
+                    v-if="canDeleteFiles"
+                    outline
+                    dense
+                    size="xs"
+                    icon="delete_outline"
+                    color="negative"
+                    no-caps
+                    style="font-size: 10px; padding: 2px 6px; border-radius: 4px"
+                    @click.stop="deleteContractFile(f)"
+                  />
+                </div>
+              </q-item-section>
+            </q-item>
+          </q-list>
+          <q-card-section class="q-pt-xs">
+            <q-btn
+              outline
+              color="grey-7"
+              icon="handshake"
+              label="Загрузить доп. соглашение"
+              no-caps
+              class="full-width"
+              dense
+              @click="uploadFor('supervision')"
+            />
+          </q-card-section>
+        </q-card>
+      </div><!-- /contract-files-grid -->
 
       <!-- Файлы: Акты без подписи -->
       <q-card class="is-card q-mb-md">
@@ -1149,3 +1152,21 @@ onMounted(async () => {
   } finally { loading.value = false }
 })
 </script>
+
+<style scoped>
+/* Ландшафт: Договор / ТЗ / Доп.соглашения — 3 колонки с равной высотой блоков */
+@media (orientation: landscape) {
+  .contract-files-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    align-items: start;
+  }
+  .contract-files-grid > .is-card {
+    margin-bottom: 0 !important;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+}
+</style>

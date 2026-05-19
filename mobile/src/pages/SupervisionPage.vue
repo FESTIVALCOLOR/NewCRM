@@ -5,10 +5,10 @@
       <div class="row items-center no-wrap">
         <div class="toggle-pills">
           <button :class="{ active: !showArchive }" @click="showArchive = false; loadCards()">
-            Активные
+            Активные <span v-if="!showArchive && cards.length > 0" class="pill-count">{{ cards.length }}</span>
           </button>
           <button :class="{ active: showArchive }" @click="showArchive = true; loadCards()">
-            Архив
+            Архив <span v-if="showArchive && cards.length > 0" class="pill-count">{{ cards.length }}</span>
           </button>
         </div>
         <q-space />
@@ -389,6 +389,8 @@ onMounted(() => loadCards())
 .toggle-pills button { border: none; background: #F0F0F0; color: #666; font-size: 11px; padding: 5px 12px; cursor: pointer; transition: all 0.2s; font-family: inherit }
 .toggle-pills button.active { background: white; color: #333; font-weight: bold; box-shadow: 0 1px 3px rgba(0,0,0,0.08) }
 .toggle-pills button + button { border-left: 1px solid #d9d9d9 }
+.pill-count { display: inline-block; background: rgba(0,0,0,0.12); border-radius: 8px; padding: 0 5px; margin-left: 3px; font-size: 10px; min-width: 16px; text-align: center; }
+.toggle-pills button.active .pill-count { background: #ffd93c; color: #333; }
 .column-nav { display: flex; overflow-x: auto; padding: 6px 8px; gap: 4px; border-bottom: 1px solid #E0E0E0; -webkit-overflow-scrolling: touch; scrollbar-width: none }
 .column-nav::-webkit-scrollbar { display: none }
 .column-nav button { border: 1px solid #d9d9d9; border-radius: 16px; background: #F5F5F5; color: #888; font-size: 10px; padding: 3px 10px; white-space: nowrap; cursor: pointer; font-family: inherit; transition: all 0.2s; flex-shrink: 0 }

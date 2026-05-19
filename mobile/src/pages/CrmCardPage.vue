@@ -62,19 +62,14 @@
         </q-card-section>
       </q-card>
 
-      <!-- Прогресс подэтапов -->
-      <div v-if="substepProgress.length > 1" class="q-px-md q-pb-sm">
-        <div class="row items-center q-gutter-xs" style="flex-wrap: wrap">
-          <div v-for="(step, idx) in substepProgress" :key="idx" class="row items-center">
-            <q-badge
-              :color="step.active ? 'positive' : (step.done ? 'grey-5' : 'grey-3')"
-              :text-color="step.active ? 'white' : (step.done ? 'white' : 'grey-6')"
-              :label="step.label"
-              style="font-size: 9px; padding: 2px 6px"
-            />
-            <q-icon v-if="idx < substepProgress.length - 1" name="chevron_right" size="12px" color="grey-4" />
+      <!-- Прогресс подэтапов — растянут на всю ширину -->
+      <div v-if="substepProgress.length > 1" class="stage-progress-bar">
+        <template v-for="(step, idx) in substepProgress" :key="idx">
+          <div class="stage-step" :class="{ 'step-active': step.active, 'step-done': step.done && !step.active }">
+            {{ step.label }}
           </div>
-        </div>
+          <span v-if="idx < substepProgress.length - 1" class="step-sep">›</span>
+        </template>
       </div>
 
       <!-- Вкладки — sticky чтобы оставались видны при скролле и не перекрывались FAB -->
@@ -86,7 +81,7 @@
         no-caps
         class="q-mb-md tabs-sticky"
         style="color: #666; position: sticky; top: 0; z-index: 5; background: white; margin-left: -16px; margin-right: -16px; padding: 0 16px"
-        align="left"
+        align="center"
         :breakpoint="0"
       >
         <q-tab name="executors" label="Исполнители" />
@@ -513,224 +508,226 @@
 
         <!-- ====== ВКЛАДКА 3: Данные по проекту (блоки) ====== -->
         <q-tab-panel name="data" class="q-pa-none">
-          <!-- ТЗ -->
-          <q-card class="is-card q-mb-md">
-            <q-card-section class="q-pb-xs">
-              <div class="row items-center justify-between" style="flex-wrap: wrap; gap: 4px">
-                <div class="text-subtitle2 text-weight-bold" style="color: #333">
-                  Техническое задание
-                </div>
-                <div class="row q-gutter-xs">
-                  <q-btn
-                    v-if="can('crm_cards.files_upload') && !isArchived"
-                    outline
-                    dense
-                    size="xs"
-                    icon="upload"
-                    label="Загрузить"
-                    no-caps
-                    color="grey-7"
-                    style="border-radius: 4px; padding: 2px 8px; min-width: 88px"
-                    @click="uploadCrmFile('tech_task')"
-                  />
-                  <q-btn
-                    v-if="contractData?.tech_task_link"
-                    outline
-                    dense
-                    size="xs"
-                    icon="open_in_new"
-                    no-caps
-                    color="grey-7"
-                    style="border-radius: 4px; padding: 2px 6px"
-                    @click="openLink(contractData.tech_task_link)"
-                  >
-                    <q-tooltip>Открыть в ЯД</q-tooltip>
-                  </q-btn>
-                </div>
-              </div>
-            </q-card-section>
-            <q-list v-if="filesByStage('tech_task').length > 0" dense class="q-pb-xs">
-              <q-item v-for="f in filesByStage('tech_task')" :key="f.id">
-                <q-item-section avatar>
-                  <q-icon :name="fileIcon(f)" :color="fileColor(f)" />
-                </q-item-section>
-                <q-item-section style="min-width: 0">
-                  <q-item-label style="font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
-                    <a href="#" style="color: #1677FF; text-decoration: none" @click.prevent="openFile(f)">{{ f.file_name }}</a>
-                  </q-item-label>
-                </q-item-section>
-                <q-item-section v-if="!isArchived" side style="flex-shrink: 0">
-                  <div class="row q-gutter-xs no-wrap">
+          <div class="data-blocks-grid">
+            <!-- ТЗ -->
+            <q-card class="is-card q-mb-md">
+              <q-card-section class="q-pb-xs">
+                <div class="row items-center justify-between" style="flex-wrap: wrap; gap: 4px">
+                  <div class="text-subtitle2 text-weight-bold" style="color: #333">
+                    Техническое задание
+                  </div>
+                  <div class="row q-gutter-xs">
                     <q-btn
+                      v-if="can('crm_cards.files_upload') && !isArchived"
+                      outline
+                      dense
+                      size="xs"
+                      icon="upload"
+                      label="Загрузить"
+                      no-caps
+                      color="grey-7"
+                      style="border-radius: 4px; padding: 2px 8px; min-width: 88px"
+                      @click="uploadCrmFile('tech_task')"
+                    />
+                    <q-btn
+                      v-if="contractData?.tech_task_link"
                       outline
                       dense
                       size="xs"
                       icon="open_in_new"
-                      label="Открыть"
+                      no-caps
+                      color="grey-7"
+                      style="border-radius: 4px; padding: 2px 6px"
+                      @click="openLink(contractData.tech_task_link)"
+                    >
+                      <q-tooltip>Открыть в ЯД</q-tooltip>
+                    </q-btn>
+                  </div>
+                </div>
+              </q-card-section>
+              <q-list v-if="filesByStage('tech_task').length > 0" dense class="q-pb-xs">
+                <q-item v-for="f in filesByStage('tech_task')" :key="f.id">
+                  <q-item-section avatar>
+                    <q-icon :name="fileIcon(f)" :color="fileColor(f)" />
+                  </q-item-section>
+                  <q-item-section style="min-width: 0">
+                    <q-item-label style="font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
+                      <a href="#" style="color: #1677FF; text-decoration: none" @click.prevent="openFile(f)">{{ f.file_name }}</a>
+                    </q-item-label>
+                  </q-item-section>
+                  <q-item-section v-if="!isArchived" side style="flex-shrink: 0">
+                    <div class="row q-gutter-xs no-wrap">
+                      <q-btn
+                        outline
+                        dense
+                        size="xs"
+                        icon="open_in_new"
+                        label="Открыть"
+                        no-caps
+                        color="grey-7"
+                        style="border-radius: 4px; padding: 2px 8px; min-width: 88px"
+                        @click.stop="openFile(f)"
+                      /><q-btn
+                        v-if="can('crm_cards.files_delete')"
+                        outline
+                        dense
+                        size="xs"
+                        icon="delete_outline"
+                        no-caps
+                        color="negative"
+                        style="padding: 2px 6px; border-radius: 4px"
+                        @click.stop="deleteFile(f)"
+                      />
+                    </div>
+                  </q-item-section>
+                </q-item>
+              </q-list>
+              <q-card-section v-else class="q-py-sm text-center" style="color: #bbb; font-size: 11px">
+                Нет файлов
+              </q-card-section>
+            </q-card>
+
+            <!-- Замер (как десктоп: ссылка на папку + дата + загрузка множества файлов) -->
+            <q-card class="is-card q-mb-md">
+              <q-card-section class="q-pb-xs">
+                <div class="row items-center justify-between" style="flex-wrap: wrap; gap: 4px">
+                  <div class="text-subtitle2 text-weight-bold" style="color: #333">
+                    Замер
+                  </div>
+                  <div class="row q-gutter-xs">
+                    <q-btn
+                      v-if="can('crm_cards.files_upload') && !isArchived"
+                      outline
+                      dense
+                      size="xs"
+                      icon="upload"
+                      label="Загрузить"
                       no-caps
                       color="grey-7"
                       style="border-radius: 4px; padding: 2px 8px; min-width: 88px"
-                      @click.stop="openFile(f)"
-                    /><q-btn
-                      v-if="can('crm_cards.files_delete')"
+                      @click="showMeasurementDlg = true"
+                    />
+                    <q-btn
+                      v-if="contractData?.measurement_image_link && can('crm_cards.files_delete') && !isArchived"
                       outline
                       dense
                       size="xs"
                       icon="delete_outline"
                       no-caps
                       color="negative"
-                      style="padding: 2px 6px; border-radius: 4px"
-                      @click.stop="deleteFile(f)"
-                    />
+                      style="border-radius: 4px; padding: 2px 6px"
+                      @click="deleteFolderSection('measurement')"
+                    >
+                      <q-tooltip>Удалить замер</q-tooltip>
+                    </q-btn>
                   </div>
-                </q-item-section>
-              </q-item>
-            </q-list>
-            <q-card-section v-else class="q-py-sm text-center" style="color: #bbb; font-size: 11px">
-              Нет файлов
-            </q-card-section>
-          </q-card>
+                </div>
+              </q-card-section>
+              <q-card-section class="q-pt-xs">
+                <div v-if="contractData?.measurement_image_link" class="q-mb-xs">
+                  <a :href="contractData.measurement_image_link" target="_blank" style="color: #1677FF; font-size: 12px">Открыть папку с замером</a>
+                </div>
+                <div v-else style="color: #999; font-size: 12px" class="q-mb-xs">
+                  Не загружен
+                </div>
+                <div class="text-caption" style="color: #888">
+                  Дата: {{ contractData?.measurement_date ? fmtDate(contractData.measurement_date) : 'Не установлена' }}
+                </div>
+              </q-card-section>
+            </q-card>
 
-          <!-- Замер (как десктоп: ссылка на папку + дата + загрузка множества файлов) -->
-          <q-card class="is-card q-mb-md">
-            <q-card-section class="q-pb-xs">
-              <div class="row items-center justify-between" style="flex-wrap: wrap; gap: 4px">
-                <div class="text-subtitle2 text-weight-bold" style="color: #333">
-                  Замер
+            <!-- Фотофиксация (как десктоп: ссылка на папку) -->
+            <q-card class="is-card q-mb-md">
+              <q-card-section class="q-pb-xs">
+                <div class="row items-center justify-between" style="flex-wrap: wrap; gap: 4px">
+                  <div class="text-subtitle2 text-weight-bold" style="color: #333">
+                    Фотофиксация
+                  </div>
+                  <div class="row q-gutter-xs">
+                    <q-btn
+                      v-if="can('crm_cards.files_upload') && !isArchived"
+                      outline
+                      dense
+                      size="xs"
+                      icon="upload"
+                      label="Загрузить"
+                      no-caps
+                      color="grey-7"
+                      style="border-radius: 4px; padding: 2px 8px; min-width: 88px"
+                      @click="uploadCrmFile('photo_documentation')"
+                    />
+                    <q-btn
+                      v-if="(contractData?.photo_folder_public_link || contractData?.photo_documentation_yandex_path) && can('crm_cards.files_delete') && !isArchived"
+                      outline
+                      dense
+                      size="xs"
+                      icon="delete_outline"
+                      no-caps
+                      color="negative"
+                      style="border-radius: 4px; padding: 2px 6px"
+                      @click="deleteFolderSection('photo_documentation')"
+                    >
+                      <q-tooltip>Удалить папку</q-tooltip>
+                    </q-btn>
+                  </div>
                 </div>
-                <div class="row q-gutter-xs">
-                  <q-btn
-                    v-if="can('crm_cards.files_upload') && !isArchived"
-                    outline
-                    dense
-                    size="xs"
-                    icon="upload"
-                    label="Загрузить"
-                    no-caps
-                    color="grey-7"
-                    style="border-radius: 4px; padding: 2px 8px; min-width: 88px"
-                    @click="showMeasurementDlg = true"
-                  />
-                  <q-btn
-                    v-if="contractData?.measurement_image_link && can('crm_cards.files_delete') && !isArchived"
-                    outline
-                    dense
-                    size="xs"
-                    icon="delete_outline"
-                    no-caps
-                    color="negative"
-                    style="border-radius: 4px; padding: 2px 6px"
-                    @click="deleteFolderSection('measurement')"
-                  >
-                    <q-tooltip>Удалить замер</q-tooltip>
-                  </q-btn>
+              </q-card-section>
+              <q-card-section class="q-pt-xs">
+                <div v-if="contractData?.photo_folder_public_link || contractData?.photo_documentation_yandex_path" class="q-mb-xs">
+                  <a :href="contractData.photo_folder_public_link || contractData.photo_documentation_yandex_path" target="_blank" style="color: #1677FF; font-size: 12px">Открыть папку с фотофиксацией</a>
                 </div>
-              </div>
-            </q-card-section>
-            <q-card-section class="q-pt-xs">
-              <div v-if="contractData?.measurement_image_link" class="q-mb-xs">
-                <a :href="contractData.measurement_image_link" target="_blank" style="color: #1677FF; font-size: 12px">Открыть папку с замером</a>
-              </div>
-              <div v-else style="color: #999; font-size: 12px" class="q-mb-xs">
-                Не загружен
-              </div>
-              <div class="text-caption" style="color: #888">
-                Дата: {{ contractData?.measurement_date ? fmtDate(contractData.measurement_date) : 'Не установлена' }}
-              </div>
-            </q-card-section>
-          </q-card>
+                <div v-else style="color: #999; font-size: 12px">
+                  Не загружена
+                </div>
+              </q-card-section>
+            </q-card>
 
-          <!-- Фотофиксация (как десктоп: ссылка на папку) -->
-          <q-card class="is-card q-mb-md">
-            <q-card-section class="q-pb-xs">
-              <div class="row items-center justify-between" style="flex-wrap: wrap; gap: 4px">
-                <div class="text-subtitle2 text-weight-bold" style="color: #333">
-                  Фотофиксация
+            <!-- Референсы / Шаблоны (как десктоп: ссылка на папку) -->
+            <q-card class="is-card q-mb-md">
+              <q-card-section class="q-pb-xs">
+                <div class="row items-center justify-between" style="flex-wrap: wrap; gap: 4px">
+                  <div class="text-subtitle2 text-weight-bold" style="color: #333">
+                    {{ card.project_type === 'Шаблонный' ? 'Шаблоны проекта' : 'Референсы' }}
+                  </div>
+                  <div class="row q-gutter-xs">
+                    <q-btn
+                      v-if="can('crm_cards.files_upload') && !isArchived"
+                      outline
+                      dense
+                      size="xs"
+                      icon="upload"
+                      label="Загрузить"
+                      no-caps
+                      color="grey-7"
+                      style="border-radius: 4px; padding: 2px 8px; min-width: 88px"
+                      @click="uploadCrmFile('references')"
+                    />
+                    <q-btn
+                      v-if="contractData?.references_yandex_path && can('crm_cards.files_delete') && !isArchived"
+                      outline
+                      dense
+                      size="xs"
+                      icon="delete_outline"
+                      no-caps
+                      color="negative"
+                      style="border-radius: 4px; padding: 2px 6px"
+                      @click="deleteFolderSection('references')"
+                    >
+                      <q-tooltip>Удалить папку</q-tooltip>
+                    </q-btn>
+                  </div>
                 </div>
-                <div class="row q-gutter-xs">
-                  <q-btn
-                    v-if="can('crm_cards.files_upload') && !isArchived"
-                    outline
-                    dense
-                    size="xs"
-                    icon="upload"
-                    label="Загрузить"
-                    no-caps
-                    color="grey-7"
-                    style="border-radius: 4px; padding: 2px 8px; min-width: 88px"
-                    @click="uploadCrmFile('photo_documentation')"
-                  />
-                  <q-btn
-                    v-if="(contractData?.photo_folder_public_link || contractData?.photo_documentation_yandex_path) && can('crm_cards.files_delete') && !isArchived"
-                    outline
-                    dense
-                    size="xs"
-                    icon="delete_outline"
-                    no-caps
-                    color="negative"
-                    style="border-radius: 4px; padding: 2px 6px"
-                    @click="deleteFolderSection('photo_documentation')"
-                  >
-                    <q-tooltip>Удалить папку</q-tooltip>
-                  </q-btn>
+              </q-card-section>
+              <q-card-section class="q-pt-xs">
+                <div v-if="contractData?.references_yandex_path" class="q-mb-xs">
+                  <a :href="contractData.references_yandex_path" target="_blank" style="color: #1677FF; font-size: 12px">{{ card.project_type === 'Шаблонный' ? 'Открыть папку с шаблонами' : 'Открыть папку с референсами' }}</a>
                 </div>
-              </div>
-            </q-card-section>
-            <q-card-section class="q-pt-xs">
-              <div v-if="contractData?.photo_folder_public_link || contractData?.photo_documentation_yandex_path" class="q-mb-xs">
-                <a :href="contractData.photo_folder_public_link || contractData.photo_documentation_yandex_path" target="_blank" style="color: #1677FF; font-size: 12px">Открыть папку с фотофиксацией</a>
-              </div>
-              <div v-else style="color: #999; font-size: 12px">
-                Не загружена
-              </div>
-            </q-card-section>
-          </q-card>
-
-          <!-- Референсы / Шаблоны (как десктоп: ссылка на папку) -->
-          <q-card class="is-card q-mb-md">
-            <q-card-section class="q-pb-xs">
-              <div class="row items-center justify-between" style="flex-wrap: wrap; gap: 4px">
-                <div class="text-subtitle2 text-weight-bold" style="color: #333">
-                  {{ card.project_type === 'Шаблонный' ? 'Шаблоны проекта' : 'Референсы' }}
+                <div v-else style="color: #999; font-size: 12px">
+                  Не загружена
                 </div>
-                <div class="row q-gutter-xs">
-                  <q-btn
-                    v-if="can('crm_cards.files_upload') && !isArchived"
-                    outline
-                    dense
-                    size="xs"
-                    icon="upload"
-                    label="Загрузить"
-                    no-caps
-                    color="grey-7"
-                    style="border-radius: 4px; padding: 2px 8px; min-width: 88px"
-                    @click="uploadCrmFile('references')"
-                  />
-                  <q-btn
-                    v-if="contractData?.references_yandex_path && can('crm_cards.files_delete') && !isArchived"
-                    outline
-                    dense
-                    size="xs"
-                    icon="delete_outline"
-                    no-caps
-                    color="negative"
-                    style="border-radius: 4px; padding: 2px 6px"
-                    @click="deleteFolderSection('references')"
-                  >
-                    <q-tooltip>Удалить папку</q-tooltip>
-                  </q-btn>
-                </div>
-              </div>
-            </q-card-section>
-            <q-card-section class="q-pt-xs">
-              <div v-if="contractData?.references_yandex_path" class="q-mb-xs">
-                <a :href="contractData.references_yandex_path" target="_blank" style="color: #1677FF; font-size: 12px">{{ card.project_type === 'Шаблонный' ? 'Открыть папку с шаблонами' : 'Открыть папку с референсами' }}</a>
-              </div>
-              <div v-else style="color: #999; font-size: 12px">
-                Не загружена
-              </div>
-            </q-card-section>
-          </q-card>
+              </q-card-section>
+            </q-card>
+          </div><!-- /data-blocks-grid -->
 
           <!-- Стадии проекта с вкладками вариаций (как в десктопе) -->
           <q-card v-for="stage in projectStages" :key="stage.code" class="is-card q-mb-md" :style="isCurrentStage(stage.code) ? 'border: 2px solid #27AE60' : ''">
@@ -3413,9 +3410,59 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-/* Добавляем отступ справа в прокручиваемом контейнере вкладок,
-   чтобы последний таб не скрывался под FAB-кнопкой */
+/* Отступ справа в прокручиваемом контейнере вкладок — чтобы не скрывался под FAB */
 .tabs-sticky :deep(.q-tabs__content) {
   padding-right: 68px;
+}
+
+/* Прогресс-бар подэтапов — полная ширина */
+.stage-progress-bar {
+  display: flex;
+  align-items: center;
+  padding: 0 16px 6px;
+  width: 100%;
+  box-sizing: border-box;
+}
+.stage-step {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  font-size: 9px;
+  padding: 3px 2px;
+  border-radius: 4px;
+  background: #EEEEEE;
+  color: #999;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.step-done {
+  background: #9E9E9E;
+  color: white;
+}
+.step-active {
+  background: #4CAF50;
+  color: white;
+  font-weight: bold;
+}
+.step-sep {
+  flex: 0 0 10px;
+  text-align: center;
+  color: #ccc;
+  font-size: 12px;
+}
+
+/* Ландшафт: вкладка Данные — 2 колонки с равной высотой блоков в строке */
+@media (orientation: landscape) {
+  .data-blocks-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    align-items: start;
+  }
+  .data-blocks-grid > .is-card {
+    margin-bottom: 0 !important;
+    height: 100%;
+  }
 }
 </style>

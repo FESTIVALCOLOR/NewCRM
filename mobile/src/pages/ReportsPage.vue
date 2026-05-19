@@ -601,7 +601,7 @@ async function loadData() {
     reportsApi.getFunnel(params),
     reportsApi.getCrmAnalytics({ ...params, project_type: pt }),
     reportsApi.getClientsDynamics({ year: filters.value.year }),
-    statisticsApi.getProjects({ ...params, project_type: 'Авторский надзор' }),
+    statisticsApi.getSupervision(params),
     dashboardApi.getContracts(params),
     statisticsApi.getContractsByPeriod({ year: filters.value.year }),
     reportsApi.getCrmAnalyticsDetailed({ ...params, project_type: pt }),
