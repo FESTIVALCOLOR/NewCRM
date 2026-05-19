@@ -1310,9 +1310,10 @@
             flat
             round
             dense
+            @click="selectedCardFiles.clear()"
           />
         </q-card-section>
-        <q-card-section>
+        <q-card-section style="max-height: 60vh; overflow-y: auto">
           <div v-if="cardFilesLoading" class="flex flex-center q-pa-md">
             <q-spinner size="28px" color="grey" />
           </div>
@@ -1327,34 +1328,59 @@
               >
                 {{ group.stage }}
               </div>
-              <q-list dense separator>
-                <q-item
-                  v-for="f in group.files"
-                  :key="f.id || f.yandex_path"
-                  clickable
-                  @click="insertCardFileLink(f)"
-                >
-                  <q-item-section avatar>
-                    <q-icon :name="f.file_type === 'folder' ? 'folder' : f.file_type === 'image' ? 'image' : 'insert_drive_file'" color="blue-5" />
-                  </q-item-section>
-                  <q-item-section>
-                    <q-item-label>{{ f.file_name || f.filename || 'файл' }}</q-item-label>
-                  </q-item-section>
-                  <q-item-section side>
-                    <q-icon name="add_link" color="blue-5" size="18px" />
-                  </q-item-section>
-                </q-item>
-              </q-list>
+              <div
+                v-for="f in group.files"
+                :key="f.id || f.yandex_path"
+                class="card-file-row"
+                :class="{ 'card-file-row--selected': selectedCardFiles.has(f.id || f.yandex_path) }"
+                @click="toggleCardFile(f)"
+              >
+                <!-- Превью изображения или иконка -->
+                <div class="card-file-thumb">
+                  <img
+                    v-if="cardFileThumbUrl(f)"
+                    :src="cardFileThumbUrl(f)"
+                    class="card-file-img"
+                    @error="e => e.target.style.display='none'"
+                  >
+                  <q-icon
+                    v-else
+                    :name="f.file_type === 'folder' ? 'folder' : 'insert_drive_file'"
+                    size="36px"
+                    color="blue-4"
+                  />
+                </div>
+                <!-- Название файла -->
+                <div class="card-file-name">
+                  {{ f.file_name || f.filename || 'файл' }}
+                </div>
+                <!-- Чекбокс -->
+                <q-checkbox
+                  :model-value="selectedCardFiles.has(f.id || f.yandex_path)"
+                  color="primary"
+                  dense
+                  @update:model-value="toggleCardFile(f)"
+                  @click.stop
+                />
+              </div>
             </template>
           </div>
         </q-card-section>
-        <q-card-actions align="right">
+        <q-card-actions align="right" class="q-pt-xs">
           <q-btn
-            v-close-popup
             flat
             no-caps
             label="Закрыть"
             color="grey-7"
+            @click="showCardFilesDialog = false; selectedCardFiles.clear()"
+          />
+          <q-btn
+            :disable="selectedCardFiles.size === 0"
+            no-caps
+            unelevated
+            :label="selectedCardFiles.size > 0 ? `Отправить (${selectedCardFiles.size})` : 'Выберите файлы'"
+            color="primary"
+            @click="sendSelectedCardFiles"
           />
         </q-card-actions>
       </q-card>
@@ -1451,6 +1477,34 @@ function copySupervisionLink() {
 const showCardFilesDialog = ref(false)
 const cardFiles = ref([])
 const cardFilesLoading = ref(false)
+const selectedCardFiles = ref(new Set())
+
+function cardFileThumbUrl(f) {
+  const name = f.file_name || f.filename || ''
+  const ext = name.split('.').pop()?.toLowerCase() || ''
+  if (!IMAGE_EXTS.includes(ext) || !f.yandex_path) return null
+  const path = f.yandex_path.replace(/^disk:/, '')
+  const token = localStorage.getItem('access_token') || ''
+  return `/api/v1/files/stream?yandex_path=${encodeURIComponent(path)}&token=${encodeURIComponent(token)}`
+}
+
+function toggleCardFile(f) {
+  const key = f.id || f.yandex_path
+  const next = new Set(selectedCardFiles.value)
+  next.has(key) ? next.delete(key) : next.add(key)
+  selectedCardFiles.value = next
+}
+
+async function sendSelectedCardFiles() {
+  if (!selectedCardFiles.value.size) return
+  showCardFilesDialog.value = false
+  const keys = new Set(selectedCardFiles.value)
+  selectedCardFiles.value = new Set()
+  const toSend = cardFiles.value.filter(f => keys.has(f.id || f.yandex_path))
+  for (const f of toSend) {
+    await insertCardFileLink(f)
+  }
+}
 
 const stageRuNames = {
   // Надзорные (идут первыми)
@@ -1576,7 +1630,6 @@ async function loadCardFiles() {
 
 async function insertCardFileLink(f) {
   if (!chat.value) return
-  showCardFilesDialog.value = false
 
   const name = f.file_name || f.filename || 'файл'
   const ext = name.split('.').pop()?.toLowerCase() || ''
@@ -2853,4 +2906,22 @@ onUnmounted(() => {
 .react-quick-btn:hover { background: #F0F0F0; }
 .react-quick-btn--active { background: #E3F2FD; }
 .gallery-open-btn :deep(.q-btn__content) { gap: 3px; }
+/* Файловый диалог карточки — превью + чекбокс */
+.card-file-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 8px; cursor: pointer; border-radius: 6px;
+  transition: background 0.15s;
+}
+.card-file-row:hover { background: #F5F5F5; }
+.card-file-row--selected { background: #E3F2FD; }
+.card-file-thumb {
+  width: 52px; height: 52px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: #F0F0F0; border-radius: 6px; overflow: hidden;
+}
+.card-file-img { width: 52px; height: 52px; object-fit: cover; }
+.card-file-name {
+  flex: 1; min-width: 0; font-size: 13px; color: #333;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 </style>

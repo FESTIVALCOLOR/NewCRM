@@ -1514,6 +1514,12 @@
         @saved="onMeasurementSaved"
       />
 
+      <ContractFormDialog
+        v-model="showContractEdit"
+        :contract="contractData"
+        @saved="() => { contractsApi.getById(card.value.contract_id).then(({ data }) => { contractData.value = data }) }"
+      />
+
       <!-- FAB кнопки (скрыты в архиве и на вкладках чата) -->
       <q-page-sticky v-if="!isArchived && !isChatTab" position="bottom-right" :offset="[18, 72]">
         <q-fab icon="more_vert" direction="up" style="background: #ffd93c; color: #333" vertical-actions-align="right">
@@ -1569,7 +1575,15 @@
           <q-fab-action
             icon="edit"
             style="background: #ffd93c; color: #333"
-            label="Редактировать"
+            label="Редактировать договор"
+            external-label
+            label-position="left"
+            @click="openContractEdit"
+          />
+          <q-fab-action
+            icon="description"
+            style="background: #5DADE2; color: white"
+            label="Посмотреть договор"
             external-label
             label-position="left"
             @click="editCard"
@@ -1651,6 +1665,7 @@ import { calcDeadlineFromTimeline } from 'src/composables/useDeadline'
 import { crmApi, employeesApi, filesApi, contractsApi, paymentsApi, locksApi, messengerApi } from 'src/services/api'
 import MeasurementDialog from 'src/components/MeasurementDialog.vue'
 import InlineChatRoom from 'src/components/InlineChatRoom.vue'
+import ContractFormDialog from 'src/components/ContractFormDialog.vue'
 import { addToCalendar } from 'src/composables/useCalendar'
 
 const { can, isSuperuser } = usePermission()
@@ -1738,6 +1753,7 @@ const cardPayments = ref([])
 const showCreatePayment = ref(false)
 const actionHistory = ref([])
 const contractData = ref(null)
+const showContractEdit = ref(false)
 const projectFiles = ref([])
 const timelineEntries = ref([])
 const hasCustomNormDays = computed(() =>
@@ -2481,8 +2497,18 @@ function addDeadlineToCalendar() {
 // === ACTIONS ===
 function editCard() {
   if (card.value?.contract_id) {
-    $q.notify({ type: 'info', message: 'Переход к карточке договора', icon: 'open_in_new', timeout: 1500 })
-    setTimeout(() => router.push(`/contracts/${card.value.contract_id}`), 300)
+    router.push(`/contracts/${card.value.contract_id}`)
+  }
+}
+
+function openContractEdit() {
+  if (!contractData.value && card.value?.contract_id) {
+    contractsApi.getById(card.value.contract_id).then(({ data }) => {
+      contractData.value = data
+      showContractEdit.value = true
+    })
+  } else {
+    showContractEdit.value = true
   }
 }
 
