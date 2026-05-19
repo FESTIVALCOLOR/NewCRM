@@ -733,12 +733,15 @@ async def get_all_payments_optimized(
         raise HTTPException(status_code=500, detail="Внутренняя ошибка сервера")
 
 
-def _recalculate_payments_for_contract(db: Session, contract_id: int) -> int:
+def _recalculate_payments_for_contract(db: Session, contract_id: int) -> int:  # noqa: C901
     """Пересчитать оплаты договора по текущей площади и тарифам.
 
-    Вызывается автоматически при изменении площади в update_contract.
-    Защищает ручные оплаты (is_manual=True): пересчитывает только calculated_amount.
-    Возвращает количество обновлённых записей.
+    Группирует платежи по (employee_id, role, stage_name, crm_card_id, supervision_card_id, payment_type).
+    Для групп с оплаченным платежом:
+      - calculated_amount обновляется, final_amount не трогается
+      - создаётся/обновляется дельта-платёж (может быть отрицательным = переплата)
+      - если дельта ≈ 0 и дельта-платёж существует — он удаляется
+    Для групп без оплаченных: обычный пересчёт final_amount и calculated_amount.
     """
     contract = db.query(Contract).filter(Contract.id == contract_id).first()
     if not contract or not contract.area:
@@ -753,90 +756,119 @@ def _recalculate_payments_for_contract(db: Session, contract_id: int) -> int:
     city = contract.city
     updated = 0
 
-    for payment in payments:
-        try:
-            new_amount = 0
-
-            if payment.role == "Замерщик":
-                rate = db.query(Rate).filter(Rate.role == "Замерщик", Rate.city == city).first()
-                if rate and rate.surveyor_price:
-                    new_amount = float(rate.surveyor_price)
-
-            elif project_type == "Индивидуальный":
-                q = db.query(Rate).filter(Rate.project_type == "Индивидуальный", Rate.role == payment.role)
-                rate = None
-                if payment.stage_name:
-                    rate = q.filter(Rate.stage_name == payment.stage_name).first()
-                if not rate:
-                    rate = q.filter(Rate.stage_name.is_(None)).first()
-                if rate and rate.rate_per_m2:
-                    new_amount = area * float(rate.rate_per_m2)
-
-            elif project_type == "Шаблонный":
-                rate = (
-                    db.query(Rate)
-                    .filter(
-                        Rate.project_type == "Шаблонный",
-                        Rate.role == payment.role,
-                        Rate.area_from <= area,
-                        or_(Rate.area_to >= area, Rate.area_to.is_(None)),
-                    )
-                    .order_by(Rate.area_from.asc())
-                    .first()
+    def _calc_amount(payment: Payment) -> float:
+        amt = 0.0
+        if payment.role == "Замерщик":
+            rate = db.query(Rate).filter(Rate.role == "Замерщик", Rate.city == city).first()
+            if rate and rate.surveyor_price:
+                amt = float(rate.surveyor_price)
+        elif project_type == "Индивидуальный":
+            q = db.query(Rate).filter(Rate.project_type == "Индивидуальный", Rate.role == payment.role)
+            rate = q.filter(Rate.stage_name == payment.stage_name).first() if payment.stage_name else None
+            if not rate:
+                rate = q.filter(Rate.stage_name.is_(None)).first()
+            if rate and rate.rate_per_m2:
+                amt = area * float(rate.rate_per_m2)
+        elif project_type == "Шаблонный":
+            rate = (
+                db.query(Rate)
+                .filter(
+                    Rate.project_type == "Шаблонный",
+                    Rate.role == payment.role,
+                    Rate.area_from <= area,
+                    or_(Rate.area_to >= area, Rate.area_to.is_(None)),
                 )
-                if rate and rate.fixed_price:
-                    new_amount = float(rate.fixed_price)
+                .order_by(Rate.area_from.asc())
+                .first()
+            )
+            if rate and rate.fixed_price:
+                amt = float(rate.fixed_price)
+        elif project_type == "Авторский надзор" or payment.supervision_card_id:
+            q = db.query(Rate).filter(Rate.project_type == "Авторский надзор", Rate.role == payment.role)
+            rate = q.filter(Rate.stage_name == payment.stage_name).first() if payment.stage_name else None
+            if not rate:
+                rate = q.filter(Rate.stage_name.is_(None)).first()
+            if not rate:
+                rate = q.first()
+            if rate and rate.rate_per_m2:
+                amt = area * float(rate.rate_per_m2)
+        if payment.payment_type in ("Аванс", "Доплата") and amt > 0:
+            amt /= 2
+        return amt
 
-            elif project_type == "Авторский надзор" or payment.supervision_card_id:
-                q = db.query(Rate).filter(Rate.project_type == "Авторский надзор", Rate.role == payment.role)
-                rate = None
-                if payment.stage_name:
-                    rate = q.filter(Rate.stage_name == payment.stage_name).first()
-                if not rate:
-                    rate = q.filter(Rate.stage_name.is_(None)).first()
-                if not rate:
-                    rate = q.first()
-                if rate and rate.rate_per_m2:
-                    new_amount = area * float(rate.rate_per_m2)
+    # Группировка платежей
+    groups: dict = {}
+    for p in payments:
+        key = (p.employee_id, p.role, p.stage_name, p.crm_card_id, p.supervision_card_id, p.payment_type)
+        groups.setdefault(key, []).append(p)
 
-            # Аванс и Доплата — половина от полной суммы
-            if payment.payment_type in ("Аванс", "Доплата") and new_amount > 0:
-                new_amount = new_amount / 2
+    for group in groups.values():
+        try:
+            paid = [p for p in group if p.is_paid]
+            unpaid_auto = [p for p in group if not p.is_paid and not p.is_manual]
+            manual_unpaid = [p for p in group if not p.is_paid and p.is_manual]
 
-            if new_amount != payment.calculated_amount:
-                old_final = payment.final_amount or 0
-                payment.calculated_amount = new_amount
+            ref = paid[0] if paid else (unpaid_auto[0] if unpaid_auto else group[0])
+            new_amount = _calc_amount(ref)
 
-                if payment.is_paid:
-                    # Уже оплаченный платёж — final_amount не трогаем.
-                    # Если сумма выросла — создаём дополнительный платёж на разницу.
-                    delta = new_amount - old_final
-                    if delta > 0:
-                        extra = Payment(
-                            contract_id=payment.contract_id,
-                            crm_card_id=payment.crm_card_id,
-                            supervision_card_id=payment.supervision_card_id,
-                            employee_id=payment.employee_id,
-                            employee_name=payment.employee_name,
-                            role=payment.role,
-                            stage_name=payment.stage_name,
+            if paid:
+                base = paid[0]
+                for p in paid:
+                    if p.calculated_amount != new_amount:
+                        p.calculated_amount = new_amount
+                        updated += 1
+
+                base_final = float(base.final_amount or 0)
+                delta = round(new_amount - base_final, 2)
+
+                if unpaid_auto:
+                    # Существующий дельта-платёж — обновляем или удаляем
+                    delta_pmt = unpaid_auto[0]
+                    for extra in unpaid_auto[1:]:
+                        db.delete(extra)
+                    if abs(delta) < 0.01:
+                        db.delete(delta_pmt)
+                        logger.info(f"AREA_RECALC: дельта-платёж {delta_pmt.id} удалён (разница ≈ 0)")
+                    else:
+                        delta_pmt.calculated_amount = delta
+                        delta_pmt.final_amount = delta
+                        updated += 1
+                        logger.info(f"AREA_RECALC: дельта-платёж {delta_pmt.id} → {delta:.2f}")
+                elif abs(delta) >= 0.01:
+                    # Дельта-платежа нет — создаём (может быть отрицательным)
+                    db.add(
+                        Payment(
+                            contract_id=base.contract_id,
+                            crm_card_id=base.crm_card_id,
+                            supervision_card_id=base.supervision_card_id,
+                            employee_id=base.employee_id,
+                            employee_name=base.employee_name,
+                            role=base.role,
+                            stage_name=base.stage_name,
                             calculated_amount=delta,
                             final_amount=delta,
-                            payment_type=payment.payment_type,
-                            report_month=payment.report_month,
+                            payment_type=base.payment_type,
+                            report_month=base.report_month,
                             is_paid=False,
                             is_manual=False,
                         )
-                        db.add(extra)
-                        logger.info(f"AREA_RECALC: платёж {payment.id} уже оплачен, создан доп. платёж на разницу {delta:.2f} (сотрудник {payment.employee_id})")
-                elif not payment.is_manual:
-                    payment.final_amount = new_amount
-
-                updated += 1
-                logger.debug(f"AREA_RECALC Payment {payment.id}: {old_final} → {new_amount} (paid={payment.is_paid}, manual={payment.is_manual})")
+                    )
+                    updated += 1
+                    logger.info(f"AREA_RECALC: создан дельта-платёж {delta:.2f} для сотрудника {base.employee_id}")
+            else:
+                # Нет оплаченных — обычный пересчёт
+                for p in unpaid_auto:
+                    if p.calculated_amount != new_amount or p.final_amount != new_amount:
+                        p.calculated_amount = new_amount
+                        p.final_amount = new_amount
+                        updated += 1
+                for p in manual_unpaid:
+                    if p.calculated_amount != new_amount:
+                        p.calculated_amount = new_amount
+                        updated += 1
 
         except Exception as e:
-            logger.warning(f"Ошибка пересчёта платежа {payment.id}: {e}")
+            logger.warning(f"Ошибка пересчёта группы платежей: {e}")
 
     if updated:
         db.commit()
