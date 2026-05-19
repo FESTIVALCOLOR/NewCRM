@@ -77,15 +77,15 @@
         </div>
       </div>
 
-      <!-- Вкладки -->
+      <!-- Вкладки — sticky чтобы оставались видны при скролле и не перекрывались FAB -->
       <q-tabs
         v-model="activeTab"
         dense
         active-color="dark"
         indicator-color="accent"
         no-caps
-        class="q-mb-md"
-        style="color: #666"
+        class="q-mb-md tabs-sticky"
+        style="color: #666; position: sticky; top: 0; z-index: 5; background: white; margin-left: -16px; margin-right: -16px; padding: 0 16px"
         align="left"
         :breakpoint="0"
       >
@@ -3411,3 +3411,11 @@ onBeforeUnmount(() => {
   _setChatScrollLock(false) // Восстанавливаем скролл при уходе со страницы
 })
 </script>
+
+<style scoped>
+/* Добавляем отступ справа в прокручиваемом контейнере вкладок,
+   чтобы последний таб не скрывался под FAB-кнопкой */
+.tabs-sticky :deep(.q-tabs__content) {
+  padding-right: 68px;
+}
+</style>

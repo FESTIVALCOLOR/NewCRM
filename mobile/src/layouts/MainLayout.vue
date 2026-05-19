@@ -1,5 +1,9 @@
 <template>
-  <q-layout view="hHh lpR fFf">
+  <q-layout
+    view="hHh lpR fFf"
+    :style="drawerOpen ? '--drawer-offset: 260px' : '--drawer-offset: 0px'"
+    style="transition: --drawer-offset 0.3s"
+  >
     <!-- Header: лого + текст + кнопки (инструкция, настройки, выход) -->
     <q-header class="bg-white text-dark" style="border-bottom: 1px solid #E0E0E0">
       <q-toolbar style="min-height: 44px; padding: 0 4px">

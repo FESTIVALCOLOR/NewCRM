@@ -966,8 +966,9 @@ onMounted(async () => {
 /* Ландшафтная доска — position:fixed обходит overflow:hidden q-layout */
 .landscape-board {
   position: fixed;
-  left: 0;
+  left: var(--drawer-offset, 0px);
   right: 0;
+  transition: left 0.3s ease;
   top: calc(var(--q-header-height, 48px) + 41px);
   bottom: var(--q-footer-height, 56px);
   display: flex;

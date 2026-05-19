@@ -400,7 +400,7 @@ onMounted(() => loadCards())
 .column-title { font-size: 13px; font-weight: bold; color: #333; flex: 1; white-space: normal; line-height: 1.35; }
 .column-body { padding: 8px; flex: 1; overflow-y: auto }
 .column-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #bbb; font-size: 12px; padding: 40px 0 }
-.landscape-board { position: fixed; left: 0; right: 0; top: calc(var(--q-header-height, 48px) + 41px); bottom: var(--q-footer-height, 56px); display: flex; flex-direction: row; overflow-x: auto; overflow-y: hidden; gap: 8px; padding: 8px; background: #fff; z-index: 1; -webkit-overflow-scrolling: touch; }
+.landscape-board { position: fixed; left: var(--drawer-offset, 0px); right: 0; top: calc(var(--q-header-height, 48px) + 41px); bottom: var(--q-footer-height, 56px); display: flex; flex-direction: row; overflow-x: auto; overflow-y: hidden; gap: 8px; padding: 8px; background: #fff; z-index: 1; -webkit-overflow-scrolling: touch; transition: left 0.3s ease; }
 .landscape-column { flex: 0 0 280px; min-width: 280px; display: flex; flex-direction: column; height: 100%; }
 .landscape-column .column-frame { flex: 1; margin: 0; display: flex; flex-direction: column; overflow: hidden; height: 100%; }
 .landscape-column .column-body { overflow-y: auto; flex: 1; }
