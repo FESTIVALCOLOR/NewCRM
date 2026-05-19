@@ -1,18 +1,16 @@
-import logging
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from sqlalchemy import or_, extract
+import logging
 from typing import List, Optional
 
-from database import (
-    get_db, Employee, Contract, Payment, Rate, Salary,
-    CRMCard, SupervisionCard, ActivityLog, ActionHistory
-)
 from auth import get_current_user
+from fastapi import APIRouter, Depends, HTTPException
 from permissions import require_permission
-from schemas import PaymentCreate, PaymentUpdate, PaymentResponse, PaymentManualUpdateRequest
+from schemas import PaymentCreate, PaymentManualUpdateRequest, PaymentResponse, PaymentUpdate
 from services.notification_dispatcher import dispatch_notification
+from sqlalchemy import extract, or_
+from sqlalchemy.orm import Session
+
+from database import ActionHistory, ActivityLog, Contract, CRMCard, Employee, Payment, Rate, Salary, SupervisionCard, get_db
 
 logger = logging.getLogger(__name__)
 
@@ -30,11 +28,11 @@ async def get_all_payments(
     payment_type: Optional[str] = None,
     month: Optional[int] = None,
     include_null_month: Optional[bool] = False,  # ДОБАВЛЕНО 06.02.2026: включить платежи без месяца
-    contract_id: Optional[int] = None,   # ДОБАВЛЕНО 21.02.2026: фильтр по договору
-    employee_id: Optional[int] = None,   # ДОБАВЛЕНО 21.02.2026: фильтр по сотруднику
-    is_paid: Optional[bool] = None,      # ДОБАВЛЕНО 21.02.2026: фильтр по статусу оплаты
+    contract_id: Optional[int] = None,  # ДОБАВЛЕНО 21.02.2026: фильтр по договору
+    employee_id: Optional[int] = None,  # ДОБАВЛЕНО 21.02.2026: фильтр по сотруднику
+    is_paid: Optional[bool] = None,  # ДОБАВЛЕНО 21.02.2026: фильтр по статусу оплаты
     current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Получить все платежи с фильтрами (включая оклады из таблицы salaries)"""
     try:
@@ -46,18 +44,12 @@ async def get_all_payments(
         if year:
             if include_null_month:
                 # ИСПРАВЛЕНИЕ 06.02.2026: Включаем платежи с NULL/пустым report_month (В работе)
-                payments_query = payments_query.filter(
-                    or_(
-                        Payment.report_month.like(f'{year}%'),
-                        Payment.report_month.is_(None),
-                        Payment.report_month == ''
-                    )
-                )
+                payments_query = payments_query.filter(or_(Payment.report_month.like(f"{year}%"), Payment.report_month.is_(None), Payment.report_month == ""))
             else:
-                payments_query = payments_query.filter(Payment.report_month.like(f'{year}%'))
+                payments_query = payments_query.filter(Payment.report_month.like(f"{year}%"))
         if month:
-            payments_query = payments_query.filter(Payment.report_month.like(f'{year}-{month:02d}%' if year else f'%-{month:02d}%'))
-        if payment_type and payment_type != 'Оклад':
+            payments_query = payments_query.filter(Payment.report_month.like(f"{year}-{month:02d}%" if year else f"%-{month:02d}%"))
+        if payment_type and payment_type != "Оклад":
             payments_query = payments_query.filter(Payment.payment_type == payment_type)
         if contract_id is not None:
             payments_query = payments_query.filter(Payment.contract_id == contract_id)
@@ -105,65 +97,62 @@ async def get_all_payments(
 
             # Определяем source
             if p.crm_card_id:
-                source = 'CRM'
+                source = "CRM"
             elif p.supervision_card_id:
-                source = 'CRM Надзор'
+                source = "CRM Надзор"
             else:
-                source = 'CRM'  # Если нет ни crm_card_id ни supervision_card_id, но есть contract_id
+                source = "CRM"  # Если нет ни crm_card_id ни supervision_card_id, но есть contract_id
 
             # ИСПРАВЛЕНИЕ 06.02.2026: Для платежей надзора project_type = 'Авторский надзор'
             if p.supervision_card_id:
-                payment_project_type = 'Авторский надзор'
+                payment_project_type = "Авторский надзор"
             else:
                 payment_project_type = contract.project_type if contract else None
 
-            result.append({
-                'id': p.id,
-                'contract_id': p.contract_id,
-                'crm_card_id': p.crm_card_id,
-                'supervision_card_id': p.supervision_card_id,
-                'employee_id': p.employee_id,
-                'employee_name': p.employee_name or (employee.full_name if employee else 'Неизвестный'),
-                'position': employee.position if employee else '',
-                'role': p.role,
-                'stage_name': p.stage_name,
-                'calculated_amount': float(p.calculated_amount) if p.calculated_amount else 0,
-                'final_amount': float(p.final_amount) if p.final_amount else 0,
-                'amount': float(p.final_amount) if p.final_amount else 0,
-                'payment_type': p.payment_type,
-                'payment_subtype': p.payment_type,  # Тип выплаты: Аванс, Доплата, Полная оплата
-                'source': source,
-                'report_month': p.report_month,
-                'payment_status': p.payment_status if p.payment_status else 'pending',
-                'is_paid': p.is_paid,
-                'created_at': p.created_at.isoformat() if p.created_at else None,
-                # Данные из контракта
-                'project_type': payment_project_type,
-                'agent_type': contract.agent_type if contract else None,
-                'address': contract.address if contract else None,
-                'contract_number': contract.contract_number if contract else None,
-                'area': float(contract.area) if contract and contract.area else None,
-                'city': contract.city if contract else None,
-                'reassigned': p.reassigned if hasattr(p, 'reassigned') else False,
-            })
+            result.append(
+                {
+                    "id": p.id,
+                    "contract_id": p.contract_id,
+                    "crm_card_id": p.crm_card_id,
+                    "supervision_card_id": p.supervision_card_id,
+                    "employee_id": p.employee_id,
+                    "employee_name": p.employee_name or (employee.full_name if employee else "Неизвестный"),
+                    "position": employee.position if employee else "",
+                    "role": p.role,
+                    "stage_name": p.stage_name,
+                    "calculated_amount": float(p.calculated_amount) if p.calculated_amount else 0,
+                    "final_amount": float(p.final_amount) if p.final_amount else 0,
+                    "amount": float(p.final_amount) if p.final_amount else 0,
+                    "payment_type": p.payment_type,
+                    "payment_subtype": p.payment_type,  # Тип выплаты: Аванс, Доплата, Полная оплата
+                    "source": source,
+                    "report_month": p.report_month,
+                    "payment_status": p.payment_status if p.payment_status else "pending",
+                    "is_paid": p.is_paid,
+                    "created_at": p.created_at.isoformat() if p.created_at else None,
+                    # Данные из контракта
+                    "project_type": payment_project_type,
+                    "agent_type": contract.agent_type if contract else None,
+                    "address": contract.address if contract else None,
+                    "contract_number": contract.contract_number if contract else None,
+                    "area": float(contract.area) if contract and contract.area else None,
+                    "city": contract.city if contract else None,
+                    "reassigned": p.reassigned if hasattr(p, "reassigned") else False,
+                }
+            )
 
         # 2. Оклады из таблицы salaries (если не фильтруем по payment_type отличному от Оклад)
-        if not payment_type or payment_type == 'Оклад':
+        if not payment_type or payment_type == "Оклад":
             salaries_query = db.query(Salary)
 
             if year:
                 if include_null_month:
                     # ИСПРАВЛЕНИЕ 06.02.2026: Включаем оклады с NULL report_month
-                    salaries_query = salaries_query.filter(
-                        or_(
-                            Salary.report_month.like(f'{year}%'),
-                            Salary.report_month.is_(None)
-                        )
-                    )
+                    salaries_query = salaries_query.filter(or_(Salary.report_month.like(f"{year}%"), Salary.report_month.is_(None)))
                 else:
-                    salaries_query = salaries_query.filter(Salary.report_month.like(f'{year}%'))
+                    salaries_query = salaries_query.filter(Salary.report_month.like(f"{year}%"))
             if month:
-                salaries_query = salaries_query.filter(Salary.report_month.like(f'{year}-{month:02d}%' if year else f'%-{month:02d}%'))
+                salaries_query = salaries_query.filter(Salary.report_month.like(f"{year}-{month:02d}%" if year else f"%-{month:02d}%"))
             if employee_id is not None:
                 salaries_query = salaries_query.filter(Salary.employee_id == employee_id)
             if contract_id is not None:
@@ -171,9 +160,9 @@ async def get_all_payments(
             if is_paid is not None:
                 # В таблице salaries статус хранится как payment_status ('paid'/'pending')
                 if is_paid:
-                    salaries_query = salaries_query.filter(Salary.payment_status == 'paid')
+                    salaries_query = salaries_query.filter(Salary.payment_status == "paid")
                 else:
-                    salaries_query = salaries_query.filter(Salary.payment_status != 'paid')
+                    salaries_query = salaries_query.filter(Salary.payment_status != "paid")
 
             salaries = salaries_query.all()
 
@@ -191,36 +180,38 @@ async def get_all_payments(
                 employee = sal_employees_map.get(s.employee_id)
                 contract = contracts_map.get(s.contract_id) if s.contract_id else None
 
-                result.append({
-                    'id': s.id,
-                    'contract_id': s.contract_id,
-                    'crm_card_id': None,
-                    'supervision_card_id': None,
-                    'employee_id': s.employee_id,
-                    'employee_name': s.employee_name or (employee.full_name if employee else 'Неизвестный'),
-                    'position': employee.position if employee else '',
-                    'role': s.payment_type,  # payment_type в salaries = роль
-                    'stage_name': s.stage_name,
-                    'calculated_amount': float(s.amount) if s.amount else 0,
-                    'final_amount': float(s.amount) if s.amount else 0,
-                    'amount': float(s.amount) if s.amount else 0,
-                    'payment_type': s.payment_type,
-                    'payment_subtype': 'Оклад',  # Всегда Оклад для salaries
-                    'source': 'Оклад',
-                    'report_month': s.report_month,
-                    'payment_status': s.payment_status if s.payment_status else 'pending',
-                    'is_paid': s.payment_status == 'paid' if s.payment_status else False,
-                    'created_at': s.created_at.isoformat() if s.created_at else None,
-                    # Данные из контракта
-                    'project_type': s.project_type if s.project_type else (contract.project_type if contract else None),
-                    'agent_type': contract.agent_type if contract else None,
-                    'address': contract.address if contract else None,
-                    'contract_number': contract.contract_number if contract else None,
-                    'area': float(contract.area) if contract and contract.area else None,
-                    'city': contract.city if contract else None,
-                    'reassigned': False,  # Оклады не переназначаются
-                    'comments': s.comments,  # Комментарий из оклада
-                })
+                result.append(
+                    {
+                        "id": s.id,
+                        "contract_id": s.contract_id,
+                        "crm_card_id": None,
+                        "supervision_card_id": None,
+                        "employee_id": s.employee_id,
+                        "employee_name": s.employee_name or (employee.full_name if employee else "Неизвестный"),
+                        "position": employee.position if employee else "",
+                        "role": s.payment_type,  # payment_type в salaries = роль
+                        "stage_name": s.stage_name,
+                        "calculated_amount": float(s.amount) if s.amount else 0,
+                        "final_amount": float(s.amount) if s.amount else 0,
+                        "amount": float(s.amount) if s.amount else 0,
+                        "payment_type": s.payment_type,
+                        "payment_subtype": "Оклад",  # Всегда Оклад для salaries
+                        "source": "Оклад",
+                        "report_month": s.report_month,
+                        "payment_status": s.payment_status if s.payment_status else "pending",
+                        "is_paid": s.payment_status == "paid" if s.payment_status else False,
+                        "created_at": s.created_at.isoformat() if s.created_at else None,
+                        # Данные из контракта
+                        "project_type": s.project_type if s.project_type else (contract.project_type if contract else None),
+                        "agent_type": contract.agent_type if contract else None,
+                        "address": contract.address if contract else None,
+                        "contract_number": contract.contract_number if contract else None,
+                        "area": float(contract.area) if contract and contract.area else None,
+                        "city": contract.city if contract else None,
+                        "reassigned": False,  # Оклады не переназначаются
+                        "comments": s.comments,  # Комментарий из оклада
+                    }
+                )
 
         return result
 
@@ -239,14 +230,14 @@ async def calculate_payment_amount(
     stage_name: Optional[str] = None,
     supervision_card_id: Optional[int] = None,
     current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Рассчитать сумму оплаты на основе тарифов - ПОЛНАЯ ЛОГИКА"""
     try:
         # Получаем договор
         contract = db.query(Contract).filter(Contract.id == contract_id).first()
         if not contract:
-            return {'amount': 0, 'error': 'Contract not found'}
+            return {"amount": 0, "error": "Contract not found"}
 
         area = float(contract.area) if contract.area else 0
         project_type = contract.project_type
@@ -254,10 +245,7 @@ async def calculate_payment_amount(
 
         # ========== АВТОРСКИЙ НАДЗОР ==========
         if supervision_card_id:
-            rate = db.query(Rate).filter(
-                Rate.project_type == 'Авторский надзор',
-                Rate.role == role
-            )
+            rate = db.query(Rate).filter(Rate.project_type == "Авторский надзор", Rate.role == role)
             if stage_name:
                 rate = rate.filter(or_(Rate.stage_name == stage_name, Rate.stage_name.is_(None)))
             rate = rate.order_by(
@@ -267,26 +255,20 @@ async def calculate_payment_amount(
 
             if rate and rate.rate_per_m2:
                 amount = area * float(rate.rate_per_m2)
-                return {'amount': amount, 'rate_per_m2': float(rate.rate_per_m2)}
-            return {'amount': 0}
+                return {"amount": amount, "rate_per_m2": float(rate.rate_per_m2)}
+            return {"amount": 0}
 
         # ========== ЗАМЕРЩИК ==========
-        if role == 'Замерщик':
-            rate = db.query(Rate).filter(
-                Rate.role == 'Замерщик',
-                Rate.city == city
-            ).first()
+        if role == "Замерщик":
+            rate = db.query(Rate).filter(Rate.role == "Замерщик", Rate.city == city).first()
             if rate and rate.surveyor_price:
-                return {'amount': float(rate.surveyor_price), 'surveyor_price': float(rate.surveyor_price)}
-            return {'amount': 0}
+                return {"amount": float(rate.surveyor_price), "surveyor_price": float(rate.surveyor_price)}
+            return {"amount": 0}
 
         # ========== ИНДИВИДУАЛЬНЫЙ ==========
-        if project_type == 'Индивидуальный':
+        if project_type == "Индивидуальный":
             logger.debug(f"CALC Индивидуальный проект: role={role}, area={area}, stage_name={stage_name}")
-            query = db.query(Rate).filter(
-                Rate.project_type == 'Индивидуальный',
-                Rate.role == role
-            )
+            query = db.query(Rate).filter(Rate.project_type == "Индивидуальный", Rate.role == role)
             if stage_name:
                 # Сначала ищем с конкретной стадией
                 rate = query.filter(Rate.stage_name == stage_name).first()
@@ -302,49 +284,46 @@ async def calculate_payment_amount(
             if rate and rate.rate_per_m2:
                 amount = area * float(rate.rate_per_m2)
                 logger.debug(f"CALC Найден тариф: rate_per_m2={rate.rate_per_m2}, amount={amount}")
-                return {'amount': amount, 'rate_per_m2': float(rate.rate_per_m2)}
+                return {"amount": amount, "rate_per_m2": float(rate.rate_per_m2)}
             logger.debug("CALC Тариф НЕ найден или rate_per_m2=0, возвращаем 0")
-            return {'amount': 0}
+            return {"amount": 0}
 
         # ========== ШАБЛОННЫЙ ==========
-        if project_type == 'Шаблонный':
-            rate = db.query(Rate).filter(
-                Rate.project_type == 'Шаблонный',
-                Rate.role == role,
-                Rate.area_from <= area,
-                or_(Rate.area_to >= area, Rate.area_to.is_(None))
-            ).order_by(Rate.area_from.asc()).first()
+        if project_type == "Шаблонный":
+            rate = (
+                db.query(Rate)
+                .filter(Rate.project_type == "Шаблонный", Rate.role == role, Rate.area_from <= area, or_(Rate.area_to >= area, Rate.area_to.is_(None)))
+                .order_by(Rate.area_from.asc())
+                .first()
+            )
 
             if rate and rate.fixed_price:
-                return {'amount': float(rate.fixed_price), 'fixed_price': float(rate.fixed_price)}
-            return {'amount': 0}
+                return {"amount": float(rate.fixed_price), "fixed_price": float(rate.fixed_price)}
+            return {"amount": 0}
 
         # ========== АВТОРСКИЙ НАДЗОР (по типу проекта) ==========
-        if project_type == 'Авторский надзор':
-            query = db.query(Rate).filter(
-                Rate.project_type == 'Авторский надзор',
-                Rate.role == role
-            )
+        if project_type == "Авторский надзор":
+            query = db.query(Rate).filter(Rate.project_type == "Авторский надзор", Rate.role == role)
             if stage_name:
                 query = query.filter(or_(Rate.stage_name == stage_name, Rate.stage_name.is_(None)))
             rate = query.first()
 
             if rate and rate.rate_per_m2:
                 amount = area * float(rate.rate_per_m2)
-                return {'amount': amount, 'rate_per_m2': float(rate.rate_per_m2)}
-            return {'amount': 0}
+                return {"amount": amount, "rate_per_m2": float(rate.rate_per_m2)}
+            return {"amount": 0}
 
-        return {'amount': 0}
+        return {"amount": 0}
 
     except Exception as e:
         logger.error(f"Error calculating payment: {str(e)}")
         import traceback
+
         traceback.print_exc()
-        return {'amount': 0, 'error': str(e)}
+        return {"amount": 0, "error": str(e)}
 
 
-def auto_create_employee_payment(db: Session, contract_id: int, crm_card_id: int,
-                                  employee_id: int, role: str):
+def auto_create_employee_payment(db: Session, contract_id: int, crm_card_id: int, employee_id: int, role: str):
     """Автоматическое создание оплат при назначении сотрудника на роль.
     Вызывается из crm_router при update_crm_card.
     """
@@ -353,17 +332,21 @@ def auto_create_employee_payment(db: Session, contract_id: int, crm_card_id: int
         return
 
     # Шаблонные проекты: СМП и Менеджер получают оклад, платежи не создаём
-    if contract.project_type == 'Шаблонный' and role in ('Старший менеджер проектов', 'Менеджер'):
+    if contract.project_type == "Шаблонный" and role in ("Старший менеджер проектов", "Менеджер"):
         return
 
     area = float(contract.area) if contract.area else 0
 
     # Удаляем старые оплаты для этой роли (не для исполнителей — только руководство/поддержка)
-    if role not in ('Дизайнер', 'Чертёжник'):
-        old_payments = db.query(Payment).filter(
-            Payment.contract_id == contract_id,
-            Payment.role == role,
-        ).all()
+    if role not in ("Дизайнер", "Чертёжник"):
+        old_payments = (
+            db.query(Payment)
+            .filter(
+                Payment.contract_id == contract_id,
+                Payment.role == role,
+            )
+            .all()
+        )
         for p in old_payments:
             db.delete(p)
         if old_payments:
@@ -372,73 +355,86 @@ def auto_create_employee_payment(db: Session, contract_id: int, crm_card_id: int
 
     # Рассчитываем сумму
     amount = 0
-    if role == 'Замерщик':
-        rate = db.query(Rate).filter(Rate.role == 'Замерщик', Rate.city == contract.city).first()
+    if role == "Замерщик":
+        rate = db.query(Rate).filter(Rate.role == "Замерщик", Rate.city == contract.city).first()
         if rate and rate.surveyor_price:
             amount = float(rate.surveyor_price)
     else:
-        if contract.project_type == 'Индивидуальный':
-            rate = db.query(Rate).filter(
-                Rate.project_type == 'Индивидуальный', Rate.role == role, Rate.stage_name.is_(None)
-            ).first()
+        if contract.project_type == "Индивидуальный":
+            rate = db.query(Rate).filter(Rate.project_type == "Индивидуальный", Rate.role == role, Rate.stage_name.is_(None)).first()
             if rate and rate.rate_per_m2:
                 amount = area * float(rate.rate_per_m2)
-        elif contract.project_type == 'Шаблонный':
-            rate = db.query(Rate).filter(
-                Rate.project_type == 'Шаблонный', Rate.role == role,
-                Rate.area_from <= area, or_(Rate.area_to >= area, Rate.area_to.is_(None))
-            ).order_by(Rate.area_from.asc()).first()
+        elif contract.project_type == "Шаблонный":
+            rate = (
+                db.query(Rate)
+                .filter(Rate.project_type == "Шаблонный", Rate.role == role, Rate.area_from <= area, or_(Rate.area_to >= area, Rate.area_to.is_(None)))
+                .order_by(Rate.area_from.asc())
+                .first()
+            )
             if rate and rate.fixed_price:
                 amount = float(rate.fixed_price)
 
     # СДП — аванс + доплата
-    if role == 'СДП':
+    if role == "СДП":
         advance = amount / 2
         balance = amount / 2
-        current_month = datetime.now().strftime('%Y-%m')
+        current_month = datetime.now().strftime("%Y-%m")
 
-        db.add(Payment(
-            contract_id=contract_id, crm_card_id=crm_card_id, employee_id=employee_id,
-            role=role, calculated_amount=advance, final_amount=advance,
-            payment_type='Аванс', report_month=current_month,
-        ))
-        db.add(Payment(
-            contract_id=contract_id, crm_card_id=crm_card_id, employee_id=employee_id,
-            role=role, calculated_amount=balance, final_amount=balance,
-            payment_type='Доплата',
-        ))
+        db.add(
+            Payment(
+                contract_id=contract_id,
+                crm_card_id=crm_card_id,
+                employee_id=employee_id,
+                role=role,
+                calculated_amount=advance,
+                final_amount=advance,
+                payment_type="Аванс",
+                report_month=current_month,
+            )
+        )
+        db.add(
+            Payment(
+                contract_id=contract_id,
+                crm_card_id=crm_card_id,
+                employee_id=employee_id,
+                role=role,
+                calculated_amount=balance,
+                final_amount=balance,
+                payment_type="Доплата",
+            )
+        )
         logger.info(f"[AUTO_PAY] Созданы аванс ({advance}) + доплата ({balance}) для {role}")
     else:
-        db.add(Payment(
-            contract_id=contract_id, crm_card_id=crm_card_id, employee_id=employee_id,
-            role=role, calculated_amount=amount, final_amount=amount,
-            payment_type='Полная оплата',
-        ))
+        db.add(
+            Payment(
+                contract_id=contract_id,
+                crm_card_id=crm_card_id,
+                employee_id=employee_id,
+                role=role,
+                calculated_amount=amount,
+                final_amount=amount,
+                payment_type="Полная оплата",
+            )
+        )
         logger.info(f"[AUTO_PAY] Создана оплата {amount} для {role}")
 
     db.flush()
 
 
 @router.get("/summary")
-async def get_payments_summary(
-    year: int,
-    month: Optional[int] = None,
-    quarter: Optional[int] = None,
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def get_payments_summary(year: int, month: Optional[int] = None, quarter: Optional[int] = None, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Получить сводку по платежам"""
     try:
         from sqlalchemy import extract
 
-        query = db.query(Payment).filter(extract('year', Payment.created_at) == year)
+        query = db.query(Payment).filter(extract("year", Payment.created_at) == year)
 
         if month:
-            query = query.filter(extract('month', Payment.created_at) == month)
+            query = query.filter(extract("month", Payment.created_at) == month)
         if quarter:
             start_month = (quarter - 1) * 3 + 1
             end_month = quarter * 3
-            query = query.filter(extract('month', Payment.created_at).between(start_month, end_month))
+            query = query.filter(extract("month", Payment.created_at).between(start_month, end_month))
 
         payments = query.all()
 
@@ -449,24 +445,24 @@ async def get_payments_summary(
         # По ролям
         by_role = {}
         for p in payments:
-            role = p.role or 'Не указано'
+            role = p.role or "Не указано"
             if role not in by_role:
-                by_role[role] = {'paid': 0, 'pending': 0, 'count': 0}
-            by_role[role]['count'] += 1
+                by_role[role] = {"paid": 0, "pending": 0, "count": 0}
+            by_role[role]["count"] += 1
             if p.is_paid:
-                by_role[role]['paid'] += p.final_amount or 0
+                by_role[role]["paid"] += p.final_amount or 0
             else:
-                by_role[role]['pending'] += p.final_amount or 0
+                by_role[role]["pending"] += p.final_amount or 0
 
         return {
-            'year': year,
-            'month': month,
-            'quarter': quarter,
-            'total_paid': paid_amount,
-            'total_pending': pending_amount,
-            'total': paid_amount + pending_amount,
-            'by_role': by_role,
-            'payments_count': len(payments)
+            "year": year,
+            "month": month,
+            "quarter": quarter,
+            "total_paid": paid_amount,
+            "total_pending": pending_amount,
+            "total": paid_amount + pending_amount,
+            "by_role": by_role,
+            "payments_count": len(payments),
         }
 
     except Exception as e:
@@ -475,12 +471,7 @@ async def get_payments_summary(
 
 
 @router.get("/by-type")
-async def get_payments_by_type(
-    payment_type: str,
-    project_type_filter: Optional[str] = None,
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def get_payments_by_type(payment_type: str, project_type_filter: Optional[str] = None, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """
     Получить платежи по типу выплаты и фильтру типа проекта
 
@@ -503,75 +494,77 @@ async def get_payments_by_type(
         result = []
 
         # Оклады - только из таблицы salaries
-        if payment_type == 'Оклады':
+        if payment_type == "Оклады":
             salaries = db.query(Salary).all()
             for s in salaries:
                 employee = db.query(Employee).filter(Employee.id == s.employee_id).first()
                 contract = db.query(Contract).filter(Contract.id == s.contract_id).first() if s.contract_id else None
 
-                result.append({
-                    'id': s.id,
-                    'contract_id': s.contract_id,
-                    'employee_id': s.employee_id,
-                    'employee_name': s.employee_name or (employee.full_name if employee else 'Неизвестный'),
-                    'position': employee.position if employee else '',
-                    'role': s.payment_type,
-                    'stage_name': s.stage_name,
-                    'final_amount': float(s.amount) if s.amount else 0,
-                    'amount': float(s.amount) if s.amount else 0,
-                    'payment_type': s.payment_type,
-                    'report_month': s.report_month,
-                    'payment_status': s.payment_status,
-                    'project_type': s.project_type,
-                    'contract_number': contract.contract_number if contract else None,
-                    'address': contract.address if contract else None,
-                    'area': float(contract.area) if contract and contract.area else None,
-                    'city': contract.city if contract else None,
-                    'agent_type': contract.agent_type if contract else None,
-                    'source': 'Оклад',
-                    'card_stage': None,
-                    'comments': s.comments  # Добавлено поле комментария
-                })
+                result.append(
+                    {
+                        "id": s.id,
+                        "contract_id": s.contract_id,
+                        "employee_id": s.employee_id,
+                        "employee_name": s.employee_name or (employee.full_name if employee else "Неизвестный"),
+                        "position": employee.position if employee else "",
+                        "role": s.payment_type,
+                        "stage_name": s.stage_name,
+                        "final_amount": float(s.amount) if s.amount else 0,
+                        "amount": float(s.amount) if s.amount else 0,
+                        "payment_type": s.payment_type,
+                        "report_month": s.report_month,
+                        "payment_status": s.payment_status,
+                        "project_type": s.project_type,
+                        "contract_number": contract.contract_number if contract else None,
+                        "address": contract.address if contract else None,
+                        "area": float(contract.area) if contract and contract.area else None,
+                        "city": contract.city if contract else None,
+                        "agent_type": contract.agent_type if contract else None,
+                        "source": "Оклад",
+                        "card_stage": None,
+                        "comments": s.comments,  # Добавлено поле комментария
+                    }
+                )
 
         # Авторский надзор - из payments с supervision_card + salaries
-        elif project_type_filter == 'Авторский надзор':
+        elif project_type_filter == "Авторский надзор":
             # Платежи из CRM надзора - ИСПРАВЛЕНО 06.02.2026
-            payments = db.query(Payment).filter(
-                Payment.supervision_card_id.isnot(None)
-            ).all()
+            payments = db.query(Payment).filter(Payment.supervision_card_id.isnot(None)).all()
 
             for p in payments:
                 employee = db.query(Employee).filter(Employee.id == p.employee_id).first()
                 supervision_card = db.query(SupervisionCard).filter(SupervisionCard.id == p.supervision_card_id).first()
                 contract = db.query(Contract).filter(Contract.id == supervision_card.contract_id).first() if supervision_card else None
 
-                result.append({
-                    'id': p.id,
-                    'contract_id': p.contract_id,
-                    'crm_card_id': p.crm_card_id,
-                    'supervision_card_id': p.supervision_card_id,
-                    'employee_id': p.employee_id,
-                    'employee_name': p.employee_name or (employee.full_name if employee else 'Неизвестный'),
-                    'position': employee.position if employee else '',
-                    'role': p.role,
-                    'stage_name': p.stage_name,
-                    'calculated_amount': float(p.calculated_amount) if p.calculated_amount else 0,
-                    'final_amount': float(p.final_amount) if p.final_amount else 0,
-                    'amount': float(p.final_amount) if p.final_amount else 0,
-                    'payment_type': p.payment_type,
-                    'payment_subtype': p.payment_type,
-                    'report_month': p.report_month,
-                    'payment_status': p.payment_status,
-                    'contract_number': contract.contract_number if contract else None,
-                    'address': contract.address if contract else None,
-                    'area': float(contract.area) if contract and contract.area else None,
-                    'city': contract.city if contract else None,
-                    'agent_type': contract.agent_type if contract else None,
-                    'project_type': contract.project_type if contract else 'Авторский надзор',
-                    'source': 'CRM Надзор',
-                    'card_stage': supervision_card.column_name if supervision_card else None,
-                    'reassigned': p.reassigned if hasattr(p, 'reassigned') else False
-                })
+                result.append(
+                    {
+                        "id": p.id,
+                        "contract_id": p.contract_id,
+                        "crm_card_id": p.crm_card_id,
+                        "supervision_card_id": p.supervision_card_id,
+                        "employee_id": p.employee_id,
+                        "employee_name": p.employee_name or (employee.full_name if employee else "Неизвестный"),
+                        "position": employee.position if employee else "",
+                        "role": p.role,
+                        "stage_name": p.stage_name,
+                        "calculated_amount": float(p.calculated_amount) if p.calculated_amount else 0,
+                        "final_amount": float(p.final_amount) if p.final_amount else 0,
+                        "amount": float(p.final_amount) if p.final_amount else 0,
+                        "payment_type": p.payment_type,
+                        "payment_subtype": p.payment_type,
+                        "report_month": p.report_month,
+                        "payment_status": p.payment_status,
+                        "contract_number": contract.contract_number if contract else None,
+                        "address": contract.address if contract else None,
+                        "area": float(contract.area) if contract and contract.area else None,
+                        "city": contract.city if contract else None,
+                        "agent_type": contract.agent_type if contract else None,
+                        "project_type": contract.project_type if contract else "Авторский надзор",
+                        "source": "CRM Надзор",
+                        "card_stage": supervision_card.column_name if supervision_card else None,
+                        "reassigned": p.reassigned if hasattr(p, "reassigned") else False,
+                    }
+                )
 
             # Добавляем оклады с типом "Авторский надзор"
             salaries = db.query(Salary).filter(Salary.project_type == project_type_filter).all()
@@ -579,68 +572,66 @@ async def get_payments_by_type(
                 employee = db.query(Employee).filter(Employee.id == s.employee_id).first()
                 contract = db.query(Contract).filter(Contract.id == s.contract_id).first() if s.contract_id else None
 
-                result.append({
-                    'id': s.id,
-                    'contract_id': s.contract_id,
-                    'employee_id': s.employee_id,
-                    'employee_name': s.employee_name or (employee.full_name if employee else 'Неизвестный'),
-                    'position': employee.position if employee else '',
-                    'role': s.payment_type,
-                    'stage_name': s.stage_name,
-                    'final_amount': float(s.amount) if s.amount else 0,
-                    'amount': float(s.amount) if s.amount else 0,
-                    'payment_type': 'Оклад',
-                    'report_month': s.report_month,
-                    'payment_status': s.payment_status,
-                    'contract_number': contract.contract_number if contract else None,
-                    'address': contract.address if contract else None,
-                    'area': float(contract.area) if contract and contract.area else None,
-                    'city': contract.city if contract else None,
-                    'agent_type': contract.agent_type if contract else None,
-                    'source': 'Оклад',
-                    'card_stage': None,
-                    'comments': s.comments  # Добавлено поле комментария
-                })
+                result.append(
+                    {
+                        "id": s.id,
+                        "contract_id": s.contract_id,
+                        "employee_id": s.employee_id,
+                        "employee_name": s.employee_name or (employee.full_name if employee else "Неизвестный"),
+                        "position": employee.position if employee else "",
+                        "role": s.payment_type,
+                        "stage_name": s.stage_name,
+                        "final_amount": float(s.amount) if s.amount else 0,
+                        "amount": float(s.amount) if s.amount else 0,
+                        "payment_type": "Оклад",
+                        "report_month": s.report_month,
+                        "payment_status": s.payment_status,
+                        "contract_number": contract.contract_number if contract else None,
+                        "address": contract.address if contract else None,
+                        "area": float(contract.area) if contract and contract.area else None,
+                        "city": contract.city if contract else None,
+                        "agent_type": contract.agent_type if contract else None,
+                        "source": "Оклад",
+                        "card_stage": None,
+                        "comments": s.comments,  # Добавлено поле комментария
+                    }
+                )
 
         # Индивидуальные и шаблонные проекты - из payments с crm_card + salaries
         elif project_type_filter:
             # Платежи из CRM
-            payments_query = db.query(Payment).join(
-                CRMCard, Payment.crm_card_id == CRMCard.id
-            ).join(
-                Contract, CRMCard.contract_id == Contract.id
-            ).filter(
-                Contract.project_type == project_type_filter
-            )
+            payments_query = db.query(Payment).join(CRMCard, Payment.crm_card_id == CRMCard.id).join(Contract, CRMCard.contract_id == Contract.id).filter(Contract.project_type == project_type_filter)
 
             for p in payments_query.all():
                 employee = db.query(Employee).filter(Employee.id == p.employee_id).first()
                 crm_card = db.query(CRMCard).filter(CRMCard.id == p.crm_card_id).first()
                 contract = db.query(Contract).filter(Contract.id == crm_card.contract_id).first() if crm_card else None
 
-                result.append({
-                    'id': p.id,
-                    'contract_id': p.contract_id,
-                    'employee_id': p.employee_id,
-                    'employee_name': p.employee_name or (employee.full_name if employee else 'Неизвестный'),
-                    'position': employee.position if employee else '',
-                    'role': p.role,
-                    'stage_name': p.stage_name,
-                    'final_amount': float(p.final_amount) if p.final_amount else 0,
-                    'amount': float(p.final_amount) if p.final_amount else 0,
-                    'payment_type': p.payment_type,
-                    'report_month': p.report_month,
-                    'payment_status': p.payment_status,
-                    'contract_number': contract.contract_number if contract else None,
-                    'address': contract.address if contract else None,
-                    'area': float(contract.area) if contract and contract.area else None,
-                    'city': contract.city if contract else None,
-                    'agent_type': contract.agent_type if contract else None,
-                    'source': 'CRM',
-                    'card_stage': crm_card.column_name if crm_card else None,
-                    'reassigned': p.reassigned if hasattr(p, 'reassigned') else False,
-                    'old_employee_id': p.old_employee_id if hasattr(p, 'old_employee_id') else None
-                })
+                result.append(
+                    {
+                        "id": p.id,
+                        "contract_id": p.contract_id,
+                        "employee_id": p.employee_id,
+                        "employee_name": p.employee_name or (employee.full_name if employee else "Неизвестный"),
+                        "position": employee.position if employee else "",
+                        "role": p.role,
+                        "stage_name": p.stage_name,
+                        "final_amount": float(p.final_amount) if p.final_amount else 0,
+                        "amount": float(p.final_amount) if p.final_amount else 0,
+                        "payment_type": p.payment_type,
+                        "report_month": p.report_month,
+                        "payment_status": p.payment_status,
+                        "contract_number": contract.contract_number if contract else None,
+                        "address": contract.address if contract else None,
+                        "area": float(contract.area) if contract and contract.area else None,
+                        "city": contract.city if contract else None,
+                        "agent_type": contract.agent_type if contract else None,
+                        "source": "CRM",
+                        "card_stage": crm_card.column_name if crm_card else None,
+                        "reassigned": p.reassigned if hasattr(p, "reassigned") else False,
+                        "old_employee_id": p.old_employee_id if hasattr(p, "old_employee_id") else None,
+                    }
+                )
 
             # Добавляем оклады с этим типом проекта
             salaries = db.query(Salary).filter(Salary.project_type == project_type_filter).all()
@@ -648,31 +639,33 @@ async def get_payments_by_type(
                 employee = db.query(Employee).filter(Employee.id == s.employee_id).first()
                 contract = db.query(Contract).filter(Contract.id == s.contract_id).first() if s.contract_id else None
 
-                result.append({
-                    'id': s.id,
-                    'contract_id': s.contract_id,
-                    'employee_id': s.employee_id,
-                    'employee_name': s.employee_name or (employee.full_name if employee else 'Неизвестный'),
-                    'position': employee.position if employee else '',
-                    'role': s.payment_type,
-                    'stage_name': s.stage_name,
-                    'final_amount': float(s.amount) if s.amount else 0,
-                    'amount': float(s.amount) if s.amount else 0,
-                    'payment_type': 'Оклад',
-                    'report_month': s.report_month,
-                    'payment_status': s.payment_status,
-                    'contract_number': contract.contract_number if contract else None,
-                    'address': contract.address if contract else None,
-                    'area': float(contract.area) if contract and contract.area else None,
-                    'city': contract.city if contract else None,
-                    'agent_type': contract.agent_type if contract else None,
-                    'source': 'Оклад',
-                    'card_stage': None,
-                    'comments': s.comments  # Добавлено поле комментария
-                })
+                result.append(
+                    {
+                        "id": s.id,
+                        "contract_id": s.contract_id,
+                        "employee_id": s.employee_id,
+                        "employee_name": s.employee_name or (employee.full_name if employee else "Неизвестный"),
+                        "position": employee.position if employee else "",
+                        "role": s.payment_type,
+                        "stage_name": s.stage_name,
+                        "final_amount": float(s.amount) if s.amount else 0,
+                        "amount": float(s.amount) if s.amount else 0,
+                        "payment_type": "Оклад",
+                        "report_month": s.report_month,
+                        "payment_status": s.payment_status,
+                        "contract_number": contract.contract_number if contract else None,
+                        "address": contract.address if contract else None,
+                        "area": float(contract.area) if contract and contract.area else None,
+                        "city": contract.city if contract else None,
+                        "agent_type": contract.agent_type if contract else None,
+                        "source": "Оклад",
+                        "card_stage": None,
+                        "comments": s.comments,  # Добавлено поле комментария
+                    }
+                )
 
         # Сортируем по id в обратном порядке
-        result.sort(key=lambda x: x['id'], reverse=True)
+        result.sort(key=lambda x: x["id"], reverse=True)
         return result
 
     except Exception as e:
@@ -682,11 +675,7 @@ async def get_payments_by_type(
 
 @router.get("/all-optimized")
 async def get_all_payments_optimized(
-    year: Optional[int] = None,
-    month: Optional[int] = None,
-    quarter: Optional[int] = None,
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    year: Optional[int] = None, month: Optional[int] = None, quarter: Optional[int] = None, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Оптимизированная загрузка всех выплат - один запрос вместо 132"""
     try:
@@ -715,25 +704,27 @@ async def get_all_payments_optimized(
         for p in payments:
             contract = contracts_map.get(p.contract_id)
 
-            result.append({
-                'id': p.id,
-                'contract_id': p.contract_id,
-                'employee_id': p.employee_id,
-                'employee_name': p.employee.full_name if p.employee else '',
-                'position': p.employee.position if p.employee else '',
-                'role': p.role,
-                'stage_name': p.stage_name,
-                'calculated_amount': float(p.calculated_amount) if p.calculated_amount else 0,
-                'final_amount': float(p.final_amount) if p.final_amount else 0,
-                'amount': float(p.final_amount) if p.final_amount else 0,
-                'payment_type': p.payment_type,
-                'payment_status': p.payment_status,
-                'report_month': p.report_month or '',
-                'source': 'CRM',
-                'project_type': contract.project_type if contract else '',
-                'address': contract.address if contract else '',
-                'agent_type': contract.agent_type if contract else ''
-            })
+            result.append(
+                {
+                    "id": p.id,
+                    "contract_id": p.contract_id,
+                    "employee_id": p.employee_id,
+                    "employee_name": p.employee.full_name if p.employee else "",
+                    "position": p.employee.position if p.employee else "",
+                    "role": p.role,
+                    "stage_name": p.stage_name,
+                    "calculated_amount": float(p.calculated_amount) if p.calculated_amount else 0,
+                    "final_amount": float(p.final_amount) if p.final_amount else 0,
+                    "amount": float(p.final_amount) if p.final_amount else 0,
+                    "payment_type": p.payment_type,
+                    "payment_status": p.payment_status,
+                    "report_month": p.report_month or "",
+                    "source": "CRM",
+                    "project_type": contract.project_type if contract else "",
+                    "address": contract.address if contract else "",
+                    "agent_type": contract.agent_type if contract else "",
+                }
+            )
 
         return result
 
@@ -742,120 +733,172 @@ async def get_all_payments_optimized(
         raise HTTPException(status_code=500, detail="Внутренняя ошибка сервера")
 
 
+def _recalculate_payments_for_contract(db: Session, contract_id: int) -> int:
+    """Пересчитать оплаты договора по текущей площади и тарифам.
+
+    Вызывается автоматически при изменении площади в update_contract.
+    Защищает ручные оплаты (is_manual=True): пересчитывает только calculated_amount.
+    Возвращает количество обновлённых записей.
+    """
+    contract = db.query(Contract).filter(Contract.id == contract_id).first()
+    if not contract or not contract.area:
+        return 0
+
+    payments = db.query(Payment).filter(Payment.contract_id == contract_id).all()
+    if not payments:
+        return 0
+
+    area = float(contract.area)
+    project_type = contract.project_type
+    city = contract.city
+    updated = 0
+
+    for payment in payments:
+        try:
+            new_amount = 0
+
+            if payment.role == "Замерщик":
+                rate = db.query(Rate).filter(Rate.role == "Замерщик", Rate.city == city).first()
+                if rate and rate.surveyor_price:
+                    new_amount = float(rate.surveyor_price)
+
+            elif project_type == "Индивидуальный":
+                q = db.query(Rate).filter(Rate.project_type == "Индивидуальный", Rate.role == payment.role)
+                rate = None
+                if payment.stage_name:
+                    rate = q.filter(Rate.stage_name == payment.stage_name).first()
+                if not rate:
+                    rate = q.filter(Rate.stage_name.is_(None)).first()
+                if rate and rate.rate_per_m2:
+                    new_amount = area * float(rate.rate_per_m2)
+
+            elif project_type == "Шаблонный":
+                rate = (
+                    db.query(Rate)
+                    .filter(
+                        Rate.project_type == "Шаблонный",
+                        Rate.role == payment.role,
+                        Rate.area_from <= area,
+                        or_(Rate.area_to >= area, Rate.area_to.is_(None)),
+                    )
+                    .order_by(Rate.area_from.asc())
+                    .first()
+                )
+                if rate and rate.fixed_price:
+                    new_amount = float(rate.fixed_price)
+
+            elif project_type == "Авторский надзор" or payment.supervision_card_id:
+                q = db.query(Rate).filter(Rate.project_type == "Авторский надзор", Rate.role == payment.role)
+                rate = None
+                if payment.stage_name:
+                    rate = q.filter(Rate.stage_name == payment.stage_name).first()
+                if not rate:
+                    rate = q.filter(Rate.stage_name.is_(None)).first()
+                if not rate:
+                    rate = q.first()
+                if rate and rate.rate_per_m2:
+                    new_amount = area * float(rate.rate_per_m2)
+
+            # Аванс и Доплата — половина от полной суммы
+            if payment.payment_type in ("Аванс", "Доплата") and new_amount > 0:
+                new_amount = new_amount / 2
+
+            if new_amount != payment.calculated_amount:
+                old_amount = payment.calculated_amount
+                payment.calculated_amount = new_amount
+                # S-08: ручные оплаты — пересчитываем только calculated, не final
+                if not payment.is_manual:
+                    payment.final_amount = new_amount
+                updated += 1
+                logger.debug(f"AREA_RECALC Payment {payment.id}: {old_amount} → {new_amount} (manual={payment.is_manual})")
+
+        except Exception as e:
+            logger.warning(f"Ошибка пересчёта платежа {payment.id}: {e}")
+
+    if updated:
+        db.commit()
+    return updated
+
+
 @router.post("/recalculate")
-async def recalculate_payments(
-    contract_id: Optional[int] = None,
-    role: Optional[str] = None,
-    current_user: Employee = Depends(require_permission("payments.update")),
-    db: Session = Depends(get_db)
-):
+async def recalculate_payments(contract_id: Optional[int] = None, role: Optional[str] = None, current_user: Employee = Depends(require_permission("payments.update")), db: Session = Depends(get_db)):
     """Пересчет выплат по текущим тарифам"""
     try:
-        # Получаем выплаты для пересчета
         query = db.query(Payment)
-
         if contract_id:
             query = query.filter(Payment.contract_id == contract_id)
         if role:
             query = query.filter(Payment.role == role)
 
         payments = query.all()
-        updated = 0
         errors = []
+        updated = 0
 
-        for payment in payments:
-            try:
-                # Получаем договор
-                contract = db.query(Contract).filter(Contract.id == payment.contract_id).first()
-                if not contract:
-                    continue
+        # Группируем по contract_id и пересчитываем через общую функцию
+        contract_ids = list({p.contract_id for p in payments if p.contract_id})
+        if role:
+            # При фильтре по роли пересчитываем только нужные платежи вручную
+            for payment in payments:
+                try:
+                    contract = db.query(Contract).filter(Contract.id == payment.contract_id).first()
+                    if not contract:
+                        continue
+                    area = float(contract.area) if contract.area else 0
+                    project_type = contract.project_type
+                    city = contract.city
+                    new_amount = 0
 
-                area = float(contract.area) if contract.area else 0
-                project_type = contract.project_type
-                city = contract.city
+                    if payment.role == "Замерщик":
+                        rate = db.query(Rate).filter(Rate.role == "Замерщик", Rate.city == city).first()
+                        if rate and rate.surveyor_price:
+                            new_amount = float(rate.surveyor_price)
+                    elif project_type == "Индивидуальный":
+                        q = db.query(Rate).filter(Rate.project_type == "Индивидуальный", Rate.role == payment.role)
+                        rate = (q.filter(Rate.stage_name == payment.stage_name).first() if payment.stage_name else None) or q.filter(Rate.stage_name.is_(None)).first()
+                        if rate and rate.rate_per_m2:
+                            new_amount = area * float(rate.rate_per_m2)
+                    elif project_type == "Шаблонный":
+                        rate = (
+                            db.query(Rate)
+                            .filter(
+                                Rate.project_type == "Шаблонный",
+                                Rate.role == payment.role,
+                                Rate.area_from <= area,
+                                or_(Rate.area_to >= area, Rate.area_to.is_(None)),
+                            )
+                            .order_by(Rate.area_from.asc())
+                            .first()
+                        )
+                        if rate and rate.fixed_price:
+                            new_amount = float(rate.fixed_price)
+                    elif project_type == "Авторский надзор" or payment.supervision_card_id:
+                        q = db.query(Rate).filter(Rate.project_type == "Авторский надзор", Rate.role == payment.role)
+                        rate = (q.filter(Rate.stage_name == payment.stage_name).first() if payment.stage_name else None) or q.filter(Rate.stage_name.is_(None)).first() or q.first()
+                        if rate and rate.rate_per_m2:
+                            new_amount = area * float(rate.rate_per_m2)
 
-                new_amount = 0
+                    if payment.payment_type in ("Аванс", "Доплата") and new_amount > 0:
+                        new_amount = new_amount / 2
 
-                # Замерщик
-                if payment.role == 'Замерщик':
-                    rate = db.query(Rate).filter(
-                        Rate.role == 'Замерщик',
-                        Rate.city == city
-                    ).first()
-                    if rate and rate.surveyor_price:
-                        new_amount = float(rate.surveyor_price)
+                    if new_amount != payment.calculated_amount:
+                        old_amount = payment.calculated_amount
+                        payment.calculated_amount = new_amount
+                        if not payment.is_manual:
+                            payment.final_amount = new_amount
+                        updated += 1
+                        logger.debug(f"RECALC Payment ID={payment.id}: {old_amount} -> {new_amount}, type={payment.payment_type}, manual={payment.is_manual}")
+                except Exception as e:
+                    errors.append({"payment_id": payment.id, "error": str(e)})
+            db.commit()
+        else:
+            # Без фильтра по роли — пересчитываем по договорам через общую функцию
+            for cid in contract_ids:
+                try:
+                    updated += _recalculate_payments_for_contract(db, cid)
+                except Exception as e:
+                    errors.append({"contract_id": cid, "error": str(e)})
 
-                # Индивидуальный
-                elif project_type == 'Индивидуальный':
-                    query_rate = db.query(Rate).filter(
-                        Rate.project_type == 'Индивидуальный',
-                        Rate.role == payment.role
-                    )
-                    if payment.stage_name:
-                        rate = query_rate.filter(Rate.stage_name == payment.stage_name).first()
-                        if not rate:
-                            rate = query_rate.filter(Rate.stage_name.is_(None)).first()
-                    else:
-                        rate = query_rate.filter(Rate.stage_name.is_(None)).first()
-
-                    if rate and rate.rate_per_m2:
-                        new_amount = area * float(rate.rate_per_m2)
-
-                # Шаблонный
-                elif project_type == 'Шаблонный':
-                    rate = db.query(Rate).filter(
-                        Rate.project_type == 'Шаблонный',
-                        Rate.role == payment.role,
-                        Rate.area_from <= area,
-                        or_(Rate.area_to >= area, Rate.area_to.is_(None))
-                    ).order_by(Rate.area_from.asc()).first()
-
-                    if rate and rate.fixed_price:
-                        new_amount = float(rate.fixed_price)
-
-                # Авторский надзор
-                elif project_type == 'Авторский надзор' or payment.supervision_card_id:
-                    query_rate = db.query(Rate).filter(
-                        Rate.project_type == 'Авторский надзор',
-                        Rate.role == payment.role
-                    )
-                    if payment.stage_name:
-                        rate = query_rate.filter(Rate.stage_name == payment.stage_name).first()
-                        if not rate:
-                            rate = query_rate.filter(Rate.stage_name.is_(None)).first()
-                    else:
-                        rate = query_rate.filter(Rate.stage_name.is_(None)).first()
-                    if not rate:
-                        rate = query_rate.first()
-
-                    if rate and rate.rate_per_m2:
-                        new_amount = area * float(rate.rate_per_m2)
-
-                # Для Аванса и Доплаты — делим пополам
-                if payment.payment_type in ('Аванс', 'Доплата') and new_amount > 0:
-                    new_amount = new_amount / 2
-
-                # Обновляем если сумма изменилась
-                if new_amount != payment.calculated_amount:
-                    old_amount = payment.calculated_amount
-                    payment.calculated_amount = new_amount
-                    # S-08: Не перезаписывать final_amount для ручных платежей
-                    if not payment.is_manual:
-                        payment.final_amount = new_amount
-                    updated += 1
-                    logger.debug(f"RECALC Payment ID={payment.id}: {old_amount} -> {new_amount}, type={payment.payment_type}, manual={payment.is_manual}")
-
-            except Exception as e:
-                errors.append({'payment_id': payment.id, 'error': str(e)})
-
-        db.commit()
-
-        return {
-            'status': 'success',
-            'updated': updated,
-            'total': len(payments),
-            'errors': errors
-        }
+        return {"status": "success", "updated": updated, "total": len(payments), "errors": errors}
 
     except Exception as e:
         db.rollback()
@@ -864,11 +907,7 @@ async def recalculate_payments(
 
 
 @router.post("/", response_model=PaymentResponse)
-async def create_payment(
-    payment_data: PaymentCreate,
-    current_user: Employee = Depends(require_permission("payments.create")),
-    db: Session = Depends(get_db)
-):
+async def create_payment(payment_data: PaymentCreate, current_user: Employee = Depends(require_permission("payments.create")), db: Session = Depends(get_db)):
     """Создать платеж"""
     # Проверяем существование договора
     if payment_data.contract_id:
@@ -885,129 +924,99 @@ async def create_payment(
     # Защита от дублей: проверяем нет ли уже платежа с теми же параметрами
     if payment_data.contract_id and payment_data.employee_id:
         duplicate_query = db.query(Payment).filter(
-            Payment.contract_id == payment_data.contract_id,
-            Payment.employee_id == payment_data.employee_id,
-            Payment.role == payment_data.role,
-            Payment.payment_type == payment_data.payment_type
+            Payment.contract_id == payment_data.contract_id, Payment.employee_id == payment_data.employee_id, Payment.role == payment_data.role, Payment.payment_type == payment_data.payment_type
         )
         # stage_name может быть None (например, у СДП) — корректно сравниваем
         if payment_data.stage_name:
             duplicate_query = duplicate_query.filter(Payment.stage_name == payment_data.stage_name)
         else:
-            duplicate_query = duplicate_query.filter(
-                (Payment.stage_name.is_(None)) | (Payment.stage_name == '')
-            )
+            duplicate_query = duplicate_query.filter((Payment.stage_name.is_(None)) | (Payment.stage_name == ""))
         if payment_data.crm_card_id:
             duplicate_query = duplicate_query.filter(Payment.crm_card_id == payment_data.crm_card_id)
         if payment_data.supervision_card_id:
             duplicate_query = duplicate_query.filter(Payment.supervision_card_id == payment_data.supervision_card_id)
         # Исключаем переназначенные платежи из проверки
-        duplicate_query = duplicate_query.filter(
-            (Payment.reassigned == False) | (Payment.reassigned.is_(None))
-        )
+        duplicate_query = duplicate_query.filter((Payment.reassigned == False) | (Payment.reassigned.is_(None)))
         existing = duplicate_query.first()
         if existing:
-            raise HTTPException(
-                status_code=409,
-                detail=f"Платёж уже существует (id={existing.id}). Используйте PUT для обновления."
-            )
+            raise HTTPException(status_code=409, detail=f"Платёж уже существует (id={existing.id}). Используйте PUT для обновления.")
 
     try:
         # Получаем данные и устанавливаем значения по умолчанию для NOT NULL полей
         data = payment_data.model_dump(exclude_unset=True)
 
         # Устанавливаем значения по умолчанию для NOT NULL полей
-        if data.get('calculated_amount') is None:
-            data['calculated_amount'] = 0.0
-        if data.get('final_amount') is None:
-            data['final_amount'] = data.get('calculated_amount', 0.0)
+        if data.get("calculated_amount") is None:
+            data["calculated_amount"] = 0.0
+        if data.get("final_amount") is None:
+            data["final_amount"] = data.get("calculated_amount", 0.0)
         # payment_status остаётся NULL - платёж ещё не оплачен
         # Статус 'paid' устанавливается кнопкой "Оплачено" в UI
 
         # Денормализация: сохраняем имя сотрудника для истории
-        if data.get('employee_id') and not data.get('employee_name'):
-            emp = db.query(Employee).filter(Employee.id == data['employee_id']).first()
+        if data.get("employee_id") and not data.get("employee_name"):
+            emp = db.query(Employee).filter(Employee.id == data["employee_id"]).first()
             if emp:
-                data['employee_name'] = emp.full_name
+                data["employee_name"] = emp.full_name
 
         payment = Payment(**data)
         db.add(payment)
         db.commit()
         db.refresh(payment)
 
-        log = ActivityLog(
-            employee_id=current_user.id,
-            action_type="create",
-            entity_type="payment",
-            entity_id=payment.id
-        )
+        log = ActivityLog(employee_id=current_user.id, action_type="create", entity_type="payment", entity_id=payment.id)
         db.add(log)
 
         # Бизнес-история создания платежа
-        emp_name = payment.employee_name or 'Неизвестный'
-        pay_desc = f'Создан платёж: {emp_name}, роль: {payment.role or "—"}, сумма: {payment.final_amount or 0}'
+        emp_name = payment.employee_name or "Неизвестный"
+        pay_desc = f"Создан платёж: {emp_name}, роль: {payment.role or '—'}, сумма: {payment.final_amount or 0}"
         # Запись для самого платежа (для API /action-history/payment/{id})
-        db.add(ActionHistory(
-            user_id=current_user.id,
-            action_type='payment_created',
-            entity_type='payment',
-            entity_id=payment.id,
-            description=pay_desc
-        ))
+        db.add(ActionHistory(user_id=current_user.id, action_type="payment_created", entity_type="payment", entity_id=payment.id, description=pay_desc))
         # Дополнительная запись для карточки (для отображения в истории карточки)
         if payment.crm_card_id:
-            db.add(ActionHistory(
-                user_id=current_user.id,
-                action_type='payment_created',
-                entity_type='crm_card',
-                entity_id=payment.crm_card_id,
-                description=pay_desc
-            ))
+            db.add(ActionHistory(user_id=current_user.id, action_type="payment_created", entity_type="crm_card", entity_id=payment.crm_card_id, description=pay_desc))
         elif payment.supervision_card_id:
-            db.add(ActionHistory(
-                user_id=current_user.id,
-                action_type='payment_created',
-                entity_type='supervision_card',
-                entity_id=payment.supervision_card_id,
-                description=pay_desc
-            ))
+            db.add(ActionHistory(user_id=current_user.id, action_type="payment_created", entity_type="supervision_card", entity_id=payment.supervision_card_id, description=pay_desc))
 
         db.commit()
 
         # N2: Уведомление о создании оплаты старшему менеджеру
         try:
             import asyncio
+
             contract = db.query(Contract).filter(Contract.id == payment.contract_id).first()
-            address = contract.address if contract else ''
-            contract_number = contract.contract_number if contract else ''
+            address = contract.address if contract else ""
+            contract_number = contract.contract_number if contract else ""
             amount_val = payment.final_amount or payment.calculated_amount or 0
-            emp_name = payment.employee_name or 'Неизвестный'
+            emp_name = payment.employee_name or "Неизвестный"
             sm_id = None
-            pt_key = 'individual'
+            pt_key = "individual"
             if payment.crm_card_id:
                 card = db.query(CRMCard).filter(CRMCard.id == payment.crm_card_id).first()
                 if card:
                     sm_id = card.senior_manager_id
                     if contract:
-                        pt = (contract.project_type or '').lower()
-                        pt_key = 'template' if 'шабл' in pt else 'individual'
+                        pt = (contract.project_type or "").lower()
+                        pt_key = "template" if "шабл" in pt else "individual"
             elif payment.supervision_card_id:
                 sv = db.query(SupervisionCard).filter(SupervisionCard.id == payment.supervision_card_id).first()
                 if sv:
                     sm_id = sv.senior_manager_id
-                pt_key = 'supervision'
+                pt_key = "supervision"
             if sm_id and amount_val > 0:
-                asyncio.create_task(dispatch_notification(
-                    db=db,
-                    employee_id=sm_id,
-                    event_type='payment',
-                    title=f'Оплата: {address}',
-                    message=f'Создана оплата {amount_val} руб. для {emp_name} по договору {contract_number} ({address}).',
-                    related_entity_type='payment',
-                    related_entity_id=payment.id,
-                    project_type=pt_key,
-                    card_id=payment.crm_card_id,
-                ))
+                asyncio.create_task(
+                    dispatch_notification(
+                        db=db,
+                        employee_id=sm_id,
+                        event_type="payment",
+                        title=f"Оплата: {address}",
+                        message=f"Создана оплата {amount_val} руб. для {emp_name} по договору {contract_number} ({address}).",
+                        related_entity_type="payment",
+                        related_entity_id=payment.id,
+                        project_type=pt_key,
+                        card_id=payment.crm_card_id,
+                    )
+                )
         except Exception as e:
             logger.warning(f"Ошибка уведомления payment: {e}")
 
@@ -1020,15 +1029,11 @@ async def create_payment(
 
 
 @router.get("/contract/{contract_id}")
-async def get_payments_for_contract(
-    contract_id: int,
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def get_payments_for_contract(contract_id: int, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Получить платежи по договору"""
     # Получаем статус договора для определения отчетного месяца
     contract = db.query(Contract).filter(Contract.id == contract_id).first()
-    contract_status = contract.status if contract else ''
+    contract_status = contract.status if contract else ""
 
     payments = db.query(Payment).filter(Payment.contract_id == contract_id).all()
 
@@ -1036,40 +1041,40 @@ async def get_payments_for_contract(
     result = []
     for payment in payments:
         payment_dict = {
-            'id': payment.id,
-            'contract_id': payment.contract_id,
-            'crm_card_id': payment.crm_card_id,
-            'supervision_card_id': payment.supervision_card_id,
-            'employee_id': payment.employee_id,
-            'role': payment.role,
-            'stage_name': payment.stage_name,
-            'calculated_amount': float(payment.calculated_amount) if payment.calculated_amount else 0,
-            'manual_amount': float(payment.manual_amount) if payment.manual_amount else None,
-            'final_amount': float(payment.final_amount) if payment.final_amount else 0,
-            'is_manual': payment.is_manual,
-            'payment_type': payment.payment_type,
-            'report_month': payment.report_month,
-            'payment_status': payment.payment_status if payment.payment_status else 'pending',  # ИСПРАВЛЕНИЕ: Статус по умолчанию
-            'is_paid': payment.is_paid,
-            'paid_date': payment.paid_date.isoformat() if payment.paid_date else None,
-            'paid_by': payment.paid_by,
-            'reassigned': payment.reassigned if payment.reassigned else False,
-            'old_employee_id': payment.old_employee_id,
-            'created_at': payment.created_at.isoformat() if payment.created_at else None,
-            'updated_at': payment.updated_at.isoformat() if payment.updated_at else None,
+            "id": payment.id,
+            "contract_id": payment.contract_id,
+            "crm_card_id": payment.crm_card_id,
+            "supervision_card_id": payment.supervision_card_id,
+            "employee_id": payment.employee_id,
+            "role": payment.role,
+            "stage_name": payment.stage_name,
+            "calculated_amount": float(payment.calculated_amount) if payment.calculated_amount else 0,
+            "manual_amount": float(payment.manual_amount) if payment.manual_amount else None,
+            "final_amount": float(payment.final_amount) if payment.final_amount else 0,
+            "is_manual": payment.is_manual,
+            "payment_type": payment.payment_type,
+            "report_month": payment.report_month,
+            "payment_status": payment.payment_status if payment.payment_status else "pending",  # ИСПРАВЛЕНИЕ: Статус по умолчанию
+            "is_paid": payment.is_paid,
+            "paid_date": payment.paid_date.isoformat() if payment.paid_date else None,
+            "paid_by": payment.paid_by,
+            "reassigned": payment.reassigned if payment.reassigned else False,
+            "old_employee_id": payment.old_employee_id,
+            "created_at": payment.created_at.isoformat() if payment.created_at else None,
+            "updated_at": payment.updated_at.isoformat() if payment.updated_at else None,
         }
 
         # Получаем имя сотрудника
         employee = db.query(Employee).filter(Employee.id == payment.employee_id).first()
-        payment_dict['employee_name'] = payment.employee_name or (employee.full_name if employee else 'Неизвестный')
-        payment_dict['position'] = employee.position if employee else ''  # ИСПРАВЛЕНИЕ: Добавлена должность
+        payment_dict["employee_name"] = payment.employee_name or (employee.full_name if employee else "Неизвестный")
+        payment_dict["position"] = employee.position if employee else ""  # ИСПРАВЛЕНИЕ: Добавлена должность
 
         # ИСПРАВЛЕНИЕ: Добавлены поля source и amount для совместимости
-        payment_dict['source'] = 'CRM' if payment.crm_card_id else 'Оклад'
-        payment_dict['amount'] = payment_dict['final_amount']  # Алиас
+        payment_dict["source"] = "CRM" if payment.crm_card_id else "Оклад"
+        payment_dict["amount"] = payment_dict["final_amount"]  # Алиас
 
         # ИСПРАВЛЕНИЕ 25.01.2026: Добавлен contract_status для отображения "В работе" вместо "Не установлен"
-        payment_dict['contract_status'] = contract_status
+        payment_dict["contract_status"] = contract_status
 
         result.append(payment_dict)
 
@@ -1077,24 +1082,17 @@ async def get_payments_for_contract(
 
 
 @router.patch("/contract/{contract_id}/report-month")
-async def set_payments_report_month(
-    contract_id: int,
-    data: dict,
-    current_user: Employee = Depends(require_permission("payments.update")),
-    db: Session = Depends(get_db)
-):
+async def set_payments_report_month(contract_id: int, data: dict, current_user: Employee = Depends(require_permission("payments.update")), db: Session = Depends(get_db)):
     """Установить отчетный месяц для всех платежей договора без месяца"""
-    report_month = data.get('report_month')
+    report_month = data.get("report_month")
     if not report_month:
         raise HTTPException(status_code=400, detail="report_month обязателен")
 
     # Обновляем все платежи без отчетного месяца
-    result = db.query(Payment).filter(
-        Payment.contract_id == contract_id,
-        or_(Payment.report_month.is_(None), Payment.report_month == '')
-    ).update(
-        {'report_month': report_month},
-        synchronize_session='fetch'
+    result = (
+        db.query(Payment)
+        .filter(Payment.contract_id == contract_id, or_(Payment.report_month.is_(None), Payment.report_month == ""))
+        .update({"report_month": report_month}, synchronize_session="fetch")
     )
 
     db.commit()
@@ -1103,116 +1101,101 @@ async def set_payments_report_month(
 
 
 @router.get("/supervision/{contract_id}")
-async def get_payments_for_supervision(
-    contract_id: int,
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def get_payments_for_supervision(contract_id: int, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Получить платежи для надзора - ИСПРАВЛЕНО 06.02.2026"""
     # ИСПРАВЛЕНИЕ: Фильтруем по supervision_card_id через JOIN с SupervisionCard
     # Платежи надзора имеют payment_type='Полная оплата' или другой тип
-    payments = db.query(Payment).join(
-        SupervisionCard, Payment.supervision_card_id == SupervisionCard.id
-    ).filter(
-        SupervisionCard.contract_id == contract_id
-    ).all()
+    payments = db.query(Payment).join(SupervisionCard, Payment.supervision_card_id == SupervisionCard.id).filter(SupervisionCard.contract_id == contract_id).all()
 
     result = []
     for payment in payments:
         employee = db.query(Employee).filter(Employee.id == payment.employee_id).first()
-        result.append({
-            'id': payment.id,
-            'contract_id': payment.contract_id,
-            'supervision_card_id': payment.supervision_card_id,
-            'employee_id': payment.employee_id,
-            'employee_name': payment.employee_name or (employee.full_name if employee else 'Неизвестный'),
-            'role': payment.role,
-            'stage_name': payment.stage_name,
-            'calculated_amount': float(payment.calculated_amount) if payment.calculated_amount else 0,
-            'manual_amount': float(payment.manual_amount) if payment.manual_amount else None,
-            'final_amount': float(payment.final_amount) if payment.final_amount else 0,
-            'is_manual': payment.is_manual,
-            'payment_type': payment.payment_type,
-            'report_month': payment.report_month,
-            'payment_status': payment.payment_status,
-            'is_paid': payment.is_paid,
-            'reassigned': payment.reassigned if hasattr(payment, 'reassigned') else False,
-            'old_employee_id': payment.old_employee_id if hasattr(payment, 'old_employee_id') else None,
-        })
+        result.append(
+            {
+                "id": payment.id,
+                "contract_id": payment.contract_id,
+                "supervision_card_id": payment.supervision_card_id,
+                "employee_id": payment.employee_id,
+                "employee_name": payment.employee_name or (employee.full_name if employee else "Неизвестный"),
+                "role": payment.role,
+                "stage_name": payment.stage_name,
+                "calculated_amount": float(payment.calculated_amount) if payment.calculated_amount else 0,
+                "manual_amount": float(payment.manual_amount) if payment.manual_amount else None,
+                "final_amount": float(payment.final_amount) if payment.final_amount else 0,
+                "is_manual": payment.is_manual,
+                "payment_type": payment.payment_type,
+                "report_month": payment.report_month,
+                "payment_status": payment.payment_status,
+                "is_paid": payment.is_paid,
+                "reassigned": payment.reassigned if hasattr(payment, "reassigned") else False,
+                "old_employee_id": payment.old_employee_id if hasattr(payment, "old_employee_id") else None,
+            }
+        )
 
     return result
 
 
 @router.get("/by-supervision-card/{supervision_card_id}")
-async def get_payments_by_supervision_card(
-    supervision_card_id: int,
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def get_payments_by_supervision_card(supervision_card_id: int, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """ДОБАВЛЕНО 30.01.2026: Получить платежи по ID карточки надзора"""
-    payments = db.query(Payment).filter(
-        Payment.supervision_card_id == supervision_card_id
-    ).all()
+    payments = db.query(Payment).filter(Payment.supervision_card_id == supervision_card_id).all()
 
     result = []
     for payment in payments:
         employee = db.query(Employee).filter(Employee.id == payment.employee_id).first()
-        result.append({
-            'id': payment.id,
-            'contract_id': payment.contract_id,
-            'supervision_card_id': payment.supervision_card_id,
-            'employee_id': payment.employee_id,
-            'employee_name': payment.employee_name or (employee.full_name if employee else 'Неизвестный'),
-            'role': payment.role,
-            'stage_name': payment.stage_name,
-            'calculated_amount': float(payment.calculated_amount) if payment.calculated_amount else 0,
-            'manual_amount': float(payment.manual_amount) if payment.manual_amount else None,
-            'final_amount': float(payment.final_amount) if payment.final_amount else 0,
-            'is_manual': payment.is_manual,
-            'payment_type': payment.payment_type,
-            'report_month': payment.report_month,
-            'payment_status': payment.payment_status,
-            'is_paid': payment.is_paid,
-            'reassigned': payment.reassigned if hasattr(payment, 'reassigned') else False,
-            'old_employee_id': payment.old_employee_id if hasattr(payment, 'old_employee_id') else None,
-        })
+        result.append(
+            {
+                "id": payment.id,
+                "contract_id": payment.contract_id,
+                "supervision_card_id": payment.supervision_card_id,
+                "employee_id": payment.employee_id,
+                "employee_name": payment.employee_name or (employee.full_name if employee else "Неизвестный"),
+                "role": payment.role,
+                "stage_name": payment.stage_name,
+                "calculated_amount": float(payment.calculated_amount) if payment.calculated_amount else 0,
+                "manual_amount": float(payment.manual_amount) if payment.manual_amount else None,
+                "final_amount": float(payment.final_amount) if payment.final_amount else 0,
+                "is_manual": payment.is_manual,
+                "payment_type": payment.payment_type,
+                "report_month": payment.report_month,
+                "payment_status": payment.payment_status,
+                "is_paid": payment.is_paid,
+                "reassigned": payment.reassigned if hasattr(payment, "reassigned") else False,
+                "old_employee_id": payment.old_employee_id if hasattr(payment, "old_employee_id") else None,
+            }
+        )
 
     return result
 
 
 @router.get("/crm/{contract_id}")
-async def get_payments_for_crm(
-    contract_id: int,
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def get_payments_for_crm(contract_id: int, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Получить выплаты для CRM (не надзор)"""
-    payments = db.query(Payment).filter(
-        Payment.contract_id == contract_id,
-        Payment.supervision_card_id.is_(None)
-    ).all()
+    payments = db.query(Payment).filter(Payment.contract_id == contract_id, Payment.supervision_card_id.is_(None)).all()
 
     result = []
     for p in payments:
         employee = db.query(Employee).filter(Employee.id == p.employee_id).first()
-        result.append({
-            'id': p.id,
-            'contract_id': p.contract_id,
-            'crm_card_id': p.crm_card_id,
-            'employee_id': p.employee_id,
-            'employee_name': p.employee_name or (employee.full_name if employee else 'Неизвестный'),
-            'position': employee.position if employee else '',
-            'role': p.role,
-            'stage_name': p.stage_name,
-            'calculated_amount': float(p.calculated_amount) if p.calculated_amount else 0,
-            'final_amount': float(p.final_amount) if p.final_amount else 0,
-            'amount': float(p.final_amount) if p.final_amount else 0,
-            'payment_type': p.payment_type,
-            'report_month': p.report_month,
-            'payment_status': p.payment_status,
-            'is_paid': p.is_paid,
-            'source': 'CRM'
-        })
+        result.append(
+            {
+                "id": p.id,
+                "contract_id": p.contract_id,
+                "crm_card_id": p.crm_card_id,
+                "employee_id": p.employee_id,
+                "employee_name": p.employee_name or (employee.full_name if employee else "Неизвестный"),
+                "position": employee.position if employee else "",
+                "role": p.role,
+                "stage_name": p.stage_name,
+                "calculated_amount": float(p.calculated_amount) if p.calculated_amount else 0,
+                "final_amount": float(p.final_amount) if p.final_amount else 0,
+                "amount": float(p.final_amount) if p.final_amount else 0,
+                "payment_type": p.payment_type,
+                "report_month": p.report_month,
+                "payment_status": p.payment_status,
+                "is_paid": p.is_paid,
+                "source": "CRM",
+            }
+        )
 
     return result
 
@@ -1224,28 +1207,19 @@ async def get_payments_for_crm(
 
 # ВАЖНО: Этот endpoint должен быть ПОСЛЕ всех статических /...
 @router.get("/{payment_id}", response_model=PaymentResponse)
-async def get_payment_by_id(
-    payment_id: int,
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def get_payment_by_id(payment_id: int, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Получить платеж по ID"""
     payment = db.query(Payment).filter(Payment.id == payment_id).first()
     if not payment:
         raise HTTPException(status_code=404, detail="Платеж не найден")
     # Добавляем employee_name через JOIN
     employee = db.query(Employee).filter(Employee.id == payment.employee_id).first()
-    payment.employee_name = payment.employee_name or (employee.full_name if employee else 'Неизвестный')
+    payment.employee_name = payment.employee_name or (employee.full_name if employee else "Неизвестный")
     return payment
 
 
 @router.put("/{payment_id}", response_model=PaymentResponse)
-async def update_payment(
-    payment_id: int,
-    payment_data: PaymentUpdate,
-    current_user: Employee = Depends(require_permission("payments.update")),
-    db: Session = Depends(get_db)
-):
+async def update_payment(payment_id: int, payment_data: PaymentUpdate, current_user: Employee = Depends(require_permission("payments.update")), db: Session = Depends(get_db)):
     """Обновить платеж"""
     payment = db.query(Payment).filter(Payment.id == payment_id).first()
     if not payment:
@@ -1254,17 +1228,17 @@ async def update_payment(
     update_fields = payment_data.model_dump(exclude_unset=True)
 
     # Синхронизация payment_status ↔ is_paid (защита от рассинхрона)
-    if 'payment_status' in update_fields and update_fields['payment_status'] == 'paid':
-        if 'is_paid' not in update_fields:
-            update_fields['is_paid'] = True
-        if 'paid_date' not in update_fields and not payment.paid_date:
-            update_fields['paid_date'] = datetime.utcnow()
-    if 'is_paid' in update_fields and update_fields['is_paid'] is True:
-        if 'payment_status' not in update_fields:
-            update_fields['payment_status'] = 'paid'
-    if 'payment_status' in update_fields and update_fields['payment_status'] != 'paid':
-        if 'is_paid' not in update_fields:
-            update_fields['is_paid'] = False
+    if "payment_status" in update_fields and update_fields["payment_status"] == "paid":
+        if "is_paid" not in update_fields:
+            update_fields["is_paid"] = True
+        if "paid_date" not in update_fields and not payment.paid_date:
+            update_fields["paid_date"] = datetime.utcnow()
+    if "is_paid" in update_fields and update_fields["is_paid"] is True:
+        if "payment_status" not in update_fields:
+            update_fields["payment_status"] = "paid"
+    if "payment_status" in update_fields and update_fields["payment_status"] != "paid":
+        if "is_paid" not in update_fields:
+            update_fields["is_paid"] = False
 
     for field, value in update_fields.items():
         setattr(payment, field, value)
@@ -1280,21 +1254,15 @@ async def update_payment(
 
     # Бизнес-история обновления платежа
     changes = []
-    if 'employee_id' in update_fields:
-        new_emp = db.query(Employee).filter(Employee.id == update_fields['employee_id']).first()
-        changes.append(f'переназначен → {new_emp.full_name if new_emp else "ID " + str(update_fields["employee_id"])}')
-    if 'reassigned' in update_fields and update_fields['reassigned']:
-        changes.append('помечен как переназначенный')
-    if 'final_amount' in update_fields:
-        changes.append(f'сумма: {update_fields["final_amount"]}')
+    if "employee_id" in update_fields:
+        new_emp = db.query(Employee).filter(Employee.id == update_fields["employee_id"]).first()
+        changes.append(f"переназначен → {new_emp.full_name if new_emp else 'ID ' + str(update_fields['employee_id'])}")
+    if "reassigned" in update_fields and update_fields["reassigned"]:
+        changes.append("помечен как переназначенный")
+    if "final_amount" in update_fields:
+        changes.append(f"сумма: {update_fields['final_amount']}")
     if changes:
-        db.add(ActionHistory(
-            user_id=current_user.id,
-            action_type='payment_updated',
-            entity_type='payment',
-            entity_id=payment_id,
-            description=f'Обновлён платёж #{payment_id}: {", ".join(changes)}'
-        ))
+        db.add(ActionHistory(user_id=current_user.id, action_type="payment_updated", entity_type="payment", entity_id=payment_id, description=f"Обновлён платёж #{payment_id}: {', '.join(changes)}"))
 
     payment.updated_at = datetime.utcnow()
     db.commit()
@@ -1304,22 +1272,13 @@ async def update_payment(
 
 
 @router.delete("/{payment_id}")
-async def delete_payment(
-    payment_id: int,
-    current_user: Employee = Depends(require_permission("payments.delete")),
-    db: Session = Depends(get_db)
-):
+async def delete_payment(payment_id: int, current_user: Employee = Depends(require_permission("payments.delete")), db: Session = Depends(get_db)):
     """Удалить платеж"""
     payment = db.query(Payment).filter(Payment.id == payment_id).first()
     if not payment:
         raise HTTPException(status_code=404, detail="Платеж не найден")
 
-    log = ActivityLog(
-        employee_id=current_user.id,
-        action_type="delete",
-        entity_type="payment",
-        entity_id=payment_id
-    )
+    log = ActivityLog(employee_id=current_user.id, action_type="delete", entity_type="payment", entity_id=payment_id)
     db.add(log)
 
     db.delete(payment)
@@ -1329,12 +1288,7 @@ async def delete_payment(
 
 
 @router.patch("/{payment_id}/manual")
-async def update_payment_manual(
-    payment_id: int,
-    data: PaymentManualUpdateRequest,
-    current_user: Employee = Depends(require_permission("payments.update")),
-    db: Session = Depends(get_db)
-):
+async def update_payment_manual(payment_id: int, data: PaymentManualUpdateRequest, current_user: Employee = Depends(require_permission("payments.update")), db: Session = Depends(get_db)):
     """Обновить платеж вручную"""
     try:
         payment = db.query(Payment).filter(Payment.id == payment_id).first()
@@ -1350,12 +1304,7 @@ async def update_payment_manual(
         db.commit()
         db.refresh(payment)
 
-        return {
-            'id': payment.id,
-            'manual_amount': float(payment.manual_amount),
-            'final_amount': float(payment.final_amount),
-            'report_month': payment.report_month
-        }
+        return {"id": payment.id, "manual_amount": float(payment.manual_amount), "final_amount": float(payment.final_amount), "report_month": payment.report_month}
 
     except HTTPException:
         raise
@@ -1366,12 +1315,7 @@ async def update_payment_manual(
 
 
 @router.patch("/{payment_id}/mark-paid")
-async def mark_payment_as_paid(
-    payment_id: int,
-    employee_id: int,
-    current_user: Employee = Depends(require_permission("salaries.mark_paid")),
-    db: Session = Depends(get_db)
-):
+async def mark_payment_as_paid(payment_id: int, employee_id: int, current_user: Employee = Depends(require_permission("salaries.mark_paid")), db: Session = Depends(get_db)):
     """Отметить платеж как выплаченный"""
     try:
         payment = db.query(Payment).filter(Payment.id == payment_id).first()
@@ -1379,18 +1323,13 @@ async def mark_payment_as_paid(
             raise HTTPException(status_code=404, detail="Платеж не найден")
 
         # Идемпотентность: если уже оплачен — вернуть текущее состояние без дублирования
-        if payment.is_paid and payment.payment_status == 'paid':
-            return {
-                'id': payment.id,
-                'is_paid': payment.is_paid,
-                'paid_date': payment.paid_date.isoformat() if payment.paid_date else None,
-                'paid_by': payment.paid_by
-            }
+        if payment.is_paid and payment.payment_status == "paid":
+            return {"id": payment.id, "is_paid": payment.is_paid, "paid_date": payment.paid_date.isoformat() if payment.paid_date else None, "paid_by": payment.paid_by}
 
         payment.is_paid = True
         payment.paid_date = datetime.utcnow()
         payment.paid_by = current_user.id
-        payment.payment_status = 'paid'
+        payment.payment_status = "paid"
         payment.updated_at = datetime.utcnow()
 
         # Аудит-лог отметки выплаты
@@ -1404,12 +1343,7 @@ async def mark_payment_as_paid(
 
         db.commit()
 
-        return {
-            'id': payment.id,
-            'is_paid': payment.is_paid,
-            'paid_date': payment.paid_date.isoformat() if payment.paid_date else None,
-            'paid_by': payment.paid_by
-        }
+        return {"id": payment.id, "is_paid": payment.is_paid, "paid_date": payment.paid_date.isoformat() if payment.paid_date else None, "paid_by": payment.paid_by}
 
     except HTTPException:
         raise

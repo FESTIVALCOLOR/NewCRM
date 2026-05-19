@@ -138,8 +138,9 @@ def _ensure_yd_folder(folder_path: str) -> bool:
         yd = get_yandex_disk_service()
         if not yd or not yd.token:
             return False
-        # ensure_folder_exists создаёт все промежуточные папки (аналог os.makedirs)
-        return yd.ensure_folder_exists(folder_path)
+        # create_folder создаёт все промежуточные папки рекурсивно (аналог os.makedirs)
+        yd.create_folder(folder_path)
+        return True
     except Exception as e:
         logger.warning(f"ЯД: не удалось создать папку {folder_path}: {e}")
         return False

@@ -829,9 +829,11 @@ async def create_card_files_gallery(
         safe_name = os.path.basename(file_item.file_name)
         if not safe_name:
             continue
+        # Нормализуем source path: ЯД API copy требует disk: префикс
+        src_path = file_item.yandex_path if file_item.yandex_path.startswith("disk:") else f"disk:{file_item.yandex_path}"
         dst_disk_path = f"disk:{target_folder}/{safe_name}"
         try:
-            yd.copy_file(file_item.yandex_path, dst_disk_path, overwrite=True)
+            yd.copy_file(src_path, dst_disk_path, overwrite=True)
             public_url = yd.get_public_link(dst_disk_path) or ""
         except Exception as e:
             logger.warning(f"Не удалось скопировать {file_item.yandex_path}: {e}")

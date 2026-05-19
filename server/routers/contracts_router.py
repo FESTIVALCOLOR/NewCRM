@@ -149,6 +149,7 @@ async def update_contract(contract_id: int, contract_data: ContractUpdate, curre
     # Проверяем, изменяется ли статус на "АВТОРСКИЙ НАДЗОР"
     old_status = contract.status
     update_data = contract_data.model_dump(exclude_unset=True)
+    old_area = contract.area
     new_status = update_data.get("status")
     need_supervision_card = new_status == "АВТОРСКИЙ НАДЗОР" and old_status != "АВТОРСКИЙ НАДЗОР"
 
@@ -180,6 +181,15 @@ async def update_contract(contract_id: int, contract_data: ContractUpdate, curre
             db.add(supervision_card)
             db.commit()
             logger.info(f"Автоматически создана карточка надзора для договора {contract_id}")
+
+    # Пересчёт оплат при изменении площади
+    new_area = update_data.get("area")
+    if new_area is not None and float(new_area or 0) != float(old_area or 0):
+        from routers.payments_router import _recalculate_payments_for_contract
+
+        recalc_count = _recalculate_payments_for_contract(db, contract_id)
+        if recalc_count:
+            logger.info(f"Договор {contract_id}: площадь изменена, пересчитано оплат: {recalc_count}")
 
     # Лог
     log = ActivityLog(employee_id=current_user.id, action_type="update", entity_type="contract", entity_id=contract.id)

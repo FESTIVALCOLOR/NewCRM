@@ -29,3 +29,7 @@ validate_stage_files_on_yandex.validate
 scan_contract_files_on_yandex
 add_file_message
 initialize_database
+get_all_payments
+get_payments_by_type
+recalculate_payments
+create_payment
