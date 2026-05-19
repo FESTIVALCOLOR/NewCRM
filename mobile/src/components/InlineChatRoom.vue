@@ -1453,19 +1453,45 @@ const cardFiles = ref([])
 const cardFilesLoading = ref(false)
 
 const stageRuNames = {
+  // Надзорные (идут первыми)
   supervision: 'Авторский надзор',
+  supervision_stage: 'Этапы надзора',
   supervision_reports: 'Отчёты надзора',
   'Авторский надзор': 'Авторский надзор',
+  'Этапы надзора': 'Этапы надзора',
   'Отчёты надзора': 'Отчёты надзора',
   'Выезды на объект': 'Выезды на объект',
-  stage1: 'Стадия 1',
+  // Стадии проекта
+  stage1: 'Стадия 1: Планировочное решение',
   stage2: 'Стадия 2',
-  stage3: 'Стадия 3',
-  planning: 'Планировочные решения',
+  stage2_concept: 'Стадия 2: Концепция',
+  stage2_3d: 'Стадия 2: 3D визуализация',
+  stage3: 'Стадия 3: Чертежи',
+  planning: 'Планировочное решение',
   concept: 'Концепция дизайна',
   working: 'Рабочие чертежи',
-  visualization: '3Д визуализация',
+  visualization: '3D визуализация',
+  // Вспомогательные
+  measurement: 'Замеры',
+  photo_documentation: 'Фотодокументация',
+  documents: 'Документы',
+  references: 'Референсы',
+  questionnaire: 'Анкета клиента',
+  acts: 'Акты',
+  act_pr: 'Акт ПР',
+  act_pr_signed: 'Акт ПР (подписан)',
+  act_kd: 'Акт КД',
+  act_kd_signed: 'Акт КД (подписан)',
+  act_rch: 'Акт РЧ',
+  act_rch_signed: 'Акт РЧ (подписан)',
+  info_letters: 'Информационные письма',
+  info_letter: 'Информационное письмо',
+  info_letter_signed: 'Информационное письмо (подписано)',
+  tech_task: 'Техническое задание',
+  additional_agreement_signed: 'Доп. соглашение (подписано)',
 }
+
+const SUPERVISION_STAGE_ORDER = ['Авторский надзор', 'Этапы надзора', 'Отчёты надзора', 'Выезды на объект']
 
 const groupedCardFiles = computed(() => {
   const groups = {}
@@ -1475,7 +1501,16 @@ const groupedCardFiles = computed(() => {
     if (!groups[key]) groups[key] = []
     groups[key].push(f)
   }
-  return Object.entries(groups).map(([stage, files]) => ({ stage, files }))
+  return Object.entries(groups)
+    .map(([stage, files]) => ({ stage, files }))
+    .sort((a, b) => {
+      const ai = SUPERVISION_STAGE_ORDER.indexOf(a.stage)
+      const bi = SUPERVISION_STAGE_ORDER.indexOf(b.stage)
+      if (ai !== -1 && bi !== -1) return ai - bi
+      if (ai !== -1) return -1
+      if (bi !== -1) return 1
+      return a.stage.localeCompare(b.stage, 'ru')
+    })
 })
 
 async function loadCardFiles() {
