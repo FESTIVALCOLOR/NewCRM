@@ -1047,6 +1047,18 @@
 
         <!-- ====== ВКЛАДКА: Чат с клиентом ====== -->
         <q-tab-panel name="chat" class="q-pa-sm">
+          <div v-if="chatData" class="row q-mb-xs">
+            <q-btn
+              flat
+              dense
+              no-caps
+              icon="smart_toy"
+              label="Отправить скрипт"
+              color="green-7"
+              style="font-size: 12px"
+              @click="loadScriptsAndShow"
+            />
+          </div>
           <div style="border: 1px solid #E0E0E0; border-radius: 8px; overflow: hidden">
             <InlineChatRoom
               v-if="chatTabVisited && card?.id"

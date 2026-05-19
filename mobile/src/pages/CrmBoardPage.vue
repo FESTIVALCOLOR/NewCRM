@@ -966,13 +966,30 @@ onMounted(async () => {
 /* Ландшафтная доска — все колонки рядом */
 .landscape-board {
   display: flex;
-  overflow-x: auto;
+  overflow-x: scroll;
   overflow-y: hidden;
   padding: 8px;
   gap: 8px;
   height: calc(100vh - 110px);
+  width: 100%;
+  box-sizing: border-box;
   -webkit-overflow-scrolling: touch;
-  scrollbar-width: auto;
+  scrollbar-width: thin;
+}
+.landscape-board::-webkit-scrollbar {
+  height: 8px;
+  display: block;
+}
+.landscape-board::-webkit-scrollbar-track {
+  background: #f0f0f0;
+  border-radius: 4px;
+}
+.landscape-board::-webkit-scrollbar-thumb {
+  background: #c0c0c0;
+  border-radius: 4px;
+}
+.landscape-board::-webkit-scrollbar-thumb:hover {
+  background: #999;
 }
 .landscape-column {
   flex: 0 0 280px;

@@ -808,7 +808,7 @@
           dense
           size="sm"
           icon="attach_file"
-          class="bg-grey-2"
+          style="background: #EEEEEE"
           :loading="uploadProgress > 0 && uploadProgress < 100"
           @click="pickFile"
         >
@@ -830,7 +830,7 @@
           size="sm"
           icon="folder_open"
           color="grey-6"
-          class="bg-grey-2"
+          style="background: #EEEEEE"
           @click="showCardFilesDialog = true; loadCardFiles()"
         >
           <q-tooltip>Файлы из карточки CRM</q-tooltip>
@@ -1959,8 +1959,9 @@ async function loadChat() {
   if (!idVal) return
   loading.value = true
   try {
+    const resolvedType = props.chatType === 'supervision' ? 'employee' : props.chatType
     const { data } = await api.get('/api/v1/chats/', {
-      params: { chat_type: 'employee', [idKey]: idVal },
+      params: { chat_type: resolvedType, [idKey]: idVal },
     })
     const list = Array.isArray(data) ? data : (data.items || [])
     if (list.length > 0) {
@@ -2188,8 +2189,9 @@ async function createChat() {
   if (!idVal) return
   creating.value = true
   try {
+    const resolvedType = props.chatType === 'supervision' ? 'employee' : props.chatType
     const payload = {
-      chat_type: 'employee',
+      chat_type: resolvedType,
       ...(isSupervision
         ? { supervision_card_id: idVal }
         : { crm_card_id: idVal }),

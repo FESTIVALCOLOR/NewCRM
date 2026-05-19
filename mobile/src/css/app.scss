@@ -217,6 +217,12 @@ body {
 * { -webkit-tap-highlight-color: transparent; }
 html { scroll-behavior: smooth; -webkit-overflow-scrolling: touch; }
 
+// Ландшафтная канбан-доска — разрешить горизонтальный скролл
+// q-layout по умолчанию имеет overflow-x: hidden, что клипует горизонтальный скролл в дочерних элементах
+.q-layout {
+  overflow-x: auto !important;
+}
+
 // Logo
 .fc-logo {
   height: 24px;

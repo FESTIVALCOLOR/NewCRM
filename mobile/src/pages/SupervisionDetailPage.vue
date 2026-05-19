@@ -61,7 +61,7 @@
         <q-tab name="payments" label="Оплаты" />
         <q-tab name="notes" label="Заметки" />
         <q-tab name="chat" label="Чат" />
-        <q-tab name="sv-chat" icon="chat" label="Чат надзора" />
+        <q-tab name="sv-chat" label="Чат надзора" />
       </q-tabs>
 
       <q-tab-panels v-model="activeTab" animated class="bg-transparent">
@@ -956,12 +956,14 @@
         </q-tab-panel>
 
         <!-- ====== ВКЛАДКА 8: Чат надзора (InlineChatRoom) ====== -->
-        <q-tab-panel name="sv-chat" class="q-pa-none">
-          <InlineChatRoom
-            v-if="svChatTabVisited && card?.id"
-            chat-type="supervision"
-            :supervision-card-id="card.id"
-          />
+        <q-tab-panel name="sv-chat" class="q-pa-sm">
+          <div style="border: 1px solid #E0E0E0; border-radius: 8px; overflow: hidden">
+            <InlineChatRoom
+              v-if="svChatTabVisited && card?.id"
+              chat-type="supervision"
+              :supervision-card-id="card.id"
+            />
+          </div>
         </q-tab-panel>
       </q-tab-panels>
     </template>
@@ -2164,7 +2166,7 @@ async function deleteVisit(visit) {
   }).onOk(async () => {
     try {
       const { api: ax } = await import('src/boot/axios')
-      await ax.delete(`/api/v1/supervision-visits/${visit.id}`)
+      await ax.delete(`/api/v1/supervision-visits/${card.value.id}/visits/${visit.id}`)
       $q.notify({ type: 'positive', message: 'Выезд удалён' })
       await reloadData()
     } catch (err) {
