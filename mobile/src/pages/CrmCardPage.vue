@@ -1047,7 +1047,7 @@
 
         <!-- ====== ВКЛАДКА: Чат с клиентом ====== -->
         <q-tab-panel name="chat" class="q-pa-sm">
-          <div v-if="chatData" class="row q-mb-xs">
+          <div class="row q-mb-xs">
             <q-btn
               flat
               dense

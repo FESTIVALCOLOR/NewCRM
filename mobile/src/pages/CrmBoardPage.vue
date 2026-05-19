@@ -63,40 +63,42 @@
 
       <!-- АКТИВНЫЕ (ландшафт) — все колонки рядом -->
       <template v-if="!crmStore.showArchive && ($q.screen.width > $q.screen.height)">
-        <div class="landscape-board">
-          <div v-for="col in crmStore.columns" :key="col.name" class="landscape-column">
-            <div class="column-frame" style="margin: 0; height: 100%">
-              <div class="column-header">
-                <span class="column-title">{{ col.name }}</span>
-                <span style="color: #888; font-size: 11px">{{ col.count }}</span>
-              </div>
-              <div v-if="col.cards.length > 0" class="column-body">
-                <crm-card-item
-                  v-for="card in col.cards"
-                  :key="card.id"
-                  :card="card"
-                  @click="openCard(card.id)"
-                  @longpress="showMoveDialog(card)"
-                  @submit-work="doCardAction(card.id, 'submit')"
-                  @accept="doCardAction(card.id, 'accept')"
-                  @reject="doCardAction(card.id, 'reject')"
-                  @client-send="doCardAction(card.id, 'client-send')"
-                  @client-approved="doCardAction(card.id, 'client-approved')"
-                  @advance-round="doCardAction(card.id, 'advance-round')"
-                  @close-stage="doCardAction(card.id, 'close-stage')"
-                  @add-extra-round="doCardAction(card.id, 'add-extra-round')"
-                  @sign-act="doCardAction(card.id, 'sign-act')"
-                  @add-measurement="openMeasurementDialog(card)"
-                  @add-tech-task="openTechTaskDialog(card)"
-                />
-              </div>
-              <div v-else class="column-empty">
-                <q-icon name="inbox" size="32px" color="grey-4" />
-                <div>Нет карточек</div>
+        <q-scroll-area style="height: calc(100vh - 110px); width: 100%">
+          <div class="landscape-inner">
+            <div v-for="col in crmStore.columns" :key="col.name" class="landscape-column">
+              <div class="column-frame" style="margin: 0; height: 100%">
+                <div class="column-header">
+                  <span class="column-title">{{ col.name }}</span>
+                  <span style="color: #888; font-size: 11px">{{ col.count }}</span>
+                </div>
+                <div v-if="col.cards.length > 0" class="column-body">
+                  <crm-card-item
+                    v-for="card in col.cards"
+                    :key="card.id"
+                    :card="card"
+                    @click="openCard(card.id)"
+                    @longpress="showMoveDialog(card)"
+                    @submit-work="doCardAction(card.id, 'submit')"
+                    @accept="doCardAction(card.id, 'accept')"
+                    @reject="doCardAction(card.id, 'reject')"
+                    @client-send="doCardAction(card.id, 'client-send')"
+                    @client-approved="doCardAction(card.id, 'client-approved')"
+                    @advance-round="doCardAction(card.id, 'advance-round')"
+                    @close-stage="doCardAction(card.id, 'close-stage')"
+                    @add-extra-round="doCardAction(card.id, 'add-extra-round')"
+                    @sign-act="doCardAction(card.id, 'sign-act')"
+                    @add-measurement="openMeasurementDialog(card)"
+                    @add-tech-task="openTechTaskDialog(card)"
+                  />
+                </div>
+                <div v-else class="column-empty">
+                  <q-icon name="inbox" size="32px" color="grey-4" />
+                  <div>Нет карточек</div>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        </q-scroll-area>
       </template>
 
       <!-- АКТИВНЫЕ (мобильный) — свайпабельные колонки -->
@@ -963,33 +965,13 @@ onMounted(async () => {
   padding: 40px 0;
 }
 
-/* Ландшафтная доска — все колонки рядом */
-.landscape-board {
-  display: flex;
-  overflow-x: scroll;
-  overflow-y: hidden;
-  padding: 8px;
+/* Ландшафтная доска — все колонки рядом (q-scroll-area) */
+.landscape-inner {
+  display: inline-flex;
   gap: 8px;
-  height: calc(100vh - 110px);
-  width: 100%;
-  box-sizing: border-box;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: thin;
-}
-.landscape-board::-webkit-scrollbar {
-  height: 8px;
-  display: block;
-}
-.landscape-board::-webkit-scrollbar-track {
-  background: #f0f0f0;
-  border-radius: 4px;
-}
-.landscape-board::-webkit-scrollbar-thumb {
-  background: #c0c0c0;
-  border-radius: 4px;
-}
-.landscape-board::-webkit-scrollbar-thumb:hover {
-  background: #999;
+  padding: 8px;
+  min-height: calc(100vh - 130px);
+  align-items: flex-start;
 }
 .landscape-column {
   flex: 0 0 280px;

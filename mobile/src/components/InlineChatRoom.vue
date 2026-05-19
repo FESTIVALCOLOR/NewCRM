@@ -803,12 +803,11 @@
     <div class="q-pa-sm bg-white" style="border-top: 1px solid #E0E0E0; flex-shrink: 0">
       <div class="row items-center q-gutter-xs" style="min-width: 0">
         <q-btn
-          flat
           round
           dense
           size="sm"
           icon="attach_file"
-          style="background: #EEEEEE"
+          color="grey-6"
           :loading="uploadProgress > 0 && uploadProgress < 100"
           @click="pickFile"
         >
@@ -824,13 +823,11 @@
         <!-- Файлы из карточки CRM -->
         <q-btn
           v-if="props.cardId"
-          flat
           round
           dense
           size="sm"
           icon="folder_open"
           color="grey-6"
-          style="background: #EEEEEE"
           @click="showCardFilesDialog = true; loadCardFiles()"
         >
           <q-tooltip>Файлы из карточки CRM</q-tooltip>

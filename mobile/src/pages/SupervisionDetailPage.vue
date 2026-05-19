@@ -60,7 +60,6 @@
         <q-tab name="history" label="История" />
         <q-tab name="payments" label="Оплаты" />
         <q-tab name="notes" label="Заметки" />
-        <q-tab name="chat" label="Чат" />
         <q-tab name="sv-chat" label="Чат надзора" />
       </q-tabs>
 
@@ -830,132 +829,7 @@
           </q-card>
         </q-tab-panel>
 
-        <!-- ====== ВКЛАДКА 7: Telegram-чат ====== -->
-        <q-tab-panel name="chat" class="q-pa-none">
-          <div v-if="svChatLoading" class="q-pa-md text-center">
-            <q-spinner color="grey-5" size="24px" />
-          </div>
-
-          <template v-else-if="svChatData">
-            <q-card class="is-card q-mb-md">
-              <q-card-section>
-                <div class="text-subtitle2 text-weight-bold q-mb-xs" style="color: #333">
-                  {{ svChatData.chat_title || 'Проектный чат' }}
-                </div>
-                <div v-if="svChatData.invite_link" class="q-mb-sm">
-                  <a :href="tgDeepLink(svChatData.invite_link)" style="color: #1677FF; text-decoration: none; font-size: 13px">
-                    <q-icon name="open_in_new" size="14px" class="q-mr-xs" />Открыть в Telegram
-                  </a>
-                </div>
-                <div class="text-caption" style="color: #888">
-                  {{ svChatMembers.length }} участник(ов)
-                </div>
-              </q-card-section>
-            </q-card>
-
-            <!-- Участники -->
-            <q-card class="is-card q-mb-md">
-              <q-card-section class="q-pb-none">
-                <div class="text-subtitle2 text-weight-bold" style="color: #333">
-                  Участники
-                </div>
-              </q-card-section>
-              <q-list v-if="svChatMembers.length > 0" dense separator>
-                <q-item v-for="member in svChatMembers" :key="member.id || member.user_id">
-                  <q-item-section avatar>
-                    <q-avatar size="24px" color="grey-3" text-color="grey-8">
-                      {{ (member.name || member.username || '?')[0] }}
-                    </q-avatar>
-                  </q-item-section>
-                  <q-item-section>
-                    <q-item-label style="font-size: 11px">
-                      {{ member.name || member.username || 'Неизвестный' }}
-                    </q-item-label>
-                    <q-item-label caption style="font-size: 10px">
-                      {{ member.role || 'участник' }}
-                    </q-item-label>
-                  </q-item-section>
-                </q-item>
-              </q-list>
-            </q-card>
-
-            <!-- Действия с чатом -->
-            <q-card class="is-card q-mb-md">
-              <q-card-section class="q-pb-none">
-                <div class="text-subtitle2 text-weight-bold" style="color: #333">
-                  Действия
-                </div>
-              </q-card-section>
-              <q-card-section>
-                <q-btn
-                  unelevated
-                  dense
-                  no-caps
-                  icon="send"
-                  label="Отправить сообщение"
-                  class="full-width q-mb-sm"
-                  style="background: #5DADE2; color: white; font-size: 12px; height: 36px; border-radius: 4px"
-                  @click="showSvSendMsgDlg = true"
-                />
-                <q-btn
-                  unelevated
-                  dense
-                  no-caps
-                  icon="smart_toy"
-                  label="Запустить скрипт"
-                  class="full-width q-mb-sm"
-                  style="background: #58D68D; color: white; font-size: 12px; height: 36px; border-radius: 4px"
-                  @click="loadSvScriptsAndShow"
-                />
-                <q-btn
-                  unelevated
-                  dense
-                  no-caps
-                  icon="person_add"
-                  label="Добавить участника"
-                  class="full-width q-mb-sm"
-                  style="background: #AAB7B8; color: white; font-size: 12px; height: 36px; border-radius: 4px"
-                  @click="showAddSvMemberDlg = true"
-                />
-                <q-btn
-                  outline
-                  dense
-                  no-caps
-                  icon="delete"
-                  label="Удалить чат"
-                  class="full-width"
-                  color="negative"
-                  style="font-size: 12px; height: 36px; border-radius: 4px"
-                  @click="confirmDeleteSvChat"
-                />
-              </q-card-section>
-            </q-card>
-          </template>
-
-          <!-- Чат не создан -->
-          <template v-else>
-            <q-card class="is-card q-mb-md">
-              <q-card-section class="text-center q-pa-lg">
-                <q-icon name="chat_bubble_outline" size="48px" color="grey-4" class="q-mb-sm" />
-                <div style="color: #999; font-size: 13px" class="q-mb-md">
-                  Telegram-чат не создан
-                </div>
-                <q-btn
-                  unelevated
-                  dense
-                  no-caps
-                  icon="add"
-                  label="Создать чат"
-                  style="background: #ffd93c; color: #333; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px; padding: 0 24px"
-                  :loading="svChatCreating"
-                  @click="openCreateSvChatDlg"
-                />
-              </q-card-section>
-            </q-card>
-          </template>
-        </q-tab-panel>
-
-        <!-- ====== ВКЛАДКА 8: Чат надзора (InlineChatRoom) ====== -->
+        <!-- ====== ВКЛАДКА 7: Чат надзора (InlineChatRoom) ====== -->
         <q-tab-panel name="sv-chat" class="q-pa-sm">
           <div style="border: 1px solid #E0E0E0; border-radius: 8px; overflow: hidden">
             <InlineChatRoom
@@ -2439,7 +2313,6 @@ async function doAddHistory() {
 // Ленивая загрузка чата при переключении на вкладку
 watch(activeTab, (val) => {
   router.replace({ query: { ...route.query, tab: val } })
-  if (val === 'chat' && !svChatData.value && !svChatLoading.value) loadSvChat()
   if (val === 'sv-chat') svChatTabVisited.value = true
 })
 
