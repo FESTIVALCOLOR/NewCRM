@@ -1298,90 +1298,101 @@
 
     <!-- Диалог: файлы из карточки CRM -->
     <q-dialog v-model="showCardFilesDialog" persistent>
-      <q-card style="min-width: 320px; max-width: 480px; width: 100%">
-        <q-card-section class="row items-center q-pb-none">
-          <div class="text-subtitle1 text-weight-medium">
+      <q-card style="min-width: 340px; max-width: 500px; width: 100%; border-radius: 10px; overflow: hidden">
+        <!-- Заголовок — белый с нижней границей, как в десктопе -->
+        <q-card-section class="row items-center" style="background:#fff; border-bottom:1px solid #E0E0E0; padding:10px 16px">
+          <div style="font-size:14px; font-weight:600; color:#222">
             {{ chatType === 'supervision' ? 'Файлы надзора' : 'Файлы из карточки CRM' }}
           </div>
           <q-space />
           <q-btn
-            v-close-popup
             icon="close"
             flat
             round
             dense
-            @click="selectedCardFiles.clear()"
+            size="sm"
+            @click="showCardFilesDialog = false; selectedCardFiles = new Set()"
           />
         </q-card-section>
-        <q-card-section style="max-height: 60vh; overflow-y: auto">
-          <div v-if="cardFilesLoading" class="flex flex-center q-pa-md">
+
+        <!-- Подсказка -->
+        <div style="padding:10px 16px 4px; font-size:11px; color:#555; background:#F9FAFB">
+          Отметьте файлы для отправки в чат:
+        </div>
+
+        <!-- Список файлов — стиль QListWidget из десктопа -->
+        <div style="background:#F9FAFB; padding:0 14px 8px">
+          <div v-if="cardFilesLoading" class="flex flex-center q-pa-lg">
             <q-spinner size="28px" color="grey" />
           </div>
           <div v-else-if="!cardFiles.length" class="text-grey-6 text-caption q-pa-sm">
             Файлы не найдены
           </div>
-          <div v-else>
+          <div
+            v-else
+            style="border:1px solid #E0E0E0; border-radius:4px; background:#fff; max-height:55vh; overflow-y:auto"
+          >
             <template v-for="group in groupedCardFiles" :key="group.stage">
-              <div
-                class="text-caption text-weight-bold q-px-sm q-pt-sm q-pb-xs"
-                style="color: #888; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px"
-              >
+              <!-- Заголовок секции -->
+              <div class="cf-stage-hdr">
                 {{ group.stage }}
               </div>
-              <div
-                v-for="f in group.files"
-                :key="f.id || f.yandex_path"
-                class="card-file-row"
-                :class="{ 'card-file-row--selected': selectedCardFiles.has(f.id || f.yandex_path) }"
-                @click="toggleCardFile(f)"
-              >
-                <!-- Превью изображения или иконка -->
-                <div class="card-file-thumb">
-                  <img
-                    v-if="cardFileThumbUrl(f)"
-                    :src="cardFileThumbUrl(f)"
-                    class="card-file-img"
-                    @error="e => e.target.style.display='none'"
-                  >
-                  <q-icon
-                    v-else
-                    :name="f.file_type === 'folder' ? 'folder' : 'insert_drive_file'"
-                    size="36px"
-                    color="blue-4"
+              <template v-for="vg in group.variants" :key="vg.varNum">
+                <!-- Заголовок варианта (только если вариантов >1) -->
+                <div v-if="group.showVariants" class="cf-var-hdr">
+                  Вариант {{ vg.varNum }}
+                </div>
+                <!-- Строка файла -->
+                <div
+                  v-for="f in vg.files"
+                  :key="cfFileKey(f)"
+                  class="cf-file-row"
+                  :class="{ 'cf-file-row--checked': selectedCardFiles.has(cfFileKey(f)) }"
+                  @click="toggleCardFile(f)"
+                >
+                  <!-- Превью / иконка слева -->
+                  <div class="cf-thumb">
+                    <img
+                      v-if="cardFileThumbUrl(f)"
+                      :src="cardFileThumbUrl(f)"
+                      class="cf-thumb-img"
+                      @error="e => e.target.style.display='none'"
+                    >
+                    <div v-else class="cf-thumb-icon" :class="cfIconClass(f)">
+                      {{ cfIconLabel(f) }}
+                    </div>
+                  </div>
+                  <!-- Название файла по центру -->
+                  <div class="cf-fname">
+                    {{ f.file_name || f.filename || 'файл' }}
+                  </div>
+                  <!-- Чекбокс справа -->
+                  <q-checkbox
+                    :model-value="selectedCardFiles.has(cfFileKey(f))"
+                    color="primary"
+                    dense
+                    @update:model-value="toggleCardFile(f)"
+                    @click.stop
                   />
                 </div>
-                <!-- Название файла -->
-                <div class="card-file-name">
-                  {{ f.file_name || f.filename || 'файл' }}
-                </div>
-                <!-- Чекбокс -->
-                <q-checkbox
-                  :model-value="selectedCardFiles.has(f.id || f.yandex_path)"
-                  color="primary"
-                  dense
-                  @update:model-value="toggleCardFile(f)"
-                  @click.stop
-                />
-              </div>
+              </template>
             </template>
           </div>
-        </q-card-section>
-        <q-card-actions align="right" class="q-pt-xs">
-          <q-btn
-            flat
-            no-caps
-            label="Закрыть"
-            color="grey-7"
-            @click="showCardFilesDialog = false; selectedCardFiles.clear()"
-          />
-          <q-btn
-            :disable="selectedCardFiles.size === 0"
-            no-caps
-            unelevated
-            :label="selectedCardFiles.size > 0 ? `Отправить (${selectedCardFiles.size})` : 'Выберите файлы'"
-            color="primary"
+        </div>
+
+        <!-- Кнопки -->
+        <q-card-actions align="right" style="background:#F9FAFB; padding:6px 14px 12px; border-top:1px solid #E0E0E0">
+          <button class="cf-btn-cancel" @click="showCardFilesDialog = false; selectedCardFiles = new Set()">
+            Отмена
+          </button>
+          <button
+            class="cf-btn-send"
+            :class="{ 'cf-btn-send--disabled': selectedCardFiles.size === 0 }"
+            :disabled="selectedCardFiles.size === 0"
             @click="sendSelectedCardFiles"
-          />
+          >
+            {{ selectedCardFiles.size > 0 ? `Отправить (${selectedCardFiles.size})` : 'Отправить' }}
+          </button>
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -1488,8 +1499,37 @@ function cardFileThumbUrl(f) {
   return `/api/v1/files/stream?yandex_path=${encodeURIComponent(path)}&token=${encodeURIComponent(token)}`
 }
 
+function cfFileKey(f) {
+  return String(f.id || f.yandex_path || f.file_name || '')
+}
+
+function cfIconLabel(f) {
+  const name = f.file_name || f.filename || ''
+  const ext = ('.' + name.split('.').pop()?.toLowerCase()) || ''
+  if (['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'].includes(ext)) return 'IMG'
+  if (ext === '.pdf') return 'PDF'
+  if (['.xls', '.xlsx', '.csv'].includes(ext)) return 'XLS'
+  if (['.doc', '.docx', '.txt', '.rtf'].includes(ext)) return 'DOC'
+  if (['.zip', '.rar', '.7z'].includes(ext)) return 'ZIP'
+  if (f.file_type === 'folder') return 'DIR'
+  return 'FILE'
+}
+
+function cfIconClass(f) {
+  const lbl = cfIconLabel(f)
+  return {
+    'cf-ico-img': lbl === 'IMG',
+    'cf-ico-pdf': lbl === 'PDF',
+    'cf-ico-xls': lbl === 'XLS',
+    'cf-ico-doc': lbl === 'DOC',
+    'cf-ico-zip': lbl === 'ZIP',
+    'cf-ico-dir': lbl === 'DIR',
+    'cf-ico-file': !['IMG', 'PDF', 'XLS', 'DOC', 'ZIP', 'DIR'].includes(lbl),
+  }
+}
+
 function toggleCardFile(f) {
-  const key = f.id || f.yandex_path
+  const key = cfFileKey(f)
   const next = new Set(selectedCardFiles.value)
   next.has(key) ? next.delete(key) : next.add(key)
   selectedCardFiles.value = next
@@ -1500,7 +1540,7 @@ async function sendSelectedCardFiles() {
   showCardFilesDialog.value = false
   const keys = new Set(selectedCardFiles.value)
   selectedCardFiles.value = new Set()
-  const toSend = cardFiles.value.filter(f => keys.has(f.id || f.yandex_path))
+  const toSend = cardFiles.value.filter(f => keys.has(cfFileKey(f)))
 
   // Генерируем group_id если несколько изображений — отправятся галереей
   const allImages = toSend.every(f => {
@@ -1553,26 +1593,49 @@ const stageRuNames = {
   additional_agreement_signed: 'Доп. соглашение (подписано)',
 }
 
-const SUPERVISION_STAGE_ORDER = ['Авторский надзор', 'Этапы надзора', 'Отчёты надзора', 'Выезды на объект']
+const STAGE_ORDER_KEYS = [
+  'measurement', 'stage1', 'stage2_concept', 'stage2_3d', 'stage3',
+  'supervision', 'supervision_stage', 'supervision_reports',
+  'Авторский надзор', 'Этапы надзора', 'Отчёты надзора', 'Выезды на объект',
+  'tech_task', 'documents', 'acts', 'info_letters', 'references',
+  'photo_documentation', 'questionnaire',
+]
 
 const groupedCardFiles = computed(() => {
-  const groups = {}
+  // Группировка по stage → по variation
+  const byStage = {}
   for (const f of cardFiles.value) {
-    const raw = f.stage || 'Прочие файлы'
-    const key = stageRuNames[raw] || raw
-    if (!groups[key]) groups[key] = []
-    groups[key].push(f)
+    const raw = f.stage || 'documents'
+    if (!byStage[raw]) byStage[raw] = []
+    byStage[raw].push(f)
   }
-  return Object.entries(groups)
-    .map(([stage, files]) => ({ stage, files }))
-    .sort((a, b) => {
-      const ai = SUPERVISION_STAGE_ORDER.indexOf(a.stage)
-      const bi = SUPERVISION_STAGE_ORDER.indexOf(b.stage)
-      if (ai !== -1 && bi !== -1) return ai - bi
-      if (ai !== -1) return -1
-      if (bi !== -1) return 1
-      return a.stage.localeCompare(b.stage, 'ru')
-    })
+
+  const orderedKeys = [
+    ...STAGE_ORDER_KEYS.filter(k => byStage[k]),
+    ...Object.keys(byStage).filter(k => !STAGE_ORDER_KEYS.includes(k)),
+  ]
+
+  return orderedKeys.map(stageKey => {
+    const files = byStage[stageKey]
+    const stageLabel = stageRuNames[stageKey] || stageKey
+
+    // Sub-group by variation
+    const byVar = {}
+    for (const f of files) {
+      const v = f.variation ?? 1
+      if (!byVar[v]) byVar[v] = []
+      byVar[v].push(f)
+    }
+    const varNums = Object.keys(byVar).map(Number).sort((a, b) => a - b)
+    const showVariants = varNums.length > 1 || (varNums.length === 1 && varNums[0] !== 1)
+
+    const variants = varNums.map(v => ({
+      varNum: v,
+      files: byVar[v].slice().sort((a, b) => (a.file_order ?? 0) - (b.file_order ?? 0)),
+    }))
+
+    return { stage: stageLabel, stageKey, showVariants, variants }
+  })
 })
 
 async function loadCardFiles() {
@@ -2916,22 +2979,59 @@ onUnmounted(() => {
 .react-quick-btn:hover { background: #F0F0F0; }
 .react-quick-btn--active { background: #E3F2FD; }
 .gallery-open-btn :deep(.q-btn__content) { gap: 3px; }
-/* Файловый диалог карточки — превью + чекбокс */
-.card-file-row {
+/* Файловый диалог карточки — стиль десктопа */
+.cf-stage-hdr {
+  padding: 4px 10px; font-size: 11px; font-weight: 700;
+  background: #E8EEF6; color: #1a3a6b;
+  border-bottom: 1px solid #d0daea;
+}
+.cf-var-hdr {
+  padding: 3px 20px; font-size: 10px; font-style: italic;
+  background: #F3F3F3; color: #666;
+  border-bottom: 1px solid #e8e8e8;
+}
+.cf-file-row {
   display: flex; align-items: center; gap: 10px;
-  padding: 6px 8px; cursor: pointer; border-radius: 6px;
-  transition: background 0.15s;
+  padding: 4px 8px; cursor: pointer; min-height: 54px;
+  border-bottom: 1px solid #F0F0F0;
+  transition: background 0.1s;
 }
-.card-file-row:hover { background: #F5F5F5; }
-.card-file-row--selected { background: #E3F2FD; }
-.card-file-thumb {
-  width: 52px; height: 52px; flex-shrink: 0;
+.cf-file-row:hover { background: #f5f5f5; }
+.cf-file-row--checked { background: #FFF8DC; }
+.cf-file-row:last-child { border-bottom: none; }
+.cf-thumb {
+  width: 56px; height: 42px; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
-  background: #F0F0F0; border-radius: 6px; overflow: hidden;
+  border-radius: 3px; overflow: hidden;
 }
-.card-file-img { width: 52px; height: 52px; object-fit: cover; }
-.card-file-name {
-  flex: 1; min-width: 0; font-size: 13px; color: #333;
+.cf-thumb-img { width: 56px; height: 42px; object-fit: cover; }
+.cf-thumb-icon {
+  width: 56px; height: 42px; display: flex; align-items: center;
+  justify-content: center; font-size: 10px; font-weight: 700;
+  border-radius: 3px;
+}
+.cf-ico-img  { background: #C8E6C9; color: #2E7D32; }
+.cf-ico-pdf  { background: #FFCDD2; color: #B71C1C; }
+.cf-ico-xls  { background: #C8E6C9; color: #1B5E20; }
+.cf-ico-doc  { background: #BBDEFB; color: #0D47A1; }
+.cf-ico-zip  { background: #E1BEE7; color: #4A148C; }
+.cf-ico-dir  { background: #FFF9C4; color: #F57F17; }
+.cf-ico-file { background: #E0E0E0; color: #424242; }
+.cf-fname {
+  flex: 1; min-width: 0; font-size: 12px; color: #333;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+.cf-btn-cancel, .cf-btn-send {
+  height: 28px; border-radius: 4px; padding: 0 14px;
+  font-size: 12px; cursor: pointer; border: none; outline: none;
+}
+.cf-btn-cancel {
+  background: #fff; border: 1px solid #d9d9d9; color: #333;
+}
+.cf-btn-cancel:hover { background: #f5f5f5; }
+.cf-btn-send {
+  background: #ffd93c; color: #333; font-weight: 700; margin-left: 8px;
+}
+.cf-btn-send:hover { background: #f5c800; }
+.cf-btn-send--disabled { background: #f0f0f0 !important; color: #aaa !important; cursor: default; }
 </style>
