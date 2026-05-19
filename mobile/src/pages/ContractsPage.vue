@@ -362,8 +362,9 @@ onMounted(() => loadContracts())
 }
 /* Радиус поиска и фильтров = радиус таблицы (8px) */
 .crm-search-input :deep(.q-field__control) { border-radius: 8px; }
-.crm-filter-select :deep(.q-field__control) { border-radius: 8px !important; height: 32px !important; min-height: 32px !important; }
-.crm-filter-select :deep(.q-field--dense .q-field__control) { height: 32px !important; min-height: 32px !important; }
-.crm-filter-select :deep(.q-field__native) { padding-top: 0 !important; padding-bottom: 0 !important; min-height: 30px !important; }
-.crm-filter-select :deep(.q-field__label) { top: 7px !important; font-size: 11px; }
+.crm-filter-select :deep(.q-field__control) { border-radius: 8px !important; }
+.crm-filter-select :deep(.q-field__control-container) { min-width: 0; overflow: hidden; }
+.crm-filter-select :deep(.q-field__native) { min-width: 0; overflow: hidden; flex-wrap: nowrap; }
+.crm-filter-select :deep(.q-field__native span) { overflow: hidden !important; text-overflow: ellipsis !important; white-space: nowrap !important; display: inline-block !important; vertical-align: middle !important; max-width: 100%; }
+.crm-filter-select :deep(.q-field__label) { font-size: 11px; }
 </style>

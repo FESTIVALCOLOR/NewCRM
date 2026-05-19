@@ -306,14 +306,14 @@
                           Снять оплату
                         </button>
                         <button
-                          v-else-if="can('salaries.mark_paid') && p.payment_status === 'to_pay'"
+                          v-else-if="(can('salaries.mark_paid') || can('salaries.mark_to_pay')) && p.payment_status === 'to_pay'"
                           class="sal-act-btn sal-act-green"
                           @click.stop="markPaid(p)"
                         >
                           <span class="material-icons" style="font-size:12px;line-height:1">check</span> Оплатить
                         </button>
                         <button
-                          v-else-if="can('salaries.mark_to_pay') && !p.is_paid && p.payment_status !== 'paid'"
+                          v-else-if="can('salaries.mark_to_pay') && !p.is_paid && p.payment_status !== 'paid' && p.payment_status !== 'to_pay'"
                           class="sal-act-btn sal-act-orange"
                           @click.stop="setPayStatus(p)"
                         >

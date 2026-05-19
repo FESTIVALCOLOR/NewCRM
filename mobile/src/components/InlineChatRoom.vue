@@ -1452,10 +1452,26 @@ const showCardFilesDialog = ref(false)
 const cardFiles = ref([])
 const cardFilesLoading = ref(false)
 
+const stageRuNames = {
+  supervision: 'Авторский надзор',
+  supervision_reports: 'Отчёты надзора',
+  'Авторский надзор': 'Авторский надзор',
+  'Отчёты надзора': 'Отчёты надзора',
+  'Выезды на объект': 'Выезды на объект',
+  stage1: 'Стадия 1',
+  stage2: 'Стадия 2',
+  stage3: 'Стадия 3',
+  planning: 'Планировочные решения',
+  concept: 'Концепция дизайна',
+  working: 'Рабочие чертежи',
+  visualization: '3Д визуализация',
+}
+
 const groupedCardFiles = computed(() => {
   const groups = {}
   for (const f of cardFiles.value) {
-    const key = f.stage || 'Прочие файлы'
+    const raw = f.stage || 'Прочие файлы'
+    const key = stageRuNames[raw] || raw
     if (!groups[key]) groups[key] = []
     groups[key].push(f)
   }
