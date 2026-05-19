@@ -892,10 +892,10 @@ def create_link(
     current_user: Employee = Depends(require_permission("chat.client.manage")),
     db: Session = Depends(get_db),
 ):
-    """Создать новую UUID-ссылку для представителя заказчика."""
+    """Создать новую UUID-ссылку для представителя заказчика или клиента надзора."""
     chat = _get_chat_or_404(db, chat_id)
-    if chat.chat_type != "client":
-        raise HTTPException(400, "Только для чатов с клиентами")
+    if chat.chat_type not in ("client", "employee"):
+        raise HTTPException(400, "Только для чатов с клиентами или надзора")
     member = create_invite_link(db, chat_id)
     base_url = os.environ.get("APP_BASE_URL", "https://crm.interior-studio.ru")
     return ChatInviteLinkResponse(

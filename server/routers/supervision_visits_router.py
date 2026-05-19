@@ -317,13 +317,24 @@ async def create_visit(
     visit_yandex_folder = None
     try:
         contract = db.query(Contract).filter(Contract.id == card.contract_id).first()
-        if contract and contract.yandex_folder_path:
+        if not contract or not contract.yandex_folder_path:
+            logger.warning(f"Карточка надзора {card_id}: yandex_folder_path не задан у договора, папка выезда не создана")
+        else:
             from yandex_disk_service import get_yandex_disk_service
 
             yd = get_yandex_disk_service()
             base_path = contract.yandex_folder_path.replace("disk:", "").rstrip("/")
             visit_date_str = str(data.visit_date) if data.visit_date else "unknown"
             folder_name = visit_date_str
+            # Убедиться что промежуточные папки существуют
+            for parent_path in [
+                f"disk:{base_path}/Авторский надзор",
+                f"disk:{base_path}/Авторский надзор/Выезды",
+            ]:
+                try:
+                    yd.get_file_info(parent_path)
+                except Exception:
+                    yd.create_folder(parent_path)
             # Проверить не занята ли папка с этой датой
             candidate = f"{base_path}/Авторский надзор/Выезды/{folder_name}"
             suffix = 2
@@ -337,6 +348,7 @@ async def create_visit(
                     break  # Папка не существует — это наш путь
             yd.create_folder(f"disk:{candidate}")
             visit_yandex_folder = f"disk:{candidate}"
+            logger.info(f"Создана папка ЯД для выезда: {visit_yandex_folder}")
     except Exception as e:
         logger.warning(f"Не удалось создать папку ЯД для выезда: {e}")
 
@@ -353,13 +365,15 @@ async def create_visit(
         visit_yandex_folder=visit_yandex_folder,
     )
     db.add(visit)
-    db.flush()
+    db.commit()
+    db.refresh(visit)
 
-    # Запись в историю надзора
+    # Запись в историю надзора (отдельная транзакция)
     try:
         visit_date_display = str(data.visit_date) if data.visit_date else ""
         stage_display = data.stage_name or ""
-        history_msg = f"Добавлен выезд: {stage_display}, дата: {visit_date_display}"
+        visit_type_display = data.visit_type or "На объект"
+        history_msg = f"Добавлен выезд ({visit_type_display}): {stage_display}, дата: {visit_date_display}"
         if data.executor_name:
             history_msg += f", исполнитель: {data.executor_name}"
         history_entry = SupervisionProjectHistory(
@@ -369,11 +383,13 @@ async def create_visit(
             created_by=current_user.id,
         )
         db.add(history_entry)
+        db.commit()
     except Exception as e:
         logger.warning(f"Не удалось записать выезд в историю: {e}")
-
-    db.commit()
-    db.refresh(visit)
+        try:
+            db.rollback()
+        except Exception:
+            pass
 
     # N4: Автотриггер supervision_visit + уведомление ДАН
     try:

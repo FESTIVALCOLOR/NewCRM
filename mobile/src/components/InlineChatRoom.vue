@@ -62,8 +62,55 @@
           <q-tooltip>Копировать ссылку</q-tooltip>
         </q-btn>
       </div>
+      <!-- Блок надзора: ссылка для клиента -->
+      <div
+        v-else-if="chatType === 'supervision'"
+        style="flex: 1 1 0%; min-width: 0; display: flex; flex-wrap: nowrap; align-items: center; overflow: hidden"
+      >
+        <template v-if="supervisionLink">
+          <q-icon
+            name="link"
+            size="14px"
+            color="blue-7"
+            class="q-mr-xs"
+            style="flex: 0 0 auto"
+          />
+          <span
+            class="text-caption text-blue-8"
+            style="flex: 1 1 0%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap"
+          >
+            {{ supervisionLink }}
+          </span>
+          <q-btn
+            flat
+            dense
+            size="xs"
+            icon="content_copy"
+            color="blue-7"
+            style="flex: 0 0 auto; margin-left: 4px"
+            @click="copySupervisionLink"
+          >
+            <q-tooltip>Копировать ссылку</q-tooltip>
+          </q-btn>
+        </template>
+        <template v-else>
+          <span class="text-caption text-grey-6" style="flex: 1 1 0%">Чат надзора</span>
+          <q-btn
+            flat
+            dense
+            size="xs"
+            icon="add_link"
+            color="blue-7"
+            :loading="creatingSupervisionLink"
+            style="flex: 0 0 auto"
+            @click="createSupervisionLink"
+          >
+            <q-tooltip>Создать ссылку для клиента</q-tooltip>
+          </q-btn>
+        </template>
+      </div>
       <span v-else class="text-caption text-grey-6" style="flex: 1 1 0%; min-width: 0">
-        {{ chatType === 'client' ? 'Чат с клиентом' : chatType === 'supervision' ? 'Чат надзора' : 'Чат сотрудников' }}
+        {{ chatType === 'client' ? 'Чат с клиентом' : 'Чат сотрудников' }}
       </span>
       <!-- Кнопка участников: всегда справа, никогда не сжимается -->
       <q-btn
@@ -820,9 +867,9 @@
           style="display: none"
           @change="onFileSelected"
         >
-        <!-- Файлы из карточки CRM -->
+        <!-- Файлы из карточки CRM / надзора -->
         <q-btn
-          v-if="props.cardId"
+          v-if="props.cardId || props.supervisionCardId"
           round
           dense
           size="sm"
@@ -830,7 +877,7 @@
           color="grey-6"
           @click="showCardFilesDialog = true; loadCardFiles()"
         >
-          <q-tooltip>Файлы из карточки CRM</q-tooltip>
+          <q-tooltip>{{ chatType === 'supervision' ? 'Файлы карточки надзора' : 'Файлы из карточки CRM' }}</q-tooltip>
         </q-btn>
         <!-- Кнопка микрофона (если нет ожидающих файлов и нет текста) -->
         <q-btn
@@ -1254,7 +1301,7 @@
       <q-card style="min-width: 320px; max-width: 480px; width: 100%">
         <q-card-section class="row items-center q-pb-none">
           <div class="text-subtitle1 text-weight-medium">
-            Файлы из карточки CRM
+            {{ chatType === 'supervision' ? 'Файлы надзора' : 'Файлы из карточки CRM' }}
           </div>
           <q-space />
           <q-btn
@@ -1359,20 +1406,98 @@ function pdfBubbleStyle(msg) {
 }
 const uploadProgress = ref(0)
 
-// ── Файлы из карточки CRM ─────────────────────────────────────
+// ── Invite link надзора ───────────────────────────────────────
+const supervisionLink = ref('')
+const creatingSupervisionLink = ref(false)
+
+async function loadSupervisionLink(chatId) {
+  try {
+    const { data } = await api.get(`/api/v1/chats/${chatId}/invite-links`)
+    const links = Array.isArray(data) ? data : []
+    supervisionLink.value = links.length > 0 ? links[0].url : ''
+  } catch { supervisionLink.value = '' }
+}
+
+async function createSupervisionLink() {
+  if (!chat.value || creatingSupervisionLink.value) return
+  creatingSupervisionLink.value = true
+  try {
+    const { data } = await api.post(`/api/v1/chats/${chat.value.id}/invite-links`)
+    supervisionLink.value = data.url || ''
+    if (supervisionLink.value) navigator.clipboard.writeText(supervisionLink.value).catch(() => {})
+    $q.notify({ type: 'positive', message: 'Ссылка создана и скопирована' })
+  } catch (e) {
+    $q.notify({ type: 'negative', message: e.response?.data?.detail || 'Ошибка создания ссылки' })
+  } finally {
+    creatingSupervisionLink.value = false
+  }
+}
+
+function copySupervisionLink() {
+  if (!supervisionLink.value) return
+  navigator.clipboard.writeText(supervisionLink.value).then(() => {
+    $q.notify({ type: 'positive', message: 'Ссылка скопирована', timeout: 1000 })
+  }).catch(() => {})
+}
+
+// ── Файлы из карточки CRM / надзора ──────────────────────────
 const showCardFilesDialog = ref(false)
 const cardFiles = ref([])
 const cardFilesLoading = ref(false)
 
 async function loadCardFiles() {
-  if (!props.cardId || cardFiles.value.length) return
+  const isSupervision = props.chatType === 'supervision'
+  if (!isSupervision && !props.cardId) return
+  if (isSupervision && !props.supervisionCardId) return
+  if (cardFiles.value.length) return
   cardFilesLoading.value = true
   try {
-    const { data: card } = await api.get(`/api/v1/crm/cards/${props.cardId}`)
-    const contractId = card?.contract_id
-    if (contractId) {
-      const { data: files } = await api.get(`/api/v1/files/contract/${contractId}`)
-      cardFiles.value = Array.isArray(files) ? files : (files?.items || [])
+    if (isSupervision) {
+      const files = []
+      // Файлы договора из карточки надзора
+      const { data: svCard } = await api.get(`/api/v1/supervision/cards/${props.supervisionCardId}`)
+      const contractId = svCard?.contract_id
+      if (contractId) {
+        try {
+          const { data: cf } = await api.get(`/api/v1/files/contract/${contractId}`)
+          files.push(...(Array.isArray(cf) ? cf : (cf?.items || [])))
+        } catch {}
+      }
+      // Файлы основной CRM карточки (если передана)
+      if (props.cardId) {
+        try {
+          const { data: crmCard } = await api.get(`/api/v1/crm/cards/${props.cardId}`)
+          const crmContractId = crmCard?.contract_id
+          if (crmContractId && crmContractId !== contractId) {
+            const { data: cf2 } = await api.get(`/api/v1/files/contract/${crmContractId}`)
+            files.push(...(Array.isArray(cf2) ? cf2 : (cf2?.items || [])))
+          }
+        } catch {}
+      }
+      // Папки выездов на объект
+      try {
+        const { data: visits } = await api.get(`/api/v1/supervision-visits/${props.supervisionCardId}/visits`)
+        const vList = Array.isArray(visits) ? visits : []
+        for (const v of vList) {
+          if (v.visit_yandex_folder) {
+            files.push({
+              id: `visit-${v.id}`,
+              file_name: `Выезд: ${v.stage_name || ''} (${v.visit_date || ''})`,
+              yandex_path: v.visit_yandex_folder,
+              stage: 'Выезды на объект',
+              file_type: 'folder',
+            })
+          }
+        }
+      } catch {}
+      cardFiles.value = files
+    } else {
+      const { data: card } = await api.get(`/api/v1/crm/cards/${props.cardId}`)
+      const contractId = card?.contract_id
+      if (contractId) {
+        const { data: files } = await api.get(`/api/v1/files/contract/${contractId}`)
+        cardFiles.value = Array.isArray(files) ? files : (files?.items || [])
+      }
     }
   } catch {
     cardFiles.value = []
@@ -1991,6 +2116,10 @@ async function openChat(chatId) {
     if (props.chatType === 'employee' && data.crm_card_id) {
       loadClientChat(data.crm_card_id)
     }
+    // Для чата надзора загрузить ссылку приглашения
+    if (props.chatType === 'supervision') {
+      loadSupervisionLink(chatId)
+    }
 
     const token = localStorage.getItem('access_token')
     if (token) {
@@ -2060,7 +2189,10 @@ async function loadClientChat(cardId) {
 
 // Открытие диалога участников — сразу грузим сотрудников карточки
 async function onMembersDialogOpen() {
-  if (!props.cardId || !chat.value) return
+  if (!chat.value) return
+  const isSupervision = props.chatType === 'supervision'
+  const sourceId = isSupervision ? props.supervisionCardId : props.cardId
+  if (!sourceId) return
   cardEmployees.value = null
   loadingCardEmployees.value = true
   try {
@@ -2068,26 +2200,36 @@ async function onMembersDialogOpen() {
     const { data: chatData } = await api.get(`/api/v1/chats/${chat.value.id}`)
     chatMembers.value = chatData.members || []
 
-    const { data } = await api.get(`/api/v1/crm/cards/${props.cardId}`)
     const emps = new Map()
-    // Менеджеры и другие роли из полей карточки
-    const roles = [
-      { id: data.senior_manager_id, name: data.senior_manager_name, role: 'Старший менеджер' },
-      { id: data.sdp_id, name: data.sdp_name, role: 'СДП' },
-      { id: data.gap_id, name: data.gap_name, role: 'ГАП' },
-      { id: data.manager_id, name: data.manager_name, role: 'Менеджер' },
-      { id: data.surveyor_id, name: data.surveyor_name, role: 'Замерщик' },
-    ]
-    for (const r of roles) {
-      if (r.id) emps.set(r.id, { name: r.name || `Сотрудник #${r.id}`, role: r.role })
-    }
-    // Исполнители этапов
-    for (const se of (data.stage_executors || [])) {
-      if (se.executor_id) {
-        emps.set(se.executor_id, { name: se.executor_name || `Сотрудник #${se.executor_id}`, role: se.stage_name || 'Исполнитель' })
+    if (isSupervision) {
+      // Исполнители из карточки надзора
+      const { data } = await api.get(`/api/v1/supervision/cards/${sourceId}`)
+      const roles = [
+        { id: data.senior_manager_id, name: data.senior_manager_name, role: 'Старший менеджер' },
+        { id: data.dan_id, name: data.dan_name, role: 'ДАН' },
+      ]
+      for (const r of roles) {
+        if (r.id) emps.set(r.id, { name: r.name || `Сотрудник #${r.id}`, role: r.role })
+      }
+    } else {
+      // Исполнители из CRM карточки
+      const { data } = await api.get(`/api/v1/crm/cards/${sourceId}`)
+      const roles = [
+        { id: data.senior_manager_id, name: data.senior_manager_name, role: 'Старший менеджер' },
+        { id: data.sdp_id, name: data.sdp_name, role: 'СДП' },
+        { id: data.gap_id, name: data.gap_name, role: 'ГАП' },
+        { id: data.manager_id, name: data.manager_name, role: 'Менеджер' },
+        { id: data.surveyor_id, name: data.surveyor_name, role: 'Замерщик' },
+      ]
+      for (const r of roles) {
+        if (r.id) emps.set(r.id, { name: r.name || `Сотрудник #${r.id}`, role: r.role })
+      }
+      for (const se of (data.stage_executors || [])) {
+        if (se.executor_id) {
+          emps.set(se.executor_id, { name: se.executor_name || `Сотрудник #${se.executor_id}`, role: se.stage_name || 'Исполнитель' })
+        }
       }
     }
-    // Исключаем тех, кто уже в чате
     const memberIds = new Set(chatMembers.value.filter(m => m.employee_id).map(m => m.employee_id))
     cardEmployees.value = [...emps.entries()]
       .filter(([id]) => !memberIds.has(id))
