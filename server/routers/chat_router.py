@@ -64,6 +64,7 @@ from services.chat_service import (
     create_client_chat,
     create_employee_chat,
     create_invite_link,
+    create_supervision_employee_chat,
     delete_chat,
     delete_message,
     edit_message,
@@ -79,6 +80,7 @@ from services.chat_service import (
     get_first_unread_message_id,
     get_guest_by_token,
     get_messages,
+    get_supervision_chat_for_employee,
     get_unread_count,
     mark_read,
     pin_message,
@@ -146,9 +148,17 @@ def create_chat(
     current_user: Employee = Depends(require_permission("chat.employee.manage")),
     db: Session = Depends(get_db),
 ):
-    """Создать чат (сотрудников или с клиентом)."""
+    """Создать чат (сотрудников или с клиентом).
+
+    Если передан supervision_card_id (без crm_card_id) — создаётся чат надзора.
+    """
     if data.chat_type not in ("employee", "client"):
         raise HTTPException(400, "chat_type должен быть 'employee' или 'client'")
+
+    # Чат надзора: supervision_card_id без crm_card_id
+    if data.supervision_card_id and not data.crm_card_id and data.chat_type == "employee":
+        chat = create_supervision_employee_chat(db, data.supervision_card_id, current_user.id)
+        return _chat_to_response(db, chat, current_user.id)
 
     if data.chat_type == "client":
         _require_perm(current_user, "chat.client.manage", db)
@@ -172,6 +182,7 @@ def create_chat(
 def list_chats(
     chat_type: Optional[str] = Query(None, description="'employee' или 'client'"),
     crm_card_id: Optional[int] = Query(None),
+    supervision_card_id: Optional[int] = Query(None),
     current_user: Employee = Depends(require_permission("chat.employee.view")),
     db: Session = Depends(get_db),
 ):
@@ -179,8 +190,16 @@ def list_chats(
 
     Если передан crm_card_id: возвращает чат карточки напрямую (без фильтра по членству),
     для чата сотрудников — авто-добавляет текущего сотрудника как участника.
+    Если передан supervision_card_id: возвращает чат(ы) карточки надзора.
     Иначе: возвращает все доступные чаты (участник ИЛИ назначен на карточку).
     """
+    if supervision_card_id:
+        # Чат надзора: ищем по supervision_card_id
+        chat = get_supervision_chat_for_employee(db, supervision_card_id, current_user.id)
+        if not chat:
+            return []
+        return [_chat_to_response(db, chat, current_user.id)]
+
     if crm_card_id and chat_type:
         chat = get_card_chat_for_employee(db, crm_card_id, chat_type, current_user.id)
         if not chat:

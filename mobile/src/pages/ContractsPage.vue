@@ -7,8 +7,7 @@
         placeholder="Поиск договоров..."
         outlined
         dense
-        rounded
-        class="q-mb-md"
+        class="q-mb-md crm-search-input"
       >
         <template #prepend>
           <q-icon name="search" />
@@ -30,6 +29,7 @@
             emit-value
             map-options
             clearable
+            class="crm-filter-select"
           />
         </div>
         <div class="col-3">
@@ -42,6 +42,7 @@
             emit-value
             map-options
             clearable
+            class="crm-filter-select"
           />
         </div>
         <div class="col-3">
@@ -52,6 +53,7 @@
             outlined
             dense
             clearable
+            class="crm-filter-select"
           />
         </div>
         <div class="col-3">
@@ -64,6 +66,7 @@
             emit-value
             map-options
             clearable
+            class="crm-filter-select"
           />
         </div>
       </div>
@@ -357,4 +360,8 @@ onMounted(() => loadContracts())
   white-space: nowrap;
   flex-shrink: 0;
 }
+/* Радиус поиска и фильтров = радиус таблицы (8px) */
+.crm-search-input :deep(.q-field__control) { border-radius: 8px; }
+.crm-filter-select :deep(.q-field__control) { border-radius: 8px; min-height: 32px; }
+.crm-filter-select :deep(.q-field--dense .q-field__control) { min-height: 32px; }
 </style>

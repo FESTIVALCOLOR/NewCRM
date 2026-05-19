@@ -1074,3 +1074,110 @@ def delete_chat(db: Session, chat_id: int, delete_yd_folder: bool = True):
             logger.warning(f"Не удалось удалить папку ЯД {chat.yandex_folder_path}: {e}")
     chat.is_active = False
     db.commit()
+
+
+# =========================
+# Чат авторского надзора
+# =========================
+
+
+def get_supervision_chat_for_employee(db: Session, supervision_card_id: int, employee_id: int) -> Optional[InternalChat]:
+    """Получить чат сотрудников для карточки надзора.
+    Авто-добавляет сотрудника как участника при первом доступе.
+    """
+    chat = (
+        db.query(InternalChat)
+        .filter(
+            InternalChat.supervision_card_id == supervision_card_id,
+            InternalChat.chat_type == "employee",
+            InternalChat.is_active == True,  # noqa: E712
+        )
+        .first()
+    )
+    if not chat:
+        return None
+
+    # Авто-добавляем сотрудника если ещё не участник
+    existing = (
+        db.query(InternalChatMember)
+        .filter(
+            InternalChatMember.chat_id == chat.id,
+            InternalChatMember.employee_id == employee_id,
+            InternalChatMember.is_active == True,  # noqa: E712
+        )
+        .first()
+    )
+    if not existing:
+        emp = db.query(Employee).filter(Employee.id == employee_id).first()
+        if emp:
+            _add_employee_member(db, chat, emp)
+            _add_system_message(db, chat, f"{_get_employee_display_name(emp)} присоединился к чату")
+            db.commit()
+    return chat
+
+
+def create_supervision_employee_chat(db: Session, supervision_card_id: int, created_by_id: int) -> InternalChat:
+    """Создать чат сотрудников для карточки авторского надзора.
+
+    Автоматически добавляет исполнителей надзора (ДАН, старший менеджер, руководитель студии).
+    """
+    # Проверить нет ли уже чата
+    existing = (
+        db.query(InternalChat)
+        .filter(
+            InternalChat.chat_type == "employee",
+            InternalChat.supervision_card_id == supervision_card_id,
+            InternalChat.is_active == True,  # noqa: E712
+        )
+        .first()
+    )
+    if existing:
+        return existing
+
+    card = db.query(SupervisionCard).filter(SupervisionCard.id == supervision_card_id).first()
+    title = None
+    contract_id = None
+    if card:
+        contract = db.query(Contract).filter(Contract.id == card.contract_id).first()
+        if contract:
+            title = contract.address or f"Надзор #{supervision_card_id}"
+            contract_id = contract.id
+
+    title = title or f"Надзор #{supervision_card_id}"
+
+    # Папка ЯД
+    base_folder = _get_card_folder(db, supervision_card_id=supervision_card_id)
+    chat_folder = f"{base_folder}/Чат надзора"
+    _ensure_yd_folder(f"disk:{chat_folder}")
+
+    chat = InternalChat(
+        chat_type="employee",
+        crm_card_id=None,
+        supervision_card_id=supervision_card_id,
+        contract_id=contract_id,
+        title=title,
+        yandex_folder_path=f"disk:{chat_folder}",
+        created_by=created_by_id,
+        is_active=True,
+    )
+    db.add(chat)
+    db.flush()
+
+    # Добавляем создателя
+    creator = db.query(Employee).filter(Employee.id == created_by_id).first()
+    if creator:
+        _add_employee_member(db, chat, creator)
+
+    # Добавляем исполнителей карточки надзора
+    if card:
+        for emp_id in filter(None, [card.dan_id, card.senior_manager_id, card.studio_director_id]):
+            if emp_id == created_by_id:
+                continue  # уже добавлен
+            emp = db.query(Employee).filter(Employee.id == emp_id).first()
+            if emp:
+                _add_employee_member(db, chat, emp)
+
+    _add_system_message(db, chat, "Чат надзора создан")
+    db.commit()
+    db.refresh(chat)
+    return chat

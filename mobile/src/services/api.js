@@ -377,6 +377,9 @@ export const supervisionApi = {
   createVisit: (cardId, data) =>
     api.post(`/api/v1/supervision-visits/${cardId}/visits`, data),
 
+  deleteVisit: (cardId, visitId) =>
+    api.delete(`/api/v1/supervision-visits/${cardId}/visits/${visitId}`),
+
   updateTimelineEntry: (cardId, stageCode, data) =>
     api.put(`/api/v1/supervision-timeline/${cardId}/entry/${stageCode}`, data),
 

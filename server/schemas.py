@@ -1275,6 +1275,7 @@ class SupervisionVisitResponse(BaseModel):
     actual_date: Optional[str] = None
     visit_type: Optional[str] = "На объект"
     sort_order: int = 0
+    visit_yandex_folder: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

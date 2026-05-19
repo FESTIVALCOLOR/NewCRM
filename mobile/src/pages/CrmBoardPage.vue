@@ -967,15 +967,16 @@ onMounted(async () => {
 .landscape-board {
   display: flex;
   overflow-x: auto;
+  overflow-y: hidden;
   padding: 8px;
   gap: 8px;
   height: calc(100vh - 110px);
   -webkit-overflow-scrolling: touch;
-  scrollbar-width: thin;
+  scrollbar-width: auto;
 }
 .landscape-column {
-  flex: 1 0 264px;
-  max-width: 352px;
+  flex: 0 0 280px;
+  min-width: 280px;
   display: flex;
   flex-direction: column;
 }

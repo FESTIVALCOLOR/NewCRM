@@ -7,8 +7,7 @@
         placeholder="Поиск клиентов..."
         outlined
         dense
-        rounded
-        class="q-mb-md"
+        class="q-mb-md crm-search-input"
         debounce="300"
         @update:model-value="onSearch"
       >
@@ -29,6 +28,7 @@
             label="Тип"
             outlined
             dense
+            class="crm-filter-select"
             @update:model-value="applyFilters"
           />
         </div>
@@ -41,6 +41,7 @@
             dense
             emit-value
             map-options
+            class="crm-filter-select"
             @update:model-value="applyFilters"
           />
         </div>
@@ -334,4 +335,8 @@ onMounted(() => {
   white-space: nowrap;
   max-width: 160px;
 }
+/* Радиус поиска и фильтров = радиус таблицы (8px) */
+.crm-search-input :deep(.q-field__control) { border-radius: 8px; }
+.crm-filter-select :deep(.q-field__control) { border-radius: 8px; min-height: 32px; }
+.crm-filter-select :deep(.q-field--dense .q-field__control) { min-height: 32px; }
 </style>

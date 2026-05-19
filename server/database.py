@@ -705,6 +705,7 @@ class SupervisionVisit(Base):
     actual_date = Column(String(30), nullable=True)  # Фактическая дата выезда
     visit_type = Column(String(50), default="На объект")  # Тип: 'На объект' / 'К поставщику'
     sort_order = Column(Integer, default=0)
+    visit_yandex_folder = Column(String(500), nullable=True)  # Путь к папке выезда на ЯД
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
