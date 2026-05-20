@@ -208,9 +208,7 @@ async def upload_client_photo(
     try:
         from yandex_disk_service import YandexDiskService
 
-        from config import get_settings
-
-        yd = YandexDiskService(get_settings().yandex_disk_token)
+        yd = YandexDiskService()
         yd_path = f"/CRM/Аватары/Клиенты/{client_id}.{ext}"
         yd.upload_file_from_bytes(content, yd_path)
         public_url = yd.get_public_link(yd_path)
