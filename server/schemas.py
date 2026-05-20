@@ -721,6 +721,31 @@ class SupervisionHistoryResponse(BaseModel):
         from_attributes = True
 
 
+class SupervisionMonthlyAssignmentCreate(BaseModel):
+    employee_id: Optional[int] = None
+    employee_name: str
+    role: str
+    monthly_amount: float
+    city: Optional[str] = None
+    start_date: str  # YYYY-MM-DD
+
+
+class SupervisionMonthlyAssignmentResponse(BaseModel):
+    id: int
+    supervision_card_id: int
+    employee_id: Optional[int] = None
+    employee_name: str
+    role: str
+    monthly_amount: float
+    city: Optional[str] = None
+    start_date: str
+    is_active: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 # =========================
 # CRM: Запросы согласования и исполнителей
 # =========================

@@ -2,47 +2,71 @@
 Роутер авторского надзора (supervision).
 Подключается в main.py через app.include_router(supervision_router, prefix="/api/supervision").
 """
+
 import asyncio
-import logging
 from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+import logging
 from typing import List, Optional
 
-from sqlalchemy import or_
-
-from database import (
-    get_db, Employee, Client, Contract, ActivityLog, ActionHistory, ProjectFile, Rate,
-    SupervisionCard, SupervisionProjectHistory, StageExecutor,
-    Payment, SupervisionTimelineEntry, MessengerChat,
-)
 from auth import get_current_user
+from constants import (
+    DAN_ROLES,
+    POSITION_DAN,
+    POSITION_SENIOR_MANAGER,
+    STATUS_COMPLETED,
+    STATUS_SUPERVISION,
+    STATUS_TERMINATED,
+)
+from fastapi import APIRouter, Depends, HTTPException
 from permissions import require_permission
 from schemas import (
-    SupervisionCardCreate, SupervisionCardUpdate, SupervisionCardResponse,
-    SupervisionColumnMoveRequest, SupervisionPauseRequest,
-    SupervisionHistoryCreate, SupervisionHistoryResponse,
-)
-from constants import (
-    DAN_ROLES, POSITION_DAN, POSITION_SENIOR_MANAGER,
-    STATUS_COMPLETED, STATUS_TERMINATED, STATUS_SUPERVISION,
+    StatusResponse,
+    SupervisionCardCreate,
+    SupervisionCardResponse,
+    SupervisionCardUpdate,
+    SupervisionColumnMoveRequest,
+    SupervisionHistoryCreate,
+    SupervisionHistoryResponse,
+    SupervisionMonthlyAssignmentCreate,
+    SupervisionMonthlyAssignmentResponse,
+    SupervisionPauseRequest,
 )
 from services.notification_service import trigger_supervision_notification
+from sqlalchemy import or_
+from sqlalchemy.orm import Session
+
+from database import (
+    ActionHistory,
+    ActivityLog,
+    Client,
+    Contract,
+    Employee,
+    MessengerChat,
+    Payment,
+    ProjectFile,
+    Rate,
+    StageExecutor,
+    SupervisionCard,
+    SupervisionMonthlyAssignment,
+    SupervisionProjectHistory,
+    SupervisionTimelineEntry,
+    get_db,
+)
 
 # Маппинг column_name → stage_code для таблицы сроков надзора
 _SUPERVISION_COLUMN_TO_STAGE = {
-    'Стадия 1: Закупка керамогранита': 'STAGE_1_CERAMIC',
-    'Стадия 2: Закупка сантехники': 'STAGE_2_PLUMBING',
-    'Стадия 3: Закупка оборудования': 'STAGE_3_EQUIPMENT',
-    'Стадия 4: Закупка дверей и окон': 'STAGE_4_DOORS',
-    'Стадия 5: Закупка настенных материалов': 'STAGE_5_WALL',
-    'Стадия 6: Закупка напольных материалов': 'STAGE_6_FLOOR',
-    'Стадия 7: Лепной декор': 'STAGE_7_STUCCO',
-    'Стадия 8: Освещение': 'STAGE_8_LIGHTING',
-    'Стадия 9: Бытовая техника': 'STAGE_9_APPLIANCES',
-    'Стадия 10: Закупка заказной мебели': 'STAGE_10_CUSTOM_FURNITURE',
-    'Стадия 11: Закупка фабричной мебели': 'STAGE_11_FACTORY_FURNITURE',
-    'Стадия 12: Закупка декора': 'STAGE_12_DECOR',
+    "Стадия 1: Закупка керамогранита": "STAGE_1_CERAMIC",
+    "Стадия 2: Закупка сантехники": "STAGE_2_PLUMBING",
+    "Стадия 3: Закупка оборудования": "STAGE_3_EQUIPMENT",
+    "Стадия 4: Закупка дверей и окон": "STAGE_4_DOORS",
+    "Стадия 5: Закупка настенных материалов": "STAGE_5_WALL",
+    "Стадия 6: Закупка напольных материалов": "STAGE_6_FLOOR",
+    "Стадия 7: Лепной декор": "STAGE_7_STUCCO",
+    "Стадия 8: Освещение": "STAGE_8_LIGHTING",
+    "Стадия 9: Бытовая техника": "STAGE_9_APPLIANCES",
+    "Стадия 10: Закупка заказной мебели": "STAGE_10_CUSTOM_FURNITURE",
+    "Стадия 11: Закупка фабричной мебели": "STAGE_11_FACTORY_FURNITURE",
+    "Стадия 12: Закупка декора": "STAGE_12_DECOR",
 }
 
 logger = logging.getLogger(__name__)
@@ -54,10 +78,7 @@ def _calc_supervision_payment_amount(db: "Session", contract_id: int, role: str,
     if not contract:
         return 0
     area = float(contract.area) if contract.area else 0
-    rate_query = db.query(Rate).filter(
-        Rate.project_type == 'Авторский надзор',
-        Rate.role == role
-    )
+    rate_query = db.query(Rate).filter(Rate.project_type == "Авторский надзор", Rate.role == role)
     if stage_name:
         rate_query = rate_query.filter(or_(Rate.stage_name == stage_name, Rate.stage_name.is_(None)))
     rate = rate_query.order_by(Rate.stage_name.desc().nullslast()).first()
@@ -69,14 +90,11 @@ def _calc_supervision_payment_amount(db: "Session", contract_id: int, role: str,
 def _auto_create_supervision_payments(db: "Session", card: "SupervisionCard", stage_name: str, user_id: int):
     """Авто-создание оплат ДАН и СМП при завершении стадии надзора"""
     # Проверяем дубли
-    existing = db.query(Payment).filter(
-        Payment.supervision_card_id == card.id,
-        Payment.stage_name == stage_name
-    ).first()
+    existing = db.query(Payment).filter(Payment.supervision_card_id == card.id, Payment.stage_name == stage_name).first()
     if existing:
         return
 
-    current_month = datetime.utcnow().strftime('%Y-%m')
+    current_month = datetime.utcnow().strftime("%Y-%m")
 
     for emp_id, role in [(card.dan_id, POSITION_DAN), (card.senior_manager_id, POSITION_SENIOR_MANAGER)]:
         if not emp_id:
@@ -97,27 +115,41 @@ def _auto_create_supervision_payments(db: "Session", card: "SupervisionCard", st
             stage_name=stage_name,
             calculated_amount=amount,
             final_amount=amount,
-            payment_type='Полная оплата',
+            payment_type="Полная оплата",
             report_month=current_month,
             supervision_card_id=card.id,
         )
         db.add(payment)
 
         # Бизнес-история авто-создания оплаты надзора
-        db.add(ActionHistory(
-            user_id=user_id,
-            action_type='payment_created',
-            entity_type='supervision_card',
-            entity_id=card.id,
-            description=f'Авто-оплата надзора: {emp_name or "ID " + str(emp_id)}, роль: {role}, стадия: «{stage_name}», сумма: {amount}'
-        ))
+        db.add(
+            ActionHistory(
+                user_id=user_id,
+                action_type="payment_created",
+                entity_type="supervision_card",
+                entity_id=card.id,
+                description=f"Авто-оплата надзора: {emp_name or 'ID ' + str(emp_id)}, роль: {role}, стадия: «{stage_name}», сумма: {amount}",
+            )
+        )
 
         logger.info(f"Авто-оплата: card={card.id}, role={role}, stage={stage_name}, amount={amount}")
 
 
 RUSSIAN_HOLIDAYS = [
-    (1, 1), (1, 2), (1, 3), (1, 4), (1, 5), (1, 6), (1, 7), (1, 8),
-    (2, 23), (3, 8), (5, 1), (5, 9), (6, 12), (11, 4),
+    (1, 1),
+    (1, 2),
+    (1, 3),
+    (1, 4),
+    (1, 5),
+    (1, 6),
+    (1, 7),
+    (1, 8),
+    (2, 23),
+    (3, 8),
+    (5, 1),
+    (5, 9),
+    (6, 12),
+    (11, 4),
 ]
 
 
@@ -144,7 +176,7 @@ def _count_business_days(start_date, end_date):
 def _add_business_days(start_date, days: int):
     """Добавить рабочие дни (пн-пт + праздники РФ) к дате."""
     if isinstance(start_date, str):
-        start_date = datetime.strptime(start_date, '%Y-%m-%d')
+        start_date = datetime.strptime(start_date, "%Y-%m-%d")
     current = start_date
     added = 0
     while added < days:
@@ -159,6 +191,7 @@ router = APIRouter(tags=["supervision"])
 
 # --- ВАЖНО: Статические пути ПЕРЕД динамическими ---
 
+
 @router.get("/cards")
 async def get_supervision_cards(
     status: str = "active",
@@ -170,13 +203,11 @@ async def get_supervision_cards(
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
     current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Получить список карточек авторского надзора с фильтрацией"""
     try:
-        base_query = db.query(SupervisionCard).join(
-            Contract, SupervisionCard.contract_id == Contract.id
-        )
+        base_query = db.query(SupervisionCard).join(Contract, SupervisionCard.contract_id == Contract.id)
 
         if status == "active":
             base_query = base_query.filter(Contract.status == STATUS_SUPERVISION)
@@ -205,35 +236,35 @@ async def get_supervision_cards(
             studio_director_name = card.studio_director.full_name if card.studio_director else None
 
             card_data = {
-                'id': card.id,
-                'contract_id': card.contract_id,
-                'column_name': card.column_name,
-                'deadline': str(card.deadline) if card.deadline else None,
-                'tags': card.tags,
-                'senior_manager_id': card.senior_manager_id,
-                'dan_id': card.dan_id,
-                'studio_director_id': card.studio_director_id,
-                'dan_completed': card.dan_completed,
-                'is_paused': card.is_paused,
-                'pause_reason': card.pause_reason,
-                'paused_at': card.paused_at.isoformat() if card.paused_at else None,
-                'total_pause_days': card.total_pause_days or 0,
-                'senior_manager_name': senior_manager_name,
-                'dan_name': dan_name,
-                'studio_director_name': studio_director_name,
-                'contract_number': contract.contract_number,
-                'address': contract.address,
-                'area': contract.area,
-                'city': contract.city,
-                'agent_type': contract.agent_type,
-                'project_type': contract.project_type,
-                'project_subtype': contract.project_subtype,
-                'contract_status': contract.status,
-                'termination_reason': contract.termination_reason if status == "archived" else None,
+                "id": card.id,
+                "contract_id": card.contract_id,
+                "column_name": card.column_name,
+                "deadline": str(card.deadline) if card.deadline else None,
+                "tags": card.tags,
+                "senior_manager_id": card.senior_manager_id,
+                "dan_id": card.dan_id,
+                "studio_director_id": card.studio_director_id,
+                "dan_completed": card.dan_completed,
+                "is_paused": card.is_paused,
+                "pause_reason": card.pause_reason,
+                "paused_at": card.paused_at.isoformat() if card.paused_at else None,
+                "total_pause_days": card.total_pause_days or 0,
+                "senior_manager_name": senior_manager_name,
+                "dan_name": dan_name,
+                "studio_director_name": studio_director_name,
+                "contract_number": contract.contract_number,
+                "address": contract.address,
+                "area": contract.area,
+                "city": contract.city,
+                "agent_type": contract.agent_type,
+                "project_type": contract.project_type,
+                "project_subtype": contract.project_subtype,
+                "contract_status": contract.status,
+                "termination_reason": contract.termination_reason if status == "archived" else None,
                 # S-14: Добавлено status_changed_date для фильтрации в архиве
-                'status_changed_date': str(contract.status_changed_date) if hasattr(contract, 'status_changed_date') and contract.status_changed_date else None,
-                'created_at': card.created_at.isoformat() if card.created_at else None,
-                'updated_at': card.updated_at.isoformat() if card.updated_at else None,
+                "status_changed_date": str(contract.status_changed_date) if hasattr(contract, "status_changed_date") and contract.status_changed_date else None,
+                "created_at": card.created_at.isoformat() if card.created_at else None,
+                "updated_at": card.updated_at.isoformat() if card.updated_at else None,
             }
             result.append(card_data)
 
@@ -245,18 +276,10 @@ async def get_supervision_cards(
 
 
 @router.get("/addresses")
-async def get_supervision_addresses(
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def get_supervision_addresses(current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Получить адреса надзора"""
     try:
-        result = db.query(Contract.address).join(
-            SupervisionCard, SupervisionCard.contract_id == Contract.id
-        ).distinct().filter(
-            Contract.address.isnot(None),
-            Contract.address != ''
-        ).all()
+        result = db.query(Contract.address).join(SupervisionCard, SupervisionCard.contract_id == Contract.id).distinct().filter(Contract.address.isnot(None), Contract.address != "").all()
         return [r[0] for r in result if r[0]]
     except Exception as e:
         logger.exception(f"Ошибка при получении адресов надзора: {e}")
@@ -264,11 +287,7 @@ async def get_supervision_addresses(
 
 
 @router.get("/cards/{card_id}")
-async def get_supervision_card(
-    card_id: int,
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def get_supervision_card(card_id: int, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Получить одну карточку надзора"""
     try:
         card = db.query(SupervisionCard).filter(SupervisionCard.id == card_id).first()
@@ -281,31 +300,31 @@ async def get_supervision_card(
         contract = card.contract
 
         return {
-            'id': card.id,
-            'contract_id': card.contract_id,
-            'column_name': card.column_name,
-            'deadline': str(card.deadline) if card.deadline else None,
-            'tags': card.tags,
-            'senior_manager_id': card.senior_manager_id,
-            'dan_id': card.dan_id,
-            'studio_director_id': card.studio_director_id,
-            'dan_completed': card.dan_completed,
-            'is_paused': card.is_paused,
-            'pause_reason': card.pause_reason,
-            'paused_at': card.paused_at.isoformat() if card.paused_at else None,
-            'total_pause_days': card.total_pause_days or 0,
-            'senior_manager_name': senior_manager_name,
-            'dan_name': dan_name,
-            'studio_director_name': studio_director_name,
-            'contract_number': contract.contract_number if contract else None,
-            'address': contract.address if contract else None,
-            'area': contract.area if contract else None,
-            'city': contract.city if contract else None,
-            'agent_type': contract.agent_type if contract else None,
-            'project_type': contract.project_type if contract else None,
-            'project_subtype': contract.project_subtype if contract else None,
-            'created_at': card.created_at.isoformat() if card.created_at else None,
-            'updated_at': card.updated_at.isoformat() if card.updated_at else None,
+            "id": card.id,
+            "contract_id": card.contract_id,
+            "column_name": card.column_name,
+            "deadline": str(card.deadline) if card.deadline else None,
+            "tags": card.tags,
+            "senior_manager_id": card.senior_manager_id,
+            "dan_id": card.dan_id,
+            "studio_director_id": card.studio_director_id,
+            "dan_completed": card.dan_completed,
+            "is_paused": card.is_paused,
+            "pause_reason": card.pause_reason,
+            "paused_at": card.paused_at.isoformat() if card.paused_at else None,
+            "total_pause_days": card.total_pause_days or 0,
+            "senior_manager_name": senior_manager_name,
+            "dan_name": dan_name,
+            "studio_director_name": studio_director_name,
+            "contract_number": contract.contract_number if contract else None,
+            "address": contract.address if contract else None,
+            "area": contract.area if contract else None,
+            "city": contract.city if contract else None,
+            "agent_type": contract.agent_type if contract else None,
+            "project_type": contract.project_type if contract else None,
+            "project_subtype": contract.project_subtype if contract else None,
+            "created_at": card.created_at.isoformat() if card.created_at else None,
+            "updated_at": card.updated_at.isoformat() if card.updated_at else None,
         }
 
     except HTTPException:
@@ -316,11 +335,7 @@ async def get_supervision_card(
 
 
 @router.post("/cards")
-async def create_supervision_card(
-    card_data: SupervisionCardCreate,
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def create_supervision_card(card_data: SupervisionCardCreate, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Создать карточку надзора"""
     try:
         card = SupervisionCard(**card_data.model_dump())
@@ -328,44 +343,40 @@ async def create_supervision_card(
         db.commit()
         db.refresh(card)
 
-        log = ActivityLog(
-            employee_id=current_user.id,
-            action_type="create",
-            entity_type="supervision_card",
-            entity_id=card.id
-        )
+        log = ActivityLog(employee_id=current_user.id, action_type="create", entity_type="supervision_card", entity_id=card.id)
         db.add(log)
         db.commit()
 
         # N4: Автотриггер supervision_start при создании карточки
         try:
-            asyncio.create_task(trigger_supervision_notification(
-                card.id, 'supervision_start', stage_name=card.column_name or '',
-                sender_id=current_user.id
-            ))
+            asyncio.create_task(trigger_supervision_notification(card.id, "supervision_start", stage_name=card.column_name or "", sender_id=current_user.id))
         except Exception as e:
             logger.warning(f"supervision_start trigger: {e}")
 
         # N4: Уведомление о создании карточки надзора
         try:
             from services.notification_dispatcher import dispatch_notification
+
             contract = db.query(Contract).filter(Contract.id == card.contract_id).first()
-            address = contract.address if contract else ''
-            client_name = ''
+            address = contract.address if contract else ""
+            client_name = ""
             if contract and contract.client_id:
                 client = db.query(Client).filter(Client.id == contract.client_id).first()
-                client_name = client.full_name if client else ''
+                client_name = client.full_name if client else ""
             sm_id = card.senior_manager_id
             if sm_id and sm_id != current_user.id:
-                asyncio.create_task(dispatch_notification(
-                    db=db, employee_id=sm_id,
-                    event_type='supervision',
-                    title=f'Новый надзор: {address}',
-                    message=f'Новая карточка авторского надзора: {address} ({client_name}). Назначьте сотрудников.',
-                    related_entity_type='supervision_card',
-                    related_entity_id=card.id,
-                    project_type='supervision',
-                ))
+                asyncio.create_task(
+                    dispatch_notification(
+                        db=db,
+                        employee_id=sm_id,
+                        event_type="supervision",
+                        title=f"Новый надзор: {address}",
+                        message=f"Новая карточка авторского надзора: {address} ({client_name}). Назначьте сотрудников.",
+                        related_entity_type="supervision_card",
+                        related_entity_id=card.id,
+                        project_type="supervision",
+                    )
+                )
         except Exception as e:
             logger.warning(f"supervision create notify: {e}")
 
@@ -393,12 +404,7 @@ async def create_supervision_card(
 
 
 @router.patch("/cards/{card_id}")
-async def update_supervision_card(
-    card_id: int,
-    updates: SupervisionCardUpdate,
-    current_user: Employee = Depends(require_permission("supervision.update")),
-    db: Session = Depends(get_db)
-):
+async def update_supervision_card(card_id: int, updates: SupervisionCardUpdate, current_user: Employee = Depends(require_permission("supervision.update")), db: Session = Depends(get_db)):
     """Обновить карточку надзора"""
     try:
         card = db.query(SupervisionCard).filter(SupervisionCard.id == card_id).first()
@@ -408,35 +414,30 @@ async def update_supervision_card(
         update_data = updates.model_dump(exclude_unset=True)
 
         # Валидация роли при назначении ДАН
-        if 'dan_id' in update_data and update_data['dan_id']:
-            dan_employee = db.query(Employee).filter(Employee.id == update_data['dan_id']).first()
+        if "dan_id" in update_data and update_data["dan_id"]:
+            dan_employee = db.query(Employee).filter(Employee.id == update_data["dan_id"]).first()
             if not dan_employee:
                 raise HTTPException(status_code=404, detail="Сотрудник (ДАН) не найден")
             if dan_employee.role not in DAN_ROLES:
                 logger.warning(f"Назначен ДАН с ролью '{dan_employee.role}' (ожидается {DAN_ROLES})")
 
         # Запись истории при смене назначенных сотрудников
-        for field_name, label in [('dan_id', 'ДАН'), ('senior_manager_id', 'Старший менеджер')]:
+        for field_name, label in [("dan_id", "ДАН"), ("senior_manager_id", "Старший менеджер")]:
             if field_name in update_data:
                 old_val = getattr(card, field_name)
                 new_val = update_data[field_name]
                 if old_val != new_val:
                     # Получаем имена сотрудников
-                    old_name = ''
-                    new_name = ''
+                    old_name = ""
+                    new_name = ""
                     if old_val:
                         old_emp = db.query(Employee).filter(Employee.id == old_val).first()
-                        old_name = old_emp.full_name if old_emp else f'ID:{old_val}'
+                        old_name = old_emp.full_name if old_emp else f"ID:{old_val}"
                     if new_val:
                         new_emp = db.query(Employee).filter(Employee.id == new_val).first()
-                        new_name = new_emp.full_name if new_emp else f'ID:{new_val}'
-                    msg = f'{label} изменён: {old_name or "—"} → {new_name or "—"}'
-                    history = SupervisionProjectHistory(
-                        supervision_card_id=card_id,
-                        entry_type="assignment_change",
-                        message=msg,
-                        created_by=current_user.id
-                    )
+                        new_name = new_emp.full_name if new_emp else f"ID:{new_val}"
+                    msg = f"{label} изменён: {old_name or '—'} → {new_name or '—'}"
+                    history = SupervisionProjectHistory(supervision_card_id=card_id, entry_type="assignment_change", message=msg, created_by=current_user.id)
                     db.add(history)
 
         for field, value in update_data.items():
@@ -446,18 +447,18 @@ async def update_supervision_card(
         db.refresh(card)
 
         return {
-            'id': card.id,
-            'contract_id': card.contract_id,
-            'column_name': card.column_name,
-            'deadline': str(card.deadline) if card.deadline else None,
-            'tags': card.tags,
-            'senior_manager_id': card.senior_manager_id,
-            'dan_id': card.dan_id,
-            'dan_completed': card.dan_completed,
-            'is_paused': card.is_paused,
-            'pause_reason': card.pause_reason,
-            'paused_at': card.paused_at.isoformat() if card.paused_at else None,
-            'total_pause_days': card.total_pause_days or 0,
+            "id": card.id,
+            "contract_id": card.contract_id,
+            "column_name": card.column_name,
+            "deadline": str(card.deadline) if card.deadline else None,
+            "tags": card.tags,
+            "senior_manager_id": card.senior_manager_id,
+            "dan_id": card.dan_id,
+            "dan_completed": card.dan_completed,
+            "is_paused": card.is_paused,
+            "pause_reason": card.pause_reason,
+            "paused_at": card.paused_at.isoformat() if card.paused_at else None,
+            "total_pause_days": card.total_pause_days or 0,
         }
 
     except HTTPException:
@@ -470,22 +471,26 @@ async def update_supervision_card(
 
 @router.patch("/cards/{card_id}/column")
 async def move_supervision_card_to_column(
-    card_id: int,
-    move_request: SupervisionColumnMoveRequest,
-    current_user: Employee = Depends(require_permission("supervision.move")),
-    db: Session = Depends(get_db)
+    card_id: int, move_request: SupervisionColumnMoveRequest, current_user: Employee = Depends(require_permission("supervision.move")), db: Session = Depends(get_db)
 ):
     """Переместить карточку надзора в другую колонку"""
     try:
         VALID_SUPERVISION_COLUMNS = [
-            'Новый заказ', 'В ожидании',
-            'Стадия 1: Закупка керамогранита', 'Стадия 2: Закупка сантехники',
-            'Стадия 3: Закупка оборудования', 'Стадия 4: Закупка дверей и окон',
-            'Стадия 5: Закупка настенных материалов', 'Стадия 6: Закупка напольных материалов',
-            'Стадия 7: Лепной декор', 'Стадия 8: Освещение',
-            'Стадия 9: Бытовая техника', 'Стадия 10: Закупка заказной мебели',
-            'Стадия 11: Закупка фабричной мебели', 'Стадия 12: Закупка декора',
-            'Выполненный проект'
+            "Новый заказ",
+            "В ожидании",
+            "Стадия 1: Закупка керамогранита",
+            "Стадия 2: Закупка сантехники",
+            "Стадия 3: Закупка оборудования",
+            "Стадия 4: Закупка дверей и окон",
+            "Стадия 5: Закупка настенных материалов",
+            "Стадия 6: Закупка напольных материалов",
+            "Стадия 7: Лепной декор",
+            "Стадия 8: Освещение",
+            "Стадия 9: Бытовая техника",
+            "Стадия 10: Закупка заказной мебели",
+            "Стадия 11: Закупка фабричной мебели",
+            "Стадия 12: Закупка декора",
+            "Выполненный проект",
         ]
         if move_request.column_name not in VALID_SUPERVISION_COLUMNS:
             raise HTTPException(status_code=422, detail=f"Недопустимая колонка надзора: {move_request.column_name}")
@@ -499,34 +504,25 @@ async def move_supervision_card_to_column(
 
         # С4: Блокируем перемещение приостановленной карточки
         # Исключение: выход из "В ожидании" разрешён (это и есть возобновление)
-        if card.is_paused and new_column != old_column and old_column != 'В ожидании':
-            raise HTTPException(
-                status_code=422,
-                detail='Карточка приостановлена. Сначала возобновите проект.'
-            )
+        if card.is_paused and new_column != old_column and old_column != "В ожидании":
+            raise HTTPException(status_code=422, detail="Карточка приостановлена. Сначала возобновите проект.")
 
         # === ПРАВИЛО: Нельзя вернуться в "Новый заказ" ===
-        if new_column == 'Новый заказ' and old_column != 'Новый заказ':
-            raise HTTPException(
-                status_code=422,
-                detail='Нельзя вернуть карточку в "Новый заказ". Используйте столбец "В ожидании".'
-            )
+        if new_column == "Новый заказ" and old_column != "Новый заказ":
+            raise HTTPException(status_code=422, detail='Нельзя вернуть карточку в "Новый заказ". Используйте столбец "В ожидании".')
 
         # === ПРАВИЛО: Из "В ожидании" — только в previous_column или "Выполненный проект" ===
-        if old_column == 'В ожидании' and new_column != 'В ожидании':
-            allowed_return = card.previous_column or 'Новый заказ'
-            if allowed_return != 'Новый заказ' and new_column not in [allowed_return, 'Выполненный проект']:
-                raise HTTPException(
-                    status_code=422,
-                    detail=f'Из "В ожидании" можно вернуть только в "{allowed_return}" или "Выполненный проект".'
-                )
+        if old_column == "В ожидании" and new_column != "В ожидании":
+            allowed_return = card.previous_column or "Новый заказ"
+            if allowed_return != "Новый заказ" and new_column not in [allowed_return, "Выполненный проект"]:
+                raise HTTPException(status_code=422, detail=f'Из "В ожидании" можно вернуть только в "{allowed_return}" или "Выполненный проект".')
 
         # === ПРАВИЛО: При переходе в "В ожидании" — сохраняем previous_column ===
-        if new_column == 'В ожидании' and old_column != 'В ожидании':
+        if new_column == "В ожидании" and old_column != "В ожидании":
             card.previous_column = old_column
 
         # === ПРАВИЛО: При возврате из "В ожидании" — автоматически возобновляем ===
-        if old_column == 'В ожидании' and new_column != 'В ожидании':
+        if old_column == "В ожидании" and new_column != "В ожидании":
             # Авто-resume: снимаем is_paused и пересчитываем дедлайны
             if card.is_paused:
                 pause_days = 0
@@ -538,35 +534,29 @@ async def move_supervision_card_to_column(
                 card.total_pause_days = (card.total_pause_days or 0) + pause_days
                 # Сдвигаем plan_dates в timeline на дни паузы
                 if pause_days > 0:
-                    timeline_entries = db.query(SupervisionTimelineEntry).filter(
-                        SupervisionTimelineEntry.supervision_card_id == card_id,
-                        SupervisionTimelineEntry.actual_date.is_(None)
-                    ).all()
+                    timeline_entries = db.query(SupervisionTimelineEntry).filter(SupervisionTimelineEntry.supervision_card_id == card_id, SupervisionTimelineEntry.actual_date.is_(None)).all()
                     for te in timeline_entries:
                         if te.plan_date:
                             try:
-                                plan_dt = datetime.strptime(te.plan_date, '%Y-%m-%d')
+                                plan_dt = datetime.strptime(te.plan_date, "%Y-%m-%d")
                                 new_dt = _add_business_days(plan_dt, pause_days)
-                                te.plan_date = new_dt.strftime('%Y-%m-%d')
+                                te.plan_date = new_dt.strftime("%Y-%m-%d")
                             except (ValueError, TypeError):
                                 pass
                     logger.info(f"Supervision card {card_id} auto-resumed from 'В ожидании', pause_days={pause_days}")
 
                 # Запись авто-resume в историю
                 resume_history = SupervisionProjectHistory(
-                    supervision_card_id=card_id,
-                    entry_type="auto_resume",
-                    message=f"Авто-возобновлено (пауза: {pause_days} дн.)" if pause_days > 0 else "Авто-возобновлено",
-                    created_by=current_user.id
+                    supervision_card_id=card_id, entry_type="auto_resume", message=f"Авто-возобновлено (пауза: {pause_days} дн.)" if pause_days > 0 else "Авто-возобновлено", created_by=current_user.id
                 )
                 db.add(resume_history)
 
                 # Сдвигаем deadline карточки
                 if card.deadline:
                     try:
-                        dl = datetime.strptime(card.deadline, '%Y-%m-%d')
+                        dl = datetime.strptime(card.deadline, "%Y-%m-%d")
                         dl = _add_business_days(dl, pause_days)
-                        card.deadline = dl.strftime('%Y-%m-%d')
+                        card.deadline = dl.strftime("%Y-%m-%d")
                     except (ValueError, TypeError):
                         pass
 
@@ -576,31 +566,23 @@ async def move_supervision_card_to_column(
 
         # K11: Запись перемещения в историю
         if old_column != new_column:
-            history = SupervisionProjectHistory(
-                supervision_card_id=card_id,
-                entry_type="card_moved",
-                message=f'Карточка перемещена: "{old_column}" → "{new_column}"',
-                created_by=current_user.id
-            )
+            history = SupervisionProjectHistory(supervision_card_id=card_id, entry_type="card_moved", message=f'Карточка перемещена: "{old_column}" → "{new_column}"', created_by=current_user.id)
             db.add(history)
 
         # === Установка actual_date в timeline при УХОДЕ из стадии ===
-        if old_column != new_column and old_column not in ['Новый заказ', 'В ожидании', 'Выполненный проект']:
+        if old_column != new_column and old_column not in ["Новый заказ", "В ожидании", "Выполненный проект"]:
             stage_code = _SUPERVISION_COLUMN_TO_STAGE.get(old_column)
             if stage_code:
-                timeline_entry = db.query(SupervisionTimelineEntry).filter(
-                    SupervisionTimelineEntry.supervision_card_id == card_id,
-                    SupervisionTimelineEntry.stage_code == stage_code
-                ).first()
+                timeline_entry = db.query(SupervisionTimelineEntry).filter(SupervisionTimelineEntry.supervision_card_id == card_id, SupervisionTimelineEntry.stage_code == stage_code).first()
                 if timeline_entry and not timeline_entry.actual_date:
-                    today_str = datetime.utcnow().strftime('%Y-%m-%d')
+                    today_str = datetime.utcnow().strftime("%Y-%m-%d")
                     timeline_entry.actual_date = today_str
-                    timeline_entry.status = 'Закуплено'
+                    timeline_entry.status = "Закуплено"
                     # Рассчитываем дней (план → факт)
                     if timeline_entry.plan_date:
                         try:
-                            plan_dt = datetime.strptime(timeline_entry.plan_date, '%Y-%m-%d')
-                            actual_dt = datetime.strptime(today_str, '%Y-%m-%d')
+                            plan_dt = datetime.strptime(timeline_entry.plan_date, "%Y-%m-%d")
+                            actual_dt = datetime.strptime(today_str, "%Y-%m-%d")
                             timeline_entry.actual_days = max(0, (actual_dt - plan_dt).days)
                         except (ValueError, TypeError):
                             pass
@@ -615,23 +597,17 @@ async def move_supervision_card_to_column(
         # Хук: уведомление в чат надзора при перемещении
         if old_column != new_column:
             # N4: supervision_end при перемещении в "Выполненный проект"
-            if new_column == 'Выполненный проект':
-                asyncio.create_task(trigger_supervision_notification(
-                    card_id, 'supervision_end', stage_name=new_column,
-                    sender_id=current_user.id
-                ))
+            if new_column == "Выполненный проект":
+                asyncio.create_task(trigger_supervision_notification(card_id, "supervision_end", stage_name=new_column, sender_id=current_user.id))
             else:
-                asyncio.create_task(trigger_supervision_notification(
-                    card_id, 'supervision_move', stage_name=new_column,
-                    sender_id=current_user.id
-                ))
+                asyncio.create_task(trigger_supervision_notification(card_id, "supervision_move", stage_name=new_column, sender_id=current_user.id))
 
         return {
-            'id': card.id,
-            'contract_id': card.contract_id,
-            'column_name': card.column_name,
-            'old_column_name': old_column,
-            'previous_column': card.previous_column,
+            "id": card.id,
+            "contract_id": card.contract_id,
+            "column_name": card.column_name,
+            "old_column_name": old_column,
+            "previous_column": card.previous_column,
         }
 
     except HTTPException:
@@ -643,12 +619,7 @@ async def move_supervision_card_to_column(
 
 
 @router.post("/cards/{card_id}/pause")
-async def pause_supervision_card(
-    card_id: int,
-    pause_request: SupervisionPauseRequest,
-    current_user: Employee = Depends(require_permission("supervision.pause_resume")),
-    db: Session = Depends(get_db)
-):
+async def pause_supervision_card(card_id: int, pause_request: SupervisionPauseRequest, current_user: Employee = Depends(require_permission("supervision.pause_resume")), db: Session = Depends(get_db)):
     """Приостановить карточку надзора"""
     try:
         card = db.query(SupervisionCard).filter(SupervisionCard.id == card_id).first()
@@ -664,22 +635,17 @@ async def pause_supervision_card(
         card.paused_at = datetime.utcnow()
 
         # Добавляем запись в историю
-        history = SupervisionProjectHistory(
-            supervision_card_id=card_id,
-            entry_type="pause",
-            message=f"Приостановлено: {pause_request.pause_reason}",
-            created_by=current_user.id
-        )
+        history = SupervisionProjectHistory(supervision_card_id=card_id, entry_type="pause", message=f"Приостановлено: {pause_request.pause_reason}", created_by=current_user.id)
         db.add(history)
 
         db.commit()
         db.refresh(card)
 
         return {
-            'id': card.id,
-            'is_paused': card.is_paused,
-            'pause_reason': card.pause_reason,
-            'paused_at': card.paused_at.isoformat() if card.paused_at else None,
+            "id": card.id,
+            "is_paused": card.is_paused,
+            "pause_reason": card.pause_reason,
+            "paused_at": card.paused_at.isoformat() if card.paused_at else None,
         }
 
     except HTTPException:
@@ -691,11 +657,7 @@ async def pause_supervision_card(
 
 
 @router.post("/cards/{card_id}/resume")
-async def resume_supervision_card(
-    card_id: int,
-    current_user: Employee = Depends(require_permission("supervision.pause_resume")),
-    db: Session = Depends(get_db)
-):
+async def resume_supervision_card(card_id: int, current_user: Employee = Depends(require_permission("supervision.pause_resume")), db: Session = Depends(get_db)):
     """Возобновить карточку надзора"""
     try:
         card = db.query(SupervisionCard).filter(SupervisionCard.id == card_id).first()
@@ -718,16 +680,13 @@ async def resume_supervision_card(
 
         # K2: Сдвигаем все plan_date в timeline на pause_days
         if pause_days > 0:
-            timeline_entries = db.query(SupervisionTimelineEntry).filter(
-                SupervisionTimelineEntry.supervision_card_id == card_id,
-                SupervisionTimelineEntry.actual_date.is_(None)
-            ).all()
+            timeline_entries = db.query(SupervisionTimelineEntry).filter(SupervisionTimelineEntry.supervision_card_id == card_id, SupervisionTimelineEntry.actual_date.is_(None)).all()
             for te in timeline_entries:
                 if te.plan_date:
                     try:
-                        plan_dt = datetime.strptime(te.plan_date, '%Y-%m-%d')
+                        plan_dt = datetime.strptime(te.plan_date, "%Y-%m-%d")
                         new_dt = _add_business_days(plan_dt, pause_days)
-                        te.plan_date = new_dt.strftime('%Y-%m-%d')
+                        te.plan_date = new_dt.strftime("%Y-%m-%d")
                     except (ValueError, TypeError):
                         pass
             logger.info(f"K2: Supervision card {card_id} resumed, pause_days={pause_days}, shifted {len(timeline_entries)} entries")
@@ -735,18 +694,15 @@ async def resume_supervision_card(
         # Сдвигаем deadline карточки
         if pause_days > 0 and card.deadline:
             try:
-                dl = datetime.strptime(card.deadline, '%Y-%m-%d')
+                dl = datetime.strptime(card.deadline, "%Y-%m-%d")
                 dl = _add_business_days(dl, pause_days)
-                card.deadline = dl.strftime('%Y-%m-%d')
+                card.deadline = dl.strftime("%Y-%m-%d")
             except (ValueError, TypeError):
                 pass
 
         # Добавляем запись в историю
         history = SupervisionProjectHistory(
-            supervision_card_id=card_id,
-            entry_type="resume",
-            message=f"Возобновлено (пауза: {pause_days} дн.)" if pause_days > 0 else "Возобновлено",
-            created_by=current_user.id
+            supervision_card_id=card_id, entry_type="resume", message=f"Возобновлено (пауза: {pause_days} дн.)" if pause_days > 0 else "Возобновлено", created_by=current_user.id
         )
         db.add(history)
 
@@ -754,8 +710,8 @@ async def resume_supervision_card(
         db.refresh(card)
 
         return {
-            'id': card.id,
-            'is_paused': card.is_paused,
+            "id": card.id,
+            "is_paused": card.is_paused,
         }
 
     except HTTPException:
@@ -766,17 +722,11 @@ async def resume_supervision_card(
         raise HTTPException(status_code=500, detail="Внутренняя ошибка сервера")
 
 
-@router.get("/cards/{card_id}/history", response_model=List[SupervisionHistoryResponse])
-async def get_supervision_card_history(
-    card_id: int,
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+@router.get("/cards/{card_id}/history", response_model=list[SupervisionHistoryResponse])
+async def get_supervision_card_history(card_id: int, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Получить историю карточки надзора"""
     try:
-        history = db.query(SupervisionProjectHistory).filter(
-            SupervisionProjectHistory.supervision_card_id == card_id
-        ).order_by(SupervisionProjectHistory.created_at.desc()).all()
+        history = db.query(SupervisionProjectHistory).filter(SupervisionProjectHistory.supervision_card_id == card_id).order_by(SupervisionProjectHistory.created_at.desc()).all()
 
         return history
 
@@ -786,11 +736,7 @@ async def get_supervision_card_history(
 
 
 @router.post("/cards/{card_id}/reset-stages")
-async def reset_supervision_card_stages(
-    card_id: int,
-    current_user: Employee = Depends(require_permission("supervision.reset_stages")),
-    db: Session = Depends(get_db)
-):
+async def reset_supervision_card_stages(card_id: int, current_user: Employee = Depends(require_permission("supervision.reset_stages")), db: Session = Depends(get_db)):
     """Сбросить выполнение стадий надзора"""
     try:
         card = db.query(SupervisionCard).filter(SupervisionCard.id == card_id).first()
@@ -813,11 +759,7 @@ async def reset_supervision_card_stages(
 
 
 @router.post("/cards/{card_id}/complete-stage")
-async def complete_supervision_stage(
-    card_id: int,
-    current_user: Employee = Depends(require_permission("supervision.complete_stage")),
-    db: Session = Depends(get_db)
-):
+async def complete_supervision_stage(card_id: int, current_user: Employee = Depends(require_permission("supervision.complete_stage")), db: Session = Depends(get_db)):
     """Завершить стадию надзора"""
     try:
         card = db.query(SupervisionCard).filter(SupervisionCard.id == card_id).first()
@@ -827,12 +769,7 @@ async def complete_supervision_stage(
         card.dan_completed = True
 
         # Добавляем запись в историю
-        history = SupervisionProjectHistory(
-            supervision_card_id=card_id,
-            entry_type="stage_completed",
-            message="Стадия завершена",
-            created_by=current_user.id
-        )
+        history = SupervisionProjectHistory(supervision_card_id=card_id, entry_type="stage_completed", message="Стадия завершена", created_by=current_user.id)
         db.add(history)
 
         db.commit()
@@ -852,7 +789,7 @@ async def add_supervision_history(
     card_id: int,
     data: SupervisionHistoryCreate,  # ИСПРАВЛЕНИЕ 06.02.2026: Принимаем body вместо query (#22)
     current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Добавить запись в историю надзора"""
     try:
@@ -860,23 +797,18 @@ async def add_supervision_history(
         if not card:
             raise HTTPException(status_code=404, detail="Карточка надзора не найдена")
 
-        history = SupervisionProjectHistory(
-            supervision_card_id=card_id,
-            entry_type=data.entry_type,
-            message=data.message,
-            created_by=data.created_by or current_user.id
-        )
+        history = SupervisionProjectHistory(supervision_card_id=card_id, entry_type=data.entry_type, message=data.message, created_by=data.created_by or current_user.id)
         db.add(history)
         db.commit()
         db.refresh(history)
 
         return {
-            'id': history.id,
-            'supervision_card_id': history.supervision_card_id,
-            'entry_type': history.entry_type,
-            'message': history.message,
-            'created_at': history.created_at.isoformat() if history.created_at else None,
-            'created_by': history.created_by
+            "id": history.id,
+            "supervision_card_id": history.supervision_card_id,
+            "entry_type": history.entry_type,
+            "message": history.message,
+            "created_at": history.created_at.isoformat() if history.created_at else None,
+            "created_by": history.created_by,
         }
 
     except HTTPException:
@@ -888,11 +820,7 @@ async def add_supervision_history(
 
 
 @router.get("/cards/{card_id}/contract")
-async def get_contract_id_by_supervision_card(
-    card_id: int,
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def get_contract_id_by_supervision_card(card_id: int, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Получить ID договора по ID карточки надзора"""
     card = db.query(SupervisionCard).filter(SupervisionCard.id == card_id).first()
     if not card:
@@ -901,12 +829,7 @@ async def get_contract_id_by_supervision_card(
 
 
 @router.delete("/orders/{supervision_card_id}")
-async def delete_supervision_order(
-    supervision_card_id: int,
-    contract_id: int,
-    current_user: Employee = Depends(require_permission("supervision.delete_order")),
-    db: Session = Depends(get_db)
-):
+async def delete_supervision_order(supervision_card_id: int, contract_id: int, current_user: Employee = Depends(require_permission("supervision.delete_order")), db: Session = Depends(get_db)):
     """Удалить заказ надзора"""
     try:
         card = db.query(SupervisionCard).filter(SupervisionCard.id == supervision_card_id).first()
@@ -915,28 +838,19 @@ async def delete_supervision_order(
 
         # Удаляем файлы проекта, привязанные к стадиям надзора (не CRM-файлы)
         if card.contract_id:
-            db.query(ProjectFile).filter(
-                ProjectFile.contract_id == card.contract_id,
-                ProjectFile.stage.like('Стадия%')
-            ).delete(synchronize_session=False)
+            db.query(ProjectFile).filter(ProjectFile.contract_id == card.contract_id, ProjectFile.stage.like("Стадия%")).delete(synchronize_session=False)
 
         # Удаляем историю
-        db.query(SupervisionProjectHistory).filter(
-            SupervisionProjectHistory.supervision_card_id == supervision_card_id
-        ).delete()
+        db.query(SupervisionProjectHistory).filter(SupervisionProjectHistory.supervision_card_id == supervision_card_id).delete()
 
         # Удаляем связанные платежи
         db.query(Payment).filter(Payment.supervision_card_id == supervision_card_id).delete()
 
         # Удаляем записи timeline
-        db.query(SupervisionTimelineEntry).filter(
-            SupervisionTimelineEntry.supervision_card_id == supervision_card_id
-        ).delete()
+        db.query(SupervisionTimelineEntry).filter(SupervisionTimelineEntry.supervision_card_id == supervision_card_id).delete()
 
         # Удаляем привязанные чаты мессенджера
-        db.query(MessengerChat).filter(
-            MessengerChat.supervision_card_id == supervision_card_id
-        ).delete(synchronize_session=False)
+        db.query(MessengerChat).filter(MessengerChat.supervision_card_id == supervision_card_id).delete(synchronize_session=False)
 
         # Удаляем карточку
         db.delete(card)
@@ -950,3 +864,76 @@ async def delete_supervision_order(
         db.rollback()
         logger.exception(f"Ошибка при удалении заказа надзора: {e}")
         raise HTTPException(status_code=500, detail="Внутренняя ошибка сервера")
+
+
+# --- Ежемесячные фиксированные ставки ---
+
+
+@router.get("/cards/{card_id}/monthly-assignments", response_model=list[SupervisionMonthlyAssignmentResponse])
+async def get_monthly_assignments(card_id: int, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Получить активные ежемесячные назначения по карточке надзора"""
+    assignments = db.query(SupervisionMonthlyAssignment).filter(SupervisionMonthlyAssignment.supervision_card_id == card_id, SupervisionMonthlyAssignment.is_active == True).all()
+    return assignments
+
+
+@router.post("/cards/{card_id}/monthly-assignments", response_model=SupervisionMonthlyAssignmentResponse)
+async def create_monthly_assignment(card_id: int, data: SupervisionMonthlyAssignmentCreate, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Назначить ежемесячную фиксированную ставку сотруднику"""
+    card = db.query(SupervisionCard).filter(SupervisionCard.id == card_id).first()
+    if not card:
+        raise HTTPException(status_code=404, detail="Карточка надзора не найдена")
+
+    # Деактивировать предыдущее назначение для этой роли на этой карточке
+    existing = (
+        db.query(SupervisionMonthlyAssignment)
+        .filter(SupervisionMonthlyAssignment.supervision_card_id == card_id, SupervisionMonthlyAssignment.role == data.role, SupervisionMonthlyAssignment.is_active == True)
+        .all()
+    )
+    for e in existing:
+        e.is_active = False
+
+    assignment = SupervisionMonthlyAssignment(supervision_card_id=card_id, **data.model_dump())
+    db.add(assignment)
+
+    # Создать оплату за текущий месяц немедленно
+    current_month = datetime.utcnow().strftime("%Y-%m")
+    contract_id = card.contract_id
+
+    existing_payment = (
+        db.query(Payment)
+        .filter(Payment.supervision_card_id == card_id, Payment.employee_name == data.employee_name, Payment.stage_name == "Ежемесячная ставка", Payment.report_month == current_month)
+        .first()
+    )
+
+    if not existing_payment:
+        payment = Payment(
+            contract_id=contract_id,
+            supervision_card_id=card_id,
+            employee_id=data.employee_id,
+            employee_name=data.employee_name,
+            role=data.role,
+            stage_name="Ежемесячная ставка",
+            calculated_amount=data.monthly_amount,
+            final_amount=data.monthly_amount,
+            payment_type="Оклад",
+            report_month=current_month,
+            payment_status="pending",
+            is_paid=False,
+        )
+        db.add(payment)
+
+    db.commit()
+    db.refresh(assignment)
+    return assignment
+
+
+@router.delete("/cards/{card_id}/monthly-assignments/{assignment_id}", response_model=StatusResponse)
+async def deactivate_monthly_assignment(card_id: int, assignment_id: int, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Деактивировать ежемесячное назначение"""
+    assignment = db.query(SupervisionMonthlyAssignment).filter(SupervisionMonthlyAssignment.id == assignment_id, SupervisionMonthlyAssignment.supervision_card_id == card_id).first()
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Назначение не найдено")
+
+    assignment.is_active = False
+    db.commit()
+    return {"status": "success", "message": "Назначение деактивировано"}

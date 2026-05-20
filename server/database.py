@@ -788,6 +788,27 @@ class Payment(Base):
     employee = relationship("Employee", foreign_keys=[employee_id])
 
 
+class SupervisionMonthlyAssignment(Base):
+    """Назначение ежемесячной фиксированной ставки сотруднику в надзоре"""
+
+    __tablename__ = "supervision_monthly_assignments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    supervision_card_id = Column(Integer, ForeignKey("supervision_cards.id", ondelete="CASCADE"), nullable=False, index=True)
+    employee_id = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    employee_name = Column(String, nullable=False)
+    role = Column(String, nullable=False)
+    monthly_amount = Column(Float, nullable=False)
+    city = Column(String, nullable=True)  # NULL = для всех городов
+    start_date = Column(String, nullable=False)  # YYYY-MM-DD
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    supervision_card = relationship("SupervisionCard", backref="monthly_assignments")
+    employee = relationship("Employee", foreign_keys=[employee_id])
+
+
 class Rate(Base):
     """Тарифы"""
 

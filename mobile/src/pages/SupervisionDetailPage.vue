@@ -139,8 +139,20 @@
                   </q-item-label>
                 </q-item-section>
                 <q-item-section side>
-                  <div class="row q-gutter-xs">
+                  <div class="row q-gutter-xs items-center">
                     <q-icon v-if="card.dan_completed" name="check_circle" color="positive" />
+                    <q-btn
+                      v-if="can('supervision.assign_executor') && card.dan_id"
+                      flat
+                      round
+                      dense
+                      size="xs"
+                      icon="payments"
+                      :color="monthlyAssignments.some(a => a.role === 'ДАН') ? 'positive' : 'grey-7'"
+                      @click="openMonthlyRateDialog('ДАН', card.dan_id, card.dan_name)"
+                    >
+                      <q-tooltip>Ежемесячная ставка</q-tooltip>
+                    </q-btn>
                     <q-btn
                       v-if="can('supervision.assign_executor')"
                       flat
@@ -172,17 +184,31 @@
                   </q-item-label>
                 </q-item-section>
                 <q-item-section v-if="can('supervision.assign_executor')" side>
-                  <q-btn
-                    flat
-                    round
-                    dense
-                    size="xs"
-                    icon="edit"
-                    color="grey-7"
-                    @click="showReassignSM = true"
-                  >
-                    <q-tooltip>Переназначить</q-tooltip>
-                  </q-btn>
+                  <div class="row q-gutter-xs items-center">
+                    <q-btn
+                      v-if="card.senior_manager_id"
+                      flat
+                      round
+                      dense
+                      size="xs"
+                      icon="payments"
+                      :color="monthlyAssignments.some(a => a.role === 'Старший менеджер проектов') ? 'positive' : 'grey-7'"
+                      @click="openMonthlyRateDialog('Старший менеджер проектов', card.senior_manager_id, card.senior_manager_name)"
+                    >
+                      <q-tooltip>Ежемесячная ставка</q-tooltip>
+                    </q-btn>
+                    <q-btn
+                      flat
+                      round
+                      dense
+                      size="xs"
+                      icon="edit"
+                      color="grey-7"
+                      @click="showReassignSM = true"
+                    >
+                      <q-tooltip>Переназначить</q-tooltip>
+                    </q-btn>
+                  </div>
                 </q-item-section>
               </q-item>
               <q-item v-if="card.studio_director_name">
@@ -1031,6 +1057,55 @@
     </q-dialog>
 
     <!-- Диалог переназначения ДАН -->
+    <!-- Диалог ежемесячной ставки -->
+    <q-dialog v-model="showMonthlyRateDialog">
+      <q-card style="min-width: 320px; border-radius: 12px">
+        <q-card-section class="q-pb-sm">
+          <div class="text-subtitle2 text-weight-bold">
+            Ежемесячная ставка
+          </div>
+          <div class="text-caption" style="color: #888">
+            {{ monthlyRateTarget.employee_name }} ({{ monthlyRateTarget.role }})
+          </div>
+        </q-card-section>
+        <q-card-section class="q-pt-none q-gutter-y-sm">
+          <div v-if="activeMonthlyAssignment" class="q-pa-sm" style="background: #e8f5e9; border-radius: 8px; font-size: 12px">
+            Текущая ставка: <b>{{ activeMonthlyAssignment.monthly_amount }} ₽/мес.</b>
+            (с {{ activeMonthlyAssignment.start_date }})
+          </div>
+          <div class="text-caption" style="color: #aaa">
+            Ставка будет начислена за текущий месяц немедленно, затем 1-го числа каждого следующего месяца, пока карточка не переведена в «Выполненный проект».
+          </div>
+          <q-input
+            v-model.number="monthlyRateAmount"
+            label="Ставка в месяц (₽)"
+            type="number"
+            outlined
+            dense
+          />
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn
+            v-if="activeMonthlyAssignment"
+            flat
+            no-caps
+            label="Деактивировать"
+            color="negative"
+            @click="deactivateMonthlyRate"
+          />
+          <q-btn flat no-caps label="Отмена" @click="showMonthlyRateDialog = false" />
+          <q-btn
+            unelevated
+            no-caps
+            label="Установить"
+            style="background: #ffd93c; color: #333"
+            :disable="!monthlyRateAmount || monthlyRateAmount <= 0"
+            @click="saveMonthlyRate"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
     <q-dialog v-model="showReassignDan" @show="loadReassignOptions">
       <q-card style="min-width: 320px; border-radius: 10px">
         <q-toolbar style="background: #F39C12; color: white">
@@ -1480,6 +1555,13 @@ const showAddVisit = ref(false)
 const editingVisitId = ref(null)
 const showReassignDan = ref(false)
 const showReassignSM = ref(false)
+const showMonthlyRateDialog = ref(false)
+const monthlyRateTarget = ref({ role: '', employee_id: null, employee_name: '' })
+const monthlyRateAmount = ref(null)
+const monthlyAssignments = ref([])
+const activeMonthlyAssignment = computed(() =>
+  monthlyAssignments.value.find(a => a.role === monthlyRateTarget.value.role) || null,
+)
 const newDanId = ref(null)
 const newSMId = ref(null)
 const danOptions = ref([])
@@ -1755,6 +1837,9 @@ async function reloadData() {
 
   // История надзора
   try { const { data } = await supervisionApi.getHistory(cardId); svHistory.value = data || [] } catch { svHistory.value = [] }
+
+  // Ежемесячные назначения
+  try { const { data } = await supervisionApi.getMonthlyAssignments(cardId); monthlyAssignments.value = data || [] } catch { monthlyAssignments.value = [] }
 
   // Файлы: закупки (stage=supervision) и отчёты выездов (stage=supervision_reports)
   const cid = card.value?.contract_id
@@ -2452,6 +2537,50 @@ async function doTriggerSvScript(script) {
     $q.notify({ type: 'positive', message: `Скрипт «${script.name || script.code}» запущен` })
     showSvScriptsDlg.value = false
   } catch { $q.notify({ type: 'negative', message: 'Ошибка запуска скрипта' }) }
+}
+
+function openMonthlyRateDialog(role, employeeId, employeeName) {
+  monthlyRateTarget.value = { role, employee_id: employeeId, employee_name: employeeName }
+  const existing = monthlyAssignments.value.find(a => a.role === role)
+  monthlyRateAmount.value = existing ? existing.monthly_amount : null
+  showMonthlyRateDialog.value = true
+}
+
+async function saveMonthlyRate() {
+  if (!monthlyRateAmount.value || monthlyRateAmount.value <= 0) return
+  const cardId = route.params.id
+  try {
+    const today = new Date().toISOString().split('T')[0]
+    await supervisionApi.createMonthlyAssignment(cardId, {
+      employee_id: monthlyRateTarget.value.employee_id,
+      employee_name: monthlyRateTarget.value.employee_name,
+      role: monthlyRateTarget.value.role,
+      monthly_amount: monthlyRateAmount.value,
+      city: null,
+      start_date: today,
+    })
+    $q.notify({ type: 'positive', message: `Ежемесячная ставка ${monthlyRateAmount.value} ₽ установлена` })
+    showMonthlyRateDialog.value = false
+    const { data } = await supervisionApi.getMonthlyAssignments(cardId)
+    monthlyAssignments.value = data || []
+  } catch {
+    $q.notify({ type: 'negative', message: 'Ошибка установки ставки' })
+  }
+}
+
+async function deactivateMonthlyRate() {
+  const cardId = route.params.id
+  const a = activeMonthlyAssignment.value
+  if (!a) return
+  try {
+    await supervisionApi.deleteMonthlyAssignment(cardId, a.id)
+    $q.notify({ type: 'positive', message: 'Ежемесячная ставка деактивирована' })
+    showMonthlyRateDialog.value = false
+    const { data } = await supervisionApi.getMonthlyAssignments(cardId)
+    monthlyAssignments.value = data || []
+  } catch {
+    $q.notify({ type: 'negative', message: 'Ошибка деактивации ставки' })
+  }
 }
 
 onMounted(async () => {

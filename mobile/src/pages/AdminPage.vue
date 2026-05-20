@@ -34,6 +34,7 @@
           <q-tab name="individual" label="Индивид." />
           <q-tab name="template" label="Шаблон." />
           <q-tab name="supervision" label="Надзор" />
+          <q-tab name="supervision_monthly" label="Надзор (мес.)" />
           <q-tab name="surveyor" label="Замерщик" />
         </q-tabs>
 
@@ -130,8 +131,66 @@
           />
         </div>
 
+        <!-- =================== ЕЖЕМЕСЯЧНЫЕ ТАРИФЫ НАДЗОРА =================== -->
+        <div v-if="rateTab === 'supervision_monthly'" class="q-mt-md q-mb-xs">
+          <div class="text-caption text-weight-bold q-px-sm q-mb-xs" style="color: #888; text-transform: uppercase; font-size: 11px">
+            Ежемесячные тарифы надзора
+          </div>
+          <div class="text-caption q-px-sm q-mb-sm" style="color: #aaa; font-size: 11px">
+            Фиксированная ставка назначается сотруднику в карточке надзора. Если город не указан — действует для всех городов.
+          </div>
+          <q-card v-for="mr in monthlyRates" :key="'m_' + mr.id" class="is-card q-mb-xs">
+            <q-card-section class="q-pa-sm">
+              <div class="row items-center justify-between">
+                <div style="flex: 1">
+                  <div class="text-weight-bold" style="font-size: 12px; color: #333">
+                    {{ mr.role }}
+                  </div>
+                  <div class="text-caption" style="color: #888">
+                    {{ mr.city || 'Все города' }}
+                  </div>
+                </div>
+                <div class="text-weight-bold q-mr-sm" style="color: #333">
+                  {{ mr.fixed_price }} ₽/мес.
+                </div>
+                <div>
+                  <q-btn
+                    flat
+                    dense
+                    size="xs"
+                    icon="edit"
+                    color="grey-7"
+                    @click="editMonthlyRate(mr)"
+                  />
+                  <q-btn
+                    flat
+                    dense
+                    size="xs"
+                    icon="delete"
+                    color="negative"
+                    @click="deleteRate(mr)"
+                  />
+                </div>
+              </div>
+            </q-card-section>
+          </q-card>
+          <q-btn
+            unelevated
+            no-caps
+            label="+ Добавить ежемесячный тариф"
+            style="background: #f5f5f5; color: #555; border-radius: 8px; width: 100%; margin-top: 4px"
+            @click="addMonthlyRate"
+          />
+        </div>
+
         <q-page-sticky position="bottom-right" :offset="[18, 18]">
-          <q-btn fab icon="add" style="background: #ffd93c; color: #333" @click="addRate" />
+          <q-btn
+            v-if="rateTab !== 'supervision_monthly'"
+            fab
+            icon="add"
+            style="background: #ffd93c; color: #333"
+            @click="addRate"
+          />
         </q-page-sticky>
       </q-tab-panel>
 
@@ -612,6 +671,52 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
+
+    <!-- Диалог ежемесячного тарифа надзора -->
+    <q-dialog v-model="showMonthlyRateDialog">
+      <q-card style="min-width: 320px; border-radius: 12px">
+        <q-card-section class="q-pb-sm">
+          <div class="text-subtitle2 text-weight-bold">
+            {{ editingMonthlyRate.id ? 'Редактировать' : 'Новый' }} ежемесячный тариф надзора
+          </div>
+        </q-card-section>
+        <q-card-section class="q-pt-none q-gutter-y-sm">
+          <q-select
+            v-model="editingMonthlyRate.role"
+            :options="['ДАН', 'Старший менеджер проектов']"
+            label="Роль"
+            outlined
+            dense
+          />
+          <q-select
+            v-model="editingMonthlyRate.city"
+            :options="['МСК', 'СПБ', 'ЕКТ', 'ВН']"
+            label="Город (пусто = все города)"
+            outlined
+            dense
+            clearable
+          />
+          <q-input
+            v-model.number="editingMonthlyRate.fixed_price"
+            label="Ставка в месяц (₽)"
+            type="number"
+            outlined
+            dense
+          />
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat no-caps label="Отмена" @click="showMonthlyRateDialog = false" />
+          <q-btn
+            unelevated
+            no-caps
+            label="Сохранить"
+            style="background: #ffd93c; color: #333"
+            :disable="!editingMonthlyRate.role || !editingMonthlyRate.fixed_price"
+            @click="saveMonthlyRate"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
@@ -678,8 +783,15 @@ const filteredRates = computed(() => {
 })
 
 const visitRates = computed(() =>
-  rates.value.filter(r => r.project_type === 'Авторский надзор' && r.fixed_price != null && r.city),
+  rates.value.filter(r => r.project_type === 'Авторский надзор' && r.fixed_price != null && r.city && r.project_subtype !== 'monthly'),
 )
+
+const monthlyRates = computed(() =>
+  rates.value.filter(r => r.project_type === 'Надзор ежемесячный'),
+)
+
+const showMonthlyRateDialog = ref(false)
+const editingMonthlyRate = ref({ id: null, role: null, city: null, fixed_price: null })
 
 const permissionsByGroup = computed(() => {
   const result = {}
@@ -729,6 +841,38 @@ function addVisitRate() {
 function editVisitRate(rate) {
   editingRate.value = { ...rate, _isVisit: true }
   showRateDialog.value = true
+}
+
+function addMonthlyRate() {
+  editingMonthlyRate.value = { id: null, role: null, city: null, fixed_price: null }
+  showMonthlyRateDialog.value = true
+}
+
+function editMonthlyRate(rate) {
+  editingMonthlyRate.value = { id: rate.id, role: rate.role, city: rate.city, fixed_price: rate.fixed_price }
+  showMonthlyRateDialog.value = true
+}
+
+async function saveMonthlyRate() {
+  if (!editingMonthlyRate.value.role || !editingMonthlyRate.value.fixed_price) return
+  try {
+    const payload = {
+      project_type: 'Надзор ежемесячный',
+      role: editingMonthlyRate.value.role,
+      city: editingMonthlyRate.value.city || null,
+      fixed_price: editingMonthlyRate.value.fixed_price,
+    }
+    if (editingMonthlyRate.value.id) {
+      await api.put(`/api/v1/rates/${editingMonthlyRate.value.id}`, payload)
+    } else {
+      await api.post('/api/v1/rates', payload)
+    }
+    $q.notify({ type: 'positive', message: 'Ежемесячный тариф сохранён' })
+    showMonthlyRateDialog.value = false
+    loadRates()
+  } catch {
+    $q.notify({ type: 'negative', message: 'Ошибка сохранения тарифа' })
+  }
 }
 
 async function saveRate() {

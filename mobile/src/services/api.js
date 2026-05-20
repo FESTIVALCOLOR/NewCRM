@@ -412,6 +412,15 @@ export const supervisionApi = {
 
   addHistory: (cardId, data) =>
     api.post(`/api/v1/supervision/cards/${cardId}/history`, data),
+
+  getMonthlyAssignments: (cardId) =>
+    api.get(`/api/v1/supervision/cards/${cardId}/monthly-assignments`),
+
+  createMonthlyAssignment: (cardId, data) =>
+    api.post(`/api/v1/supervision/cards/${cardId}/monthly-assignments`, data),
+
+  deleteMonthlyAssignment: (cardId, assignmentId) =>
+    api.delete(`/api/v1/supervision/cards/${cardId}/monthly-assignments/${assignmentId}`),
 }
 
 // === Timeline ===

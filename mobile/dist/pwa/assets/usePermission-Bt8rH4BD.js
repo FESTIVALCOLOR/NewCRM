@@ -1,1 +1,0 @@
-import{V as t,O as i}from"./index-B4b5iSTO.js";function a(){const s=t(),e=i(()=>s.isSuperuser);function n(r){return s.has(r)}function u(...r){return r.some(o=>s.has(o))}return{can:n,canAny:u,isSuperuser:e}}export{a as u};

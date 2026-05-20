@@ -289,6 +289,37 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"Chat maintenance: {e}")
 
+    # N7: Ежемесячные оплаты надзора (1-го числа в 09:00 UTC)
+    async def _monthly_supervision_payments_loop():
+        """Запускает create_monthly_supervision_payments 1-го числа каждого месяца в 09:00 UTC."""
+        from services.deadline_checker import create_monthly_supervision_payments
+
+        logger.info("Monthly supervision payments loop: запущен")
+        while True:
+            try:
+                now = datetime.utcnow()
+                # Следующее 1-е число в 09:00 UTC
+                if now.month == 12:
+                    next_run = now.replace(year=now.year + 1, month=1, day=1, hour=9, minute=0, second=0, microsecond=0)
+                else:
+                    next_run = now.replace(month=now.month + 1, day=1, hour=9, minute=0, second=0, microsecond=0)
+                # Если сейчас 1-е число и время ещё не наступило — запустить сегодня
+                if now.day == 1 and now.hour < 9:
+                    next_run = now.replace(hour=9, minute=0, second=0, microsecond=0)
+                sleep_secs = (next_run - now).total_seconds()
+                logger.info(f"Monthly supervision payments: следующий запуск через {sleep_secs / 3600:.1f}ч")
+                await asyncio.sleep(sleep_secs)
+                await create_monthly_supervision_payments(SessionLocal)
+            except Exception as e:
+                logger.error(f"_monthly_supervision_payments_loop: {e}")
+                await asyncio.sleep(3600)  # При ошибке — повтор через час
+
+    try:
+        asyncio.create_task(_monthly_supervision_payments_loop())
+        logger.info("Monthly supervision payments: задача запущена (1-го числа в 09:00 UTC)")
+    except Exception as e:
+        logger.warning(f"Monthly supervision payments: {e}")
+
     # N6: Разовая синхронизация аватаров из Telegram для уже привязанных сотрудников
     try:
         from telegram_bot_handlers import sync_employee_telegram_avatars

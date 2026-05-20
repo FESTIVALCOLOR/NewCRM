@@ -37,3 +37,17 @@ _recalculate_payments_for_contract
 get_supervision_statistics
 get_project_statistics
 on_card_moved
+create_visit
+check_deadlines_once
+get_salaries_by_type_dashboard
+get_reports_summary
+get_crm_analytics
+get_supervision_analytics
+preview_act
+send_files_to_chat
+move_supervision_card_to_column
+export_supervision_timeline_excel
+export_timeline_pdf
+dispatch_notification
+build_project_timeline_template
+build_template_project_timeline
