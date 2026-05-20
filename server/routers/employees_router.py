@@ -15,7 +15,8 @@ from typing import List, Optional
 
 from auth import get_current_user, get_password_hash
 from constants import POSITION_SENIOR_MANAGER, POSITION_STUDIO_DIRECTOR, ROLE_ADMIN, ROLE_DIRECTOR
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from fastapi.responses import FileResponse
 from permissions import (
     DEFAULT_ROLE_PERMISSIONS,
     NON_MATRIX_PERMISSIONS,
@@ -242,9 +243,23 @@ async def delete_employee(employee_id: int, current_user: Employee = Depends(req
     return {"status": "success", "message": "Сотрудник удален"}
 
 
+@router.get("/avatars/{filename}")
+async def get_avatar(filename: str):
+    """Публичный доступ к файлу аватара (без авторизации)"""
+    import os
+
+    if "/" in filename or "\\" in filename or ".." in filename:
+        raise HTTPException(status_code=400, detail="Недопустимое имя файла")
+    file_path = os.path.join("uploads", "avatars", filename)
+    if not os.path.isfile(file_path):
+        raise HTTPException(status_code=404, detail="Файл не найден")
+    return FileResponse(file_path)
+
+
 @router.post("/employees/{employee_id}/photo")
 async def upload_employee_photo(
     employee_id: int,
+    request: Request,
     file: UploadFile = File(...),
     current_user: Employee = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -267,15 +282,19 @@ async def upload_employee_photo(
         raise HTTPException(status_code=400, detail="Допустимые форматы: jpg, jpeg, png, webp")
 
     try:
-        from yandex_disk_service import YandexDiskService
+        import os
 
-        yd = YandexDiskService()
-        yd_path = f"/CRM/Аватары/Сотрудники/{employee_id}.{ext}"
-        yd.upload_file_from_bytes(content, yd_path)
-        public_url = yd.get_public_link(yd_path)
+        os.makedirs("uploads/avatars", exist_ok=True)
+        filename = f"employee_{employee_id}.{ext}"
+        file_path = os.path.join("uploads", "avatars", filename)
+        with open(file_path, "wb") as f:
+            f.write(content)
+        scheme = request.headers.get("x-forwarded-proto", "https")
+        host = request.headers.get("host", "crm.festivalcolor.ru")
+        public_url = f"{scheme}://{host}/api/v1/avatars/{filename}"
     except Exception as e:
-        logging.error(f"Ошибка загрузки аватара сотрудника {employee_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Ошибка загрузки на Яндекс.Диск: {e}")
+        logging.error(f"Ошибка сохранения аватара сотрудника {employee_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка сохранения файла: {e}")
 
     employee.photo_url = public_url
     db.commit()
