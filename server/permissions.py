@@ -58,6 +58,7 @@ PERMISSION_NAMES: dict[str, str] = {
     "contracts.delete": "Удаление договоров",
     # === CRM ===
     "crm_cards.update": "Редактирование CRM карточек",
+    "crm_cards.view_archive": "Просмотр архива CRM",
     "crm_cards.move": "Управление стадиями CRM",
     "crm_cards.delete": "Удаление CRM карточек",
     "crm_cards.assign_executor": "Назначение/переназначение исполнителей",
@@ -171,6 +172,7 @@ _BASE_MANAGER = {
     "contracts.delete",
     # CRM
     "crm_cards.update",
+    "crm_cards.view_archive",
     "crm_cards.move",
     "crm_cards.delete",
     "crm_cards.assign_executor",

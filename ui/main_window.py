@@ -1448,6 +1448,17 @@ class MainWindow(QMainWindow):
         if metadata is None:
             metadata = {}
 
+        # Проверяем право доступа к типу сущности (защита от edge-cases)
+        perm_map = {
+            "client": "access.clients",
+            "contract": "access.contracts",
+            "crm_card": "access.crm",
+            "supervision_card": "access.supervision",
+        }
+        required_perm = perm_map.get(entity_type)
+        if required_perm and not _has_perm(self.employee, getattr(self, "api_client", None), required_perm):
+            return
+
         tab_map = {
             "client": "Клиенты",
             "contract": "Договора",

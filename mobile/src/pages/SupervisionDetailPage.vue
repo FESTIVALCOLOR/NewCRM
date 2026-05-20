@@ -127,7 +127,9 @@
                 <q-item-section avatar>
                   <q-avatar size="32px" color="orange-2" text-color="orange-8" style="overflow:hidden">
                     <img v-if="card.dan_name && getAvatarByName(card.dan_name)" :src="getAvatarByName(card.dan_name)" style="width:100%;height:100%;object-fit:cover;border-radius:50%">
-                    <template v-else>{{ card.dan_name ? card.dan_name[0] : '?' }}</template>
+                    <template v-else>
+                      {{ card.dan_name ? card.dan_name[0] : '?' }}
+                    </template>
                   </q-avatar>
                 </q-item-section>
                 <q-item-section>
@@ -158,7 +160,9 @@
                 <q-item-section avatar>
                   <q-avatar size="32px" color="blue-2" text-color="blue-8" style="overflow:hidden">
                     <img v-if="card.senior_manager_name && getAvatarByName(card.senior_manager_name)" :src="getAvatarByName(card.senior_manager_name)" style="width:100%;height:100%;object-fit:cover;border-radius:50%">
-                    <template v-else>{{ card.senior_manager_name ? card.senior_manager_name[0] : '?' }}</template>
+                    <template v-else>
+                      {{ card.senior_manager_name ? card.senior_manager_name[0] : '?' }}
+                    </template>
                   </q-avatar>
                 </q-item-section>
                 <q-item-section>
@@ -185,7 +189,9 @@
                 <q-item-section avatar>
                   <q-avatar size="32px" color="purple-2" text-color="purple-8" style="overflow:hidden">
                     <img v-if="getAvatarByName(card.studio_director_name)" :src="getAvatarByName(card.studio_director_name)" style="width:100%;height:100%;object-fit:cover;border-radius:50%">
-                    <template v-else>{{ card.studio_director_name[0] }}</template>
+                    <template v-else>
+                      {{ card.studio_director_name[0] }}
+                    </template>
                   </q-avatar>
                 </q-item-section>
                 <q-item-section>

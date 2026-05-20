@@ -144,12 +144,14 @@ import { ref } from 'vue'
 import { useDashboardStore } from 'src/stores/dashboard'
 import { crmApi } from 'src/services/api'
 import { useNotificationsStore } from 'src/stores/notifications'
+import { usePermissionsStore } from 'src/stores/permissions'
 import InstallBanner from 'src/components/InstallBanner.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
 const dashboard = useDashboardStore()
 const notificationsStore = useNotificationsStore()
+const permissionsStore = usePermissionsStore()
 
 const firstName = computed(() => authStore.user?.full_name?.split(' ')[0] || '')
 const greeting = computed(() => { const h = new Date().getHours(); return h < 6 ? 'Доброй ночи' : h < 12 ? 'Доброе утро' : h < 18 ? 'Добрый день' : 'Добрый вечер' })
@@ -173,13 +175,16 @@ const kpiCards = computed(() => {
   ]
 })
 
-// Порядок: Клиенты, Договора, СРМ, СРМ надзора
-const quickActions = [
-  { label: 'Клиенты', icon: 'people', to: '/clients' },
-  { label: 'Договора', icon: 'description', to: '/contracts' },
-  { label: 'СРМ', icon: 'view_kanban', to: '/crm' },
-  { label: 'СРМ надзора', icon: 'engineering', to: '/supervision' },
+// Порядок: Клиенты, Договора, СРМ, СРМ надзора — фильтруются по правам
+const ALL_QUICK_ACTIONS = [
+  { label: 'Клиенты', icon: 'people', to: '/clients', perm: 'access.clients' },
+  { label: 'Договора', icon: 'description', to: '/contracts', perm: 'access.contracts' },
+  { label: 'СРМ', icon: 'view_kanban', to: '/crm', perm: 'access.crm' },
+  { label: 'СРМ надзора', icon: 'engineering', to: '/supervision', perm: 'access.supervision' },
 ]
+const quickActions = computed(() =>
+  ALL_QUICK_ACTIONS.filter(a => permissionsStore.has(a.perm)),
+)
 
 const myTasks = ref([])
 

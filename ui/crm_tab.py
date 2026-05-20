@@ -202,7 +202,7 @@ class CRMTab(QWidget):
         # === ИНДИВИДУАЛЬНЫЕ ПРОЕКТЫ ===
         self.individual_widget = self.create_crm_board("Индивидуальный")
 
-        if _has_perm(self.employee, self.api_client, "crm_cards.move"):
+        if _has_perm(self.employee, self.api_client, "crm_cards.view_archive"):
             # Есть архив — показываем подвкладки
             individual_main_widget = QWidget()
             individual_main_layout = QVBoxLayout()
@@ -251,7 +251,7 @@ class CRMTab(QWidget):
         if True:  # Шаблонные проекты видны всем, кто видит CRM
             self.template_widget = self.create_crm_board("Шаблонный")
 
-            if _has_perm(self.employee, self.api_client, "crm_cards.move"):
+            if _has_perm(self.employee, self.api_client, "crm_cards.view_archive"):
                 # Есть архив — показываем подвкладки
                 template_main_widget = QWidget()
                 template_main_layout = QVBoxLayout()
@@ -337,13 +337,13 @@ class CRMTab(QWidget):
             if hasattr(self, "individual_subtabs"):
                 self.individual_subtabs.setTabText(0, f"Активные проекты ({individual_count})")
 
-                if _has_perm(self.employee, self.api_client, "crm_cards.move"):
+                if _has_perm(self.employee, self.api_client, "crm_cards.view_archive"):
                     self.individual_subtabs.setTabText(1, f"Архив ({individual_archive_count})")
 
             if hasattr(self, "template_subtabs"):
                 self.template_subtabs.setTabText(0, f"Активные проекты ({template_count})")
 
-                if _has_perm(self.employee, self.api_client, "crm_cards.move"):
+                if _has_perm(self.employee, self.api_client, "crm_cards.view_archive"):
                     self.template_subtabs.setTabText(1, f"Архив ({template_archive_count})")
 
         except Exception as e:

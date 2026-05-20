@@ -195,7 +195,9 @@
                 <q-item-section avatar>
                   <q-avatar size="28px" :color="m.name ? 'grey-3' : 'red-1'" :text-color="m.name ? 'grey-8' : 'red-3'" style="overflow:hidden">
                     <img v-if="m.name && getAvatarByName(m.name)" :src="getAvatarByName(m.name)" style="width:100%;height:100%;object-fit:cover;border-radius:50%">
-                    <template v-else>{{ m.name ? m.name[0] : '?' }}</template>
+                    <template v-else>
+                      {{ m.name ? m.name[0] : '?' }}
+                    </template>
                   </q-avatar>
                 </q-item-section>
                 <q-item-section>
