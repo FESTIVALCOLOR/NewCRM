@@ -1,0 +1,1 @@
+import{U as u}from"./index-CoPZWYvo.js";function m(){const t=u();async function i(n,a,o,e){const r=n();try{return await a(),e&&t.notify({type:"positive",message:e}),!0}catch(p){o(r);const s=p.response?.data?.detail,c=typeof s=="string"?s:"сервер недоступен";return t.notify({type:"negative",message:`Ошибка: ${c}. Изменения отменены.`}),!1}}return{optimistic:i}}export{m as u};

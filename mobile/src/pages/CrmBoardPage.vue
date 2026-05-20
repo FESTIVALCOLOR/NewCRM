@@ -68,7 +68,7 @@
             <div class="column-frame" style="margin: 0; height: 100%">
               <div class="column-header">
                 <span class="column-title">{{ col.name }}</span>
-                <span class="col-count-badge">{{ col.count }}</span>
+                <span :class="['col-count-badge', { 'has-cards': col.count > 0 }]">{{ col.count }}</span>
               </div>
               <div v-if="col.cards.length > 0" class="column-body">
                 <crm-card-item
@@ -128,7 +128,7 @@
             <div class="column-frame">
               <div class="column-header">
                 <span class="column-title">{{ col.name }}</span>
-                <span class="col-count-badge">{{ col.count }}</span>
+                <span :class="['col-count-badge', { 'has-cards': col.count > 0 }]">{{ col.count }}</span>
               </div>
               <div v-if="col.cards.length > 0" class="column-body">
                 <crm-card-item
@@ -178,7 +178,7 @@
             <div class="column-frame">
               <div class="column-header">
                 <span class="column-title">{{ col.name }}</span>
-                <span class="col-count-badge">{{ col.count }}</span>
+                <span :class="['col-count-badge', { 'has-cards': col.count > 0 }]">{{ col.count }}</span>
               </div>
               <div v-if="col.cards.length > 0" class="column-body">
                 <crm-card-item
@@ -993,15 +993,13 @@ onMounted(async () => {
   -webkit-overflow-scrolling: touch;
 }
 .landscape-column {
-  flex: 1 1 0;
-  min-width: 180px;
+  flex: 1 1 280px;
+  min-width: 280px;
   display: flex;
   flex-direction: column;
   height: 100%;
 }
 .col-count-badge {
-  background: #ffd93c;
-  color: #333;
   border-radius: 50%;
   width: 22px;
   height: 22px;
@@ -1011,6 +1009,12 @@ onMounted(async () => {
   font-size: 11px;
   font-weight: bold;
   flex-shrink: 0;
+  background: #E0E0E0;
+  color: #888;
+}
+.col-count-badge.has-cards {
+  background: #ffd93c;
+  color: #333;
 }
 .landscape-column .column-frame {
   flex: 1;
