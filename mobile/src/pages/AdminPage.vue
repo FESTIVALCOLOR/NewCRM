@@ -477,7 +477,7 @@
           <template v-if="editingRate._isVisit">
             <q-select
               v-model="editingRate.role"
-              :options="['ДАН', 'Старший менеджер проектов', 'Дизайнер авторского надзора']"
+              :options="['ДАН', 'Старший менеджер проектов']"
               label="Роль"
               outlined
               dense
