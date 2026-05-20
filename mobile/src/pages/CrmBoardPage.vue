@@ -425,6 +425,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { useCrmStore } from 'src/stores/crm'
+import { useAuthStore } from 'src/stores/auth'
 import { crmApi, employeesApi, contractsApi, paymentsApi, filesApi } from 'src/services/api'
 import { usePermission } from 'src/composables/usePermission'
 import { useOptimistic } from 'src/composables/useOptimistic'
@@ -463,7 +464,26 @@ const archiveCount = ref(0)
 async function loadArchiveCount() {
   try {
     const { data } = await crmApi.getCards(crmStore.projectType, true)
-    archiveCount.value = Array.isArray(data) ? data.length : 0
+    const auth = useAuthStore()
+    const user = auth.user
+    if (!user || !Array.isArray(data)) { archiveCount.value = 0; return }
+    const pos = user.position || ''
+    const role = user.role || ''
+    if (['Руководитель студии', 'Старший менеджер проектов'].includes(pos) || ['admin', 'director'].includes(role)) {
+      archiveCount.value = data.length
+      return
+    }
+    const empId = user.id
+    const empName = user.full_name || ''
+    archiveCount.value = data.filter(card => {
+      if (pos === 'Менеджер' && card.manager_id === empId) return true
+      if (pos === 'ГАП' && card.gap_id === empId) return true
+      if (pos === 'СДП' && card.sdp_id === empId) return true
+      if (pos === 'Дизайнер' && card.designer_name === empName) return true
+      if (pos === 'Чертёжник' && card.draftsman_name === empName) return true
+      if (pos === 'Замерщик' && card.surveyor_id === empId) return true
+      return false
+    }).length
   } catch { archiveCount.value = 0 }
 }
 

@@ -439,6 +439,9 @@ async def global_search(q: str, limit: int = 50, entity_types: Optional[str] = N
                 }
             )
 
+    # Определяем права суперпользователя один раз для CRM и Надзора
+    is_admin_user = getattr(current_user, "role", "") in ("admin", "director") or getattr(current_user, "position", "") in ("Руководитель студии", "Старший менеджер проектов")
+
     # Поиск по CRM карточкам (через join с договором)
     if "crm_cards" in types_filter:
         from database import Contract as ContractModel2
@@ -453,9 +456,22 @@ async def global_search(q: str, limit: int = 50, entity_types: Optional[str] = N
                     ContractModel2.contract_number.ilike(search_pattern),
                 )
             )
-            .limit(limit)
-            .all()
         )
+        # Ограничение по назначению — не-суперпользователи видят только свои карточки
+        if not is_admin_user:
+            from database import StageExecutor as SEModel
+
+            assigned_card_ids = db.query(SEModel.crm_card_id).filter(SEModel.executor_id == current_user.id, SEModel.crm_card_id.isnot(None)).subquery()
+            cards_filter = or_(
+                CRMCardModel.senior_manager_id == current_user.id,
+                CRMCardModel.sdp_id == current_user.id,
+                CRMCardModel.gap_id == current_user.id,
+                CRMCardModel.manager_id == current_user.id,
+                CRMCardModel.surveyor_id == current_user.id,
+                CRMCardModel.id.in_(assigned_card_ids),
+            )
+            cards = cards.filter(cards_filter)
+        cards = cards.limit(limit).all()
         can_view_archive = check_permission(current_user, "crm_cards.view_archive", db)
         for card in cards:
             contract = db.query(ContractModel2).filter(ContractModel2.id == card.contract_id).first()
@@ -489,9 +505,16 @@ async def global_search(q: str, limit: int = 50, entity_types: Optional[str] = N
                     ContractModel3.contract_number.ilike(search_pattern),
                 )
             )
-            .limit(limit)
-            .all()
         )
+        # Ограничение надзора по назначению
+        if not is_admin_user:
+            sup_filter = or_(
+                SupervisionCardModel.dan_id == current_user.id,
+                SupervisionCardModel.senior_manager_id == current_user.id,
+                SupervisionCardModel.studio_director_id == current_user.id,
+            )
+            sup_cards = sup_cards.filter(sup_filter)
+        sup_cards = sup_cards.limit(limit).all()
         for sc in sup_cards:
             contract = db.query(ContractModel3).filter(ContractModel3.id == sc.contract_id).first()
             results.append(

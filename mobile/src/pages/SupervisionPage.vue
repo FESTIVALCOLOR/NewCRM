@@ -299,6 +299,7 @@ import { useQuasar } from 'quasar'
 import { supervisionApi } from 'src/services/api'
 import { usePermission } from 'src/composables/usePermission'
 import { useReferencesStore } from 'src/stores/references'
+import { useAuthStore } from 'src/stores/auth'
 import PageDashboard from 'src/components/PageDashboard.vue'
 
 const router = useRouter()
@@ -318,7 +319,17 @@ const archiveCount = ref(0)
 async function loadArchiveCount() {
   try {
     const { data } = await supervisionApi.getCards({ status: 'archived' })
-    archiveCount.value = Array.isArray(data) ? data.length : 0
+    const auth = useAuthStore()
+    const user = auth.user
+    if (!user || !Array.isArray(data)) { archiveCount.value = 0; return }
+    const pos = user.position || ''
+    const role = user.role || ''
+    if (['Руководитель студии', 'Старший менеджер проектов'].includes(pos) || ['admin', 'director'].includes(role)) {
+      archiveCount.value = data.length
+      return
+    }
+    const empId = user.id
+    archiveCount.value = data.filter(c => c.dan_id === empId || c.senior_manager_id === empId || c.studio_director_id === empId).length
   } catch { archiveCount.value = 0 }
 }
 const currentSlide = ref(parseInt(sessionStorage.getItem('sv_slide') || '0'))

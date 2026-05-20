@@ -80,6 +80,56 @@
         <div v-if="filteredRates.length === 0" class="text-center q-pa-md" style="color: #999">
           Нет тарифов
         </div>
+
+        <!-- =================== ВЫЕЗДЫ НАДЗОРА =================== -->
+        <div v-if="rateTab === 'supervision'" class="q-mt-md q-mb-xs">
+          <div class="text-caption text-weight-bold q-px-sm q-mb-xs" style="color: #888; text-transform: uppercase; font-size: 11px">
+            Тарифы за выезды
+          </div>
+          <q-card v-for="vr in visitRates" :key="'v_' + vr.id" class="is-card q-mb-xs">
+            <q-card-section class="q-pa-sm">
+              <div class="row items-center justify-between">
+                <div style="flex: 1">
+                  <div class="text-weight-bold" style="font-size: 12px; color: #333">
+                    {{ vr.role }}
+                  </div>
+                  <div class="text-caption" style="color: #888">
+                    {{ vr.city }}
+                  </div>
+                </div>
+                <div class="text-weight-bold q-mr-sm" style="color: #333">
+                  {{ vr.fixed_price }} ₽
+                </div>
+                <div>
+                  <q-btn
+                    flat
+                    dense
+                    size="xs"
+                    icon="edit"
+                    color="grey-7"
+                    @click="editVisitRate(vr)"
+                  />
+                  <q-btn
+                    flat
+                    dense
+                    size="xs"
+                    icon="delete"
+                    color="negative"
+                    @click="deleteRate(vr)"
+                  />
+                </div>
+              </div>
+            </q-card-section>
+          </q-card>
+          <q-btn
+            unelevated
+            no-caps
+            label="+ Добавить тариф выезда"
+            style="background: #f5f5f5; color: #555; border-radius: 8px; width: 100%; margin-top: 4px"
+            @click="addVisitRate"
+          />
+        </div>
+
         <q-page-sticky position="bottom-right" :offset="[18, 18]">
           <q-btn fab icon="add" style="background: #ffd93c; color: #333" @click="addRate" />
         </q-page-sticky>
@@ -423,8 +473,35 @@
           </q-toolbar-title>
         </q-toolbar>
         <q-card-section v-if="editingRate">
+          <!-- Тариф выезда надзора -->
+          <template v-if="editingRate._isVisit">
+            <q-select
+              v-model="editingRate.role"
+              :options="['ДАН', 'Старший менеджер проектов', 'Дизайнер авторского надзора']"
+              label="Роль"
+              outlined
+              dense
+              class="q-mb-sm"
+            />
+            <q-select
+              v-model="editingRate.city"
+              :options="refs.cities"
+              label="Город"
+              outlined
+              dense
+              class="q-mb-sm"
+            />
+            <q-input
+              v-model.number="editingRate.fixed_price"
+              label="Цена за выезд (₽)"
+              outlined
+              dense
+              type="number"
+              class="q-mb-sm"
+            />
+          </template>
           <!-- Тариф замерщика: только цена и город -->
-          <template v-if="rateTab === 'surveyor' || editingRate.surveyor_price">
+          <template v-else-if="rateTab === 'surveyor' || editingRate.surveyor_price">
             <q-input
               v-model.number="editingRate.surveyor_price"
               label="Цена замера (₽)"
@@ -453,6 +530,25 @@
               dense
               class="q-mb-sm"
             />
+            <!-- Диапазон площади — только для Шаблонных тарифов -->
+            <div v-if="rateTab === 'template'" class="row q-gutter-xs q-mb-sm">
+              <q-input
+                v-model.number="editingRate.area_from"
+                label="Площадь от (м²)"
+                outlined
+                dense
+                type="number"
+                style="flex: 1"
+              />
+              <q-input
+                v-model.number="editingRate.area_to"
+                label="Площадь до (м²)"
+                outlined
+                dense
+                type="number"
+                style="flex: 1"
+              />
+            </div>
             <!-- Подтип проекта — только для Индивидуальных тарифов, первым чтобы влиял на стадии -->
             <q-select
               v-if="rateTab === 'individual'"
@@ -569,7 +665,7 @@ const rateTypeMap = { individual: 'Индивидуальный', template: 'Ш�
 const STAGES_BY_TAB = {
   individual: ['Стадия 1: планировочные решения', 'Стадия 2: концепция дизайна', 'Стадия 3: рабочие чертежи'],
   template: ['Стадия 1: планировочные решения', 'Стадия 2: рабочие чертежи', 'Стадия 3: 3д визуализация (Дополнительная)'],
-  supervision: ['Разработка КД', 'Авторский надзор', 'Координация'],
+  supervision: ['Разработка КД', 'Авторский надзор', 'Согласование проекта'],
   surveyor: [],
 }
 
@@ -577,8 +673,13 @@ const stageOptions = computed(() => STAGES_BY_TAB[rateTab.value] || [])
 
 const filteredRates = computed(() => {
   if (rateTab.value === 'surveyor') return rates.value.filter(r => r.role === 'Замерщик')
+  if (rateTab.value === 'supervision') return rates.value.filter(r => r.project_type === 'Авторский надзор' && !r.fixed_price)
   return rates.value.filter(r => r.project_type === rateTypeMap[rateTab.value])
 })
+
+const visitRates = computed(() =>
+  rates.value.filter(r => r.project_type === 'Авторский надзор' && r.fixed_price != null && r.city),
+)
 
 const permissionsByGroup = computed(() => {
   const result = {}
@@ -615,14 +716,41 @@ function addRate() {
   if (rateTab.value === 'surveyor') {
     editingRate.value = { role: 'Замерщик', surveyor_price: null, city: null }
   } else {
-    editingRate.value = { project_type: rateTypeMap[rateTab.value] || null, role: null, rate_per_m2: null, fixed_price: null, stage_name: null, city: null, project_subtype: null }
+    editingRate.value = { project_type: rateTypeMap[rateTab.value] || null, role: null, rate_per_m2: null, fixed_price: null, stage_name: null, city: null, project_subtype: null, area_from: null, area_to: null }
   }
+  showRateDialog.value = true
+}
+
+function addVisitRate() {
+  editingRate.value = { project_type: 'Авторский надзор', role: null, fixed_price: null, city: null, _isVisit: true }
+  showRateDialog.value = true
+}
+
+function editVisitRate(rate) {
+  editingRate.value = { ...rate, _isVisit: true }
   showRateDialog.value = true
 }
 
 async function saveRate() {
   if (!editingRate.value) return
   try {
+    if (editingRate.value._isVisit) {
+      const payload = {
+        project_type: 'Авторский надзор',
+        role: editingRate.value.role,
+        city: editingRate.value.city,
+        fixed_price: editingRate.value.fixed_price,
+      }
+      if (editingRate.value.id) {
+        await api.put(`/api/v1/rates/${editingRate.value.id}`, payload)
+      } else {
+        await api.post('/api/v1/rates', payload)
+      }
+      $q.notify({ type: 'positive', message: 'Тариф выезда сохранён' })
+      showRateDialog.value = false
+      loadRates()
+      return
+    }
     const isSurveyor = rateTab.value === 'surveyor' || !!editingRate.value.surveyor_price
     if (isSurveyor) {
       // Замерщик: upsert по городу через специальный endpoint
