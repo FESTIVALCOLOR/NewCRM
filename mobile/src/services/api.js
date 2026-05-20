@@ -163,7 +163,9 @@ export const clientsApi = {
     const fd = new FormData()
     const name = fileOrBlob instanceof File ? fileOrBlob.name : 'avatar.jpg'
     fd.append('file', fileOrBlob, name)
-    return api.post(`/api/v1/clients/${id}/photo`, fd)
+    return api.post(`/api/v1/clients/${id}/photo`, fd, {
+      transformRequest: [(data, headers) => { delete headers['Content-Type']; return data }],
+    })
   },
 
   deletePhoto: (id) =>
@@ -273,7 +275,9 @@ export const employeesApi = {
     const fd = new FormData()
     const name = fileOrBlob instanceof File ? fileOrBlob.name : 'avatar.jpg'
     fd.append('file', fileOrBlob, name)
-    return api.post(`/api/v1/employees/${id}/photo`, fd)
+    return api.post(`/api/v1/employees/${id}/photo`, fd, {
+      transformRequest: [(data, headers) => { delete headers['Content-Type']; return data }],
+    })
   },
 
   deletePhoto: (id) =>
