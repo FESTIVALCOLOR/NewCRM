@@ -232,6 +232,7 @@
       </q-page-sticky>
 
       <client-form-dialog v-model="showEdit" :client="client" @saved="reloadClient" />
+      <avatar-crop-dialog v-model="showCrop" :src="cropSrc" @cropped="onCropped" />
     </template>
 
     <div v-else class="text-center q-pa-xl" style="color: #999">
@@ -251,6 +252,7 @@ import { useReferencesStore } from 'src/stores/references'
 import { usePermission } from 'src/composables/usePermission'
 import { useQuasar } from 'quasar'
 import ClientFormDialog from 'src/components/ClientFormDialog.vue'
+import AvatarCropDialog from 'src/components/AvatarCropDialog.vue'
 import { clientsApi } from 'src/services/api'
 
 const { can } = usePermission()
@@ -263,6 +265,8 @@ const loaded = ref(false)
 const showEdit = ref(false)
 const photoUploading = ref(false)
 const clientPhotoUrl = ref(null)
+const showCrop = ref(false)
+const cropSrc = ref(null)
 
 const client = computed(() => clientsStore.selectedClient)
 
@@ -300,17 +304,31 @@ async function reloadClient() {
   }
 }
 
-async function handlePhotoUpload(e) {
+function handlePhotoUpload(e) {
   const file = e.target?.files?.[0]
   if (!file) return
+  // Открываем диалог обрезки
+  const reader = new FileReader()
+  reader.onload = (ev) => {
+    cropSrc.value = ev.target.result
+    showCrop.value = true
+  }
+  reader.readAsDataURL(file)
+  // Сбрасываем input чтобы повторный выбор того же файла работал
+  e.target.value = ''
+}
+
+async function onCropped(blob) {
   photoUploading.value = true
   try {
-    const { data } = await clientsApi.uploadPhoto(client.value.id, file)
+    const { data } = await clientsApi.uploadPhoto(client.value.id, blob)
     clientPhotoUrl.value = data.photo_url
     $q.notify({ type: 'positive', message: 'Фото загружено' })
   } catch {
     $q.notify({ type: 'negative', message: 'Ошибка загрузки фото' })
-  } finally { photoUploading.value = false }
+  } finally {
+    photoUploading.value = false
+  }
 }
 
 onMounted(async () => {

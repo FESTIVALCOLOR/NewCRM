@@ -62,14 +62,16 @@
         </q-card-section>
       </q-card>
 
-      <!-- Прогресс подэтапов — растянут на всю ширину -->
+      <!-- Прогресс подэтапов — grid, минимум 55px на блок, перенос на 2 строки -->
       <div v-if="substepProgress.length > 1" class="stage-progress-bar">
-        <template v-for="(step, idx) in substepProgress" :key="idx">
-          <div class="stage-step" :class="{ 'step-active': step.active, 'step-done': step.done && !step.active }">
-            {{ step.label }}
-          </div>
-          <span v-if="idx < substepProgress.length - 1" class="step-sep">›</span>
-        </template>
+        <div
+          v-for="(step, idx) in substepProgress"
+          :key="idx"
+          class="stage-step"
+          :class="{ 'step-active': step.active, 'step-done': step.done && !step.active }"
+        >
+          {{ step.label }}
+        </div>
       </div>
 
       <!-- Вкладки — sticky чтобы оставались видны при скролле и не перекрывались FAB -->
@@ -3415,20 +3417,19 @@ onBeforeUnmount(() => {
   padding-right: 68px;
 }
 
-/* Прогресс-бар подэтапов — полная ширина */
+/* Прогресс-бар подэтапов — grid, auto-fit минимум 55px */
 .stage-progress-bar {
-  display: flex;
-  align-items: center;
-  padding: 0 16px 6px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(55px, 1fr));
+  gap: 3px;
+  padding: 4px 16px 8px;
   width: 100%;
   box-sizing: border-box;
 }
 .stage-step {
-  flex: 1;
-  min-width: 0;
   text-align: center;
   font-size: 9px;
-  padding: 3px 2px;
+  padding: 3px 4px;
   border-radius: 4px;
   background: #EEEEEE;
   color: #999;
@@ -3445,20 +3446,15 @@ onBeforeUnmount(() => {
   color: white;
   font-weight: bold;
 }
-.step-sep {
-  flex: 0 0 10px;
-  text-align: center;
-  color: #ccc;
-  font-size: 12px;
-}
 
-/* Ландшафт: вкладка Данные — 2 колонки с равной высотой блоков в строке */
+/* Ландшафт: вкладка Данные — 2 колонки, минимум 150px, перенос если не влезает */
 @media (orientation: landscape) {
   .data-blocks-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
     gap: 12px;
     align-items: start;
+    margin-bottom: 12px;
   }
   .data-blocks-grid > .is-card {
     margin-bottom: 0 !important;

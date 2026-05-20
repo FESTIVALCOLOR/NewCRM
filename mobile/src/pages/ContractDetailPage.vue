@@ -1154,13 +1154,14 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-/* Ландшафт: Договор / ТЗ / Доп.соглашения — 3 колонки с равной высотой блоков */
+/* Ландшафт: Договор / ТЗ / Доп.соглашения — до 3 колонок, минимум 200px, перенос */
 @media (orientation: landscape) {
   .contract-files-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 12px;
     align-items: start;
+    margin-bottom: 16px;
   }
   .contract-files-grid > .is-card {
     margin-bottom: 0 !important;

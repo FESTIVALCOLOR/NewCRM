@@ -159,10 +159,11 @@ export const clientsApi = {
   delete: (clientId) =>
     api.delete(`/api/v1/clients/${clientId}`),
 
-  uploadPhoto: (id, file) => {
+  uploadPhoto: (id, fileOrBlob) => {
     const fd = new FormData()
-    fd.append('file', file)
-    return api.post(`/api/v1/clients/${id}/photo`, fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+    const name = fileOrBlob instanceof File ? fileOrBlob.name : 'avatar.jpg'
+    fd.append('file', fileOrBlob, name)
+    return api.post(`/api/v1/clients/${id}/photo`, fd)
   },
 
   deletePhoto: (id) =>
@@ -268,10 +269,11 @@ export const employeesApi = {
   connectTelegram: (id, code) =>
     api.post(`/api/v1/employees/${id}/telegram-connect/${code}`),
 
-  uploadPhoto: (id, file) => {
+  uploadPhoto: (id, fileOrBlob) => {
     const fd = new FormData()
-    fd.append('file', file)
-    return api.post(`/api/v1/employees/${id}/photo`, fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+    const name = fileOrBlob instanceof File ? fileOrBlob.name : 'avatar.jpg'
+    fd.append('file', fileOrBlob, name)
+    return api.post(`/api/v1/employees/${id}/photo`, fd)
   },
 
   deletePhoto: (id) =>

@@ -612,6 +612,7 @@
         </q-card-section>
       </q-card>
     </q-dialog>
+    <avatar-crop-dialog v-model="showEmpCrop" :src="empCropSrc" @cropped="onEmpCropped" />
   </q-page>
 </template>
 
@@ -620,6 +621,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useQuasar } from 'quasar'
 import { employeesApi } from 'src/services/api'
 import PageDashboard from 'src/components/PageDashboard.vue'
+import AvatarCropDialog from 'src/components/AvatarCropDialog.vue'
 import { useReferencesStore } from 'src/stores/references'
 import { usePermission } from 'src/composables/usePermission'
 
@@ -663,6 +665,8 @@ const roleOptions = computed(() => {
 const selected = ref(null)
 const showDetail = ref(false)
 const empPhotoUploading = ref(false)
+const showEmpCrop = ref(false)
+const empCropSrc = ref(null)
 const showCreate = ref(false)
 const editMode = ref(false)
 const createForm = ref(null)
@@ -729,17 +733,30 @@ function openEmployee(emp) {
   editMode.value = false
 }
 
-async function handleEmpPhotoUpload(e) {
+function handleEmpPhotoUpload(e) {
   const file = e.target?.files?.[0]
   if (!file || !selected.value) return
+  const reader = new FileReader()
+  reader.onload = (ev) => {
+    empCropSrc.value = ev.target.result
+    showEmpCrop.value = true
+  }
+  reader.readAsDataURL(file)
+  e.target.value = ''
+}
+
+async function onEmpCropped(blob) {
+  if (!selected.value) return
   empPhotoUploading.value = true
   try {
-    const { data } = await employeesApi.uploadPhoto(selected.value.id, file)
+    const { data } = await employeesApi.uploadPhoto(selected.value.id, blob)
     selected.value = { ...selected.value, photo_url: data.photo_url }
     $q.notify({ type: 'positive', message: 'Фото загружено' })
   } catch {
     $q.notify({ type: 'negative', message: 'Ошибка загрузки фото' })
-  } finally { empPhotoUploading.value = false }
+  } finally {
+    empPhotoUploading.value = false
+  }
 }
 
 async function loadEmployees() {
