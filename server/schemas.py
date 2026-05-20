@@ -1282,6 +1282,8 @@ class SupervisionVisitCreate(BaseModel):
     notes: Optional[str] = None
     actual_date: Optional[str] = None
     visit_type: str = "На объект"
+    executor_role: Optional[str] = None
+    extra_visit: bool = False
 
 
 class SupervisionVisitUpdate(BaseModel):

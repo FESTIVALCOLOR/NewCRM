@@ -926,9 +926,17 @@
             class="q-mb-sm"
           />
           <q-select
+            v-model="visitForm.executor_role"
+            :options="['ДАН', 'Старший менеджер проектов']"
+            label="Роль исполнителя"
+            outlined
+            dense
+            class="q-mb-sm"
+          />
+          <q-select
             v-model="visitForm.executor_name"
             :options="executorNameOptions"
-            label="Исполнитель (ДАН)"
+            label="Исполнитель (ФИО)"
             outlined
             dense
             emit-value
@@ -941,7 +949,19 @@
             dense
             type="textarea"
             autogrow
+            class="q-mb-sm"
           />
+          <q-item tag="label" class="q-px-none q-pt-xs">
+            <q-item-section avatar>
+              <q-checkbox v-model="visitForm.extra_visit" color="positive" />
+            </q-item-section>
+            <q-item-section>
+              <q-item-label>Доп. выезд</q-item-label>
+              <q-item-label caption>
+                Оплата за выезд начисляется только для доп. выездов
+              </q-item-label>
+            </q-item-section>
+          </q-item>
         </q-card-section>
         <q-card-actions align="right">
           <q-btn v-close-popup flat label="Отмена" no-caps />
@@ -1571,7 +1591,7 @@ const editEntry = ref(null)
 const cameraInput = ref(null)
 const fileInput = ref(null)
 const nadzorFileInput = ref(null)
-const visitForm = ref({ visit_date: new Date().toISOString().split('T')[0], stage_code: '', notes: '', executor_name: '', visit_type: 'На объект' })
+const visitForm = ref({ visit_date: new Date().toISOString().split('T')[0], stage_code: '', notes: '', executor_name: '', visit_type: 'На объект', executor_role: 'ДАН', extra_visit: false })
 const executorOptions = ref([])
 const executorNameOptions = ref([])
 const svPayments = ref([])
@@ -2017,6 +2037,14 @@ async function saveVisit() {
     $q.notify({ type: 'warning', message: 'Для выезда к поставщику укажите стадию' })
     return
   }
+  // Предупреждение: доп. выезд не отмечен, а ежемесячная ставка для роли не активна
+  if (!editingVisitId.value && !visitForm.value.extra_visit) {
+    const role = visitForm.value.executor_role
+    const hasMonthly = monthlyAssignments.value.some(a => a.role === role)
+    if (!hasMonthly) {
+      $q.notify({ type: 'warning', message: `Ежемесячная ставка для «${role}» не включена. Оплата за выезд не будет начислена.` })
+    }
+  }
   try {
     const stageLabel = stageCodesForVisit.find(s => s.value === visitForm.value.stage_code)?.label || ''
     const isEditing = !!editingVisitId.value
@@ -2027,6 +2055,8 @@ async function saveVisit() {
       visit_type: visitForm.value.visit_type || 'На объект',
       executor_name: visitForm.value.executor_name || '',
       notes: visitForm.value.notes,
+      executor_role: visitForm.value.executor_role || 'ДАН',
+      extra_visit: visitForm.value.extra_visit || false,
     }
     if (isEditing) {
       const { api: ax } = await import('src/boot/axios')
@@ -2070,6 +2100,8 @@ function editVisit(visit) {
     notes: visit.notes || '',
     executor_name: visit.executor_name || '',
     visit_type: visit.visit_type || 'На объект',
+    executor_role: visit.executor_role || 'ДАН',
+    extra_visit: visit.extra_visit || false,
   }
   editingVisitId.value = visit.id
   showAddVisit.value = true
@@ -2539,10 +2571,21 @@ async function doTriggerSvScript(script) {
   } catch { $q.notify({ type: 'negative', message: 'Ошибка запуска скрипта' }) }
 }
 
-function openMonthlyRateDialog(role, employeeId, employeeName) {
+async function openMonthlyRateDialog(role, employeeId, employeeName) {
   monthlyRateTarget.value = { role, employee_id: employeeId, employee_name: employeeName }
   const existing = monthlyAssignments.value.find(a => a.role === role)
-  monthlyRateAmount.value = existing ? existing.monthly_amount : null
+  if (existing) {
+    monthlyRateAmount.value = existing.monthly_amount
+  } else {
+    // Автозаполнение из таблицы тарифов
+    monthlyRateAmount.value = null
+    try {
+      const { api: ax } = await import('src/boot/axios')
+      const { data: ratesList } = await ax.get('/api/v1/rates')
+      const found = (ratesList || []).find(r => r.project_type === 'Надзор ежемесячный' && r.role === role)
+      if (found?.fixed_price) monthlyRateAmount.value = found.fixed_price
+    } catch {}
+  }
   showMonthlyRateDialog.value = true
 }
 

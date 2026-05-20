@@ -426,68 +426,59 @@ async def create_visit(
     except Exception as e:
         logging.getLogger(__name__).warning(f"supervision_visit trigger: {e}")
 
-    # Авто-создание оплаты за выезд
-    try:
-        # Получаем город из контракта
-        contract_for_pay = db.query(Contract).filter(Contract.id == card.contract_id).first()
-        card_city = getattr(contract_for_pay, "city", None) if contract_for_pay else None
+    # Авто-создание оплаты за выезд (только доп. выезд с указанной ролью)
+    if data.extra_visit and data.executor_role:
+        try:
+            contract_for_pay = db.query(Contract).filter(Contract.id == card.contract_id).first()
+            card_city = getattr(contract_for_pay, "city", None) if contract_for_pay else None
 
-        # Ищем тариф за выезд для ДАН по городу (или универсальный)
-        if card.dan_id:
-            dan_emp = db.query(Employee).filter(Employee.id == card.dan_id).first()
-            if dan_emp:
-                dan_rate = None
+            role = data.executor_role
+            emp_id = card.dan_id if role == POSITION_DAN else card.senior_manager_id
+            if emp_id:
+                emp = db.query(Employee).filter(Employee.id == emp_id).first()
+                rate = None
                 if card_city:
-                    dan_rate = db.query(Rate).filter(Rate.project_type == "Авторский надзор", Rate.role == POSITION_DAN, Rate.fixed_price.isnot(None), Rate.city == card_city).first()
-                if not dan_rate:
-                    dan_rate = db.query(Rate).filter(Rate.project_type == "Авторский надзор", Rate.role == POSITION_DAN, Rate.fixed_price.isnot(None), Rate.city.is_(None)).first()
-
-                if dan_rate:
+                    rate = (
+                        db.query(Rate)
+                        .filter(
+                            Rate.project_type == "Авторский надзор",
+                            Rate.role == role,
+                            Rate.fixed_price.isnot(None),
+                            Rate.city == card_city,
+                        )
+                        .first()
+                    )
+                if not rate:
+                    rate = (
+                        db.query(Rate)
+                        .filter(
+                            Rate.project_type == "Авторский надзор",
+                            Rate.role == role,
+                            Rate.fixed_price.isnot(None),
+                            Rate.city.is_(None),
+                        )
+                        .first()
+                    )
+                if rate and emp:
                     visit_payment = Payment(
                         contract_id=card.contract_id,
                         supervision_card_id=card.id,
-                        employee_id=card.dan_id,
-                        employee_name=dan_emp.full_name,
-                        role=POSITION_DAN,
+                        employee_id=emp_id,
+                        employee_name=emp.full_name,
+                        role=role,
                         stage_name="Выезд на объект",
-                        calculated_amount=dan_rate.fixed_price,
-                        final_amount=dan_rate.fixed_price,
+                        calculated_amount=rate.fixed_price,
+                        final_amount=rate.fixed_price,
                         payment_type="Полная оплата",
                         report_month=datetime.utcnow().strftime("%Y-%m"),
                         payment_status="pending",
                         is_paid=False,
                     )
                     db.add(visit_payment)
-
-        # Тариф для старшего менеджера (если есть)
-        if card.senior_manager_id:
-            sm_emp = db.query(Employee).filter(Employee.id == card.senior_manager_id).first()
-            sm_rate = None
-            if card_city:
-                sm_rate = db.query(Rate).filter(Rate.project_type == "Авторский надзор", Rate.role == POSITION_SENIOR_MANAGER, Rate.fixed_price.isnot(None), Rate.city == card_city).first()
-            if not sm_rate:
-                sm_rate = db.query(Rate).filter(Rate.project_type == "Авторский надзор", Rate.role == POSITION_SENIOR_MANAGER, Rate.fixed_price.isnot(None), Rate.city.is_(None)).first()
-            if sm_rate and sm_emp:
-                sm_payment = Payment(
-                    contract_id=card.contract_id,
-                    supervision_card_id=card.id,
-                    employee_id=card.senior_manager_id,
-                    employee_name=sm_emp.full_name,
-                    role=POSITION_SENIOR_MANAGER,
-                    stage_name="Выезд на объект",
-                    calculated_amount=sm_rate.fixed_price,
-                    final_amount=sm_rate.fixed_price,
-                    payment_type="Полная оплата",
-                    report_month=datetime.utcnow().strftime("%Y-%m"),
-                    payment_status="pending",
-                    is_paid=False,
-                )
-                db.add(sm_payment)
-
-        db.commit()
-    except Exception as pay_err:
-        logger.warning(f"Не удалось создать оплату за выезд: {pay_err}")
-        db.rollback()
+                    db.commit()
+        except Exception as pay_err:
+            logger.warning(f"Не удалось создать оплату за выезд: {pay_err}")
+            db.rollback()
 
     return visit
 
