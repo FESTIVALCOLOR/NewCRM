@@ -289,6 +289,15 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"Chat maintenance: {e}")
 
+    # N6: Разовая синхронизация аватаров из Telegram для уже привязанных сотрудников
+    try:
+        from telegram_bot_handlers import sync_employee_telegram_avatars
+
+        asyncio.create_task(sync_employee_telegram_avatars())
+        logger.info("Telegram avatar sync: задача запущена")
+    except Exception as e:
+        logger.warning(f"Telegram avatar sync: {e}")
+
     # Запуск Telegram Bot polling для обработки /start (привязка аккаунтов)
     # Используем file-lock чтобы только ОДИН воркер Uvicorn запускал polling
     # (иначе TelegramConflictError при --workers > 1)

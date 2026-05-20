@@ -2,8 +2,9 @@
 Telegram Bot handlers — обработчики команд бота для CRM.
 Обрабатывает привязку Telegram аккаунта сотрудника через /start TOKEN.
 """
-import logging
+
 from datetime import datetime
+import logging
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -14,6 +15,7 @@ try:
     from aiogram import Router
     from aiogram.filters import CommandStart
     from aiogram.types import Message
+
     AIOGRAM_AVAILABLE = True
 except ImportError:
     logger.warning("aiogram не установлен — Telegram bot handlers недоступны")
@@ -24,30 +26,21 @@ if AIOGRAM_AVAILABLE:
     @router.message(CommandStart())
     async def handle_start(message: Message):
         """Обработчик команды /start для привязки Telegram аккаунта сотрудника"""
-        from database import SessionLocal, Employee
+        from database import Employee, SessionLocal
 
         args = message.text.split(maxsplit=1)
         token = args[1] if len(args) > 1 else None
 
         if not token:
-            await message.answer(
-                "Добро пожаловать в CRM Festival Color!\n\n"
-                "Для подключения уведомлений используйте ссылку из приветственного письма."
-            )
+            await message.answer("Добро пожаловать в CRM Festival Color!\n\nДля подключения уведомлений используйте ссылку из приветственного письма.")
             return
 
         db = SessionLocal()
         try:
-            employee = db.query(Employee).filter(
-                Employee.telegram_link_token == token,
-                Employee.telegram_link_token_expires > datetime.utcnow()
-            ).first()
+            employee = db.query(Employee).filter(Employee.telegram_link_token == token, Employee.telegram_link_token_expires > datetime.utcnow()).first()
 
             if not employee:
-                await message.answer(
-                    "Ссылка недействительна или устарела.\n\n"
-                    "Попросите администратора выслать приглашение повторно."
-                )
+                await message.answer("Ссылка недействительна или устарела.\n\nПопросите администратора выслать приглашение повторно.")
                 return
 
             # Привязываем Telegram ID к сотруднику
@@ -62,9 +55,7 @@ if AIOGRAM_AVAILABLE:
                     import io
                     import os
 
-                    photos = await message.bot.get_user_profile_photos(
-                        user_id=message.from_user.id, limit=1
-                    )
+                    photos = await message.bot.get_user_profile_photos(user_id=message.from_user.id, limit=1)
                     if photos.total_count > 0:
                         file_id = photos.photos[0][-1].file_id
                         buf = io.BytesIO()
@@ -93,10 +84,7 @@ if AIOGRAM_AVAILABLE:
                 f"• Напоминания о дедлайнах\n"
                 f"• Изменения по проектам"
             )
-            logger.info(
-                f"Telegram привязан: employee_id={employee.id}, "
-                f"telegram_user_id={message.from_user.id}"
-            )
+            logger.info(f"Telegram привязан: employee_id={employee.id}, telegram_user_id={message.from_user.id}")
 
         except Exception as e:
             logger.error(f"Ошибка привязки Telegram для токена {token}: {e}")
@@ -107,3 +95,57 @@ if AIOGRAM_AVAILABLE:
 else:
     # Заглушка если aiogram не установлен
     router = None
+
+
+async def sync_employee_telegram_avatars():
+    """При старте сервера: загружает аватары из Telegram для уже привязанных
+    сотрудников у которых нет фото (photo_url IS NULL, telegram_user_id IS NOT NULL).
+    Запускается однократно в фоне.
+    """
+    import asyncio
+    import io
+    import os
+
+    await asyncio.sleep(15)  # Ждём полной инициализации бота
+
+    from telegram_service import get_telegram_service
+
+    tg = get_telegram_service()
+    if not tg.bot_available:
+        logger.info("Telegram avatar sync: бот не доступен, пропуск")
+        return
+
+    from database import Employee, SessionLocal
+
+    db = SessionLocal()
+    try:
+        employees = db.query(Employee).filter(Employee.telegram_user_id.isnot(None), Employee.photo_url.is_(None)).all()
+        if not employees:
+            logger.info("Telegram avatar sync: нет сотрудников для синхронизации")
+            return
+
+        logger.info(f"Telegram avatar sync: начало, {len(employees)} сотрудников")
+        base_url = os.environ.get("BASE_URL", "https://crm.festivalcolor.ru")
+
+        for emp in employees:
+            try:
+                photos = await tg._bot.get_user_profile_photos(user_id=emp.telegram_user_id, limit=1)
+                if photos.total_count > 0:
+                    file_id = photos.photos[0][-1].file_id
+                    buf = io.BytesIO()
+                    await tg._bot.download(file_id, destination=buf)
+                    buf.seek(0)
+                    os.makedirs("uploads/avatars", exist_ok=True)
+                    filename = f"employee_{emp.id}.jpg"
+                    with open(os.path.join("uploads", "avatars", filename), "wb") as f:
+                        f.write(buf.read())
+                    emp.photo_url = f"{base_url}/api/v1/avatars/{filename}"
+                    db.commit()
+                    logger.info(f"Telegram avatar sync: сохранён employee_id={emp.id}")
+                await asyncio.sleep(0.3)  # Пауза между запросами к Telegram API
+            except Exception as e:
+                logger.warning(f"Telegram avatar sync: ошибка для employee {emp.id}: {e}")
+
+        logger.info("Telegram avatar sync: завершено")
+    finally:
+        db.close()
