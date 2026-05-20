@@ -1358,6 +1358,7 @@ def _chat_to_detail_response(db: Session, chat: InternalChat, employee_id: int, 
         role_in_project = None
         is_online = None
         last_login = None
+        photo_url = None
         if m.employee_id:
             emp = db.query(Employee).filter(Employee.id == m.employee_id).first()
             if emp:
@@ -1366,6 +1367,7 @@ def _chat_to_detail_response(db: Session, chat: InternalChat, employee_id: int, 
                 activity_threshold = datetime.utcnow() - timedelta(minutes=2)
                 is_online = bool(emp.is_online and emp.last_activity and emp.last_activity > activity_threshold)
                 last_login = emp.last_login
+                photo_url = emp.photo_url
         elif m.member_type == "client_guest":
             role_in_project = "Клиент"
             if m.last_guest_activity:
@@ -1385,6 +1387,7 @@ def _chat_to_detail_response(db: Session, chat: InternalChat, employee_id: int, 
                 role_in_project=role_in_project,
                 is_online=is_online,
                 last_login=last_login,
+                photo_url=photo_url,
             )
         )
     first_unread_id = get_first_unread_message_id(db, chat.id, employee_id)

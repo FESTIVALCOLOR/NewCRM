@@ -125,8 +125,9 @@
             <q-list dense separator>
               <q-item v-if="card.dan_name || can('supervision.assign_executor')">
                 <q-item-section avatar>
-                  <q-avatar size="32px" color="orange-2" text-color="orange-8">
-                    {{ card.dan_name ? card.dan_name[0] : '?' }}
+                  <q-avatar size="32px" color="orange-2" text-color="orange-8" style="overflow:hidden">
+                    <img v-if="card.dan_name && getAvatarByName(card.dan_name)" :src="getAvatarByName(card.dan_name)" style="width:100%;height:100%;object-fit:cover;border-radius:50%">
+                    <template v-else>{{ card.dan_name ? card.dan_name[0] : '?' }}</template>
                   </q-avatar>
                 </q-item-section>
                 <q-item-section>
@@ -155,8 +156,9 @@
               </q-item>
               <q-item v-if="card.senior_manager_name || can('supervision.assign_executor')">
                 <q-item-section avatar>
-                  <q-avatar size="32px" color="blue-2" text-color="blue-8">
-                    {{ card.senior_manager_name ? card.senior_manager_name[0] : '?' }}
+                  <q-avatar size="32px" color="blue-2" text-color="blue-8" style="overflow:hidden">
+                    <img v-if="card.senior_manager_name && getAvatarByName(card.senior_manager_name)" :src="getAvatarByName(card.senior_manager_name)" style="width:100%;height:100%;object-fit:cover;border-radius:50%">
+                    <template v-else>{{ card.senior_manager_name ? card.senior_manager_name[0] : '?' }}</template>
                   </q-avatar>
                 </q-item-section>
                 <q-item-section>
@@ -181,8 +183,9 @@
               </q-item>
               <q-item v-if="card.studio_director_name">
                 <q-item-section avatar>
-                  <q-avatar size="32px" color="purple-2" text-color="purple-8">
-                    {{ card.studio_director_name[0] }}
+                  <q-avatar size="32px" color="purple-2" text-color="purple-8" style="overflow:hidden">
+                    <img v-if="getAvatarByName(card.studio_director_name)" :src="getAvatarByName(card.studio_director_name)" style="width:100%;height:100%;object-fit:cover;border-radius:50%">
+                    <template v-else>{{ card.studio_director_name[0] }}</template>
                   </q-avatar>
                 </q-item-section>
                 <q-item-section>
@@ -1438,12 +1441,14 @@ import VoiceRecorder from 'src/components/VoiceRecorder.vue'
 import InlineChatRoom from 'src/components/InlineChatRoom.vue'
 import { addToCalendar } from 'src/composables/useCalendar'
 import { usePermission } from 'src/composables/usePermission'
+import { useEmployeeAvatars } from 'src/composables/useEmployeeAvatars'
 import { useAuthStore } from 'src/stores/auth'
 import { useReferencesStore } from 'src/stores/references'
 
 const { can } = usePermission()
 const refs = useReferencesStore()
 const authStore = useAuthStore()
+const { ensureLoaded: loadAvatars, getAvatarByName } = useEmployeeAvatars()
 const agentColor = computed(() => refs.agentByName(card.value?.agent_type)?.color || '#95A5A6')
 
 const route = useRoute()
@@ -2444,6 +2449,7 @@ async function doTriggerSvScript(script) {
 }
 
 onMounted(async () => {
+  loadAvatars()
   const cardId = route.params.id
   if (!cardId) return
 

@@ -193,8 +193,9 @@
             <q-list dense separator>
               <q-item v-for="m in allTeamMembers" :key="m.roleKey">
                 <q-item-section avatar>
-                  <q-avatar size="28px" :color="m.name ? 'grey-3' : 'red-1'" :text-color="m.name ? 'grey-8' : 'red-3'">
-                    {{ m.name ? m.name[0] : '?' }}
+                  <q-avatar size="28px" :color="m.name ? 'grey-3' : 'red-1'" :text-color="m.name ? 'grey-8' : 'red-3'" style="overflow:hidden">
+                    <img v-if="m.name && getAvatarByName(m.name)" :src="getAvatarByName(m.name)" style="width:100%;height:100%;object-fit:cover;border-radius:50%">
+                    <template v-else>{{ m.name ? m.name[0] : '?' }}</template>
                   </q-avatar>
                 </q-item-section>
                 <q-item-section>
@@ -1666,8 +1667,10 @@ import MeasurementDialog from 'src/components/MeasurementDialog.vue'
 import InlineChatRoom from 'src/components/InlineChatRoom.vue'
 import ContractFormDialog from 'src/components/ContractFormDialog.vue'
 import { addToCalendar } from 'src/composables/useCalendar'
+import { useEmployeeAvatars } from 'src/composables/useEmployeeAvatars'
 
 const { can, isSuperuser } = usePermission()
+const { ensureLoaded: loadAvatars, getAvatarByName } = useEmployeeAvatars()
 const authStore = useAuthStore()
 
 // Текущий пользователь — исполнитель (дизайнер/чертёжник) без управленческих прав
@@ -3388,6 +3391,7 @@ async function releaseLock() {
 }
 
 onMounted(async () => {
+  loadAvatars()
   try {
     const id = route.params.id
     if (route.query.tab) {

@@ -1015,9 +1015,12 @@
                 <q-avatar
                   :color="m.member_type === 'employee' ? 'blue-2' : 'green-2'"
                   :text-color="m.member_type === 'employee' ? 'blue-9' : 'green-9'"
-                  icon="person"
                   size="28px"
-                />
+                  style="overflow:hidden"
+                >
+                  <img v-if="m.photo_url" :src="m.photo_url" style="width:100%;height:100%;object-fit:cover;border-radius:50%">
+                  <q-icon v-else name="person" />
+                </q-avatar>
                 <span
                   v-if="m.is_online !== null && m.is_online !== undefined"
                   :style="{

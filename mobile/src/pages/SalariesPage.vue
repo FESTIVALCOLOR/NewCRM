@@ -233,8 +233,9 @@
       <template v-else>
         <div v-for="group in groupedPayments" :key="group.employeeId" class="q-mb-md">
           <div class="employee-group-header" @click="expandedGroups[group.employeeId] = !expandedGroups[group.employeeId]">
-            <q-avatar size="28px" color="grey-3" text-color="grey-8">
-              {{ group.initial }}
+            <q-avatar size="28px" color="grey-3" text-color="grey-8" style="overflow:hidden">
+              <img v-if="getAvatarByName(group.name)" :src="getAvatarByName(group.name)" style="width:100%;height:100%;object-fit:cover;border-radius:50%">
+              <template v-else>{{ group.initial }}</template>
             </q-avatar>
             <div style="flex: 1; margin-left: 8px">
               <div class="text-weight-bold" style="font-size: 13px; color: #333">
@@ -581,8 +582,10 @@ import { api } from 'src/boot/axios'
 import { useReferencesStore } from 'src/stores/references'
 import { usePermission } from 'src/composables/usePermission'
 import { useOptimistic } from 'src/composables/useOptimistic'
+import { useEmployeeAvatars } from 'src/composables/useEmployeeAvatars'
 
 const { can, isSuperuser } = usePermission()
+const { ensureLoaded: loadAvatars, getAvatarByName } = useEmployeeAvatars()
 const { optimistic } = useOptimistic()
 
 const $q = useQuasar()
@@ -950,6 +953,7 @@ watch(paymentTab, () => loadData())
 function onRefresh(done) { loadData().finally(done) }
 
 onMounted(async () => {
+  loadAvatars()
   loadData()
   try {
     const { data } = await employeesApi.getList()

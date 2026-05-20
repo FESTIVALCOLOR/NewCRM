@@ -78,6 +78,7 @@ services:
       MAX_FILE_SIZE_MB: 50
       FILE_STORAGE_PATH: /app/uploads
       PREVIEW_CACHE_PATH: /app/previews
+      BASE_URL: https://crm.festivalcolor.ru
     volumes:
       - uploads_data:/app/uploads
       - previews_data:/app/previews

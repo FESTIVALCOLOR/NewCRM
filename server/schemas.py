@@ -1476,6 +1476,7 @@ class InternalChatMemberResponse(BaseModel):
     # Онлайн-статус (только для сотрудников)
     is_online: Optional[bool] = None
     last_login: Optional[datetime] = None
+    photo_url: Optional[str] = None
 
     class Config:
         from_attributes = True

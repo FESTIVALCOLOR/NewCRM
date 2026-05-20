@@ -56,6 +56,31 @@ if AIOGRAM_AVAILABLE:
             employee.telegram_link_token_expires = None
             db.commit()
 
+            # Загружаем аватар из Telegram, если фото ещё не задано
+            if not employee.photo_url:
+                try:
+                    import io
+                    import os
+
+                    photos = await message.bot.get_user_profile_photos(
+                        user_id=message.from_user.id, limit=1
+                    )
+                    if photos.total_count > 0:
+                        file_id = photos.photos[0][-1].file_id
+                        buf = io.BytesIO()
+                        await message.bot.download(file_id, destination=buf)
+                        buf.seek(0)
+                        os.makedirs("uploads/avatars", exist_ok=True)
+                        filename = f"employee_{employee.id}.jpg"
+                        with open(os.path.join("uploads", "avatars", filename), "wb") as f:
+                            f.write(buf.read())
+                        base_url = os.environ.get("BASE_URL", "https://crm.festivalcolor.ru")
+                        employee.photo_url = f"{base_url}/api/v1/avatars/{filename}"
+                        db.commit()
+                        logger.info(f"Telegram аватар сохранён: employee_id={employee.id}")
+                except Exception as tg_err:
+                    logger.warning(f"Не удалось загрузить Telegram аватар employee {employee.id}: {tg_err}")
+
             # Определяем имя для обращения
             parts = employee.full_name.split()
             first_name = parts[1] if len(parts) > 1 else employee.full_name

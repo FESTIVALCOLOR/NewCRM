@@ -75,8 +75,9 @@
               @click="openEmployee(emp)"
             >
               <q-item-section avatar>
-                <q-avatar :color="statusColor(emp.status)" text-color="white" size="40px">
-                  {{ emp.full_name ? emp.full_name[0] : '?' }}
+                <q-avatar :color="statusColor(emp.status)" text-color="white" size="40px" style="overflow:hidden">
+                  <img v-if="emp.photo_url" :src="emp.photo_url" style="width:100%;height:100%;object-fit:cover;border-radius:50%">
+                  <template v-else>{{ emp.full_name ? emp.full_name[0] : '?' }}</template>
                 </q-avatar>
               </q-item-section>
               <q-item-section>
@@ -121,8 +122,9 @@
           @click="openEmployee(emp)"
         >
           <span class="emph-name empv-name">
-            <q-avatar :color="statusColor(emp.status)" text-color="white" size="22px" style="flex-shrink:0;font-size:11px;margin-right:6px">
-              {{ emp.full_name ? emp.full_name[0] : '?' }}
+            <q-avatar :color="statusColor(emp.status)" text-color="white" size="22px" style="flex-shrink:0;font-size:11px;margin-right:6px;overflow:hidden">
+              <img v-if="emp.photo_url" :src="emp.photo_url" style="width:100%;height:100%;object-fit:cover;border-radius:50%">
+              <template v-else>{{ emp.full_name ? emp.full_name[0] : '?' }}</template>
             </q-avatar>
             {{ emp.full_name }}
           </span>
