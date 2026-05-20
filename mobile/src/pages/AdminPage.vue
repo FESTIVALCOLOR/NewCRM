@@ -45,7 +45,7 @@
                   {{ rate.role }}
                 </div>
                 <div class="text-caption" style="color: #888">
-                  <span v-if="rate.project_subtype" style="color: #2F5496; font-weight: 600">{{ rate.project_subtype }}</span>
+                  <span v-if="rateTab === 'individual'" style="color: #2F5496; font-weight: 600">{{ rate.project_subtype || 'все подтипы' }}</span>
                   <span v-if="rate.stage_name"> | {{ rate.stage_name }}</span>
                   <span v-if="rate.city"> | {{ rate.city }}</span>
                   <span v-if="rate.area_from"> | {{ rate.area_from }}-{{ rate.area_to }} м²</span>
@@ -453,6 +453,30 @@
               dense
               class="q-mb-sm"
             />
+            <!-- Подтип проекта — только для Индивидуальных тарифов, первым чтобы влиял на стадии -->
+            <q-select
+              v-if="rateTab === 'individual'"
+              v-model="editingRate.project_subtype"
+              :options="['Полный', 'Эскизный', 'Планировочный']"
+              label="Подтип проекта"
+              outlined
+              dense
+              clearable
+              class="q-mb-sm"
+              hint="Пусто = тариф для всех подтипов"
+            />
+            <!-- Стадия: выпадающий список в зависимости от вкладки -->
+            <q-select
+              v-if="stageOptions.length > 0"
+              v-model="editingRate.stage_name"
+              :options="stageOptions"
+              label="Стадия"
+              outlined
+              dense
+              clearable
+              class="q-mb-sm"
+              hint="Пусто = тариф без привязки к стадии"
+            />
             <q-input
               v-model.number="editingRate.rate_per_m2"
               label="₽/м²"
@@ -468,25 +492,6 @@
               dense
               type="number"
               class="q-mb-sm"
-            />
-            <q-input
-              v-model="editingRate.stage_name"
-              label="Стадия"
-              outlined
-              dense
-              class="q-mb-sm"
-            />
-            <!-- Подтип проекта — только для Индивидуальных тарифов -->
-            <q-select
-              v-if="rateTab === 'individual'"
-              v-model="editingRate.project_subtype"
-              :options="['Полный', 'Эскизный', 'Планировочный']"
-              label="Подтип проекта (Полный / Эскизный / Планировочный)"
-              outlined
-              dense
-              clearable
-              class="q-mb-sm"
-              hint="Оставьте пустым если тариф применяется ко всем подтипам"
             />
             <q-select
               v-model="editingRate.city"
@@ -561,6 +566,15 @@ const PERMISSION_GROUPS = {
 
 const rateTypeMap = { individual: 'Индивидуальный', template: 'Шаблонный', supervision: 'Авторский надзор', surveyor: 'Замерщик' }
 
+const STAGES_BY_TAB = {
+  individual: ['Стадия 1: планировочные решения', 'Стадия 2: концепция дизайна', 'Стадия 3: рабочие чертежи'],
+  template: ['Стадия 1: планировочные решения', 'Стадия 2: рабочие чертежи', 'Стадия 3: 3д визуализация (Дополнительная)'],
+  supervision: ['Разработка КД', 'Авторский надзор', 'Координация'],
+  surveyor: [],
+}
+
+const stageOptions = computed(() => STAGES_BY_TAB[rateTab.value] || [])
+
 const filteredRates = computed(() => {
   if (rateTab.value === 'surveyor') return rates.value.filter(r => r.role === 'Замерщик')
   return rates.value.filter(r => r.project_type === rateTypeMap[rateTab.value])
@@ -601,7 +615,7 @@ function addRate() {
   if (rateTab.value === 'surveyor') {
     editingRate.value = { role: 'Замерщик', surveyor_price: null, city: null }
   } else {
-    editingRate.value = { role: null, rate_per_m2: null, fixed_price: null, stage_name: '', city: null, project_subtype: null }
+    editingRate.value = { project_type: rateTypeMap[rateTab.value] || null, role: null, rate_per_m2: null, fixed_price: null, stage_name: null, city: null, project_subtype: null }
   }
   showRateDialog.value = true
 }

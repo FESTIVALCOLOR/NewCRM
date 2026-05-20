@@ -125,8 +125,8 @@ export const crmApi = {
   repairWorkflow: (cardId) =>
     api.post(`/api/v1/crm/cards/${cardId}/workflow/repair`),
 
-  getPayments: (cardId) =>
-    api.get('/api/v1/payments', { params: { crm_card_id: cardId } }),
+  getPayments: (contractId) =>
+    api.get(`/api/v1/payments/crm/${contractId}`),
 
   getStageHistory: (cardId) =>
     api.get(`/api/v1/crm/cards/${cardId}/stage-history`),

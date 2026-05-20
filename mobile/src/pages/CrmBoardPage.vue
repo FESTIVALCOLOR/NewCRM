@@ -794,7 +794,7 @@ async function doMoveWithAssign() {
       const isStage1 = stageName.includes('Стадия 1')
 
       // Проверяем нет ли уже оплаты для этого исполнителя на этой роли+стадии
-      const { data: existingPayments } = await crmApi.getPayments(moveCard.value.id)
+      const { data: existingPayments } = await crmApi.getPayments(moveCard.value.contract_id)
       const alreadyPaid = (existingPayments || []).some(p =>
         p.employee_id === moveExecutorId.value && p.role === roleName &&
         (p.stage_name === stageName || !p.stage_name) && !p.reassigned,

@@ -1575,6 +1575,7 @@
             @click="syncCrmWithYd"
           />
           <q-fab-action
+            v-if="can('contracts.update')"
             icon="edit"
             style="background: #ffd93c; color: #333"
             label="Редактировать договор"
@@ -2646,17 +2647,17 @@ async function doAssign() {
 
         // Создаём новые оплаты для нового исполнителя
         try {
-          const calcRes = await paymentsApi.calculate({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName })
+          const calcRes = await paymentsApi.calculate({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, stage_name: stageName || undefined, project_subtype: card.value.project_subtype || undefined })
           const fullAmount = typeof calcRes.data === 'number' ? calcRes.data : (calcRes.data?.amount || 0)
           if (fullAmount > 0) {
             const month = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
             if (isTemplate) {
-              await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, payment_type: 'Полная оплата', crm_card_id: card.value.id, calculated_amount: fullAmount, final_amount: fullAmount, report_month: null })
+              await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, stage_name: stageName || undefined, payment_type: 'Полная оплата', crm_card_id: card.value.id, calculated_amount: fullAmount, final_amount: fullAmount, report_month: null })
             } else {
               const advance = Math.round(fullAmount / 2)
               const balance = fullAmount - advance
-              await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, payment_type: 'Аванс', crm_card_id: card.value.id, calculated_amount: advance, final_amount: advance, report_month: month })
-              await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, payment_type: 'Доплата', crm_card_id: card.value.id, calculated_amount: balance, final_amount: balance, report_month: null })
+              await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, stage_name: stageName || undefined, payment_type: 'Аванс', crm_card_id: card.value.id, calculated_amount: advance, final_amount: advance, report_month: month })
+              await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, stage_name: stageName || undefined, payment_type: 'Доплата', crm_card_id: card.value.id, calculated_amount: balance, final_amount: balance, report_month: null })
             }
           }
         } catch (e) { console.warn('Ошибка создания оплат при переназначении:', e) }
@@ -2962,12 +2963,15 @@ async function handleCrmFileUpload(event) {
 async function reloadCard() { const id = route.params.id; await crmStore.loadCard(id); await loadAdditionalData(id) }
 
 async function loadAdditionalData(cardId) {
-  // Оплаты — загружаем ВСЕ и фильтруем по crm_card_id
+  // Оплаты — загружаем по contract_id через правильный endpoint
   try {
-    const { data } = await crmApi.getPayments(cardId)
-    const cid = Number(cardId)
-    // Фильтр: только этой карточки, исключая оклады
-    cardPayments.value = (data || []).filter(p => Number(p.crm_card_id) === cid && p.source !== 'Оклад')
+    const contractId = card.value?.contract_id
+    if (contractId) {
+      const { data } = await crmApi.getPayments(contractId)
+      const cid = Number(cardId)
+      // Фильтр: только этой карточки, исключая оклады
+      cardPayments.value = (data || []).filter(p => Number(p.crm_card_id) === cid && p.source !== 'Оклад')
+    }
   } catch (e) { cardPayments.value = [] }
 
   // История действий
