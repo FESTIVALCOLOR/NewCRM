@@ -2204,6 +2204,7 @@ class DataAccess(QObject):
                     self.db.assign_stage_executor(card_id, data.get("stage_name", ""), data.get("executor_id"), data.get("assigned_by"), data.get("deadline"))
                 except Exception as e:
                     _safe_log(f"[DataAccess] Ошибка DB assign_stage_executor: {e}")
+                self._global_cache.invalidate("crm_cards")
                 return result
             except APIResponseError as e:
                 if e.status_code in (422, 400, 409):

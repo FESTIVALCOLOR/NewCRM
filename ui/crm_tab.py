@@ -2289,7 +2289,10 @@ class CRMCard(QFrame):
         if not is_surveyor:
             deadline_to_show = None
 
-            if "концепция дизайна" in current_column and self.card_data.get("designer_deadline"):
+            # Приоритет: исполнитель точно на ТЕКУЩЕЙ стадии, затем по типу стадии
+            if self.card_data.get("current_stage_deadline"):
+                deadline_to_show = self.card_data["current_stage_deadline"]
+            elif "концепция дизайна" in current_column and self.card_data.get("designer_deadline"):
                 deadline_to_show = self.card_data["designer_deadline"]
             elif ("планировочные" in current_column or "чертежи" in current_column) and self.card_data.get("draftsman_deadline"):
                 deadline_to_show = self.card_data["draftsman_deadline"]
@@ -3577,7 +3580,14 @@ class CRMCard(QFrame):
                 parent = parent.parent()
 
     def get_highlight_role(self, column_name, project_type):
-        """Определение, какую роль подсвечивать"""
+        """Определение, какую роль подсвечивать (учитывает workflow_status)"""
+        wf_status = self.card_data.get("workflow_status")
+
+        # При ожидании проверки — подсвечиваем проверяющего
+        if wf_status == "pending_review":
+            return "sdp" if project_type == "Индивидуальный" else "gap"
+
+        # В остальных случаях (in_progress, revision и др.) — исполнителя по колонке
         if project_type == "Индивидуальный":
             if column_name == "Стадия 1: планировочные решения":
                 return "draftsman"

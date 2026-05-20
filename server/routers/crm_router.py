@@ -365,6 +365,10 @@ async def get_crm_cards(project_type: Optional[str] = None, archived: bool = Fal
             draftsman_candidates = [e for e in card_executors if "чертежи" in (e.stage_name or "").lower() or "планировочные" in (e.stage_name or "").lower()]
             draftsman_executor = max(draftsman_candidates, key=lambda e: e.id) if draftsman_candidates else None
 
+            # Find executor for CURRENT stage only — for accurate deadline display
+            current_col_executors = [e for e in card_executors if e.stage_name == card.column_name]
+            current_col_executor = max(current_col_executors, key=lambda e: e.id) if current_col_executors else None
+
             # Get executor names from batch-loaded employees map
             designer_employee = executor_employees_map.get(designer_executor.executor_id) if designer_executor else None
             draftsman_employee = executor_employees_map.get(draftsman_executor.executor_id) if draftsman_executor else None
@@ -416,6 +420,7 @@ async def get_crm_cards(project_type: Optional[str] = None, archived: bool = Fal
                 "draftsman_name": draftsman_employee.full_name if draftsman_employee else None,
                 "draftsman_completed": draftsman_executor.completed if draftsman_executor else False,
                 "draftsman_deadline": str(draftsman_executor.deadline) if draftsman_executor and draftsman_executor.deadline else None,
+                "current_stage_deadline": str(current_col_executor.deadline) if current_col_executor and current_col_executor.deadline else None,
                 "order_position": card.order_position,
                 "client_name": client_names.get(card.id),
                 "created_at": card.created_at.isoformat() if card.created_at else None,
