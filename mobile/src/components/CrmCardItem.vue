@@ -306,12 +306,16 @@ const activeHighlightRole = computed(() => {
   const col = (props.card.column_name || '').toLowerCase()
   const pt = props.card.project_type || ''
 
-  if (wf === 'pending_review') return 'sdp'
+  if (wf === 'pending_review') return pt === 'Шаблонный' ? 'gap' : 'sdp'
 
   if (wf === 'revision') {
     const substepRole = (props.card.current_substep_executor_role || '').toLowerCase()
     if (substepRole.includes('sdp') || substepRole.includes('сдп')) return 'sdp'
     if (substepRole.includes('gap') || substepRole.includes('гап')) return 'gap'
+    if (substepRole.includes('дизайнер') || substepRole.includes('designer')) return 'designer'
+    if (substepRole.includes('чертёжник') || substepRole.includes('чертежник') || substepRole.includes('draftsman')) return 'draftsman'
+    // Роль подэтапа не определена — revision всегда у проверяющего
+    return pt === 'Шаблонный' ? 'gap' : 'sdp'
   }
 
   if (col.includes('концепция') || col.includes('визуализац')) return 'designer'

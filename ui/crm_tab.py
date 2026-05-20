@@ -3587,17 +3587,24 @@ class CRMCard(QFrame):
         if wf_status == "pending_review":
             return "sdp" if project_type == "Индивидуальный" else "gap"
 
-        # При revision — смотрим executor_role текущего подэтапа:
-        # если подэтап у СДП/ГАП (сбор правок, согласование) — подсвечиваем их,
-        # иначе — исполнителя по типу колонки (дизайнер/чертёжник исправляет).
+        # При revision — смотрим executor_role текущего подэтапа.
+        # Если подэтап у СДП/ГАП — подсвечиваем их.
+        # Если у дизайнера/чертёжника — подсвечиваем исполнителя.
+        # Если роль не определена (нет данных подэтапа) — подсвечиваем проверяющего.
         if wf_status == "revision":
             substep_role = (self.card_data.get("current_substep_executor_role") or "").lower()
             if "sdp" in substep_role or "сдп" in substep_role:
                 return "sdp"
             if "gap" in substep_role or "гап" in substep_role:
                 return "gap"
+            if "дизайнер" in substep_role or "designer" in substep_role:
+                return "designer"
+            if "чертёжник" in substep_role or "чертежник" in substep_role or "draftsman" in substep_role:
+                return "draftsman"
+            # Роль подэтапа не определена — revision всегда у проверяющего
+            return "sdp" if project_type == "Индивидуальный" else "gap"
 
-        # in_progress, revision (исполнитель) и др. — исполнителя по типу колонки
+        # in_progress и др. — исполнителя по типу колонки
         if project_type == "Индивидуальный":
             if column_name == "Стадия 1: планировочные решения":
                 return "draftsman"

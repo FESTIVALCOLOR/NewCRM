@@ -795,6 +795,7 @@ class Rate(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     project_type = Column(String)  # Индивидуальный, Шаблонный, Авторский надзор
+    project_subtype = Column(String)  # Полный, Эскизный, Планировочный (NULL = для всех подтипов)
     role = Column(String)
     stage_name = Column(String)
 

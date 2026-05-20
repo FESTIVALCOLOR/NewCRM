@@ -45,7 +45,8 @@
                   {{ rate.role }}
                 </div>
                 <div class="text-caption" style="color: #888">
-                  <span v-if="rate.stage_name">{{ rate.stage_name }}</span>
+                  <span v-if="rate.project_subtype" style="color: #2F5496; font-weight: 600">{{ rate.project_subtype }}</span>
+                  <span v-if="rate.stage_name"> | {{ rate.stage_name }}</span>
                   <span v-if="rate.city"> | {{ rate.city }}</span>
                   <span v-if="rate.area_from"> | {{ rate.area_from }}-{{ rate.area_to }} м²</span>
                 </div>
@@ -475,6 +476,18 @@
               dense
               class="q-mb-sm"
             />
+            <!-- Подтип проекта — только для Индивидуальных тарифов -->
+            <q-select
+              v-if="rateTab === 'individual'"
+              v-model="editingRate.project_subtype"
+              :options="['Полный', 'Эскизный', 'Планировочный']"
+              label="Подтип проекта (Полный / Эскизный / Планировочный)"
+              outlined
+              dense
+              clearable
+              class="q-mb-sm"
+              hint="Оставьте пустым если тариф применяется ко всем подтипам"
+            />
             <q-select
               v-model="editingRate.city"
               :options="refs.cities"
@@ -535,8 +548,8 @@ const PERMISSION_GROUPS = {
   'Сотрудники': ['employees.create', 'employees.update', 'employees.delete'],
   'Клиенты': ['clients.create', 'clients.view', 'clients.update', 'clients.delete'],
   'Договоры': ['contracts.create', 'contracts.view', 'contracts.update', 'contracts.delete'],
-  'CRM': ['crm_cards.update', 'crm_cards.move', 'crm_cards.delete', 'crm_cards.assign_executor', 'crm_cards.delete_executor', 'crm_cards.reset_stages', 'crm_cards.reset_approval', 'crm_cards.complete_approval', 'crm_cards.reset_designer', 'crm_cards.reset_draftsman', 'crm_cards.files_upload', 'crm_cards.files_delete', 'crm_cards.deadlines', 'crm_cards.payments'],
-  'Надзор': ['supervision.update', 'supervision.move', 'supervision.pause_resume', 'supervision.complete_stage', 'supervision.delete_order', 'supervision.assign_executor', 'supervision.files_upload', 'supervision.files_delete', 'supervision.deadlines', 'supervision.payments'],
+  'CRM': ['crm_cards.update', 'crm_cards.view_archive', 'crm_cards.move', 'crm_cards.delete', 'crm_cards.assign_executor', 'crm_cards.delete_executor', 'crm_cards.reset_stages', 'crm_cards.reset_approval', 'crm_cards.complete_approval', 'crm_cards.reset_designer', 'crm_cards.reset_draftsman', 'crm_cards.files_upload', 'crm_cards.files_delete', 'crm_cards.deadlines', 'crm_cards.payments'],
+  'Надзор': ['supervision.view_archive', 'supervision.update', 'supervision.move', 'supervision.pause_resume', 'supervision.complete_stage', 'supervision.delete_order', 'supervision.assign_executor', 'supervision.files_upload', 'supervision.files_delete', 'supervision.deadlines', 'supervision.payments'],
   'Платежи': ['payments.create', 'payments.update', 'payments.delete'],
   'Зарплаты': ['salaries.create', 'salaries.update', 'salaries.delete', 'salaries.mark_to_pay', 'salaries.mark_paid'],
   'Тарифы': ['rates.create', 'rates.delete'],
@@ -588,7 +601,7 @@ function addRate() {
   if (rateTab.value === 'surveyor') {
     editingRate.value = { role: 'Замерщик', surveyor_price: null, city: null }
   } else {
-    editingRate.value = { role: null, rate_per_m2: null, fixed_price: null, stage_name: '', city: null }
+    editingRate.value = { role: null, rate_per_m2: null, fixed_price: null, stage_name: '', city: null, project_subtype: null }
   }
   showRateDialog.value = true
 }

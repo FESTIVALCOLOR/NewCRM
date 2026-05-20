@@ -624,13 +624,22 @@ async function doCardAction(cardId, action) {
   }
 }
 
-function showMoveDialog(card) {
+async function showMoveDialog(card) {
   if (!can('crm_cards.move')) return
   moveCard.value = card
   moveStep.value = 1
   moveExecutorId.value = null
   moveDeadline.value = ''
+  filteredMoveEmployees.value = employeeOpts.value // предзаполняем на случай открытия step 2
   moveDialogVisible.value = true
+  // Перезагружаем список сотрудников если пуст (например после ошибки onMounted)
+  if (employeeOpts.value.length === 0) {
+    try {
+      const { data } = await employeesApi.getList()
+      employeeOpts.value = data.filter(e => e.status === 'активный').map(e => ({ id: e.id, label: `${e.full_name} (${e.position})` }))
+      filteredMoveEmployees.value = employeeOpts.value
+    } catch {}
+  }
 }
 
 async function selectMoveColumn(colName) {
@@ -665,6 +674,14 @@ async function selectMoveColumn(colName) {
     }
   }
 
+  // === Правило: Планировочный подтип — только Стадия 1 ===
+  if (moveCard.value.project_subtype && moveCard.value.project_subtype.includes('Планировочный')) {
+    if (colName.includes('Стадия 2') || colName.includes('Стадия 3')) {
+      $q.notify({ type: 'warning', message: 'Планировочный проект не может перейти в эту стадию' })
+      return
+    }
+  }
+
   // === Правило: проверка оплаты аванса для индивидуальных (как в десктопе crm_tab.py:659-670) ===
   if (moveCard.value.project_type === 'Индивидуальный' && colName.startsWith('Стадия')) {
     const cid = moveCard.value.contract_id
@@ -684,6 +701,14 @@ async function selectMoveColumn(colName) {
     moveStep.value = 2
     moveExecutorId.value = null
     moveDeadline.value = ''
+    // Предзаполняем список исполнителей по роли стадии немедленно
+    const stageRole = getStageRole(colName)
+    let empList = employeeOpts.value
+    if (stageRole) {
+      const filtered = empList.filter(e => e.label.includes(stageRole))
+      empList = filtered.length > 0 ? filtered : empList
+    }
+    filteredMoveEmployees.value = empList
 
     // Подстановка уже назначенного исполнителя из stage_executors
     // (если назначили заранее через команду проекта)
@@ -698,7 +723,7 @@ async function selectMoveColumn(colName) {
       }
     } catch {}
 
-    // Автоподстановка дедлайна + norm_days из timeline (если не подставлен из stage_executors)
+    // Автоподстановка дедлайна + norm_days из timeline (только если дедлайн ещё не подставлен)
     moveNormDays.value = 0
     moveSubstepName.value = ''
     const cid = moveCard.value.contract_id
@@ -709,7 +734,8 @@ async function selectMoveColumn(colName) {
         const resp = await ax.get(`/api/v1/timeline/${cid}`)
         const entries = Array.isArray(resp.data) ? resp.data : []
         const info = getStageDeadlineInfo(entries, colName)
-        if (info.deadline) moveDeadline.value = info.deadline
+        // НЕ перезаписываем дедлайн если уже загружен из stage_executors
+        if (info.deadline && !moveDeadline.value) moveDeadline.value = info.deadline
         moveNormDays.value = info.normDays || 0
         moveSubstepName.value = info.substepName || ''
       } catch { /* fallback ниже */ }
@@ -763,13 +789,15 @@ async function doMoveWithAssign() {
     // 3. Создаём оплату при перемещении (как десктоп ExecutorSelectionDialog)
     try {
       const roleName = getStageRole(moveTargetCol.value) || 'Чертёжник'
+      const stageName = moveTargetCol.value
       const isTemplate = moveCard.value.project_type === 'Шаблонный'
-      const isStage1 = moveTargetCol.value.includes('Стадия 1')
+      const isStage1 = stageName.includes('Стадия 1')
 
-      // Проверяем нет ли уже оплаты для этого исполнителя на этой роли
+      // Проверяем нет ли уже оплаты для этого исполнителя на этой роли+стадии
       const { data: existingPayments } = await crmApi.getPayments(moveCard.value.id)
       const alreadyPaid = (existingPayments || []).some(p =>
-        p.employee_id === moveExecutorId.value && p.role === roleName && !p.reassigned,
+        p.employee_id === moveExecutorId.value && p.role === roleName &&
+        (p.stage_name === stageName || !p.stage_name) && !p.reassigned,
       )
 
       if (!alreadyPaid) {
@@ -777,21 +805,23 @@ async function doMoveWithAssign() {
           contract_id: moveCard.value.contract_id,
           employee_id: moveExecutorId.value,
           role: roleName,
+          stage_name: stageName,
+          project_subtype: moveCard.value.project_subtype || undefined,
         })
         const fullAmount = calcRes.data?.amount || calcRes.data?.full_amount || 0
 
         if (isTemplate) {
           // Шаблонный: Полная оплата (Стадия 1 = 0)
           const amount = isStage1 ? 0 : fullAmount
-          await paymentsApi.create({ contract_id: moveCard.value.contract_id, employee_id: moveExecutorId.value, role: roleName, payment_type: 'Полная оплата', crm_card_id: moveCard.value.id, calculated_amount: amount, final_amount: amount, report_month: '' })
+          await paymentsApi.create({ contract_id: moveCard.value.contract_id, employee_id: moveExecutorId.value, role: roleName, stage_name: stageName, payment_type: 'Полная оплата', crm_card_id: moveCard.value.id, calculated_amount: amount, final_amount: amount, report_month: '' })
         } else {
           // Индивидуальный: Аванс 50% + Доплата 50%
           if (fullAmount > 0) {
             const advance = Math.round(fullAmount / 2)
             const balance = fullAmount - advance
             const month = new Date().toISOString().slice(0, 7)
-            await paymentsApi.create({ contract_id: moveCard.value.contract_id, employee_id: moveExecutorId.value, role: roleName, payment_type: 'Аванс', crm_card_id: moveCard.value.id, calculated_amount: advance, final_amount: advance, report_month: month })
-            await paymentsApi.create({ contract_id: moveCard.value.contract_id, employee_id: moveExecutorId.value, role: roleName, payment_type: 'Доплата', crm_card_id: moveCard.value.id, calculated_amount: balance, final_amount: balance, report_month: null })
+            await paymentsApi.create({ contract_id: moveCard.value.contract_id, employee_id: moveExecutorId.value, role: roleName, stage_name: stageName, payment_type: 'Аванс', crm_card_id: moveCard.value.id, calculated_amount: advance, final_amount: advance, report_month: month })
+            await paymentsApi.create({ contract_id: moveCard.value.contract_id, employee_id: moveExecutorId.value, role: roleName, stage_name: stageName, payment_type: 'Доплата', crm_card_id: moveCard.value.id, calculated_amount: balance, final_amount: balance, report_month: null })
           }
         }
       }

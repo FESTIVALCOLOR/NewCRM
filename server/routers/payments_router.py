@@ -229,6 +229,7 @@ async def calculate_payment_amount(
     role: str,
     stage_name: Optional[str] = None,
     supervision_card_id: Optional[int] = None,
+    project_subtype: Optional[str] = None,
     current_user: Employee = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -267,24 +268,33 @@ async def calculate_payment_amount(
 
         # ========== ИНДИВИДУАЛЬНЫЙ ==========
         if project_type == "Индивидуальный":
-            logger.debug(f"CALC Индивидуальный проект: role={role}, area={area}, stage_name={stage_name}")
+            # Используем subtype из договора, если не передан явно
+            effective_subtype = project_subtype or (contract.project_subtype if hasattr(contract, "project_subtype") else None)
+            logger.debug(f"CALC Индивидуальный проект: role={role}, area={area}, stage_name={stage_name}, subtype={effective_subtype}")
             query = db.query(Rate).filter(Rate.project_type == "Индивидуальный", Rate.role == role)
-            if stage_name:
-                # Сначала ищем с конкретной стадией
-                rate = query.filter(Rate.stage_name == stage_name).first()
-                logger.debug(f"CALC Поиск с stage_name='{stage_name}': rate={rate}")
-                # Если не найден - ищем без стадии
-                if not rate:
-                    rate = query.filter(Rate.stage_name.is_(None)).first()
-                    logger.debug(f"CALC Поиск с stage_name IS NULL: rate={rate}")
-            else:
-                rate = query.filter(Rate.stage_name.is_(None)).first()
-                logger.debug(f"CALC Поиск без stage_name (IS NULL): rate={rate}")
+
+            def _find_rate_for_subtype(q, sname, subtype):
+                """Ищет тариф с учётом подтипа и стадии. Приоритет: subtype+stage > subtype > stage > NULL."""
+                if subtype and sname:
+                    r = q.filter(Rate.project_subtype == subtype, Rate.stage_name == sname).first()
+                    if r:
+                        return r
+                if subtype:
+                    r = q.filter(Rate.project_subtype == subtype, Rate.stage_name.is_(None)).first()
+                    if r:
+                        return r
+                if sname:
+                    r = q.filter(Rate.project_subtype.is_(None), Rate.stage_name == sname).first()
+                    if r:
+                        return r
+                return q.filter(Rate.project_subtype.is_(None), Rate.stage_name.is_(None)).first()
+
+            rate = _find_rate_for_subtype(query, stage_name, effective_subtype)
+            logger.debug(f"CALC Найден тариф: {rate.rate_per_m2 if rate else 'НЕТ'}")
 
             if rate and rate.rate_per_m2:
                 amount = area * float(rate.rate_per_m2)
-                logger.debug(f"CALC Найден тариф: rate_per_m2={rate.rate_per_m2}, amount={amount}")
-                return {"amount": amount, "rate_per_m2": float(rate.rate_per_m2)}
+                return {"amount": amount, "rate_per_m2": float(rate.rate_per_m2), "project_subtype": effective_subtype}
             logger.debug("CALC Тариф НЕ найден или rate_per_m2=0, возвращаем 0")
             return {"amount": 0}
 

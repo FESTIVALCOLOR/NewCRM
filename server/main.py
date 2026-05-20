@@ -456,9 +456,13 @@ async def global_search(q: str, limit: int = 50, entity_types: Optional[str] = N
             .limit(limit)
             .all()
         )
+        can_view_archive = check_permission(current_user, "crm_cards.view_archive", db)
         for card in cards:
             contract = db.query(ContractModel2).filter(ContractModel2.id == card.contract_id).first()
             is_archive = (contract.status in ARCHIVE_STATUSES) if contract and contract.status else False
+            # Скрываем архивные карточки пользователям без права view_archive
+            if is_archive and not can_view_archive:
+                continue
             project_type = contract.project_type if contract else None
             results.append(
                 {

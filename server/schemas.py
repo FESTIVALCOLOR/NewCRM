@@ -856,6 +856,7 @@ class PaymentResponse(PaymentBase):
 
 class RateBase(BaseModel):
     project_type: Optional[str] = None
+    project_subtype: Optional[str] = None
     role: Optional[str] = None
     stage_name: Optional[str] = None
     rate_per_m2: Optional[float] = None
@@ -875,6 +876,7 @@ class RateCreate(RateBase):
 
 class RateUpdate(BaseModel):
     project_type: Optional[str] = None
+    project_subtype: Optional[str] = None
     role: Optional[str] = None
     stage_name: Optional[str] = None
     rate_per_m2: Optional[float] = None
@@ -1055,6 +1057,7 @@ class IndividualRateRequest(BaseModel):
     role: str
     rate_per_m2: float
     stage_name: Optional[str] = None
+    project_subtype: Optional[str] = None  # Полный / Эскизный / Планировочный (None = для всех)
 
 
 class SupervisionRateRequest(BaseModel):
