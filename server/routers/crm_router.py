@@ -326,12 +326,16 @@ async def get_crm_cards(project_type: Optional[str] = None, archived: bool = Fal
         for wf in all_wf_states:
             wf_states_by_card[(wf.crm_card_id, wf.stage_name)] = wf
 
-        # Batch-load substep names из ProjectTimelineEntry
+        # Batch-load substep names и executor_role из ProjectTimelineEntry
         substep_codes = [wf.current_substep_code for wf in all_wf_states if wf.current_substep_code]
         substep_name_map = {}
+        substep_executor_role_map = {}
         if substep_codes:
-            substep_entries = db.query(ProjectTimelineEntry.stage_code, ProjectTimelineEntry.stage_name).filter(ProjectTimelineEntry.stage_code.in_(substep_codes)).all()
+            substep_entries = (
+                db.query(ProjectTimelineEntry.stage_code, ProjectTimelineEntry.stage_name, ProjectTimelineEntry.executor_role).filter(ProjectTimelineEntry.stage_code.in_(substep_codes)).all()
+            )
             substep_name_map = {e.stage_code: e.stage_name for e in substep_entries}
+            substep_executor_role_map = {e.stage_code: e.executor_role for e in substep_entries}
 
         # Batch-load timeline entries для расчёта дедлайна текущего подэтапа
         contract_ids = list(set(card.contract_id for card in cards))
@@ -428,6 +432,9 @@ async def get_crm_cards(project_type: Optional[str] = None, archived: bool = Fal
                 # Текущий подэтап из StageWorkflowState
                 "current_substep_code": (lambda wf: wf.current_substep_code if wf else None)(wf_states_by_card.get((card.id, card.column_name))),
                 "current_substep_name": (lambda wf: substep_name_map.get(wf.current_substep_code) if wf and wf.current_substep_code else None)(wf_states_by_card.get((card.id, card.column_name))),
+                "current_substep_executor_role": (lambda wf: substep_executor_role_map.get(wf.current_substep_code) if wf and wf.current_substep_code else None)(
+                    wf_states_by_card.get((card.id, card.column_name))
+                ),
                 "workflow_status": (lambda wf: wf.status if wf else None)(wf_states_by_card.get((card.id, card.column_name))),
                 "revision_count": (lambda wf: wf.revision_count if wf else 0)(wf_states_by_card.get((card.id, card.column_name))),
                 # Дедлайн текущего подэтапа (плановая дата из timeline)

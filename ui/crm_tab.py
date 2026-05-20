@@ -3580,14 +3580,24 @@ class CRMCard(QFrame):
                 parent = parent.parent()
 
     def get_highlight_role(self, column_name, project_type):
-        """Определение, какую роль подсвечивать (учитывает workflow_status)"""
+        """Определение, какую роль подсвечивать (учитывает workflow_status и executor_role текущего подэтапа)"""
         wf_status = self.card_data.get("workflow_status")
 
-        # При ожидании проверки — подсвечиваем проверяющего
+        # При ожидании проверки — подсвечиваем проверяющего (СДП/ГАП)
         if wf_status == "pending_review":
             return "sdp" if project_type == "Индивидуальный" else "gap"
 
-        # В остальных случаях (in_progress, revision и др.) — исполнителя по колонке
+        # При revision — смотрим executor_role текущего подэтапа:
+        # если подэтап у СДП/ГАП (сбор правок, согласование) — подсвечиваем их,
+        # иначе — исполнителя по типу колонки (дизайнер/чертёжник исправляет).
+        if wf_status == "revision":
+            substep_role = (self.card_data.get("current_substep_executor_role") or "").lower()
+            if "sdp" in substep_role or "сдп" in substep_role:
+                return "sdp"
+            if "gap" in substep_role or "гап" in substep_role:
+                return "gap"
+
+        # in_progress, revision (исполнитель) и др. — исполнителя по типу колонки
         if project_type == "Индивидуальный":
             if column_name == "Стадия 1: планировочные решения":
                 return "draftsman"
