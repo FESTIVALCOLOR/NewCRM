@@ -19,7 +19,7 @@
             Активные <span v-if="!crmStore.showArchive" class="pill-count">{{ crmStore.totalCards }}</span>
           </button>
           <button :class="{ active: crmStore.showArchive }" @click="!crmStore.showArchive && crmStore.toggleArchive()">
-            Архив
+            Архив <span v-if="archiveCount > 0" class="pill-count">{{ archiveCount }}</span>
           </button>
         </div>
       </div>
@@ -68,7 +68,7 @@
             <div class="column-frame" style="margin: 0; height: 100%">
               <div class="column-header">
                 <span class="column-title">{{ col.name }}</span>
-                <span style="color: #888; font-size: 11px">{{ col.count }}</span>
+                <span class="col-count-badge">{{ col.count }}</span>
               </div>
               <div v-if="col.cards.length > 0" class="column-body">
                 <crm-card-item
@@ -128,7 +128,7 @@
             <div class="column-frame">
               <div class="column-header">
                 <span class="column-title">{{ col.name }}</span>
-                <span style="color: #888; font-size: 11px">Карточек в столбце: {{ col.count }}</span>
+                <span class="col-count-badge">{{ col.count }}</span>
               </div>
               <div v-if="col.cards.length > 0" class="column-body">
                 <crm-card-item
@@ -178,7 +178,7 @@
             <div class="column-frame">
               <div class="column-header">
                 <span class="column-title">{{ col.name }}</span>
-                <span style="color: #888; font-size: 11px">Карточек в столбце: {{ col.count }}</span>
+                <span class="col-count-badge">{{ col.count }}</span>
               </div>
               <div v-if="col.cards.length > 0" class="column-body">
                 <crm-card-item
@@ -458,6 +458,14 @@ const measContractId = ref(null)
 const measContractData = ref(null)
 const terminationReason = ref('')
 const archiveSearch = ref('')
+const archiveCount = ref(0)
+
+async function loadArchiveCount() {
+  try {
+    const { data } = await crmApi.getCards(crmStore.projectType, true)
+    archiveCount.value = Array.isArray(data) ? data.length : 0
+  } catch { archiveCount.value = 0 }
+}
 
 const archiveFiltered = computed(() => {
   const list = crmStore.filteredCards
@@ -824,8 +832,11 @@ async function doCompleteProject() {
   } finally { moveLoading.value = false }
 }
 
+watch(() => crmStore.projectType, loadArchiveCount)
+
 onMounted(async () => {
   crmStore.loadCards()
+  loadArchiveCount()
   try {
     const { data } = await employeesApi.getList()
     employeeOpts.value = data.filter(e => e.status === 'активный').map(e => ({ id: e.id, label: `${e.full_name} (${e.position})` }))
@@ -982,11 +993,24 @@ onMounted(async () => {
   -webkit-overflow-scrolling: touch;
 }
 .landscape-column {
-  flex: 0 0 280px;
-  min-width: 280px;
+  flex: 1 1 0;
+  min-width: 180px;
   display: flex;
   flex-direction: column;
   height: 100%;
+}
+.col-count-badge {
+  background: #ffd93c;
+  color: #333;
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: bold;
+  flex-shrink: 0;
 }
 .landscape-column .column-frame {
   flex: 1;

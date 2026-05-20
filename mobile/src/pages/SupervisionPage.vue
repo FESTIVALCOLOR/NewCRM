@@ -8,7 +8,7 @@
             Активные <span v-if="!showArchive && cards.length > 0" class="pill-count">{{ cards.length }}</span>
           </button>
           <button :class="{ active: showArchive }" @click="showArchive = true; loadCards()">
-            Архив <span v-if="showArchive && cards.length > 0" class="pill-count">{{ cards.length }}</span>
+            Архив <span v-if="archiveCount > 0" class="pill-count">{{ showArchive ? cards.length : archiveCount }}</span>
           </button>
         </div>
         <q-space />
@@ -55,7 +55,7 @@
             <div class="column-frame" style="margin: 0; height: 100%">
               <div class="column-header">
                 <span class="column-title">{{ col.name }}</span>
-                <span style="color: #888; font-size: 11px">{{ col.count }}</span>
+                <span class="col-count-badge">{{ col.count }}</span>
               </div>
               <div v-if="col.cards.length > 0" class="column-body" style="overflow-y: auto; flex: 1">
                 <q-card v-for="card in col.cards" :key="card.id" class="crm-card q-mb-sm" :style="card.is_paused ? { background: '#FFF8E1', borderColor: '#F39C12' } : {}">
@@ -132,7 +132,7 @@
             <div class="column-frame">
               <div class="column-header">
                 <span class="column-title">{{ col.name }}</span>
-                <span style="color: #888; font-size: 11px">Карточек: {{ col.count }}</span>
+                <span class="col-count-badge">{{ col.count }}</span>
               </div>
               <div v-if="col.cards.length > 0" class="column-body">
                 <q-card v-for="card in col.cards" :key="card.id" class="crm-card q-mb-sm" :style="card.is_paused ? { background: '#FFF8E1', borderColor: '#F39C12' } : {}">
@@ -313,6 +313,14 @@ function agentColorFor(agentType) {
 const cards = ref([])
 const loading = ref(false)
 const showArchive = ref(false)
+const archiveCount = ref(0)
+
+async function loadArchiveCount() {
+  try {
+    const { data } = await supervisionApi.getCards({ status: 'archived' })
+    archiveCount.value = Array.isArray(data) ? data.length : 0
+  } catch { archiveCount.value = 0 }
+}
 const currentSlide = ref(parseInt(sessionStorage.getItem('sv_slide') || '0'))
 const moveDialogVisible = ref(false)
 const moveCard = ref(null)
@@ -381,7 +389,9 @@ async function loadCards() {
   catch { cards.value = [] } finally { loading.value = false }
 }
 
-onMounted(() => loadCards())
+watch(showArchive, (isArchive) => { if (!isArchive) loadArchiveCount() })
+
+onMounted(() => { loadCards(); loadArchiveCount() })
 </script>
 
 <style scoped>
@@ -403,7 +413,8 @@ onMounted(() => loadCards())
 .column-body { padding: 8px; flex: 1; overflow-y: auto }
 .column-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #bbb; font-size: 12px; padding: 40px 0 }
 .landscape-board { position: fixed; left: var(--drawer-offset, 0px); right: 0; top: calc(var(--q-header-height, 48px) + 41px); bottom: var(--q-footer-height, 56px); display: flex; flex-direction: row; overflow-x: auto; overflow-y: hidden; gap: 8px; padding: 8px; background: #fff; z-index: 1; -webkit-overflow-scrolling: touch; transition: left 0.3s ease; }
-.landscape-column { flex: 0 0 280px; min-width: 280px; display: flex; flex-direction: column; height: 100%; }
+.landscape-column { flex: 1 1 0; min-width: 160px; display: flex; flex-direction: column; height: 100%; }
+.col-count-badge { background: #ffd93c; color: #333; border-radius: 50%; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; flex-shrink: 0; }
 .landscape-column .column-frame { flex: 1; margin: 0; display: flex; flex-direction: column; overflow: hidden; height: 100%; }
 .landscape-column .column-body { overflow-y: auto; flex: 1; }
 </style>
