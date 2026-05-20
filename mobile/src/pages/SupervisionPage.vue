@@ -7,7 +7,7 @@
           <button :class="{ active: !showArchive }" @click="showArchive = false; loadCards()">
             Активные <span v-if="!showArchive && cards.length > 0" class="pill-count">{{ cards.length }}</span>
           </button>
-          <button :class="{ active: showArchive }" @click="showArchive = true; loadCards()">
+          <button v-if="can('supervision.view_archive')" :class="{ active: showArchive }" @click="showArchive = true; loadCards()">
             Архив <span v-if="archiveCount > 0" class="pill-count">{{ showArchive ? cards.length : archiveCount }}</span>
           </button>
         </div>
@@ -389,9 +389,9 @@ async function loadCards() {
   catch { cards.value = [] } finally { loading.value = false }
 }
 
-watch(showArchive, (isArchive) => { if (!isArchive) loadArchiveCount() })
+watch(showArchive, (isArchive) => { if (!isArchive && can('supervision.view_archive')) loadArchiveCount() })
 
-onMounted(() => { loadCards(); loadArchiveCount() })
+onMounted(() => { loadCards(); if (can('supervision.view_archive')) loadArchiveCount() })
 </script>
 
 <style scoped>

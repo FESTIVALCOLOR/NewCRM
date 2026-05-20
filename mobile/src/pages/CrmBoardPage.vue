@@ -18,7 +18,7 @@
           <button :class="{ active: !crmStore.showArchive }" @click="crmStore.showArchive && crmStore.toggleArchive()">
             Активные <span v-if="!crmStore.showArchive" class="pill-count">{{ crmStore.totalCards }}</span>
           </button>
-          <button :class="{ active: crmStore.showArchive }" @click="!crmStore.showArchive && crmStore.toggleArchive()">
+          <button v-if="can('crm_cards.view_archive')" :class="{ active: crmStore.showArchive }" @click="!crmStore.showArchive && crmStore.toggleArchive()">
             Архив <span v-if="archiveCount > 0" class="pill-count">{{ archiveCount }}</span>
           </button>
         </div>
@@ -832,11 +832,11 @@ async function doCompleteProject() {
   } finally { moveLoading.value = false }
 }
 
-watch(() => crmStore.projectType, loadArchiveCount)
+watch(() => crmStore.projectType, () => { if (can('crm_cards.view_archive')) loadArchiveCount() })
 
 onMounted(async () => {
   crmStore.loadCards()
-  loadArchiveCount()
+  if (can('crm_cards.view_archive')) loadArchiveCount()
   try {
     const { data } = await employeesApi.getList()
     employeeOpts.value = data.filter(e => e.status === 'активный').map(e => ({ id: e.id, label: `${e.full_name} (${e.position})` }))

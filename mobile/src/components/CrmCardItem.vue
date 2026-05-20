@@ -300,15 +300,36 @@ const substepColor = computed(() => {
   return m[ws.value] || '#E67E22'
 })
 
+// === Активная роль для подсветки команды (аналог get_highlight_role десктопа) ===
+const activeHighlightRole = computed(() => {
+  const wf = props.card.workflow_status
+  const col = (props.card.column_name || '').toLowerCase()
+  const pt = props.card.project_type || ''
+
+  if (wf === 'pending_review') return 'sdp'
+
+  if (wf === 'revision') {
+    const substepRole = (props.card.current_substep_executor_role || '').toLowerCase()
+    if (substepRole.includes('sdp') || substepRole.includes('сдп')) return 'sdp'
+    if (substepRole.includes('gap') || substepRole.includes('гап')) return 'gap'
+  }
+
+  if (col.includes('концепция') || col.includes('визуализац')) return 'designer'
+  if (col.includes('планировочн') || col.includes('чертёж') || col.includes('чертеж')) return 'draftsman'
+  return null
+})
+
+const ROLE_KEY_MAP = { СМ: 'senior_manager', СДП: 'sdp', ГАП: 'gap', Менеджер: 'manager', Замерщик: 'surveyor', Дизайнер: 'designer', Чертёжник: 'draftsman' }
+
 // === Команда с подсветкой ===
 const teamMembers = computed(() => {
   const c = props.card
-  const empName = auth.user?.full_name || ''
   const items = []
   const add = (role, name, completed) => {
     if (!name) return
-    const isCurrent = name === empName
-    const bg = completed ? '#C8E6C9' : isCurrent ? '#FFE082' : 'transparent'
+    const roleKey = ROLE_KEY_MAP[role]
+    const isActive = roleKey && roleKey === activeHighlightRole.value
+    const bg = completed ? '#C8E6C9' : isActive ? '#FFE082' : 'transparent'
     items.push({ text: `${role}: ${name}${completed ? ' ✓' : ''}`, bg })
   }
   add('СМ', c.senior_manager_name)
@@ -355,14 +376,15 @@ const generalDeadlineText = computed(() => {
 const generalDeadlineColor = computed(() => _deadlineDaysColor(generalDeadlineDays.value))
 const generalDeadlineBg = computed(() => _deadlineDaysBg(generalDeadlineDays.value))
 
-// Правый блок: Дедлайн текущего подэтапа (current_substep_deadline с сервера)
+// Правый блок: Дедлайн подэтапа — предпочитаем дедлайн исполнителя (current_stage_deadline),
+// иначе плановый из тайм-лайна (current_substep_deadline)
 const substepDeadlineDays = computed(() => {
-  const deadline = props.card.current_substep_deadline
+  const deadline = props.card.current_stage_deadline || props.card.current_substep_deadline
   if (!deadline) return null
   return countWorkingDaysUntil(deadline)
 })
 const substepDeadlineText = computed(() => {
-  const deadline = props.card.current_substep_deadline
+  const deadline = props.card.current_stage_deadline || props.card.current_substep_deadline
   if (!deadline || substepDeadlineDays.value === null) return null
   const d = new Date(deadline).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit' })
   const days = substepDeadlineDays.value
