@@ -100,23 +100,20 @@ else:
 async def sync_employee_telegram_avatars():
     """При старте сервера: загружает аватары из Telegram для уже привязанных
     сотрудников у которых нет фото (photo_url IS NULL, telegram_user_id IS NOT NULL).
+    Использует MTProto (Pyrogram) — Bot API заблокирован на сервере хостинга.
     Запускается однократно в фоне.
     """
     import asyncio
     import io
     import os
 
-    await asyncio.sleep(20)  # Ждём полной инициализации бота
-
-    if not AIOGRAM_AVAILABLE:
-        logger.info("Telegram avatar sync: aiogram не установлен, пропуск")
-        return
+    await asyncio.sleep(25)  # Ждём полной инициализации Pyrogram-клиента
 
     from telegram_service import get_telegram_service
 
     tg = get_telegram_service()
-    if not tg._bot_token:
-        logger.info("Telegram avatar sync: токен бота не задан, пропуск")
+    if not tg.mtproto_available:
+        logger.info("Telegram avatar sync: MTProto недоступен, пропуск")
         return
 
     from database import Employee, SessionLocal
@@ -131,31 +128,30 @@ async def sync_employee_telegram_avatars():
         logger.info(f"Telegram avatar sync: начало, {len(employees)} сотрудников")
         base_url = os.environ.get("BASE_URL", "https://crm.festivalcolor.ru")
 
-        # Создаём отдельный Bot — не зависит от polling-сессии
-        from aiogram import Bot
-
-        bot = Bot(token=tg._bot_token)
-        try:
+        # Bot API (149.154.x) заблокирован на сервере — используем MTProto (91.108.x)
+        async with tg._mtproto_lock:
+            client = await tg._ensure_pyrogram_client()
             for emp in employees:
                 try:
-                    photos = await bot.get_user_profile_photos(user_id=emp.telegram_user_id, limit=1)
-                    if photos.total_count > 0:
-                        file_id = photos.photos[0][-1].file_id
-                        buf = io.BytesIO()
-                        await bot.download(file_id, destination=buf)
-                        buf.seek(0)
-                        os.makedirs("uploads/avatars", exist_ok=True)
-                        filename = f"employee_{emp.id}.jpg"
-                        with open(os.path.join("uploads", "avatars", filename), "wb") as f:
-                            f.write(buf.read())
-                        emp.photo_url = f"{base_url}/api/v1/avatars/{filename}"
-                        db.commit()
-                        logger.info(f"Telegram avatar sync: сохранён employee_id={emp.id}")
-                    await asyncio.sleep(0.5)  # Пауза между запросами к Telegram API
+                    downloaded = False
+                    async for photo in client.get_chat_photos(emp.telegram_user_id, limit=1):
+                        buf = await client.download_media(photo, in_memory=True)
+                        if buf:
+                            buf.seek(0)
+                            os.makedirs("uploads/avatars", exist_ok=True)
+                            filename = f"employee_{emp.id}.jpg"
+                            with open(os.path.join("uploads", "avatars", filename), "wb") as f:
+                                f.write(buf.read())
+                            emp.photo_url = f"{base_url}/api/v1/avatars/{filename}"
+                            db.commit()
+                            logger.info(f"Telegram avatar sync: сохранён employee_id={emp.id}")
+                            downloaded = True
+                        break
+                    if not downloaded:
+                        logger.info(f"Telegram avatar sync: нет фото у employee {emp.id}")
+                    await asyncio.sleep(0.5)
                 except Exception as e:
                     logger.warning(f"Telegram avatar sync: ошибка для employee {emp.id}: {e}")
-        finally:
-            await bot.session.close()
 
         logger.info("Telegram avatar sync: завершено")
     finally:
