@@ -32,7 +32,7 @@
 
       <!-- Кнопки быстрого доступа — порядок: Клиенты, Договора, СРМ, СРМ надзора -->
       <div class="row q-col-gutter-sm q-mb-md">
-        <div v-for="action in quickActions" :key="action.to" class="col-6">
+        <div v-for="action in quickActions" :key="action.to" :class="quickActions.length === 1 ? 'col-12' : 'col-6'">
           <q-btn
             :icon="action.icon"
             :label="action.label"

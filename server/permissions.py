@@ -84,6 +84,7 @@ PERMISSION_NAMES: dict[str, str] = {
     "supervision.files_delete": "Удаление файлов в надзоре",
     "supervision.deadlines": "Управление дедлайнами надзора",
     "supervision.payments": "Оплаты в карточках надзора",
+    "supervision.view_archive": "Просмотр архива надзора",
     # === Платежи (глобальные) ===
     "payments.create": "Создание платежей",
     "payments.update": "Редактирование платежей",
@@ -196,6 +197,7 @@ _BASE_MANAGER = {
     "supervision.files_delete",
     "supervision.deadlines",
     "supervision.payments",
+    "supervision.view_archive",
     # Платежи
     "payments.create",
     "payments.update",
@@ -334,6 +336,7 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, set[str]] = {
         "supervision.complete_stage",
         "supervision.assign_executor",
         "supervision.files_upload",
+        "supervision.view_archive",
         # Внутренний чат — Менеджер управляет клиентским чатом (ссылки, участники)
         "chat.employee.view",
         "chat.employee.send",

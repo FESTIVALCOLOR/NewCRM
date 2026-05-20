@@ -36,3 +36,4 @@ create_payment
 _recalculate_payments_for_contract
 get_supervision_statistics
 get_project_statistics
+on_card_moved

@@ -4,16 +4,12 @@
 Роли — столбцы, права — строки, сгруппированные по категориям.
 """
 
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem,
-    QPushButton, QLabel, QHeaderView, QCheckBox, QFrame
-)
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QFont, QColor, QBrush
+from PyQt5.QtGui import QBrush, QColor, QFont
+from PyQt5.QtWidgets import QCheckBox, QFrame, QHBoxLayout, QHeaderView, QLabel, QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget
 
 from ui.custom_message_box import CustomMessageBox, CustomQuestionBox
 from utils.data_access import DataAccess
-
 
 # =========================
 # Группы прав (порядок отображения)
@@ -22,56 +18,84 @@ from utils.data_access import DataAccess
 # S-12: Синхронизировано с server/permissions.py PERMISSION_NAMES
 # Агенты и Города убраны из матрицы — доступ только у суперпользователей
 PERMISSION_GROUPS = {
-    'Доступ к страницам': [
-        'access.clients', 'access.contracts', 'access.crm', 'access.supervision',
-        'access.reports', 'access.employees', 'access.salaries',
-        'access.employee_reports', 'access.admin', 'access.dashboards',
+    "Доступ к страницам": [
+        "access.clients",
+        "access.contracts",
+        "access.crm",
+        "access.supervision",
+        "access.reports",
+        "access.employees",
+        "access.salaries",
+        "access.employee_reports",
+        "access.employee_analytics",
+        "access.admin",
+        "access.dashboards",
     ],
-    'Сотрудники': ['employees.create', 'employees.update', 'employees.delete'],
-    'Клиенты': ['clients.create', 'clients.view', 'clients.update', 'clients.delete'],
-    'Договоры': ['contracts.create', 'contracts.view', 'contracts.update', 'contracts.delete'],
-    'CRM': [
-        'crm_cards.update', 'crm_cards.move', 'crm_cards.delete',
-        'crm_cards.assign_executor', 'crm_cards.reset_approval',
-        'crm_cards.complete_approval', 'crm_cards.reset_designer',
-        'crm_cards.reset_draftsman',
-        'crm_cards.files_upload', 'crm_cards.files_delete',
-        'crm_cards.deadlines', 'crm_cards.payments',
+    "Сотрудники": ["employees.create", "employees.update", "employees.delete"],
+    "Клиенты": ["clients.create", "clients.view", "clients.update", "clients.delete"],
+    "Договоры": ["contracts.create", "contracts.view", "contracts.update", "contracts.delete"],
+    "CRM": [
+        "crm_cards.update",
+        "crm_cards.view_archive",
+        "crm_cards.move",
+        "crm_cards.delete",
+        "crm_cards.assign_executor",
+        "crm_cards.reset_approval",
+        "crm_cards.complete_approval",
+        "crm_cards.reset_designer",
+        "crm_cards.reset_draftsman",
+        "crm_cards.files_upload",
+        "crm_cards.files_delete",
+        "crm_cards.deadlines",
+        "crm_cards.payments",
     ],
-    'Надзор': [
-        'supervision.update', 'supervision.move', 'supervision.pause_resume',
-        'supervision.complete_stage', 'supervision.delete_order',
-        'supervision.assign_executor',
-        'supervision.files_upload', 'supervision.files_delete',
-        'supervision.deadlines', 'supervision.payments',
+    "Надзор": [
+        "supervision.view_archive",
+        "supervision.update",
+        "supervision.move",
+        "supervision.pause_resume",
+        "supervision.complete_stage",
+        "supervision.delete_order",
+        "supervision.assign_executor",
+        "supervision.files_upload",
+        "supervision.files_delete",
+        "supervision.deadlines",
+        "supervision.payments",
     ],
-    'Платежи': ['payments.create', 'payments.update', 'payments.delete'],
-    'Зарплаты': [
-        'salaries.create', 'salaries.update', 'salaries.delete',
-        'salaries.mark_to_pay', 'salaries.mark_paid',
+    "Платежи": ["payments.create", "payments.update", "payments.delete"],
+    "Зарплаты": [
+        "salaries.create",
+        "salaries.update",
+        "salaries.delete",
+        "salaries.mark_to_pay",
+        "salaries.mark_paid",
     ],
-    'Тарифы': ['rates.create', 'rates.delete'],
-    'Мессенджер': [
-        'messenger.create_chat', 'messenger.delete_chat',
-        'messenger.view_chat', 'messenger.manage_scripts',
+    "Тарифы": ["rates.create", "rates.delete"],
+    "Мессенджер": [
+        "messenger.create_chat",
+        "messenger.delete_chat",
+        "messenger.view_chat",
+        "messenger.manage_scripts",
     ],
-    'Уведомления': [
-        'notifications.settings_projects', 'notifications.settings_duplication',
-        'notifications.settings_supervision', 'notifications.settings_payment',
+    "Уведомления": [
+        "notifications.settings_projects",
+        "notifications.settings_duplication",
+        "notifications.settings_supervision",
+        "notifications.settings_payment",
     ],
 }
 
 # Роли — столбцы таблицы (9 ролей)
 ROLES = [
-    'Руководитель студии',
-    'Старший менеджер проектов',
-    'СДП',
-    'ГАП',
-    'Менеджер',
-    'ДАН',
-    'Дизайнер',
-    'Чертёжник',
-    'Замерщик',
+    "Руководитель студии",
+    "Старший менеджер проектов",
+    "СДП",
+    "ГАП",
+    "Менеджер",
+    "ДАН",
+    "Дизайнер",
+    "Чертёжник",
+    "Замерщик",
 ]
 
 # =========================
@@ -80,82 +104,173 @@ ROLES = [
 
 # Наборы прав для повторного использования
 _ACCESS_ALL = {
-    "access.clients", "access.contracts", "access.crm", "access.supervision",
-    "access.reports", "access.employees", "access.salaries", "access.employee_reports",
-    "access.admin", "access.dashboards",
+    "access.clients",
+    "access.contracts",
+    "access.crm",
+    "access.supervision",
+    "access.reports",
+    "access.employees",
+    "access.salaries",
+    "access.employee_reports",
+    "access.employee_analytics",
+    "access.admin",
+    "access.dashboards",
 }
 _ACCESS_MANAGER = {
-    "access.clients", "access.contracts", "access.crm", "access.supervision",
-    "access.reports", "access.employees", "access.salaries", "access.employee_reports",
+    "access.clients",
+    "access.contracts",
+    "access.crm",
+    "access.supervision",
+    "access.reports",
+    "access.employees",
+    "access.salaries",
+    "access.employee_reports",
+    "access.employee_analytics",
     "access.dashboards",
 }
 _BASE_MANAGER = {
     # Клиенты CRUD
-    "clients.create", "clients.view", "clients.update", "clients.delete",
+    "clients.create",
+    "clients.view",
+    "clients.update",
+    "clients.delete",
     # Договоры CRUD
-    "contracts.create", "contracts.view", "contracts.update", "contracts.delete",
+    "contracts.create",
+    "contracts.view",
+    "contracts.update",
+    "contracts.delete",
     # CRM
-    "crm_cards.update", "crm_cards.move", "crm_cards.delete",
-    "crm_cards.assign_executor", "crm_cards.reset_approval", "crm_cards.complete_approval",
-    "crm_cards.files_upload", "crm_cards.files_delete",
-    "crm_cards.deadlines", "crm_cards.payments",
+    "crm_cards.update",
+    "crm_cards.view_archive",
+    "crm_cards.move",
+    "crm_cards.delete",
+    "crm_cards.assign_executor",
+    "crm_cards.reset_approval",
+    "crm_cards.complete_approval",
+    "crm_cards.files_upload",
+    "crm_cards.files_delete",
+    "crm_cards.deadlines",
+    "crm_cards.payments",
     # Надзор
-    "supervision.update", "supervision.move", "supervision.pause_resume",
-    "supervision.complete_stage", "supervision.delete_order",
-    "supervision.assign_executor", "supervision.files_upload", "supervision.files_delete",
-    "supervision.deadlines", "supervision.payments",
+    "supervision.view_archive",
+    "supervision.update",
+    "supervision.move",
+    "supervision.pause_resume",
+    "supervision.complete_stage",
+    "supervision.delete_order",
+    "supervision.assign_executor",
+    "supervision.files_upload",
+    "supervision.files_delete",
+    "supervision.deadlines",
+    "supervision.payments",
     # Платежи
-    "payments.create", "payments.update", "payments.delete",
+    "payments.create",
+    "payments.update",
+    "payments.delete",
     # Зарплаты
-    "salaries.create", "salaries.update",
-    "salaries.mark_to_pay", "salaries.mark_paid",
+    "salaries.create",
+    "salaries.update",
+    "salaries.mark_to_pay",
+    "salaries.mark_paid",
     # Тарифы
-    "rates.create", "rates.delete",
+    "rates.create",
+    "rates.delete",
     # Мессенджер
-    "messenger.create_chat", "messenger.delete_chat", "messenger.view_chat",
+    "messenger.create_chat",
+    "messenger.delete_chat",
+    "messenger.view_chat",
 }
 
 DEFAULT_ROLE_PERMISSIONS = {
-    "Руководитель студии": _ACCESS_ALL | _BASE_MANAGER | {
-        "employees.create", "employees.update", "employees.delete",
-        "crm_cards.reset_designer", "crm_cards.reset_draftsman",
+    "Руководитель студии": _ACCESS_ALL
+    | _BASE_MANAGER
+    | {
+        "employees.create",
+        "employees.update",
+        "employees.delete",
+        "crm_cards.reset_designer",
+        "crm_cards.reset_draftsman",
         "salaries.delete",
         "messenger.manage_scripts",
-        "notifications.settings_projects", "notifications.settings_duplication",
-        "notifications.settings_supervision", "notifications.settings_payment",
+        "notifications.settings_projects",
+        "notifications.settings_duplication",
+        "notifications.settings_supervision",
+        "notifications.settings_payment",
     },
-    "Старший менеджер проектов": _ACCESS_MANAGER | _BASE_MANAGER | {
+    "Старший менеджер проектов": _ACCESS_MANAGER
+    | _BASE_MANAGER
+    | {
         "employees.update",
-        "crm_cards.reset_designer", "crm_cards.reset_draftsman",
-        "notifications.settings_projects", "notifications.settings_duplication",
-        "notifications.settings_supervision", "notifications.settings_payment",
+        "crm_cards.reset_designer",
+        "crm_cards.reset_draftsman",
+        "notifications.settings_projects",
+        "notifications.settings_duplication",
+        "notifications.settings_supervision",
+        "notifications.settings_payment",
     },
     "СДП": {
-        "access.crm", "access.clients", "access.contracts", "access.reports",
-        "access.employees", "access.dashboards",
-        "crm_cards.update", "crm_cards.move", "crm_cards.complete_approval",
-        "crm_cards.assign_executor", "crm_cards.files_upload", "crm_cards.deadlines",
-        "crm_cards.reset_designer", "crm_cards.reset_draftsman",
+        "access.crm",
+        "access.clients",
+        "access.contracts",
+        "access.reports",
+        "access.employees",
+        "access.employee_analytics",
+        "access.dashboards",
+        "crm_cards.update",
+        "crm_cards.view_archive",
+        "crm_cards.move",
+        "crm_cards.complete_approval",
+        "crm_cards.assign_executor",
+        "crm_cards.files_upload",
+        "crm_cards.deadlines",
+        "crm_cards.reset_designer",
+        "crm_cards.reset_draftsman",
         "messenger.view_chat",
         "notifications.settings_projects",
     },
     "ГАП": {
-        "access.crm", "access.clients", "access.contracts", "access.reports",
-        "access.employees", "access.dashboards",
-        "crm_cards.update", "crm_cards.move", "crm_cards.complete_approval",
-        "crm_cards.assign_executor", "crm_cards.files_upload", "crm_cards.deadlines",
-        "crm_cards.reset_designer", "crm_cards.reset_draftsman",
+        "access.crm",
+        "access.clients",
+        "access.contracts",
+        "access.reports",
+        "access.employees",
+        "access.employee_analytics",
+        "access.dashboards",
+        "crm_cards.update",
+        "crm_cards.view_archive",
+        "crm_cards.move",
+        "crm_cards.complete_approval",
+        "crm_cards.assign_executor",
+        "crm_cards.files_upload",
+        "crm_cards.deadlines",
+        "crm_cards.reset_designer",
+        "crm_cards.reset_draftsman",
         "messenger.view_chat",
         "notifications.settings_projects",
     },
     "Менеджер": {
-        "access.crm", "access.supervision", "access.clients", "access.contracts",
-        "access.reports", "access.employees", "access.dashboards",
-        "crm_cards.update", "crm_cards.move", "crm_cards.complete_approval",
-        "crm_cards.assign_executor", "crm_cards.files_upload",
-        "crm_cards.reset_designer", "crm_cards.reset_draftsman",
-        "supervision.update", "supervision.move", "supervision.complete_stage",
-        "supervision.assign_executor", "supervision.files_upload",
+        "access.crm",
+        "access.supervision",
+        "access.clients",
+        "access.contracts",
+        "access.reports",
+        "access.employees",
+        "access.employee_analytics",
+        "access.dashboards",
+        "crm_cards.update",
+        "crm_cards.view_archive",
+        "crm_cards.move",
+        "crm_cards.complete_approval",
+        "crm_cards.assign_executor",
+        "crm_cards.files_upload",
+        "crm_cards.reset_designer",
+        "crm_cards.reset_draftsman",
+        "supervision.view_archive",
+        "supervision.update",
+        "supervision.move",
+        "supervision.complete_stage",
+        "supervision.assign_executor",
+        "supervision.files_upload",
         "notifications.settings_projects",
         "notifications.settings_supervision",
     },
@@ -192,6 +307,7 @@ PERMISSION_DESCRIPTIONS = {
     "access.employees": "Доступ к странице Сотрудники",
     "access.salaries": "Доступ к странице Зарплаты",
     "access.employee_reports": "Доступ к Отчетам по сотрудникам",
+    "access.employee_analytics": "Доступ к Аналитике сотрудников",
     "access.admin": "Доступ к администрированию",
     "access.dashboards": "Показ дашбордов внизу страницы",
     # Сотрудники
@@ -210,6 +326,7 @@ PERMISSION_DESCRIPTIONS = {
     "contracts.delete": "Удаление договоров",
     # CRM
     "crm_cards.update": "Редактирование CRM карточек",
+    "crm_cards.view_archive": "Просмотр архива CRM",
     "crm_cards.move": "Управление стадиями CRM",
     "crm_cards.delete": "Удаление CRM карточек",
     "crm_cards.assign_executor": "Назначение/переназначение исполнителей",
@@ -222,6 +339,7 @@ PERMISSION_DESCRIPTIONS = {
     "crm_cards.deadlines": "Управление дедлайнами CRM",
     "crm_cards.payments": "Оплаты в CRM карточках",
     # Надзор
+    "supervision.view_archive": "Просмотр архива надзора",
     "supervision.update": "Редактирование карточек надзора",
     "supervision.move": "Перемещение карточек надзора",
     "supervision.pause_resume": "Приостановка/возобновление надзора",
@@ -268,6 +386,7 @@ PERMISSION_TOOLTIPS = {
     "access.employees": "Сотрудник видит вкладку «Сотрудники»",
     "access.salaries": "Сотрудник видит вкладку «Зарплаты»",
     "access.employee_reports": "Сотрудник видит раздел отчётов по сотрудникам",
+    "access.employee_analytics": "Сотрудник видит страницу «Аналитика сотрудников»",
     "access.admin": "Сотрудник видит кнопку «Администрирование» — управление правами, агентами, городами",
     # Сотрудники
     "employees.create": "Может добавлять новых сотрудников в систему",
@@ -285,6 +404,7 @@ PERMISSION_TOOLTIPS = {
     "contracts.delete": "Может удалять договоры из системы",
     # CRM
     "crm_cards.update": "Может редактировать данные в карточке проекта (теги, дедлайн, описание)",
+    "crm_cards.view_archive": "Сотрудник видит вкладку «Архив» на канбан-доске CRM",
     "crm_cards.move": "Управление рабочим процессом: принять работу, отправить на исправление, отправить клиенту",
     "crm_cards.delete": "Может удалять карточки проектов с канбан-доски",
     "crm_cards.assign_executor": "Может назначать и переназначать исполнителей на стадии проекта",
@@ -297,6 +417,7 @@ PERMISSION_TOOLTIPS = {
     "crm_cards.deadlines": "Может устанавливать и изменять дедлайны стадий проекта",
     "crm_cards.payments": "Видит и управляет вкладкой «Оплаты» в карточке проекта",
     # Надзор
+    "supervision.view_archive": "Сотрудник видит вкладку «Архив» в авторском надзоре",
     "supervision.update": "Может редактировать данные карточки авторского надзора",
     "supervision.move": "Может перемещать карточки надзора между стадиями на канбан-доске",
     "supervision.pause_resume": "Может приостановить или возобновить работу по карточке надзора",
@@ -354,6 +475,7 @@ class PermissionsMatrixWidget(QWidget):
 
         # Исправление черного фона всплывающих подсказок
         from utils.tooltip_fix import apply_tooltip_palette
+
         apply_tooltip_palette(self)
 
         self._init_ui()
@@ -366,23 +488,18 @@ class PermissionsMatrixWidget(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
 
         # Заголовок
-        title_label = QLabel('Матрица прав доступа по ролям')
-        title_label.setStyleSheet(
-            'font-size: 14px; font-weight: bold; color: #333333; margin-bottom: 5px;'
-        )
+        title_label = QLabel("Матрица прав доступа по ролям")
+        title_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #333333; margin-bottom: 5px;")
         layout.addWidget(title_label)
 
-        desc_label = QLabel(
-            'Настройте, какие действия доступны каждой роли. '
-            'Изменения вступят в силу после сохранения.'
-        )
+        desc_label = QLabel("Настройте, какие действия доступны каждой роли. Изменения вступят в силу после сохранения.")
         desc_label.setWordWrap(True)
-        desc_label.setStyleSheet('font-size: 12px; color: #757575; margin-bottom: 10px;')
+        desc_label.setStyleSheet("font-size: 12px; color: #757575; margin-bottom: 10px;")
         layout.addWidget(desc_label)
 
         # Таблица
         self.table = QTableWidget()
-        self.table.setObjectName('permissions_matrix_table')
+        self.table.setObjectName("permissions_matrix_table")
         self._setup_table()
         layout.addWidget(self.table, 1)
 
@@ -390,7 +507,7 @@ class PermissionsMatrixWidget(QWidget):
         buttons_layout = QHBoxLayout()
         buttons_layout.setSpacing(10)
 
-        reset_btn = QPushButton('Сбросить по умолчанию')
+        reset_btn = QPushButton("Сбросить по умолчанию")
         reset_btn.setFixedHeight(36)
         reset_btn.setStyleSheet("""
             QPushButton {
@@ -412,7 +529,7 @@ class PermissionsMatrixWidget(QWidget):
 
         buttons_layout.addStretch()
 
-        save_btn = QPushButton('Сохранить')
+        save_btn = QPushButton("Сохранить")
         save_btn.setFixedHeight(36)
         save_btn.setStyleSheet("""
             QPushButton {
@@ -479,7 +596,7 @@ class PermissionsMatrixWidget(QWidget):
         table.setRowCount(total_rows)
 
         # Заголовки столбцов — с переносом слов для длинных названий ролей
-        headers = ['Право'] + [r.replace(' ', '\n') for r in ROLES]
+        headers = ["Право"] + [r.replace(" ", "\n") for r in ROLES]
         table.setHorizontalHeaderLabels(headers)
 
         # Настройка заголовков
@@ -506,7 +623,7 @@ class PermissionsMatrixWidget(QWidget):
         bold_font.setBold(True)
         bold_font.setPointSize(10)
 
-        category_bg = QBrush(QColor('#f0f0f0'))
+        category_bg = QBrush(QColor("#f0f0f0"))
 
         for group_name, perm_names in PERMISSION_GROUPS.items():
             # === Строка-заголовок категории ===
@@ -518,7 +635,7 @@ class PermissionsMatrixWidget(QWidget):
 
             # Заполняем остальные ячейки категории серым фоном
             for col_idx in range(1, col_count):
-                filler = QTableWidgetItem('')
+                filler = QTableWidgetItem("")
                 filler.setBackground(category_bg)
                 filler.setFlags(Qt.ItemIsEnabled)
                 table.setItem(row, col_idx, filler)
@@ -550,30 +667,28 @@ class PermissionsMatrixWidget(QWidget):
                     cb.stateChanged.connect(self._mark_dirty)
 
                     # Подтверждение при включении access.admin
-                    if perm_name == 'access.admin':
-                        cb.stateChanged.connect(
-                            lambda state, r=role, c=cb: self._on_admin_access_changed(state, r, c)
-                        )
+                    if perm_name == "access.admin":
+                        cb.stateChanged.connect(lambda state, r=role, c=cb: self._on_admin_access_changed(state, r, c))
 
                 self._row_perm_map[row] = perm_name
                 row += 1
 
     # Права, автоматически выдаваемые при access.admin
     _ADMIN_AUTO_PERMS = [
-        'agents.create', 'agents.update', 'agents.delete',
-        'cities.create', 'cities.delete',
+        "agents.create",
+        "agents.update",
+        "agents.delete",
+        "cities.create",
+        "cities.delete",
     ]
 
     def _on_admin_access_changed(self, state, role, checkbox):
         """Подтверждение при включении access.admin для роли"""
         if state == Qt.Checked:
             from PyQt5.QtWidgets import QDialog
+
             reply = CustomQuestionBox(
-                self,
-                'Доступ к администрированию',
-                f'Предоставить роли "{role}" доступ к администрированию?\n\n'
-                'Это включает управление агентами, городами,\n'
-                'правами доступа и другими настройками.'
+                self, "Доступ к администрированию", f'Предоставить роли "{role}" доступ к администрированию?\n\nЭто включает управление агентами, городами,\nправами доступа и другими настройками.'
             ).exec_()
             if reply != QDialog.Accepted:
                 checkbox.blockSignals(True)
@@ -619,8 +734,8 @@ class PermissionsMatrixWidget(QWidget):
             defs = self.data_access.get_permission_definitions()
             if isinstance(defs, list):
                 for d in defs:
-                    name = d.get('name', '')
-                    desc = d.get('description', '')
+                    name = d.get("name", "")
+                    desc = d.get("description", "")
                     if name and desc:
                         self.definitions[name] = desc
 
@@ -674,7 +789,7 @@ class PermissionsMatrixWidget(QWidget):
                     if cb and cb.isChecked():
                         perms.append(perm_name)
             # Автоматически добавляем agents/cities при access.admin
-            if 'access.admin' in perms:
+            if "access.admin" in perms:
                 for auto_perm in self._ADMIN_AUTO_PERMS:
                     if auto_perm not in perms:
                         perms.append(auto_perm)
@@ -689,50 +804,31 @@ class PermissionsMatrixWidget(QWidget):
         """Сохранить матрицу прав"""
         matrix = self._collect_matrix()
         try:
-            result = self.data_access.save_role_permissions_matrix({
-                "roles": matrix,
-                "apply_to_employees": True,
-            })
+            result = self.data_access.save_role_permissions_matrix(
+                {
+                    "roles": matrix,
+                    "apply_to_employees": True,
+                }
+            )
             if result:
                 # Сбрасываем клиентский кеш прав — изменения должны подхватиться
                 from utils.permissions import invalidate_cache
+
                 invalidate_cache()
                 self._is_dirty = False
-                CustomMessageBox(
-                    self,
-                    'Успешно',
-                    'Матрица прав доступа сохранена.',
-                    'success'
-                ).exec_()
+                CustomMessageBox(self, "Успешно", "Матрица прав доступа сохранена.", "success").exec_()
                 return
         except Exception as e:
             print(f"[WARN] Ошибка сохранения матрицы прав: {e}")
 
         # Если API недоступен или вернул None — уведомляем пользователя
-        CustomMessageBox(
-            self,
-            'Ошибка',
-            'Не удалось сохранить матрицу прав.\n'
-            'Проверьте подключение к серверу.',
-            'error'
-        ).exec_()
+        CustomMessageBox(self, "Ошибка", "Не удалось сохранить матрицу прав.\nПроверьте подключение к серверу.", "error").exec_()
 
     def _on_reset_defaults(self):
         """Сбросить матрицу к дефолтным значениям"""
         from PyQt5.QtWidgets import QDialog
 
-        reply = CustomQuestionBox(
-            self,
-            'Подтверждение',
-            'Сбросить все права до значений по умолчанию?\n\n'
-            'Текущие настройки будут потеряны.'
-        )
+        reply = CustomQuestionBox(self, "Подтверждение", "Сбросить все права до значений по умолчанию?\n\nТекущие настройки будут потеряны.")
         if reply.exec_() == QDialog.Accepted:
             self._apply_matrix(DEFAULT_ROLE_PERMISSIONS)
-            CustomMessageBox(
-                self,
-                'Готово',
-                'Матрица прав сброшена до значений по умолчанию.\n'
-                'Не забудьте нажать "Сохранить" для применения.',
-                'info'
-            ).exec_()
+            CustomMessageBox(self, "Готово", 'Матрица прав сброшена до значений по умолчанию.\nНе забудьте нажать "Сохранить" для применения.', "info").exec_()
