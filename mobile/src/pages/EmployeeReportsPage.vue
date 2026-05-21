@@ -112,7 +112,13 @@
       <!-- Список сотрудников по роли -->
       <q-card v-if="roleEmployees.length > 0" class="is-card q-mb-md">
         <q-list separator>
-          <q-item v-for="emp in roleEmployees" :key="emp.id || emp.name" v-ripple clickable>
+          <q-item
+            v-for="emp in roleEmployees"
+            :key="emp.id || emp.name"
+            v-ripple
+            clickable
+            @click="selectedEmp = emp"
+          >
             <q-item-section avatar>
               <q-avatar size="36px" color="grey-3" text-color="grey-8">
                 {{ emp.full_name?.[0] || emp.name?.[0] || '?' }}
@@ -188,6 +194,61 @@
         <div>Нет данных</div>
       </div>
     </q-pull-to-refresh>
+
+    <!-- Диалог деталей сотрудника -->
+    <q-dialog v-model="empDialog" position="bottom">
+      <q-card v-if="selectedEmp" style="width: 100%; max-width: 600px; border-radius: 16px 16px 0 0">
+        <q-card-section class="q-pb-none">
+          <div class="row items-center q-mb-sm">
+            <q-avatar size="48px" color="grey-3" text-color="grey-8" class="q-mr-md">
+              {{ selectedEmp.full_name?.[0] || '?' }}
+            </q-avatar>
+            <div>
+              <div class="text-subtitle1 text-weight-bold" style="color: #333">
+                {{ selectedEmp.full_name || selectedEmp.name }}
+              </div>
+              <div class="text-caption" style="color: #888">
+                {{ selectedEmp.position }}
+              </div>
+            </div>
+            <q-space />
+            <q-btn flat round icon="close" @click="selectedEmp = null" />
+          </div>
+        </q-card-section>
+        <q-card-section>
+          <div class="row q-col-gutter-sm">
+            <div class="col-6">
+              <q-card flat bordered class="q-pa-sm text-center" style="border-radius: 8px">
+                <div class="text-caption" style="color: #888; font-size: 10px">
+                  KPI выполнения
+                </div>
+                <div class="text-h6 text-weight-bold q-mt-xs" :style="{ color: kpiColor((selectedEmp.completion_rate || 0) / 10) }">
+                  {{ selectedEmp.completion_rate?.toFixed(0) || '—' }}%
+                </div>
+              </q-card>
+            </div>
+            <div class="col-6">
+              <q-card flat bordered class="q-pa-sm text-center" style="border-radius: 8px">
+                <div class="text-caption" style="color: #888; font-size: 10px">
+                  Этапы
+                </div>
+                <div class="text-h6 text-weight-bold q-mt-xs" style="color: #333">
+                  {{ selectedEmp.completed_stages || 0 }}/{{ selectedEmp.total_stages || 0 }}
+                </div>
+              </q-card>
+            </div>
+          </div>
+          <q-linear-progress
+            v-if="selectedEmp.total_stages > 0"
+            :value="(selectedEmp.completed_stages || 0) / selectedEmp.total_stages"
+            color="positive"
+            class="q-mt-sm"
+            rounded
+            style="height: 8px"
+          />
+        </q-card-section>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
@@ -205,6 +266,11 @@ const executorLoad = ref([])
 const roleEmployees = ref([])
 const loading = ref(false)
 const surveyStats = ref(null)
+const selectedEmp = ref(null)
+const empDialog = computed({
+  get: () => !!selectedEmp.value,
+  set: (v) => { if (!v) selectedEmp.value = null },
+})
 
 const years = Array.from({ length: 7 }, (_, i) => currentYear - i)
 const quarters = [{ label: 'Все', value: null }, { label: 'Q1', value: 1 }, { label: 'Q2', value: 2 }, { label: 'Q3', value: 3 }, { label: 'Q4', value: 4 }]
@@ -234,12 +300,13 @@ async function loadData() {
   if (filters.value.month) params.month = filters.value.month
 
   const pt = projectTab.value === 'template' ? 'Шаблонный' : projectTab.value === 'supervision' ? 'Авторский надзор' : 'Индивидуальный'
+  const PT_ENG = { 'Индивидуальный': 'individual', 'Шаблонный': 'template', 'Авторский надзор': 'supervision' }
 
   const [dashR, empR, projR, survR] = await Promise.allSettled([
     statisticsApi.getDashboard(params),
     statisticsApi.getEmployees(params),
     statisticsApi.getProjects({ ...params, project_type: pt }),
-    surveyApi.getStats({ project_type: pt }),
+    surveyApi.getStats({ project_type: PT_ENG[pt] || 'individual' }),
   ])
 
   if (dashR.status === 'fulfilled') dashboard.value = dashR.value.data
@@ -282,10 +349,6 @@ const surveyKpis = computed(() => {
   return [
     { label: 'NPS', value: s.avg_nps },
     { label: 'CSAT', value: s.avg_csat },
-    { label: 'Дизайн', value: s.avg_design },
-    { label: 'Сроки', value: s.avg_deadline },
-    { label: 'Общение', value: s.avg_communication },
-    { label: 'Ожидания', value: s.avg_expectations },
   ].filter(k => k.value != null)
 })
 

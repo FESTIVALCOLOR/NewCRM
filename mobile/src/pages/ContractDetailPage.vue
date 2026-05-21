@@ -836,10 +836,13 @@ async function loadSurveys() {
   finally { surveysLoading.value = false }
 }
 
+const PT_RU_EN = { 'Индивидуальный': 'individual', 'Шаблонный': 'template', 'Авторский надзор': 'supervision' }
+
 async function createSurvey() {
   if (!contract.value) return
+  const pt = PT_RU_EN[contract.value.project_type] || 'individual'
   try {
-    await surveyApi.create({ contract_id: contract.value.id, project_type: contract.value.project_type || 'Индивидуальный' })
+    await surveyApi.create({ contract_id: contract.value.id, project_type: pt })
     $q.notify({ type: 'positive', message: 'Опрос создан' })
     await loadSurveys()
   } catch (e) { $q.notify({ type: 'negative', message: e.response?.data?.detail || 'Ошибка создания опроса' }) }

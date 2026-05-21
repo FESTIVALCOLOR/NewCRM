@@ -273,9 +273,10 @@ const ARCHIVE_COLUMNS = ['Выполненный проект', 'СДАН', 'Р�
 const isArchived = computed(() => ARCHIVE_COLUMNS.includes(props.card.column_name))
 const archiveCardStyle = computed(() => {
   const col = props.card.column_name || ''
-  if (col === 'Выполненный проект' || col === 'СДАН') return { background: '#E8F8F5', borderColor: '#27AE60' }
+  const cs = props.card.contract_status || ''
   if (col === 'РАСТОРГНУТ') return { background: '#FADBD8', borderColor: '#E74C3C' }
-  if (col.includes('НАДЗОР')) return { background: '#E3F2FD', borderColor: '#2196F3' }
+  if (col.includes('НАДЗОР') || cs === 'АВТОРСКИЙ НАДЗОР') return { background: '#E3F2FD', borderColor: '#2196F3' }
+  if (col === 'Выполненный проект' || col === 'СДАН') return { background: '#E8F8F5', borderColor: '#27AE60' }
   return {}
 })
 
