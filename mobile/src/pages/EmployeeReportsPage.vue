@@ -154,6 +154,35 @@
         </q-card-section>
       </q-card>
 
+      <!-- Опросы клиентов — KPI качества -->
+      <q-card v-if="surveyStats" class="is-card q-mb-md">
+        <q-card-section class="q-pb-none">
+          <div class="text-subtitle2 text-weight-bold" style="color: #333">
+            Качество проектов (опросы клиентов)
+          </div>
+          <div class="text-caption" style="color: #888">
+            {{ surveyStats.completed }}/{{ surveyStats.total }} завершённых опросов
+          </div>
+        </q-card-section>
+        <q-card-section>
+          <div class="row q-col-gutter-sm">
+            <div v-for="kpi in surveyKpis" :key="kpi.label" class="col-6 col-sm-4">
+              <q-card flat bordered class="q-pa-sm text-center" style="border-radius: 8px">
+                <div class="text-caption" style="color: #888; font-size: 10px">
+                  {{ kpi.label }}
+                </div>
+                <div class="text-weight-bold q-mt-xs" :style="{ color: kpiColor(kpi.value), fontSize: '18px' }">
+                  {{ kpi.value != null ? kpi.value.toFixed(1) : '—' }}
+                </div>
+                <div class="text-caption" style="color: #ccc; font-size: 9px">
+                  из 10
+                </div>
+              </q-card>
+            </div>
+          </div>
+        </q-card-section>
+      </q-card>
+
       <div v-if="!dashboard && !loading" class="text-center q-pa-xl" style="color: #999">
         <q-icon name="analytics" size="48px" class="q-mb-sm" />
         <div>Нет данных</div>
@@ -164,7 +193,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
-import { statisticsApi } from 'src/services/api'
+import { statisticsApi, surveyApi } from 'src/services/api'
 import BarChart from 'src/components/charts/BarChart.vue'
 
 const currentYear = new Date().getFullYear()
@@ -175,6 +204,7 @@ const dashboard = ref(null)
 const executorLoad = ref([])
 const roleEmployees = ref([])
 const loading = ref(false)
+const surveyStats = ref(null)
 
 const years = Array.from({ length: 7 }, (_, i) => currentYear - i)
 const quarters = [{ label: 'Все', value: null }, { label: 'Q1', value: 1 }, { label: 'Q2', value: 2 }, { label: 'Q3', value: 3 }, { label: 'Q4', value: 4 }]
@@ -205,13 +235,16 @@ async function loadData() {
 
   const pt = projectTab.value === 'template' ? 'Шаблонный' : projectTab.value === 'supervision' ? 'Авторский надзор' : 'Индивидуальный'
 
-  const [dashR, empR, projR] = await Promise.allSettled([
+  const [dashR, empR, projR, survR] = await Promise.allSettled([
     statisticsApi.getDashboard(params),
     statisticsApi.getEmployees(params),
     statisticsApi.getProjects({ ...params, project_type: pt }),
+    surveyApi.getStats({ project_type: pt }),
   ])
 
   if (dashR.status === 'fulfilled') dashboard.value = dashR.value.data
+  if (survR.status === 'fulfilled') surveyStats.value = survR.value.data?.total > 0 ? survR.value.data : null
+  else surveyStats.value = null
 
   // Сотрудники — фильтрация по roleTab
   if (empR.status === 'fulfilled' && Array.isArray(empR.value.data)) {
@@ -242,6 +275,25 @@ async function loadData() {
   }
 
   loading.value = false
+}
+
+const surveyKpis = computed(() => {
+  const s = surveyStats.value || {}
+  return [
+    { label: 'NPS', value: s.avg_nps },
+    { label: 'CSAT', value: s.avg_csat },
+    { label: 'Дизайн', value: s.avg_design },
+    { label: 'Сроки', value: s.avg_deadline },
+    { label: 'Общение', value: s.avg_communication },
+    { label: 'Ожидания', value: s.avg_expectations },
+  ].filter(k => k.value != null)
+})
+
+function kpiColor(v) {
+  if (v == null) return '#888'
+  if (v >= 8) return '#27AE60'
+  if (v >= 6) return '#F39C12'
+  return '#E74C3C'
 }
 
 function resetFilters() {

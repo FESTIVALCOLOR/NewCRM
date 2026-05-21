@@ -411,14 +411,14 @@
                 @click="showRestoreDialog = true"
               />
               <q-btn
-                v-if="canRestore && card.column_name !== 'АВТОРСКИЙ НАДЗОР'"
+                v-if="canRestore && card.column_name !== 'АВТОРСКИЙ НАДЗОР' && contractData?.status !== 'АВТОРСКИЙ НАДЗОР'"
                 unelevated
                 dense
                 no-caps
                 icon="engineering"
                 label="В авторский надзор"
                 class="full-width q-mb-sm"
-                style="background: #F39C12; color: white; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px"
+                style="background: #5DADE2; color: white; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px"
                 :loading="actionLoading"
                 @click="transferToSupervision"
               />
@@ -442,7 +442,7 @@
                 v-for="e in timelineEntries"
                 :key="e.id"
                 :style="timelineRowStyle(e)"
-                :clickable="e.executor_role !== 'header' && can('crm_cards.deadlines')"
+                :clickable="e.executor_role !== 'header' && can('crm_cards.deadlines') && !isArchived"
                 @click="editNormDays(e)"
               >
                 <q-item-section v-if="e.executor_role !== 'header'" avatar style="min-width: 24px">

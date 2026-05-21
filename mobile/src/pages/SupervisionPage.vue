@@ -372,7 +372,7 @@ async function quickResume(card) {
 
 const dashItems = computed(() => [
   { label: 'Всего', value: cards.value.length },
-  { label: 'В работе', value: cards.value.filter(c => (c.column_name || '').includes('Стадия')).length, color: '#F39C12' },
+  { label: 'В работе', value: cards.value.filter(c => (c.column_name || '').includes('Стадия') && !c.is_paused).length, color: '#F39C12' },
   { label: 'Приостановлено', value: cards.value.filter(c => c.is_paused).length, color: '#E74C3C' },
 ])
 

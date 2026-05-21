@@ -531,7 +531,7 @@ const dashItems = computed(() => {
   return [
     { label: 'Всего карточек', value: total },
     { label: 'В работе', value: inWork, color: '#F39C12' },
-    { label: 'Столбцов', value: cols.length, color: '#3498DB' },
+    { label: 'В архиве', value: archiveCount.value, color: '#3498DB' },
   ]
 })
 

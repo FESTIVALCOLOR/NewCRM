@@ -624,6 +624,102 @@
         </q-card-section>
       </q-card>
 
+      <!-- Блок опросов клиентов -->
+      <q-card class="is-card q-mb-md">
+        <q-card-section class="q-pb-none">
+          <div class="row items-center justify-between">
+            <div class="text-subtitle2 text-weight-bold" style="color: #333">
+              Опрос клиента
+            </div>
+            <q-btn
+              v-if="!surveys.some(s => s.status === 'pending' || s.status === 'sent')"
+              unelevated
+              dense
+              no-caps
+              icon="add_task"
+              label="Создать опрос"
+              style="background: #ffd93c; color: #333; font-size: 11px; height: 32px; border-radius: 4px"
+              :loading="surveysLoading"
+              @click="createSurvey"
+            />
+          </div>
+        </q-card-section>
+        <q-card-section v-if="surveysLoading" class="text-center">
+          <q-spinner size="24px" color="accent" />
+        </q-card-section>
+        <template v-else-if="surveys.length > 0">
+          <q-list dense separator>
+            <q-item v-for="s in surveys" :key="s.id">
+              <q-item-section>
+                <q-item-label style="font-size: 12px; font-weight: bold">
+                  {{ s.project_type || contract.project_type }}
+                </q-item-label>
+                <q-item-label caption>
+                  <q-badge :color="surveyStatusColor(s.status)" :label="surveyStatusLabel(s.status)" dense />
+                  <span v-if="s.completed_at" class="q-ml-xs">{{ new Date(s.completed_at).toLocaleDateString('ru-RU') }}</span>
+                </q-item-label>
+                <!-- Результаты опроса -->
+                <template v-if="s.status === 'completed'">
+                  <div class="row q-gutter-xs q-mt-xs" style="flex-wrap: wrap">
+                    <div v-if="s.nps_score != null" class="text-caption" style="color: #333">
+                      NPS: <b>{{ s.nps_score }}</b>/10
+                    </div>
+                    <div v-if="s.csat_score != null" class="text-caption" style="color: #888">
+                      ·
+                    </div>
+                    <div v-if="s.csat_score != null" class="text-caption" style="color: #333">
+                      CSAT: <b>{{ s.csat_score }}</b>/10
+                    </div>
+                    <div v-if="s.design_score != null" class="text-caption" style="color: #888">
+                      ·
+                    </div>
+                    <div v-if="s.design_score != null" class="text-caption" style="color: #333">
+                      Дизайн: <b>{{ s.design_score }}</b>/10
+                    </div>
+                    <div v-if="s.deadline_score != null" class="text-caption" style="color: #888">
+                      ·
+                    </div>
+                    <div v-if="s.deadline_score != null" class="text-caption" style="color: #333">
+                      Сроки: <b>{{ s.deadline_score }}</b>/10
+                    </div>
+                    <div v-if="s.communication_score != null" class="text-caption" style="color: #888">
+                      ·
+                    </div>
+                    <div v-if="s.communication_score != null" class="text-caption" style="color: #333">
+                      Общение: <b>{{ s.communication_score }}</b>/10
+                    </div>
+                  </div>
+                  <div v-if="s.comment" class="text-caption q-mt-xs" style="color: #666; font-style: italic">
+                    "{{ s.comment }}"
+                  </div>
+                </template>
+                <!-- Ссылка на опрос (если не завершён) -->
+                <div v-if="s.survey_link && s.status !== 'completed'" class="q-mt-xs">
+                  <a :href="s.survey_link" target="_blank" style="color: #1677FF; font-size: 11px; word-break: break-all">{{ s.survey_link }}</a>
+                </div>
+              </q-item-section>
+              <q-item-section side style="flex-shrink: 0">
+                <q-btn
+                  v-if="s.status !== 'completed'"
+                  flat
+                  round
+                  dense
+                  size="xs"
+                  icon="send"
+                  color="positive"
+                  @click="resendSurvey(s)"
+                >
+                  <q-tooltip>Переотправить</q-tooltip>
+                </q-btn>
+              </q-item-section>
+            </q-item>
+          </q-list>
+        </template>
+        <q-card-section v-else class="text-center" style="color: #999; font-size: 12px">
+          Опросов нет
+        </q-card-section>
+      </q-card>
+
       <!-- Кнопка удаления -->
       <q-btn
         v-if="can('contracts.delete')"
@@ -692,7 +788,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
-import { contractsApi, filesApi, crmApi, clientsApi, timelineApi } from 'src/services/api'
+import { contractsApi, filesApi, crmApi, clientsApi, timelineApi, surveyApi } from 'src/services/api'
 import { useReferencesStore } from 'src/stores/references'
 import { useAuthStore } from 'src/stores/auth'
 import { usePermission } from 'src/composables/usePermission'
@@ -725,6 +821,45 @@ const receiptType = ref('')
 
 const agentColor = computed(() => refs.agentByName(contract.value?.agent_type)?.color || '#95A5A6')
 const crmDeadline = computed(() => contract.value?.crm_card_deadline || null)
+
+// Опросы клиента
+const surveys = ref([])
+const surveysLoading = ref(false)
+
+async function loadSurveys() {
+  if (!contract.value?.id) return
+  surveysLoading.value = true
+  try {
+    const { data } = await surveyApi.getByContract(contract.value.id)
+    surveys.value = Array.isArray(data) ? data : []
+  } catch { surveys.value = [] }
+  finally { surveysLoading.value = false }
+}
+
+async function createSurvey() {
+  if (!contract.value) return
+  try {
+    await surveyApi.create({ contract_id: contract.value.id, project_type: contract.value.project_type || 'Индивидуальный' })
+    $q.notify({ type: 'positive', message: 'Опрос создан' })
+    await loadSurveys()
+  } catch (e) { $q.notify({ type: 'negative', message: e.response?.data?.detail || 'Ошибка создания опроса' }) }
+}
+
+async function resendSurvey(survey) {
+  try {
+    await surveyApi.resend(survey.id)
+    $q.notify({ type: 'positive', message: 'Ссылка обновлена' })
+    await loadSurveys()
+  } catch (e) { $q.notify({ type: 'negative', message: e.response?.data?.detail || 'Ошибка' }) }
+}
+
+function surveyStatusLabel(s) {
+  return { pending: 'Ожидает', sent: 'Отправлен', completed: 'Завершён', expired: 'Истёк' }[s] || s
+}
+function surveyStatusColor(s) {
+  return { pending: 'grey-7', sent: 'warning', completed: 'positive', expired: 'negative' }[s] || 'grey-7'
+}
+function scoreBar(v) { return v != null ? `${v}/10` : '—' }
 
 // ФИО клиента — из contract.client_name или загрузим отдельно
 const clientName = ref(null)
@@ -1149,6 +1284,8 @@ onMounted(async () => {
     }
     // Фоновая синхронизация файлов с ЯД
     syncFilesWithYd()
+    // Загрузка опросов
+    loadSurveys()
   } finally { loading.value = false }
 })
 </script>

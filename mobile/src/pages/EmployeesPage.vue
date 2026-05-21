@@ -652,7 +652,7 @@ const dashItems = computed(() => {
   return [
     { label: 'Всего', value: all.length },
     { label: 'Активных', value: active, color: '#27AE60' },
-    { label: 'Отделов', value: departments.value.length - 1, color: '#3498DB' },
+    { label: 'В резерве', value: all.filter(e => e.status === 'в резерве').length, color: '#3498DB' },
   ]
 })
 const employees = ref([])

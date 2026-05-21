@@ -142,7 +142,7 @@
                   <div class="row q-gutter-xs items-center">
                     <q-icon v-if="card.dan_completed" name="check_circle" color="positive" />
                     <q-btn
-                      v-if="can('supervision.assign_executor') && card.dan_id"
+                      v-if="can('supervision.assign_executor') && card.dan_id && !isArchived"
                       flat
                       round
                       dense
@@ -154,7 +154,7 @@
                       <q-tooltip>Ежемесячная ставка</q-tooltip>
                     </q-btn>
                     <q-btn
-                      v-if="can('supervision.assign_executor')"
+                      v-if="can('supervision.assign_executor') && !isArchived"
                       flat
                       round
                       dense
@@ -168,7 +168,7 @@
                   </div>
                 </q-item-section>
               </q-item>
-              <q-item v-if="card.senior_manager_name || can('supervision.assign_executor')">
+              <q-item v-if="card.senior_manager_name || (can('supervision.assign_executor') && !isArchived)">
                 <q-item-section avatar>
                   <q-avatar size="32px" color="blue-2" text-color="blue-8" style="overflow:hidden">
                     <img v-if="card.senior_manager_name && getAvatarByName(card.senior_manager_name)" :src="getAvatarByName(card.senior_manager_name)" style="width:100%;height:100%;object-fit:cover;border-radius:50%">
@@ -183,7 +183,7 @@
                     Ст. менеджер
                   </q-item-label>
                 </q-item-section>
-                <q-item-section v-if="can('supervision.assign_executor')" side>
+                <q-item-section v-if="can('supervision.assign_executor') && !isArchived" side>
                   <div class="row q-gutter-xs items-center">
                     <q-btn
                       v-if="card.senior_manager_id"
@@ -239,7 +239,7 @@
             </q-card-section>
             <q-card-section>
               <q-btn
-                v-if="can('supervision.pause_resume') && !card.is_paused"
+                v-if="can('supervision.pause_resume') && !card.is_paused && !isArchived"
                 unelevated
                 dense
                 no-caps
@@ -250,7 +250,7 @@
                 @click="handlePause"
               />
               <q-btn
-                v-else-if="can('supervision.pause_resume') && card.is_paused"
+                v-else-if="can('supervision.pause_resume') && card.is_paused && !isArchived"
                 unelevated
                 dense
                 no-caps
@@ -261,7 +261,7 @@
                 @click="handleResume"
               />
               <q-btn
-                v-if="can('supervision.complete_stage')"
+                v-if="can('supervision.complete_stage') && !isArchived"
                 unelevated
                 dense
                 no-caps
@@ -272,7 +272,7 @@
                 @click="handleCompleteStage"
               />
               <q-btn
-                v-if="can('supervision.move')"
+                v-if="can('supervision.move') && !isArchived"
                 unelevated
                 dense
                 no-caps
@@ -283,7 +283,7 @@
                 @click="showMoveDialog = true"
               />
               <q-btn
-                v-if="isDan && !card.dan_completed"
+                v-if="isDan && !card.dan_completed && !isArchived"
                 unelevated
                 dense
                 no-caps
@@ -293,6 +293,9 @@
                 style="background: #58D68D; color: white; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px"
                 @click="submitDanWork"
               />
+              <div v-if="isArchived" class="text-center" style="color: #999; font-size: 12px; padding: 4px 0">
+                Карточка завершена
+              </div>
             </q-card-section>
           </q-card>
         </q-tab-panel>
@@ -489,6 +492,7 @@
                   Выезды
                 </div>
                 <q-btn
+                  v-if="!isArchived"
                   unelevated
                   dense
                   no-caps
@@ -613,6 +617,7 @@
                       @click="setActualDate(visit)"
                     />
                     <q-btn
+                      v-if="!isArchived"
                       outline
                       dense
                       size="xs"
@@ -623,6 +628,7 @@
                       @click="editVisit(visit)"
                     />
                     <q-btn
+                      v-if="!isArchived"
                       outline
                       dense
                       size="xs"
@@ -705,6 +711,7 @@
                   История проекта
                 </div>
                 <q-btn
+                  v-if="!isArchived"
                   unelevated
                   dense
                   no-caps
@@ -771,6 +778,9 @@
                   </q-item-label>
                   <q-item-label caption>
                     {{ p.role || '' }} {{ p.stage_name ? `· ${p.stage_name}` : '' }}
+                  </q-item-label>
+                  <q-item-label v-if="p.report_month" caption style="color: #5DADE2">
+                    {{ formatReportMonth(p.report_month) }}
                   </q-item-label>
                   <div class="row items-center q-gutter-xs q-mt-xs">
                     <q-btn
@@ -1563,6 +1573,7 @@ const refs = useReferencesStore()
 const authStore = useAuthStore()
 const { ensureLoaded: loadAvatars, getAvatarByName } = useEmployeeAvatars()
 const agentColor = computed(() => refs.agentByName(card.value?.agent_type)?.color || '#95A5A6')
+const isArchived = computed(() => card.value?.column_name === 'Выполненный проект')
 
 const route = useRoute()
 const router = useRouter()
@@ -1828,6 +1839,15 @@ function formatMoney(amount) {
   return new Intl.NumberFormat('ru-RU', {
     style: 'currency', currency: 'RUB', maximumFractionDigits: 0,
   }).format(amount)
+}
+
+function formatReportMonth(m) {
+  if (!m) return null
+  try {
+    const [y, mo] = m.split('-')
+    const months = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь']
+    return `${months[parseInt(mo) - 1]} ${y}`
+  } catch { return m }
 }
 
 // Цвет дедлайна

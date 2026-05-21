@@ -524,3 +524,16 @@ export const filesApi = {
     })
   },
 }
+
+// === Surveys (опросы клиентов) ===
+
+export const surveyApi = {
+  getByContract: (contractId, projectType) =>
+    api.get(`/api/v1/surveys/contract/${contractId}`, { params: projectType ? { project_type: projectType } : {} }),
+  create: (data) =>
+    api.post('/api/v1/surveys/create', data),
+  resend: (surveyId) =>
+    api.post(`/api/v1/surveys/${surveyId}/resend`),
+  getStats: (params = {}) =>
+    api.get('/api/v1/surveys/stats', { params }),
+}
