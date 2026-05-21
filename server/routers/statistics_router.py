@@ -21,7 +21,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import Date, and_, case, cast, extract, func
 from sqlalchemy.orm import Session
 
-from database import Contract, CRMCard, Employee, Payment, Salary, StageExecutor, SupervisionCard, get_db
+from database import ClientSurvey, Contract, CRMCard, Employee, Payment, Salary, StageExecutor, SupervisionCard, get_db
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["statistics"])
@@ -159,6 +159,23 @@ async def get_employee_statistics(year: Optional[int] = None, month: Optional[in
         salary_totals = salary_query.group_by(Salary.employee_id).all()
         salary_map = {st[0]: float(st[1]) if st[1] else 0 for st in salary_totals}
 
+        # Batch avg NPS per employee from completed surveys on their contracts
+        nps_subq = (
+            db.query(StageExecutor.executor_id, ClientSurvey.nps_score)
+            .join(CRMCard, StageExecutor.crm_card_id == CRMCard.id)
+            .join(Contract, CRMCard.contract_id == Contract.id)
+            .join(ClientSurvey, ClientSurvey.contract_id == Contract.id)
+            .filter(
+                StageExecutor.executor_id.in_(emp_ids),
+                ClientSurvey.status == "completed",
+                ClientSurvey.nps_score.isnot(None),
+            )
+            .distinct()
+            .subquery()
+        )
+        nps_rows = db.query(nps_subq.c.executor_id, func.avg(nps_subq.c.nps_score).label("avg_nps")).group_by(nps_subq.c.executor_id).all()
+        nps_map = {n[0]: round(float(n[1]), 1) for n in nps_rows}
+
         result = []
         for emp in employees:
             stage_data = stage_map.get(emp.id, {"total": 0, "completed": 0})
@@ -175,6 +192,7 @@ async def get_employee_statistics(year: Optional[int] = None, month: Optional[in
                     "completed_stages": completed_stages,
                     "completion_rate": (completed_stages / total_stages * 100) if total_stages > 0 else 0,
                     "total_salary": total_salary,
+                    "avg_nps": nps_map.get(emp.id),
                 }
             )
 

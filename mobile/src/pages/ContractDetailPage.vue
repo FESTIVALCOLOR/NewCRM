@@ -652,7 +652,7 @@
             <q-item v-for="s in surveys" :key="s.id">
               <q-item-section>
                 <q-item-label style="font-size: 12px; font-weight: bold">
-                  {{ s.project_type || contract.project_type }}
+                  {{ { individual: 'Индивидуальный', template: 'Шаблонный', supervision: 'Авторский надзор' }[s.project_type] || contract.project_type }}
                 </q-item-label>
                 <q-item-label caption>
                   <q-badge :color="surveyStatusColor(s.status)" :label="surveyStatusLabel(s.status)" dense />
@@ -668,25 +668,25 @@
                       ·
                     </div>
                     <div v-if="s.csat_score != null" class="text-caption" style="color: #333">
-                      CSAT: <b>{{ s.csat_score }}</b>/10
+                      CSAT: <b>{{ s.csat_score }}</b>/5
                     </div>
                     <div v-if="s.design_score != null" class="text-caption" style="color: #888">
                       ·
                     </div>
                     <div v-if="s.design_score != null" class="text-caption" style="color: #333">
-                      Дизайн: <b>{{ s.design_score }}</b>/10
+                      Дизайн: <b>{{ s.design_score }}</b>/5
                     </div>
                     <div v-if="s.deadline_score != null" class="text-caption" style="color: #888">
                       ·
                     </div>
                     <div v-if="s.deadline_score != null" class="text-caption" style="color: #333">
-                      Сроки: <b>{{ s.deadline_score }}</b>/10
+                      Сроки: <b>{{ s.deadline_score }}</b>/5
                     </div>
                     <div v-if="s.communication_score != null" class="text-caption" style="color: #888">
                       ·
                     </div>
                     <div v-if="s.communication_score != null" class="text-caption" style="color: #333">
-                      Общение: <b>{{ s.communication_score }}</b>/10
+                      Общение: <b>{{ s.communication_score }}</b>/5
                     </div>
                   </div>
                   <div v-if="s.comment" class="text-caption q-mt-xs" style="color: #666; font-style: italic">

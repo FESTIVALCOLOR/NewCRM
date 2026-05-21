@@ -181,7 +181,7 @@
                   {{ kpi.value != null ? kpi.value.toFixed(1) : '—' }}
                 </div>
                 <div class="text-caption" style="color: #ccc; font-size: 9px">
-                  из 10
+                  из {{ kpi.scale }}
                 </div>
               </q-card>
             </div>
@@ -246,6 +246,19 @@
             rounded
             style="height: 8px"
           />
+          <div v-if="selectedEmp.avg_nps != null" class="q-mt-sm">
+            <q-card flat bordered class="q-pa-sm text-center" style="border-radius: 8px">
+              <div class="text-caption" style="color: #888; font-size: 10px">
+                NPS клиентов
+              </div>
+              <div class="text-weight-bold q-mt-xs" :style="{ color: kpiColor(selectedEmp.avg_nps), fontSize: '18px' }">
+                {{ selectedEmp.avg_nps.toFixed(1) }}
+              </div>
+              <div class="text-caption" style="color: #ccc; font-size: 9px">
+                из 10
+              </div>
+            </q-card>
+          </div>
         </q-card-section>
       </q-card>
     </q-dialog>
@@ -347,8 +360,8 @@ async function loadData() {
 const surveyKpis = computed(() => {
   const s = surveyStats.value || {}
   return [
-    { label: 'NPS', value: s.avg_nps },
-    { label: 'CSAT', value: s.avg_csat },
+    { label: 'NPS', value: s.avg_nps, scale: 10 },
+    { label: 'CSAT', value: s.avg_csat, scale: 5 },
   ].filter(k => k.value != null)
 })
 
