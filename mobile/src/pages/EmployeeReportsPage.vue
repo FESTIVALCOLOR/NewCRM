@@ -263,6 +263,47 @@
               </div>
             </div>
           </div>
+          <!-- Выезды на объекты (ДАН и Менеджер) -->
+          <div v-if="showVisitStats(selectedEmp)" class="q-mt-md">
+            <div class="text-caption q-mb-xs" style="color: #666; font-weight: 600; font-size: 11px">
+              Выезды на объекты
+            </div>
+            <div class="row q-gutter-xs">
+              <div class="col">
+                <q-card flat bordered class="q-pa-sm text-center" style="border-radius: 8px">
+                  <div class="text-caption" style="color: #888; font-size: 10px">
+                    На объект
+                  </div>
+                  <div class="text-weight-bold q-mt-xs" style="font-size: 18px; color: #333">
+                    {{ selectedEmp.visits_object ?? 0 }}
+                  </div>
+                </q-card>
+              </div>
+              <div class="col">
+                <q-card flat bordered class="q-pa-sm text-center" style="border-radius: 8px">
+                  <div class="text-caption" style="color: #888; font-size: 10px">
+                    К поставщику
+                  </div>
+                  <div class="text-weight-bold q-mt-xs" style="font-size: 18px; color: #333">
+                    {{ selectedEmp.visits_supplier ?? 0 }}
+                  </div>
+                </q-card>
+              </div>
+              <div class="col">
+                <q-card flat bordered class="q-pa-sm text-center" style="border-radius: 8px">
+                  <div class="text-caption" style="color: #888; font-size: 10px">
+                    Просрочено
+                  </div>
+                  <div
+                    class="text-weight-bold q-mt-xs"
+                    :style="{ fontSize: '18px', color: (selectedEmp.visits_overdue ?? 0) > 0 ? '#E74C3C' : '#27AE60' }"
+                  >
+                    {{ selectedEmp.visits_overdue ?? 0 }}
+                  </div>
+                </q-card>
+              </div>
+            </div>
+          </div>
         </q-card-section>
       </q-card>
     </q-dialog>
@@ -295,8 +336,8 @@ const monthOpts = [{ label: 'Все', value: null }, ...Array.from({ length: 12 
 
 const ROLE_TABS = {
   individual: [{ code: 'sdp', label: 'СДП' }, { code: 'gap', label: 'ГАП' }, { code: 'manager', label: 'Менеджер' }, { code: 'executor', label: 'Исполнитель' }],
-  template: [{ code: 'gap', label: 'ГАП' }, { code: 'manager', label: 'Менеджер' }, { code: 'executor', label: 'Исполнитель' }],
-  supervision: [{ code: 'supervisor', label: 'Надзиратель' }, { code: 'gap', label: 'ГАП' }],
+  template: [{ code: 'gap', label: 'ГАП' }, { code: 'manager', label: 'Менеджер' }, { code: 'executor', label: 'Чертёжник' }, { code: 'visualization', label: 'Визуализация' }],
+  supervision: [{ code: 'dan', label: 'ДАН' }, { code: 'manager', label: 'Менеджер' }],
 }
 
 const roleTabs = computed(() => ROLE_TABS[projectTab.value] || ROLE_TABS.individual)
@@ -337,10 +378,17 @@ async function loadData() {
     const rt = roleTab.value
     let filtered = allEmps
     if (rt === 'sdp') filtered = allEmps.filter(e => e.position?.includes('СДП'))
-    else if (rt === 'gap') filtered = allEmps.filter(e => e.position?.includes('ГАП') || e.position?.includes('руководитель'))
+    else if (rt === 'gap') filtered = allEmps.filter(e => e.position?.includes('ГАП'))
     else if (rt === 'manager') filtered = allEmps.filter(e => e.position?.toLowerCase().includes('менеджер'))
-    else if (rt === 'executor') filtered = allEmps.filter(e => e.position?.includes('Дизайнер') || e.position?.includes('Чертёжник') || e.position?.includes('дизайнер') || e.position?.includes('чертёжник'))
-    else if (rt === 'supervisor') filtered = allEmps.filter(e => e.position?.includes('ДАН') || e.position?.includes('надзор'))
+    else if (rt === 'dan') filtered = allEmps.filter(e => e.position === 'ДАН' || e.position === 'Дизайнер авторского надзора')
+    else if (rt === 'visualization') filtered = allEmps.filter(e => e.position === 'Дизайнер')
+    else if (rt === 'executor') {
+      if (projectTab.value === 'template') {
+        filtered = allEmps.filter(e => e.position?.includes('Чертёжник'))
+      } else {
+        filtered = allEmps.filter(e => ['Дизайнер', 'Чертёжник', 'Замерщик'].some(p => e.position?.includes(p)) && e.position !== 'ДАН' && e.position !== 'Дизайнер авторского надзора')
+      }
+    }
 
     roleEmployees.value = filtered.sort((a, b) => b.completion_rate - a.completion_rate)
 
@@ -370,23 +418,32 @@ const surveyKpis = computed(() => {
     { label: 'Сроки', value: s.avg_deadline, scale: 5 },
     { label: 'Общение', value: s.avg_communication, scale: 5 },
     { label: 'Ожидания', value: s.avg_expectations, scale: 5 },
+    { label: 'Надзор', value: s.avg_supervision, scale: 5 },
   ].filter(k => k.value != null)
 })
 
 function empSurveyScores(emp) {
   if (!emp) return []
   const pos = emp.position || ''
+  const isDan = pos === 'ДАН' || pos === 'Дизайнер авторского надзора'
+  const isDesigner = pos === 'Дизайнер'
+  const isDraftsman = pos === 'Чертёжник'
   const isSdp = pos === 'СДП'
   const isGap = pos === 'ГАП'
-  const isDesigner = pos.includes('Дизайнер') || pos.includes('дизайнер')
-  const isManager = pos.includes('Менеджер') || pos.includes('менеджер')
+  const isManager = pos.toLowerCase().includes('менеджер')
   const scores = []
   if (emp.avg_nps != null) scores.push({ label: 'NPS', value: emp.avg_nps, scale: 10 })
   if (emp.avg_csat != null) scores.push({ label: 'CSAT', value: emp.avg_csat, scale: 5 })
-  if (emp.avg_design != null && (isDesigner || isSdp)) scores.push({ label: 'Дизайн', value: emp.avg_design, scale: 5 })
-  if (emp.avg_deadline != null && (isManager || isSdp)) scores.push({ label: 'Сроки', value: emp.avg_deadline, scale: 5 })
+  // Дизайн: Дизайнер, СДП, ДАН
+  if (emp.avg_design != null && (isDesigner || isSdp || isDan)) scores.push({ label: 'Дизайн', value: emp.avg_design, scale: 5 })
+  // Сроки: Менеджер/Ст.менеджер, СДП, ДАН
+  if (emp.avg_deadline != null && (isManager || isSdp || isDan)) scores.push({ label: 'Сроки', value: emp.avg_deadline, scale: 5 })
+  // Общение: только Менеджер/Ст.менеджер
   if (emp.avg_communication != null && isManager) scores.push({ label: 'Общение', value: emp.avg_communication, scale: 5 })
-  if (emp.avg_expectations != null && (isGap || isManager)) scores.push({ label: 'Ожидания', value: emp.avg_expectations, scale: 5 })
+  // Ожидания: ГАП, Менеджер, Чертёжник, ДАН
+  if (emp.avg_expectations != null && (isGap || isManager || isDraftsman || isDan)) scores.push({ label: 'Ожидания', value: emp.avg_expectations, scale: 5 })
+  // Надзор: только ДАН
+  if (emp.avg_supervision != null && isDan) scores.push({ label: 'Надзор', value: emp.avg_supervision, scale: 5 })
   return scores
 }
 
@@ -395,6 +452,14 @@ function kpiColor(v) {
   if (v >= 8) return '#27AE60'
   if (v >= 6) return '#F39C12'
   return '#E74C3C'
+}
+
+function showVisitStats(emp) {
+  if (!emp) return false
+  const pos = emp.position || ''
+  const isDan = pos === 'ДАН' || pos === 'Дизайнер авторского надзора'
+  const isManager = pos.toLowerCase().includes('менеджер')
+  return (isDan || isManager) && ((emp.visits_total ?? 0) > 0 || (emp.visits_overdue ?? 0) > 0)
 }
 
 function resetFilters() {

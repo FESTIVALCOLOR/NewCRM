@@ -140,6 +140,7 @@ class SurveyStatsResponse(BaseModel):
     avg_deadline: Optional[float] = None
     avg_communication: Optional[float] = None
     avg_expectations: Optional[float] = None
+    avg_supervision: Optional[float] = None
     response_rate: float  # % завершённых от отправленных
 
 
@@ -394,7 +395,7 @@ async def get_survey_stats(
     completed = [s for s in surveys if s.status == "completed"]
     sent_or_completed = by_status.get("sent", 0) + by_status.get("completed", 0)
 
-    avg_nps = avg_csat = avg_design = avg_deadline = avg_communication = avg_expectations = None
+    avg_nps = avg_csat = avg_design = avg_deadline = avg_communication = avg_expectations = avg_supervision = None
     if completed:
 
         def _avg(values):
@@ -407,6 +408,7 @@ async def get_survey_stats(
         avg_deadline = _avg(s.deadline_score for s in completed)
         avg_communication = _avg(s.communication_score for s in completed)
         avg_expectations = _avg(s.expectations_score for s in completed)
+        avg_supervision = _avg(s.supervision_score for s in completed)
 
     return {
         "total": total,
@@ -420,6 +422,7 @@ async def get_survey_stats(
         "avg_deadline": avg_deadline,
         "avg_communication": avg_communication,
         "avg_expectations": avg_expectations,
+        "avg_supervision": avg_supervision,
         "response_rate": round(len(completed) / sent_or_completed * 100, 1) if sent_or_completed > 0 else 0,
     }
 

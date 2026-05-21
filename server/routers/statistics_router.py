@@ -21,7 +21,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import Date, and_, case, cast, extract, func
 from sqlalchemy.orm import Session
 
-from database import ClientSurvey, Contract, CRMCard, Employee, Payment, Salary, StageExecutor, SupervisionCard, get_db
+from database import ClientSurvey, Contract, CRMCard, Employee, Payment, Salary, StageExecutor, SupervisionCard, SupervisionProjectHistory, SupervisionVisit, get_db
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["statistics"])
@@ -159,8 +159,11 @@ async def get_employee_statistics(year: Optional[int] = None, month: Optional[in
         salary_totals = salary_query.group_by(Salary.employee_id).all()
         salary_map = {st[0]: float(st[1]) if st[1] else 0 for st in salary_totals}
 
-        # Batch survey scores per employee from completed surveys on their contracts
-        survey_subq = (
+        def _r(v):
+            return round(float(v), 1) if v is not None else None
+
+        # Batch survey scores via CRM path (StageExecutor → CRMCard → Contract → ClientSurvey)
+        crm_survey_subq = (
             db.query(
                 StageExecutor.executor_id,
                 ClientSurvey.nps_score,
@@ -180,23 +183,19 @@ async def get_employee_statistics(year: Optional[int] = None, month: Optional[in
             .distinct()
             .subquery()
         )
-        survey_rows = (
+        crm_survey_rows = (
             db.query(
-                survey_subq.c.executor_id,
-                func.avg(survey_subq.c.nps_score).label("avg_nps"),
-                func.avg(survey_subq.c.csat_score).label("avg_csat"),
-                func.avg(survey_subq.c.design_score).label("avg_design"),
-                func.avg(survey_subq.c.deadline_score).label("avg_deadline"),
-                func.avg(survey_subq.c.communication_score).label("avg_communication"),
-                func.avg(survey_subq.c.expectations_score).label("avg_expectations"),
+                crm_survey_subq.c.executor_id,
+                func.avg(crm_survey_subq.c.nps_score).label("avg_nps"),
+                func.avg(crm_survey_subq.c.csat_score).label("avg_csat"),
+                func.avg(crm_survey_subq.c.design_score).label("avg_design"),
+                func.avg(crm_survey_subq.c.deadline_score).label("avg_deadline"),
+                func.avg(crm_survey_subq.c.communication_score).label("avg_communication"),
+                func.avg(crm_survey_subq.c.expectations_score).label("avg_expectations"),
             )
-            .group_by(survey_subq.c.executor_id)
+            .group_by(crm_survey_subq.c.executor_id)
             .all()
         )
-
-        def _r(v):
-            return round(float(v), 1) if v is not None else None
-
         survey_map = {
             row[0]: {
                 "avg_nps": _r(row[1]),
@@ -205,9 +204,92 @@ async def get_employee_statistics(year: Optional[int] = None, month: Optional[in
                 "avg_deadline": _r(row[4]),
                 "avg_communication": _r(row[5]),
                 "avg_expectations": _r(row[6]),
+                "avg_supervision": None,
             }
-            for row in survey_rows
+            for row in crm_survey_rows
         }
+
+        # Supervision survey scores via SupervisionProjectHistory → SupervisionCard → Contract → ClientSurvey
+        sup_survey_subq = (
+            db.query(
+                SupervisionProjectHistory.executor_id,
+                ClientSurvey.nps_score,
+                ClientSurvey.csat_score,
+                ClientSurvey.design_score,
+                ClientSurvey.deadline_score,
+                ClientSurvey.expectations_score,
+                ClientSurvey.supervision_score,
+            )
+            .join(SupervisionCard, SupervisionProjectHistory.card_id == SupervisionCard.id)
+            .join(Contract, SupervisionCard.contract_id == Contract.id)
+            .join(ClientSurvey, ClientSurvey.contract_id == Contract.id)
+            .filter(
+                SupervisionProjectHistory.executor_id.in_(emp_ids),
+                ClientSurvey.status == "completed",
+                ClientSurvey.project_type == "supervision",
+            )
+            .distinct()
+            .subquery()
+        )
+        sup_survey_rows = (
+            db.query(
+                sup_survey_subq.c.executor_id,
+                func.avg(sup_survey_subq.c.nps_score).label("avg_nps"),
+                func.avg(sup_survey_subq.c.csat_score).label("avg_csat"),
+                func.avg(sup_survey_subq.c.design_score).label("avg_design"),
+                func.avg(sup_survey_subq.c.deadline_score).label("avg_deadline"),
+                func.avg(sup_survey_subq.c.expectations_score).label("avg_expectations"),
+                func.avg(sup_survey_subq.c.supervision_score).label("avg_supervision"),
+            )
+            .group_by(sup_survey_subq.c.executor_id)
+            .all()
+        )
+        for row in sup_survey_rows:
+            eid = row[0]
+            sup_data = {
+                "avg_nps": _r(row[1]),
+                "avg_csat": _r(row[2]),
+                "avg_design": _r(row[3]),
+                "avg_deadline": _r(row[4]),
+                "avg_communication": None,
+                "avg_expectations": _r(row[5]),
+                "avg_supervision": _r(row[6]),
+            }
+            if eid in survey_map:
+                for key, val in sup_data.items():
+                    if val is not None:
+                        survey_map[eid][key] = val
+            else:
+                survey_map[eid] = sup_data
+
+        # Batch visit stats per executor (matched by executor_name string)
+        today_str = datetime.utcnow().date().isoformat()
+        visit_rows = (
+            db.query(
+                SupervisionVisit.executor_name,
+                SupervisionVisit.visit_type,
+                func.count(SupervisionVisit.id).label("cnt"),
+                func.sum(
+                    case(
+                        (and_(SupervisionVisit.actual_date.is_(None), SupervisionVisit.visit_date < today_str), 1),
+                        else_=0,
+                    )
+                ).label("overdue"),
+            )
+            .filter(SupervisionVisit.executor_name.isnot(None))
+            .group_by(SupervisionVisit.executor_name, SupervisionVisit.visit_type)
+            .all()
+        )
+        visit_raw: dict = defaultdict(lambda: {"total": 0, "object": 0, "supplier": 0, "overdue": 0})
+        for name, vtype, cnt, overdue in visit_rows:
+            if name:
+                visit_raw[name]["total"] += cnt
+                visit_raw[name]["overdue"] += overdue or 0
+                if vtype == "К поставщику":
+                    visit_raw[name]["supplier"] += cnt
+                else:
+                    visit_raw[name]["object"] += cnt
+        visit_map = {emp.id: dict(visit_raw[emp.full_name]) for emp in employees if emp.full_name and emp.full_name in visit_raw}
 
         result = []
         for emp in employees:
@@ -225,7 +307,10 @@ async def get_employee_statistics(year: Optional[int] = None, month: Optional[in
                     "completed_stages": completed_stages,
                     "completion_rate": (completed_stages / total_stages * 100) if total_stages > 0 else 0,
                     "total_salary": total_salary,
-                    **survey_map.get(emp.id, {"avg_nps": None, "avg_csat": None, "avg_design": None, "avg_deadline": None, "avg_communication": None, "avg_expectations": None}),
+                    **survey_map.get(
+                        emp.id, {"avg_nps": None, "avg_csat": None, "avg_design": None, "avg_deadline": None, "avg_communication": None, "avg_expectations": None, "avg_supervision": None}
+                    ),
+                    **{f"visits_{k}": v for k, v in visit_map.get(emp.id, {"total": 0, "object": 0, "supplier": 0, "overdue": 0}).items()},
                 }
             )
 
