@@ -463,6 +463,7 @@ async def create_visit(
                     visit_payment = Payment(
                         contract_id=card.contract_id,
                         supervision_card_id=card.id,
+                        visit_id=visit.id,
                         employee_id=emp_id,
                         employee_name=emp.full_name,
                         role=role,
@@ -610,6 +611,14 @@ async def delete_visit(
         db.add(history_entry)
     except Exception as e:
         logger.warning(f"Не удалось записать удаление выезда в историю: {e}")
+
+    # Удалить связанные оплаты за этот выезд
+    try:
+        visit_payments = db.query(Payment).filter(Payment.visit_id == visit_id).all()
+        for vp in visit_payments:
+            db.delete(vp)
+    except Exception as e:
+        logger.warning(f"Не удалось удалить оплаты выезда {visit_id}: {e}")
 
     db.delete(visit)
     db.commit()

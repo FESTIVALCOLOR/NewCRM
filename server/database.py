@@ -781,6 +781,9 @@ class Payment(Base):
     reassigned = Column(Boolean, default=False)
     old_employee_id = Column(Integer)
 
+    # Ссылка на конкретный выезд (для автоудаления при удалении выезда)
+    visit_id = Column(Integer, ForeignKey("supervision_visits.id", ondelete="SET NULL"), nullable=True)
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

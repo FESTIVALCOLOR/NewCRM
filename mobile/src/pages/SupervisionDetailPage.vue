@@ -772,6 +772,26 @@
                   <q-item-label caption>
                     {{ p.role || '' }} {{ p.stage_name ? `· ${p.stage_name}` : '' }}
                   </q-item-label>
+                  <div class="row items-center q-gutter-xs q-mt-xs">
+                    <q-btn
+                      flat
+                      round
+                      dense
+                      size="xs"
+                      icon="edit"
+                      color="grey-7"
+                      @click.stop="editSvPayment(p)"
+                    />
+                    <q-btn
+                      flat
+                      round
+                      dense
+                      size="xs"
+                      icon="delete_outline"
+                      color="negative"
+                      @click.stop="deleteSvPayment(p)"
+                    />
+                  </div>
                 </q-item-section>
                 <q-item-section side>
                   <div class="text-weight-bold" :style="{ color: p.is_paid ? '#27AE60' : '#333' }">
@@ -891,7 +911,7 @@
     </div>
 
     <!-- Диалог добавления выезда -->
-    <q-dialog v-model="showAddVisit" @hide="editingVisitId = null">
+    <q-dialog v-model="showAddVisit" @hide="editingVisitId = null; visitExecutorPick = visitExecutorOptions[0] || null">
       <q-card style="min-width: 320px">
         <q-card-section>
           <div class="text-subtitle1 text-weight-bold">
@@ -926,20 +946,12 @@
             class="q-mb-sm"
           />
           <q-select
-            v-model="visitForm.executor_role"
-            :options="['ДАН', 'Старший менеджер проектов']"
-            label="Роль исполнителя"
+            v-model="visitExecutorPick"
+            :options="visitExecutorOptions"
+            option-label="label"
+            label="Исполнитель"
             outlined
             dense
-            class="q-mb-sm"
-          />
-          <q-select
-            v-model="visitForm.executor_name"
-            :options="executorNameOptions"
-            label="Исполнитель (ФИО)"
-            outlined
-            dense
-            emit-value
             class="q-mb-sm"
           />
           <q-input
@@ -1592,8 +1604,15 @@ const cameraInput = ref(null)
 const fileInput = ref(null)
 const nadzorFileInput = ref(null)
 const visitForm = ref({ visit_date: new Date().toISOString().split('T')[0], stage_code: '', notes: '', executor_name: '', visit_type: 'На объект', executor_role: 'ДАН', extra_visit: false })
+const visitExecutorPick = ref(null)
 const executorOptions = ref([])
 const executorNameOptions = ref([])
+const visitExecutorOptions = computed(() => {
+  const opts = []
+  if (card.value?.dan_name) opts.push({ label: `${card.value.dan_name} (ДАН)`, name: card.value.dan_name, role: 'ДАН' })
+  if (card.value?.senior_manager_name) opts.push({ label: `${card.value.senior_manager_name} (Ст. менеджер)`, name: card.value.senior_manager_name, role: 'Старший менеджер проектов' })
+  return opts
+})
 const svPayments = ref([])
 const svHistory = ref([])
 const svFilesSupervision = ref([])
@@ -2037,12 +2056,16 @@ async function saveVisit() {
     $q.notify({ type: 'warning', message: 'Для выезда к поставщику укажите стадию' })
     return
   }
+  // Применяем выбранного исполнителя
+  const pickedExecutor = visitExecutorPick.value
+  const executorName = pickedExecutor?.name || visitForm.value.executor_name || ''
+  const executorRole = pickedExecutor?.role || visitForm.value.executor_role || 'ДАН'
+
   // Предупреждение: доп. выезд не отмечен, а ежемесячная ставка для роли не активна
   if (!editingVisitId.value && !visitForm.value.extra_visit) {
-    const role = visitForm.value.executor_role
-    const hasMonthly = monthlyAssignments.value.some(a => a.role === role)
+    const hasMonthly = monthlyAssignments.value.some(a => a.role === executorRole)
     if (!hasMonthly) {
-      $q.notify({ type: 'warning', message: `Ежемесячная ставка для «${role}» не включена. Оплата за выезд не будет начислена.` })
+      $q.notify({ type: 'warning', message: `Ежемесячная ставка для «${executorRole}» не включена. Оплата за выезд не будет начислена.` })
     }
   }
   try {
@@ -2053,9 +2076,9 @@ async function saveVisit() {
       stage_name: stageLabel,
       visit_date: visitForm.value.visit_date,
       visit_type: visitForm.value.visit_type || 'На объект',
-      executor_name: visitForm.value.executor_name || '',
+      executor_name: executorName,
       notes: visitForm.value.notes,
-      executor_role: visitForm.value.executor_role || 'ДАН',
+      executor_role: executorRole,
       extra_visit: visitForm.value.extra_visit || false,
     }
     if (isEditing) {
@@ -2103,6 +2126,9 @@ function editVisit(visit) {
     executor_role: visit.executor_role || 'ДАН',
     extra_visit: visit.extra_visit || false,
   }
+  visitExecutorPick.value = visitExecutorOptions.value.find(
+    o => o.name === visit.executor_name,
+  ) || visitExecutorOptions.value[0] || null
   editingVisitId.value = visit.id
   showAddVisit.value = true
 }
@@ -2172,6 +2198,40 @@ async function deleteVisit(visit) {
       await ax.delete(`/api/v1/supervision-visits/${card.value.id}/visits/${visit.id}`)
       $q.notify({ type: 'positive', message: 'Выезд удалён' })
       await reloadData()
+    } catch (err) {
+      $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
+    }
+  })
+}
+
+function editSvPayment(p) {
+  $q.dialog({
+    title: 'Изменить сумму',
+    prompt: { model: String(p.final_amount || p.amount || 0), type: 'number' },
+    cancel: { label: 'Отмена', flat: true, noCaps: true },
+    ok: { label: 'Сохранить', noCaps: true, color: 'positive' },
+  }).onOk(async (val) => {
+    try {
+      await paymentsApi.update(p.id, { final_amount: parseFloat(val) })
+      p.final_amount = parseFloat(val)
+      $q.notify({ type: 'positive', message: 'Сумма обновлена' })
+    } catch (err) {
+      $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
+    }
+  })
+}
+
+async function deleteSvPayment(p) {
+  $q.dialog({
+    title: 'Удалить оплату?',
+    message: `${p.employee_name} — ${formatMoney(p.final_amount || p.amount)}`,
+    cancel: { label: 'Нет', flat: true, noCaps: true },
+    ok: { label: 'Да', noCaps: true, color: 'negative' },
+  }).onOk(async () => {
+    try {
+      await paymentsApi.delete(p.id)
+      svPayments.value = svPayments.value.filter(x => x.id !== p.id)
+      $q.notify({ type: 'positive', message: 'Оплата удалена' })
     } catch (err) {
       $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
     }
