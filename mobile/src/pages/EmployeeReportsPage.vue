@@ -246,18 +246,22 @@
             rounded
             style="height: 8px"
           />
-          <div v-if="selectedEmp.avg_nps != null" class="q-mt-sm">
-            <q-card flat bordered class="q-pa-sm text-center" style="border-radius: 8px">
-              <div class="text-caption" style="color: #888; font-size: 10px">
-                NPS клиентов
+          <div v-if="empSurveyScores(selectedEmp).length" class="q-mt-sm">
+            <div class="row q-gutter-xs">
+              <div v-for="sc in empSurveyScores(selectedEmp)" :key="sc.label" class="col">
+                <q-card flat bordered class="q-pa-sm text-center" style="border-radius: 8px; min-width: 60px">
+                  <div class="text-caption" style="color: #888; font-size: 10px">
+                    {{ sc.label }}
+                  </div>
+                  <div class="text-weight-bold q-mt-xs" :style="{ color: kpiColor(sc.value), fontSize: '18px' }">
+                    {{ sc.value.toFixed(1) }}
+                  </div>
+                  <div class="text-caption" style="color: #ccc; font-size: 9px">
+                    из {{ sc.scale }}
+                  </div>
+                </q-card>
               </div>
-              <div class="text-weight-bold q-mt-xs" :style="{ color: kpiColor(selectedEmp.avg_nps), fontSize: '18px' }">
-                {{ selectedEmp.avg_nps.toFixed(1) }}
-              </div>
-              <div class="text-caption" style="color: #ccc; font-size: 9px">
-                из 10
-              </div>
-            </q-card>
+            </div>
           </div>
         </q-card-section>
       </q-card>
@@ -362,8 +366,29 @@ const surveyKpis = computed(() => {
   return [
     { label: 'NPS', value: s.avg_nps, scale: 10 },
     { label: 'CSAT', value: s.avg_csat, scale: 5 },
+    { label: 'Дизайн', value: s.avg_design, scale: 5 },
+    { label: 'Сроки', value: s.avg_deadline, scale: 5 },
+    { label: 'Общение', value: s.avg_communication, scale: 5 },
+    { label: 'Ожидания', value: s.avg_expectations, scale: 5 },
   ].filter(k => k.value != null)
 })
+
+function empSurveyScores(emp) {
+  if (!emp) return []
+  const pos = emp.position || ''
+  const isSdp = pos === 'СДП'
+  const isGap = pos === 'ГАП'
+  const isDesigner = pos.includes('Дизайнер') || pos.includes('дизайнер')
+  const isManager = pos.includes('Менеджер') || pos.includes('менеджер')
+  const scores = []
+  if (emp.avg_nps != null) scores.push({ label: 'NPS', value: emp.avg_nps, scale: 10 })
+  if (emp.avg_csat != null) scores.push({ label: 'CSAT', value: emp.avg_csat, scale: 5 })
+  if (emp.avg_design != null && (isDesigner || isSdp)) scores.push({ label: 'Дизайн', value: emp.avg_design, scale: 5 })
+  if (emp.avg_deadline != null && (isManager || isSdp)) scores.push({ label: 'Сроки', value: emp.avg_deadline, scale: 5 })
+  if (emp.avg_communication != null && isManager) scores.push({ label: 'Общение', value: emp.avg_communication, scale: 5 })
+  if (emp.avg_expectations != null && (isGap || isManager)) scores.push({ label: 'Ожидания', value: emp.avg_expectations, scale: 5 })
+  return scores
+}
 
 function kpiColor(v) {
   if (v == null) return '#888'

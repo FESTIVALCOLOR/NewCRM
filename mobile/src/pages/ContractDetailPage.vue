@@ -688,6 +688,12 @@
                     <div v-if="s.communication_score != null" class="text-caption" style="color: #333">
                       Общение: <b>{{ s.communication_score }}</b>/5
                     </div>
+                    <div v-if="s.expectations_score != null" class="text-caption" style="color: #888">
+                      ·
+                    </div>
+                    <div v-if="s.expectations_score != null" class="text-caption" style="color: #333">
+                      Ожидания: <b>{{ s.expectations_score }}</b>/5
+                    </div>
                   </div>
                   <div v-if="s.comment" class="text-caption q-mt-xs" style="color: #666; font-style: italic">
                     "{{ s.comment }}"

@@ -159,22 +159,55 @@ async def get_employee_statistics(year: Optional[int] = None, month: Optional[in
         salary_totals = salary_query.group_by(Salary.employee_id).all()
         salary_map = {st[0]: float(st[1]) if st[1] else 0 for st in salary_totals}
 
-        # Batch avg NPS per employee from completed surveys on their contracts
-        nps_subq = (
-            db.query(StageExecutor.executor_id, ClientSurvey.nps_score)
+        # Batch survey scores per employee from completed surveys on their contracts
+        survey_subq = (
+            db.query(
+                StageExecutor.executor_id,
+                ClientSurvey.nps_score,
+                ClientSurvey.csat_score,
+                ClientSurvey.design_score,
+                ClientSurvey.deadline_score,
+                ClientSurvey.communication_score,
+                ClientSurvey.expectations_score,
+            )
             .join(CRMCard, StageExecutor.crm_card_id == CRMCard.id)
             .join(Contract, CRMCard.contract_id == Contract.id)
             .join(ClientSurvey, ClientSurvey.contract_id == Contract.id)
             .filter(
                 StageExecutor.executor_id.in_(emp_ids),
                 ClientSurvey.status == "completed",
-                ClientSurvey.nps_score.isnot(None),
             )
             .distinct()
             .subquery()
         )
-        nps_rows = db.query(nps_subq.c.executor_id, func.avg(nps_subq.c.nps_score).label("avg_nps")).group_by(nps_subq.c.executor_id).all()
-        nps_map = {n[0]: round(float(n[1]), 1) for n in nps_rows}
+        survey_rows = (
+            db.query(
+                survey_subq.c.executor_id,
+                func.avg(survey_subq.c.nps_score).label("avg_nps"),
+                func.avg(survey_subq.c.csat_score).label("avg_csat"),
+                func.avg(survey_subq.c.design_score).label("avg_design"),
+                func.avg(survey_subq.c.deadline_score).label("avg_deadline"),
+                func.avg(survey_subq.c.communication_score).label("avg_communication"),
+                func.avg(survey_subq.c.expectations_score).label("avg_expectations"),
+            )
+            .group_by(survey_subq.c.executor_id)
+            .all()
+        )
+
+        def _r(v):
+            return round(float(v), 1) if v is not None else None
+
+        survey_map = {
+            row[0]: {
+                "avg_nps": _r(row[1]),
+                "avg_csat": _r(row[2]),
+                "avg_design": _r(row[3]),
+                "avg_deadline": _r(row[4]),
+                "avg_communication": _r(row[5]),
+                "avg_expectations": _r(row[6]),
+            }
+            for row in survey_rows
+        }
 
         result = []
         for emp in employees:
@@ -192,7 +225,7 @@ async def get_employee_statistics(year: Optional[int] = None, month: Optional[in
                     "completed_stages": completed_stages,
                     "completion_rate": (completed_stages / total_stages * 100) if total_stages > 0 else 0,
                     "total_salary": total_salary,
-                    "avg_nps": nps_map.get(emp.id),
+                    **survey_map.get(emp.id, {"avg_nps": None, "avg_csat": None, "avg_design": None, "avg_deadline": None, "avg_communication": None, "avg_expectations": None}),
                 }
             )
 

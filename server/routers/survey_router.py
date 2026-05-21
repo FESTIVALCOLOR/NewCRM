@@ -136,6 +136,10 @@ class SurveyStatsResponse(BaseModel):
     expired: int
     avg_nps: Optional[float] = None
     avg_csat: Optional[float] = None
+    avg_design: Optional[float] = None
+    avg_deadline: Optional[float] = None
+    avg_communication: Optional[float] = None
+    avg_expectations: Optional[float] = None
     response_rate: float  # % завершённых от отправленных
 
 
@@ -390,13 +394,19 @@ async def get_survey_stats(
     completed = [s for s in surveys if s.status == "completed"]
     sent_or_completed = by_status.get("sent", 0) + by_status.get("completed", 0)
 
-    avg_nps = None
-    avg_csat = None
+    avg_nps = avg_csat = avg_design = avg_deadline = avg_communication = avg_expectations = None
     if completed:
-        nps_values = [s.nps_score for s in completed if s.nps_score is not None]
-        csat_values = [s.csat_score for s in completed if s.csat_score is not None]
-        avg_nps = round(sum(nps_values) / len(nps_values), 1) if nps_values else None
-        avg_csat = round(sum(csat_values) / len(csat_values), 1) if csat_values else None
+
+        def _avg(values):
+            vals = [v for v in values if v is not None]
+            return round(sum(vals) / len(vals), 1) if vals else None
+
+        avg_nps = _avg(s.nps_score for s in completed)
+        avg_csat = _avg(s.csat_score for s in completed)
+        avg_design = _avg(s.design_score for s in completed)
+        avg_deadline = _avg(s.deadline_score for s in completed)
+        avg_communication = _avg(s.communication_score for s in completed)
+        avg_expectations = _avg(s.expectations_score for s in completed)
 
     return {
         "total": total,
@@ -406,6 +416,10 @@ async def get_survey_stats(
         "expired": by_status.get("expired", 0),
         "avg_nps": avg_nps,
         "avg_csat": avg_csat,
+        "avg_design": avg_design,
+        "avg_deadline": avg_deadline,
+        "avg_communication": avg_communication,
+        "avg_expectations": avg_expectations,
         "response_rate": round(len(completed) / sent_or_completed * 100, 1) if sent_or_completed > 0 else 0,
     }
 
