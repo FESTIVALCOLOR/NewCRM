@@ -21,7 +21,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import Date, and_, case, cast, extract, func
 from sqlalchemy.orm import Session
 
-from database import ClientSurvey, Contract, CRMCard, Employee, Payment, Salary, StageExecutor, SupervisionCard, SupervisionProjectHistory, SupervisionVisit, get_db
+from database import ClientSurvey, Contract, CRMCard, Employee, Payment, Salary, StageExecutor, SupervisionCard, SupervisionVisit, get_db
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["statistics"])
@@ -209,10 +209,10 @@ async def get_employee_statistics(year: Optional[int] = None, month: Optional[in
             for row in crm_survey_rows
         }
 
-        # Supervision survey scores via SupervisionProjectHistory → SupervisionCard → Contract → ClientSurvey
+        # Supervision survey scores via SupervisionCard.dan_id → Contract → ClientSurvey
         sup_survey_subq = (
             db.query(
-                SupervisionProjectHistory.executor_id,
+                SupervisionCard.dan_id.label("executor_id"),
                 ClientSurvey.nps_score,
                 ClientSurvey.csat_score,
                 ClientSurvey.design_score,
@@ -220,11 +220,10 @@ async def get_employee_statistics(year: Optional[int] = None, month: Optional[in
                 ClientSurvey.expectations_score,
                 ClientSurvey.supervision_score,
             )
-            .join(SupervisionCard, SupervisionProjectHistory.card_id == SupervisionCard.id)
             .join(Contract, SupervisionCard.contract_id == Contract.id)
             .join(ClientSurvey, ClientSurvey.contract_id == Contract.id)
             .filter(
-                SupervisionProjectHistory.executor_id.in_(emp_ids),
+                SupervisionCard.dan_id.in_(emp_ids),
                 ClientSurvey.status == "completed",
                 ClientSurvey.project_type == "supervision",
             )
