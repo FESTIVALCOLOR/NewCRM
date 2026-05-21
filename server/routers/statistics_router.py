@@ -127,8 +127,10 @@ async def get_dashboard_statistics(
 
 
 @router.get("/employees")
-async def get_employee_statistics(year: Optional[int] = None, month: Optional[int] = None, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Получить статистику по сотрудникам"""
+async def get_employee_statistics(
+    year: Optional[int] = None, month: Optional[int] = None, project_type: Optional[str] = None, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    """Получить статистику по сотрудникам. project_type: individual | template | supervision"""
     try:
         employees = db.query(Employee).filter(Employee.status == "активный").all()
         emp_ids = [emp.id for emp in employees]
@@ -162,40 +164,48 @@ async def get_employee_statistics(year: Optional[int] = None, month: Optional[in
         def _r(v):
             return round(float(v), 1) if v is not None else None
 
-        # Batch survey scores via CRM path (StageExecutor → CRMCard → Contract → ClientSurvey)
-        crm_survey_subq = (
-            db.query(
-                StageExecutor.executor_id,
-                ClientSurvey.nps_score,
-                ClientSurvey.csat_score,
-                ClientSurvey.design_score,
-                ClientSurvey.deadline_score,
-                ClientSurvey.communication_score,
-                ClientSurvey.expectations_score,
+        # project_type param: 'individual' | 'template' | 'supervision' | None (all)
+        _CRM_PT = {"individual": "Индивидуальный", "template": "Шаблонный"}
+
+        # CRM survey scores (StageExecutor → CRMCard → Contract → ClientSurvey)
+        # Skipped when viewing supervision tab — those surveys come via dan_id path
+        if project_type != "supervision":
+            _crm_filters = [StageExecutor.executor_id.in_(emp_ids), ClientSurvey.status == "completed"]
+            if project_type in _CRM_PT:
+                _crm_filters.append(Contract.project_type == _CRM_PT[project_type])
+            crm_survey_subq = (
+                db.query(
+                    StageExecutor.executor_id,
+                    ClientSurvey.nps_score,
+                    ClientSurvey.csat_score,
+                    ClientSurvey.design_score,
+                    ClientSurvey.deadline_score,
+                    ClientSurvey.communication_score,
+                    ClientSurvey.expectations_score,
+                )
+                .join(CRMCard, StageExecutor.crm_card_id == CRMCard.id)
+                .join(Contract, CRMCard.contract_id == Contract.id)
+                .join(ClientSurvey, ClientSurvey.contract_id == Contract.id)
+                .filter(*_crm_filters)
+                .distinct()
+                .subquery()
             )
-            .join(CRMCard, StageExecutor.crm_card_id == CRMCard.id)
-            .join(Contract, CRMCard.contract_id == Contract.id)
-            .join(ClientSurvey, ClientSurvey.contract_id == Contract.id)
-            .filter(
-                StageExecutor.executor_id.in_(emp_ids),
-                ClientSurvey.status == "completed",
+            crm_survey_rows = (
+                db.query(
+                    crm_survey_subq.c.executor_id,
+                    func.avg(crm_survey_subq.c.nps_score).label("avg_nps"),
+                    func.avg(crm_survey_subq.c.csat_score).label("avg_csat"),
+                    func.avg(crm_survey_subq.c.design_score).label("avg_design"),
+                    func.avg(crm_survey_subq.c.deadline_score).label("avg_deadline"),
+                    func.avg(crm_survey_subq.c.communication_score).label("avg_communication"),
+                    func.avg(crm_survey_subq.c.expectations_score).label("avg_expectations"),
+                )
+                .group_by(crm_survey_subq.c.executor_id)
+                .all()
             )
-            .distinct()
-            .subquery()
-        )
-        crm_survey_rows = (
-            db.query(
-                crm_survey_subq.c.executor_id,
-                func.avg(crm_survey_subq.c.nps_score).label("avg_nps"),
-                func.avg(crm_survey_subq.c.csat_score).label("avg_csat"),
-                func.avg(crm_survey_subq.c.design_score).label("avg_design"),
-                func.avg(crm_survey_subq.c.deadline_score).label("avg_deadline"),
-                func.avg(crm_survey_subq.c.communication_score).label("avg_communication"),
-                func.avg(crm_survey_subq.c.expectations_score).label("avg_expectations"),
-            )
-            .group_by(crm_survey_subq.c.executor_id)
-            .all()
-        )
+        else:
+            crm_survey_rows = []
+
         survey_map = {
             row[0]: {
                 "avg_nps": _r(row[1]),
@@ -209,86 +219,91 @@ async def get_employee_statistics(year: Optional[int] = None, month: Optional[in
             for row in crm_survey_rows
         }
 
-        # Supervision survey scores via SupervisionCard.dan_id → Contract → ClientSurvey
-        sup_survey_subq = (
-            db.query(
-                SupervisionCard.dan_id.label("executor_id"),
-                ClientSurvey.nps_score,
-                ClientSurvey.csat_score,
-                ClientSurvey.design_score,
-                ClientSurvey.deadline_score,
-                ClientSurvey.expectations_score,
-                ClientSurvey.supervision_score,
+        # Supervision survey scores (SupervisionCard.dan_id → Contract → ClientSurvey)
+        # Only relevant for supervision tab or general view (no project_type filter)
+        if project_type in (None, "supervision"):
+            sup_survey_subq = (
+                db.query(
+                    SupervisionCard.dan_id.label("executor_id"),
+                    ClientSurvey.nps_score,
+                    ClientSurvey.csat_score,
+                    ClientSurvey.design_score,
+                    ClientSurvey.deadline_score,
+                    ClientSurvey.expectations_score,
+                    ClientSurvey.supervision_score,
+                )
+                .join(Contract, SupervisionCard.contract_id == Contract.id)
+                .join(ClientSurvey, ClientSurvey.contract_id == Contract.id)
+                .filter(
+                    SupervisionCard.dan_id.in_(emp_ids),
+                    ClientSurvey.status == "completed",
+                    ClientSurvey.project_type == "supervision",
+                )
+                .distinct()
+                .subquery()
             )
-            .join(Contract, SupervisionCard.contract_id == Contract.id)
-            .join(ClientSurvey, ClientSurvey.contract_id == Contract.id)
-            .filter(
-                SupervisionCard.dan_id.in_(emp_ids),
-                ClientSurvey.status == "completed",
-                ClientSurvey.project_type == "supervision",
+            sup_survey_rows = (
+                db.query(
+                    sup_survey_subq.c.executor_id,
+                    func.avg(sup_survey_subq.c.nps_score).label("avg_nps"),
+                    func.avg(sup_survey_subq.c.csat_score).label("avg_csat"),
+                    func.avg(sup_survey_subq.c.design_score).label("avg_design"),
+                    func.avg(sup_survey_subq.c.deadline_score).label("avg_deadline"),
+                    func.avg(sup_survey_subq.c.expectations_score).label("avg_expectations"),
+                    func.avg(sup_survey_subq.c.supervision_score).label("avg_supervision"),
+                )
+                .group_by(sup_survey_subq.c.executor_id)
+                .all()
             )
-            .distinct()
-            .subquery()
-        )
-        sup_survey_rows = (
-            db.query(
-                sup_survey_subq.c.executor_id,
-                func.avg(sup_survey_subq.c.nps_score).label("avg_nps"),
-                func.avg(sup_survey_subq.c.csat_score).label("avg_csat"),
-                func.avg(sup_survey_subq.c.design_score).label("avg_design"),
-                func.avg(sup_survey_subq.c.deadline_score).label("avg_deadline"),
-                func.avg(sup_survey_subq.c.expectations_score).label("avg_expectations"),
-                func.avg(sup_survey_subq.c.supervision_score).label("avg_supervision"),
-            )
-            .group_by(sup_survey_subq.c.executor_id)
-            .all()
-        )
-        for row in sup_survey_rows:
-            eid = row[0]
-            sup_data = {
-                "avg_nps": _r(row[1]),
-                "avg_csat": _r(row[2]),
-                "avg_design": _r(row[3]),
-                "avg_deadline": _r(row[4]),
-                "avg_communication": None,
-                "avg_expectations": _r(row[5]),
-                "avg_supervision": _r(row[6]),
-            }
-            if eid in survey_map:
-                for key, val in sup_data.items():
-                    if val is not None:
-                        survey_map[eid][key] = val
-            else:
-                survey_map[eid] = sup_data
-
-        # Batch visit stats per executor (matched by executor_name string)
-        today_str = datetime.utcnow().date().isoformat()
-        visit_rows = (
-            db.query(
-                SupervisionVisit.executor_name,
-                SupervisionVisit.visit_type,
-                func.count(SupervisionVisit.id).label("cnt"),
-                func.sum(
-                    case(
-                        (and_(SupervisionVisit.actual_date.is_(None), SupervisionVisit.visit_date < today_str), 1),
-                        else_=0,
-                    )
-                ).label("overdue"),
-            )
-            .filter(SupervisionVisit.executor_name.isnot(None))
-            .group_by(SupervisionVisit.executor_name, SupervisionVisit.visit_type)
-            .all()
-        )
-        visit_raw: dict = defaultdict(lambda: {"total": 0, "object": 0, "supplier": 0, "overdue": 0})
-        for name, vtype, cnt, overdue in visit_rows:
-            if name:
-                visit_raw[name]["total"] += cnt
-                visit_raw[name]["overdue"] += overdue or 0
-                if vtype == "К поставщику":
-                    visit_raw[name]["supplier"] += cnt
+            for row in sup_survey_rows:
+                eid = row[0]
+                sup_data = {
+                    "avg_nps": _r(row[1]),
+                    "avg_csat": _r(row[2]),
+                    "avg_design": _r(row[3]),
+                    "avg_deadline": _r(row[4]),
+                    "avg_communication": None,
+                    "avg_expectations": _r(row[5]),
+                    "avg_supervision": _r(row[6]),
+                }
+                if eid in survey_map:
+                    for key, val in sup_data.items():
+                        if val is not None:
+                            survey_map[eid][key] = val
                 else:
-                    visit_raw[name]["object"] += cnt
-        visit_map = {emp.id: dict(visit_raw[emp.full_name]) for emp in employees if emp.full_name and emp.full_name in visit_raw}
+                    survey_map[eid] = sup_data
+
+        # Visit stats (matched by executor_name string) — only for supervision view
+        if project_type in (None, "supervision"):
+            today_str = datetime.utcnow().date().isoformat()
+            visit_rows = (
+                db.query(
+                    SupervisionVisit.executor_name,
+                    SupervisionVisit.visit_type,
+                    func.count(SupervisionVisit.id).label("cnt"),
+                    func.sum(
+                        case(
+                            (and_(SupervisionVisit.actual_date.is_(None), SupervisionVisit.visit_date < today_str), 1),
+                            else_=0,
+                        )
+                    ).label("overdue"),
+                )
+                .filter(SupervisionVisit.executor_name.isnot(None))
+                .group_by(SupervisionVisit.executor_name, SupervisionVisit.visit_type)
+                .all()
+            )
+            visit_raw: dict = defaultdict(lambda: {"total": 0, "object": 0, "supplier": 0, "overdue": 0})
+            for name, vtype, cnt, overdue in visit_rows:
+                if name:
+                    visit_raw[name]["total"] += cnt
+                    visit_raw[name]["overdue"] += overdue or 0
+                    if vtype == "К поставщику":
+                        visit_raw[name]["supplier"] += cnt
+                    else:
+                        visit_raw[name]["object"] += cnt
+            visit_map = {emp.id: dict(visit_raw[emp.full_name]) for emp in employees if emp.full_name and emp.full_name in visit_raw}
+        else:
+            visit_map = {}
 
         result = []
         for emp in employees:

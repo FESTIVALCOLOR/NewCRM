@@ -253,8 +253,8 @@
                   <div class="text-caption" style="color: #888; font-size: 10px">
                     {{ sc.label }}
                   </div>
-                  <div class="text-weight-bold q-mt-xs" :style="{ color: kpiColor(sc.value), fontSize: '18px' }">
-                    {{ sc.value.toFixed(1) }}
+                  <div class="text-weight-bold q-mt-xs" :style="{ color: sc.value != null ? kpiColor(sc.value) : '#ccc', fontSize: '18px' }">
+                    {{ sc.value != null ? sc.value.toFixed(1) : '—' }}
                   </div>
                   <div class="text-caption" style="color: #ccc; font-size: 9px">
                     из {{ sc.scale }}
@@ -362,7 +362,7 @@ async function loadData() {
 
   const [dashR, empR, projR, survR] = await Promise.allSettled([
     statisticsApi.getDashboard(params),
-    statisticsApi.getEmployees(params),
+    statisticsApi.getEmployees({ ...params, project_type: projectTab.value }),
     statisticsApi.getProjects({ ...params, project_type: pt }),
     surveyApi.getStats({ project_type: PT_ENG[pt] || 'individual' }),
   ])
@@ -432,18 +432,19 @@ function empSurveyScores(emp) {
   const isGap = pos === 'ГАП'
   const isManager = pos.toLowerCase().includes('менеджер')
   const scores = []
-  if (emp.avg_nps != null) scores.push({ label: 'NPS', value: emp.avg_nps, scale: 10 })
-  if (emp.avg_csat != null) scores.push({ label: 'CSAT', value: emp.avg_csat, scale: 5 })
+  // NPS и CSAT — для всех ролей
+  scores.push({ label: 'NPS', value: emp.avg_nps ?? null, scale: 10 })
+  scores.push({ label: 'CSAT', value: emp.avg_csat ?? null, scale: 5 })
   // Дизайн: Дизайнер, СДП, ДАН
-  if (emp.avg_design != null && (isDesigner || isSdp || isDan)) scores.push({ label: 'Дизайн', value: emp.avg_design, scale: 5 })
-  // Сроки: Менеджер/Ст.менеджер, СДП, ДАН
-  if (emp.avg_deadline != null && (isManager || isSdp || isDan)) scores.push({ label: 'Сроки', value: emp.avg_deadline, scale: 5 })
-  // Общение: только Менеджер/Ст.менеджер
-  if (emp.avg_communication != null && isManager) scores.push({ label: 'Общение', value: emp.avg_communication, scale: 5 })
+  if (isDesigner || isSdp || isDan) scores.push({ label: 'Дизайн', value: emp.avg_design ?? null, scale: 5 })
+  // Сроки: Менеджер, СДП, ДАН
+  if (isManager || isSdp || isDan) scores.push({ label: 'Сроки', value: emp.avg_deadline ?? null, scale: 5 })
+  // Общение: только Менеджер
+  if (isManager) scores.push({ label: 'Общение', value: emp.avg_communication ?? null, scale: 5 })
   // Ожидания: ГАП, Менеджер, Чертёжник, ДАН
-  if (emp.avg_expectations != null && (isGap || isManager || isDraftsman || isDan)) scores.push({ label: 'Ожидания', value: emp.avg_expectations, scale: 5 })
+  if (isGap || isManager || isDraftsman || isDan) scores.push({ label: 'Ожидания', value: emp.avg_expectations ?? null, scale: 5 })
   // Надзор: только ДАН
-  if (emp.avg_supervision != null && isDan) scores.push({ label: 'Надзор', value: emp.avg_supervision, scale: 5 })
+  if (isDan) scores.push({ label: 'Надзор', value: emp.avg_supervision ?? null, scale: 5 })
   return scores
 }
 
@@ -459,7 +460,7 @@ function showVisitStats(emp) {
   const pos = emp.position || ''
   const isDan = pos === 'ДАН' || pos === 'Дизайнер авторского надзора'
   const isManager = pos.toLowerCase().includes('менеджер')
-  return (isDan || isManager) && ((emp.visits_total ?? 0) > 0 || (emp.visits_overdue ?? 0) > 0)
+  return isDan || isManager
 }
 
 function resetFilters() {
