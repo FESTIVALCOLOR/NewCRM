@@ -1513,6 +1513,7 @@
         :card-id="card?.id"
         :contract-id="card?.contract_id"
         :contract-data="contractData"
+        :card-surveyor-id="card?.surveyor_id ?? null"
         @saved="onMeasurementSaved"
       />
 

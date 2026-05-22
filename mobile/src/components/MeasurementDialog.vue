@@ -195,6 +195,7 @@ const props = defineProps({
   cardId: { type: Number, default: null },
   contractId: { type: Number, default: null },
   contractData: { type: Object, default: null },
+  cardSurveyorId: { type: Number, default: null },
 })
 const emit = defineEmits(['update:modelValue', 'saved'])
 
@@ -255,6 +256,7 @@ async function loadSurveyors() {
         .filter(e => e.status === 'активный' && (e.position === 'Замерщик' || e.secondary_position === 'Замерщик'))
         .map(e => ({ id: e.id, label: e.full_name })),
     ]
+    if (props.cardSurveyorId) surveyorId.value = props.cardSurveyorId
   } catch {}
 }
 

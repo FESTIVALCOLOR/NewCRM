@@ -354,6 +354,7 @@
       :card-id="measCardId"
       :contract-id="measContractId"
       :contract-data="measContractData"
+      :card-surveyor-id="measSurveyorId"
       @saved="onMeasurementSaved"
     />
     <tech-task-dialog
@@ -461,6 +462,7 @@ const showMeasDialog = ref(false)
 const measCardId = ref(null)
 const measContractId = ref(null)
 const measContractData = ref(null)
+const measSurveyorId = ref(null)
 const terminationReason = ref('')
 const archiveSearch = ref('')
 const archiveCount = ref(0)
@@ -553,6 +555,7 @@ function openCard(cardId) { router.push(`/crm/${cardId}`) }
 async function openMeasurementDialog(card) {
   measCardId.value = card.id
   measContractId.value = card.contract_id
+  measSurveyorId.value = card.surveyor_id || null
   try {
     const { data } = await contractsApi.getById(card.contract_id)
     measContractData.value = data
