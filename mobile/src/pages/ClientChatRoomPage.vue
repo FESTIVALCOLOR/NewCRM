@@ -2745,7 +2745,13 @@ async function onMembersDialogOpen() {
     }
     for (const se of (data.stage_executors || [])) {
       if (se.executor_id) {
-        emps.set(se.executor_id, { name: se.executor_name || `Сотрудник #${se.executor_id}`, role: se.stage_name || 'Исполнитель' })
+        const existing = emps.get(se.executor_id)
+        const stageName = se.stage_name || 'Исполнитель'
+        if (existing) {
+          existing.role = existing.role.includes(stageName) ? existing.role : existing.role + ' + ' + stageName
+        } else {
+          emps.set(se.executor_id, { name: se.executor_name || `Сотрудник #${se.executor_id}`, role: stageName })
+        }
       }
     }
     const memberIds = new Set(members.value.filter(m => m.employee_id).map(m => m.employee_id))
