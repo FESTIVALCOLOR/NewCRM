@@ -2681,45 +2681,13 @@ async function doAssign() {
         await crmApi.assignExecutor(card.value.id, { stage_name: stageName, executor_id: assignEmployeeId.value, deadline: assignDeadline.value || null })
         // Оплата НЕ создаётся здесь — только при ПЕРЕМЕЩЕНИИ на стадию
       } else if (roleKey === 'surveyor') {
-        // Замерщик — назначаем без оплаты (оплата при загрузке замера)
+        // Замерщик — сервер auto_create_employee_payment создаёт платёж автоматически
         await crmApi.updateCard(card.value.id, { surveyor_id: assignEmployeeId.value })
-        // Создаём запись оплаты БЕЗ report_month (будет заполнен при загрузке замера)
-        try {
-          const calcRes = await paymentsApi.calculate({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName })
-          const fullAmount = typeof calcRes.data === 'number' ? calcRes.data : (calcRes.data?.amount || 0)
-          if (fullAmount > 0) {
-            await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, payment_type: 'Полная оплата', crm_card_id: card.value.id, calculated_amount: fullAmount, final_amount: fullAmount, report_month: null })
-          }
-        } catch {}
       } else {
-        // Руководство (СМ, СДП, ГАП, Менеджер) — назначение + оплата сразу
+        // Руководство (СМ, СДП, ГАП, Менеджер) — сервер auto_create_employee_payment
+        // создаёт платежи автоматически при updateCard, дублировать не нужно
         const update = {}; update[`${roleKey}_id`] = assignEmployeeId.value
         await crmApi.updateCard(card.value.id, update)
-
-        // Удаляем старые оплаты для этой роли
-        const oldPayments = cardPayments.value.filter(p => p.role === roleName)
-        for (const op of oldPayments) { try { await paymentsApi.delete(op.id) } catch {} }
-
-        // Создаём оплату (шаблонные: СМ и Менеджер без оплаты)
-        const skipPayment = isTemplate && ['senior_manager', 'manager'].includes(roleKey)
-        if (!skipPayment) {
-          try {
-            const calcRes = await paymentsApi.calculate({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName })
-            const fullAmount = typeof calcRes.data === 'number' ? calcRes.data : (calcRes.data?.amount || 0)
-            if (fullAmount > 0) {
-              if (roleKey === 'sdp') {
-                // СДП: Аванс 50% + Доплата 50%
-                const advance = Math.round(fullAmount / 2)
-                const balance = fullAmount - advance
-                const month = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
-                await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, payment_type: 'Аванс', crm_card_id: card.value.id, calculated_amount: advance, final_amount: advance, report_month: month })
-                await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, payment_type: 'Доплата', crm_card_id: card.value.id, calculated_amount: balance, final_amount: balance, report_month: null })
-              } else {
-                await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, payment_type: 'Полная оплата', crm_card_id: card.value.id, calculated_amount: fullAmount, final_amount: fullAmount, report_month: null })
-              }
-            }
-          } catch (e) { console.warn('Ошибка оплаты:', e) }
-        }
       }
 
       // История
