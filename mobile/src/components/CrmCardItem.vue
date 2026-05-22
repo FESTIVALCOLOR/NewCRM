@@ -343,13 +343,13 @@ const teamMembers = computed(() => {
   add('Менеджер', c.manager_name)
   add('Замерщик', c.surveyor_name)
   // Стадии в правильном порядке: 1 → 2 → 3
-  add('Пл.решения', c.stage_plan_name, c.stage_plan_completed)
+  add('Стадия 1', c.stage_plan_name, c.stage_plan_completed)
   if (c.project_type === 'Шаблонный') {
-    add('Чертёжник', c.draftsman_name, c.draftsman_completed) // Стадия 2
-    add('Визуализация', c.designer_name, c.designer_completed) // Стадия 3
+    add('Стадия 2', c.draftsman_name, c.draftsman_completed)
+    add('Стадия 3', c.designer_name, c.designer_completed)
   } else {
-    add('Концепция', c.designer_name, c.designer_completed) // Стадия 2
-    add('Чертёжник', c.draftsman_name, c.draftsman_completed) // Стадия 3
+    add('Стадия 2', c.designer_name, c.designer_completed)
+    add('Стадия 3', c.draftsman_name, c.draftsman_completed)
   }
   return items
 })
@@ -415,11 +415,11 @@ const workSubmittedText = computed(() => {
   const col = (c.column_name || '').toLowerCase()
   const parts = []
   if (col.includes('планировочн')) {
-    if (c.stage_plan_completed) parts.push(`Пл.решения ${c.stage_plan_name}`)
+    if (c.stage_plan_completed) parts.push(`Стадия 1: ${c.stage_plan_name}`)
   } else if (col.includes('концепция') || col.includes('визуализац')) {
-    if (c.designer_completed) parts.push(`Дизайнер ${c.designer_name}`)
+    if (c.designer_completed) parts.push(`Стадия 2: ${c.designer_name}`)
   } else if (col.includes('чертеж') || col.includes('чертёж')) {
-    if (c.draftsman_completed) parts.push(`Чертёжник ${c.draftsman_name}`)
+    if (c.draftsman_completed) parts.push(`Стадия 3: ${c.draftsman_name}`)
   }
   return parts.length > 0 ? `Работа сдана: ${parts.join(', ')}` : null
 })
