@@ -102,6 +102,9 @@
             <span class="contract-addr">{{ contract.address || 'Без адреса' }}</span>
             <span v-if="contract.agent_type" class="contract-agent" :style="{ background: agentColor(contract.agent_type) }">{{ contract.agent_type }}</span>
           </div>
+          <div v-if="contract.project_type" class="contract-row3">
+            <span class="contract-type-info">{{ shortType(contract.project_type) }}<template v-if="contract.project_subtype"> | {{ contract.project_subtype }}</template></span>
+          </div>
         </div>
         <div v-if="filtered.length === 0" class="text-center q-pa-xl text-grey-5">
           <q-icon name="description" size="48px" class="q-mb-sm" />
@@ -115,6 +118,7 @@
           <span class="lh-num">№</span>
           <span class="lh-addr">Адрес</span>
           <span class="lh-type">Тип</span>
+          <span class="lh-subtype">Подтип</span>
           <span class="lh-status">Статус</span>
           <span class="lh-agent">Агент</span>
         </div>
@@ -127,7 +131,8 @@
         >
           <span class="lh-num ls-num">{{ contract.contract_number }}</span>
           <span class="lh-addr ls-addr">{{ contract.address || '—' }}</span>
-          <span class="lh-type ls-meta">{{ contract.project_type === 'Индивидуальный' ? 'Инд.' : contract.project_type === 'Шаблонный' ? 'Шабл.' : (contract.project_type || '—') }}</span>
+          <span class="lh-type ls-meta">{{ shortType(contract.project_type) }}</span>
+          <span class="lh-subtype ls-meta">{{ contract.project_subtype || '—' }}</span>
           <span class="lh-status">
             <q-badge :color="statusColor(contract.status)" :label="shortStatus(contract.status)" style="font-size: 10px; padding: 2px 5px" />
           </span>
@@ -244,6 +249,12 @@ const filtered = computed(() => {
   return items
 })
 
+function shortType(type) {
+  if (type === 'Индивидуальный') return 'Инд.'
+  if (type === 'Шаблонный') return 'Шабл.'
+  return type || '—'
+}
+
 function shortStatus(status) {
   if (!status) return '—'
   if (status.includes('НАДЗОР') || status.includes('надзор')) return 'Автор. надзор'
@@ -306,11 +317,12 @@ onMounted(() => loadContracts())
 .contract-row-ls:last-of-type { border-radius: 0 0 8px 8px; }
 .contract-row-ls:hover { background: #F9F9F9; }
 /* колонки ландшафта */
-.lh-num   { width: 72px; flex-shrink: 0; font-size: 11px; }
-.lh-addr  { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
-.lh-type  { width: 44px; flex-shrink: 0; font-size: 11px; }
-.lh-status { width: 100px; flex-shrink: 0; }
-.lh-agent { width: 80px; flex-shrink: 0; }
+.lh-num     { width: 72px; flex-shrink: 0; font-size: 11px; }
+.lh-addr    { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.lh-type    { width: 40px; flex-shrink: 0; font-size: 11px; }
+.lh-subtype { width: 110px; flex-shrink: 0; font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lh-status  { width: 100px; flex-shrink: 0; }
+.lh-agent   { width: 80px; flex-shrink: 0; }
 /* значения в строках */
 .ls-num   { font-weight: bold; color: #333; }
 .ls-addr  { color: #444; }
@@ -359,6 +371,13 @@ onMounted(() => loadContracts())
   border-radius: 4px;
   white-space: nowrap;
   flex-shrink: 0;
+}
+.contract-row3 {
+  margin-top: 3px;
+}
+.contract-type-info {
+  font-size: 10px;
+  color: #999;
 }
 /* Радиус поиска и фильтров = радиус таблицы (8px) */
 .crm-search-input :deep(.q-field__control) { border-radius: 8px; }
