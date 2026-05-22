@@ -324,7 +324,7 @@ const activeHighlightRole = computed(() => {
   return null
 })
 
-const ROLE_KEY_MAP = { СМ: 'senior_manager', СДП: 'sdp', ГАП: 'gap', Менеджер: 'manager', Замерщик: 'surveyor', Дизайнер: 'designer', Чертёжник: 'draftsman' }
+const ROLE_KEY_MAP = { СМ: 'senior_manager', СДП: 'sdp', ГАП: 'gap', Менеджер: 'manager', Замерщик: 'surveyor', Дизайнер: 'designer', Чертёжник: 'draftsman', 'Пл.решения': 'designer', Концепция: 'designer', Визуализация: 'designer' }
 
 // === Команда с подсветкой ===
 const teamMembers = computed(() => {
@@ -342,8 +342,15 @@ const teamMembers = computed(() => {
   add('ГАП', c.gap_name)
   add('Менеджер', c.manager_name)
   add('Замерщик', c.surveyor_name)
-  add('Дизайнер', c.designer_name, c.designer_completed)
-  add('Чертёжник', c.draftsman_name, c.draftsman_completed)
+  // Стадии в правильном порядке: 1 → 2 → 3
+  add('Пл.решения', c.stage_plan_name, c.stage_plan_completed)
+  if (c.project_type === 'Шаблонный') {
+    add('Чертёжник', c.draftsman_name, c.draftsman_completed) // Стадия 2
+    add('Визуализация', c.designer_name, c.designer_completed) // Стадия 3
+  } else {
+    add('Концепция', c.designer_name, c.designer_completed) // Стадия 2
+    add('Чертёжник', c.draftsman_name, c.draftsman_completed) // Стадия 3
+  }
   return items
 })
 
@@ -407,10 +414,11 @@ const workSubmittedText = computed(() => {
   const c = props.card
   const col = (c.column_name || '').toLowerCase()
   const parts = []
-  if (col.includes('концепция') || col.includes('визуализац')) {
+  if (col.includes('планировочн')) {
+    if (c.stage_plan_completed) parts.push(`Пл.решения ${c.stage_plan_name}`)
+  } else if (col.includes('концепция') || col.includes('визуализац')) {
     if (c.designer_completed) parts.push(`Дизайнер ${c.designer_name}`)
-  }
-  if (col.includes('планировочн') || col.includes('чертеж') || col.includes('чертёж')) {
+  } else if (col.includes('чертеж') || col.includes('чертёж')) {
     if (c.draftsman_completed) parts.push(`Чертёжник ${c.draftsman_name}`)
   }
   return parts.length > 0 ? `Работа сдана: ${parts.join(', ')}` : null
@@ -423,6 +431,7 @@ const empPos = computed(() => auth.user?.position || '')
 const canSubmitWork = computed(() => {
   if (ws.value && ws.value !== 'in_progress' && ws.value !== 'active' && ws.value !== 'revision') return false
   const c = props.card
+  if (empPos.value === 'Дизайнер' && c.stage_plan_name === empName.value && !c.stage_plan_completed) return true
   if (empPos.value === 'Дизайнер' && c.designer_name === empName.value && !c.designer_completed) return true
   if ((empPos.value === 'Чертёжник' || auth.user?.secondary_position === 'Чертёжник') && c.draftsman_name === empName.value && !c.draftsman_completed) return true
   return false
@@ -430,7 +439,7 @@ const canSubmitWork = computed(() => {
 const showWaitReview = computed(() => {
   if (ws.value !== 'pending_review') return false
   const c = props.card
-  if (empPos.value === 'Дизайнер' && c.designer_name === empName.value) return true
+  if (empPos.value === 'Дизайнер' && (c.stage_plan_name === empName.value || c.designer_name === empName.value)) return true
   if (empPos.value === 'Чертёжник' && c.draftsman_name === empName.value) return true
   return false
 })

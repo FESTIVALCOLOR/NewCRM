@@ -357,16 +357,19 @@ async def get_crm_cards(project_type: Optional[str] = None, archived: bool = Fal
             manager_name = card.manager.full_name if card.manager else None
             surveyor_name = card.surveyor.full_name if card.surveyor else None
 
-            # ИСПРАВЛЕНИЕ 06.02.2026: Добавлен поиск по '3д визуализация' для шаблонных проектов (#10)
             # Use batch-loaded executors instead of per-card queries
             card_executors = executors_by_card.get(card.id, [])
 
-            # Find designer executor: stage_name contains 'концепция' or 'визуализация', latest by id
+            # Stage 1 (планировочные решения) — оба типа проектов
+            stage_plan_candidates = [e for e in card_executors if "планировочные" in (e.stage_name or "").lower()]
+            stage_plan_executor = max(stage_plan_candidates, key=lambda e: e.id) if stage_plan_candidates else None
+
+            # Stage 2 Индивидуальный (концепция) / Stage 3 Шаблонный (визуализация)
             designer_candidates = [e for e in card_executors if "концепция" in (e.stage_name or "").lower() or "визуализация" in (e.stage_name or "").lower()]
             designer_executor = max(designer_candidates, key=lambda e: e.id) if designer_candidates else None
 
-            # Find draftsman executor: stage_name contains 'чертежи' or 'планировочные', latest by id
-            draftsman_candidates = [e for e in card_executors if "чертежи" in (e.stage_name or "").lower() or "планировочные" in (e.stage_name or "").lower()]
+            # Stage 3 Индивидуальный / Stage 2 Шаблонный (рабочие чертежи — без планировочных)
+            draftsman_candidates = [e for e in card_executors if "чертежи" in (e.stage_name or "").lower() and "планировочные" not in (e.stage_name or "").lower()]
             draftsman_executor = max(draftsman_candidates, key=lambda e: e.id) if draftsman_candidates else None
 
             # Find executor for CURRENT stage only — for accurate deadline display
@@ -374,6 +377,7 @@ async def get_crm_cards(project_type: Optional[str] = None, archived: bool = Fal
             current_col_executor = max(current_col_executors, key=lambda e: e.id) if current_col_executors else None
 
             # Get executor names from batch-loaded employees map
+            stage_plan_employee = executor_employees_map.get(stage_plan_executor.executor_id) if stage_plan_executor else None
             designer_employee = executor_employees_map.get(designer_executor.executor_id) if designer_executor else None
             draftsman_employee = executor_employees_map.get(draftsman_executor.executor_id) if draftsman_executor else None
 
@@ -418,6 +422,8 @@ async def get_crm_cards(project_type: Optional[str] = None, archived: bool = Fal
                 "measurement_file_name": contract.measurement_file_name,
                 "measurement_yandex_path": contract.measurement_yandex_path,
                 "measurement_date": str(contract.measurement_date) if contract.measurement_date else None,
+                "stage_plan_name": stage_plan_employee.full_name if stage_plan_employee else None,
+                "stage_plan_completed": stage_plan_executor.completed if stage_plan_executor else False,
                 "designer_name": designer_employee.full_name if designer_employee else None,
                 "designer_completed": designer_executor.completed if designer_executor else False,
                 "designer_deadline": str(designer_executor.deadline) if designer_executor and designer_executor.deadline else None,
