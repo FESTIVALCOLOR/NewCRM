@@ -320,9 +320,9 @@ onMounted(() => loadContracts())
 .lh-num     { width: 72px; flex-shrink: 0; font-size: 11px; }
 .lh-addr    { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
 .lh-type    { width: 40px; flex-shrink: 0; font-size: 11px; }
-.lh-subtype { width: 110px; flex-shrink: 0; font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.lh-status  { width: 100px; flex-shrink: 0; }
-.lh-agent   { width: 80px; flex-shrink: 0; }
+.lh-subtype { width: 160px; flex-shrink: 0; font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lh-status  { width: 100px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.lh-agent   { width: 80px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
 /* значения в строках */
 .ls-num   { font-weight: bold; color: #333; }
 .ls-addr  { color: #444; }
