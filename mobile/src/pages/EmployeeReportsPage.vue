@@ -456,7 +456,7 @@ function kpiColor(v) {
 }
 
 function showVisitStats(emp) {
-  if (!emp) return false
+  if (!emp || projectTab.value !== 'supervision') return false
   const pos = emp.position || ''
   const isDan = pos === 'ДАН' || pos === 'Дизайнер авторского надзора'
   const isManager = pos.toLowerCase().includes('менеджер')
