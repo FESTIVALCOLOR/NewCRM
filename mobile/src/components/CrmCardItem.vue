@@ -458,6 +458,7 @@ const showAddTechTask = computed(() => {
 .crm-add-btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 3px;
   flex: 1;
   min-height: 28px;
@@ -472,7 +473,7 @@ const showAddTechTask = computed(() => {
   white-space: normal;
   word-break: break-word;
   line-height: 1.3;
-  text-align: left;
+  text-align: center;
 }
 .crm-add-measurement { background: #F39C12; }
 .crm-add-techtask { background: #9B59B6; }

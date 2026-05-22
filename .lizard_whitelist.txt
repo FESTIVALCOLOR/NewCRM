@@ -51,3 +51,4 @@ export_timeline_pdf
 dispatch_notification
 build_project_timeline_template
 build_template_project_timeline
+_do_seed_scripts

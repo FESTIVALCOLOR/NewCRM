@@ -4,42 +4,72 @@
     app.include_router(messenger_router, prefix="/api/messenger")
     app.include_router(sync_messenger_router, prefix="/api/sync")
 """
+
+import asyncio
+from datetime import datetime
 import logging
 import os
-import asyncio
 import tempfile
 import time
-from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException
-import sqlalchemy as sa
-from sqlalchemy.orm import Session
 from typing import List, Optional
 
-from database import (
-    get_db, Employee, Client, Contract, ProjectFile,
-    CRMCard, SupervisionCard,
-    MessengerChat, MessengerChatMember, MessengerScript, MessengerSetting, MessengerMessageLog,
-)
 from auth import get_current_user
 from constants import SUPERUSER_ROLES
+from email_service import get_email_service
+from fastapi import APIRouter, Depends, HTTPException
+from messenger_schemas import (
+    ChatMemberInput,
+    ChatMemberResponse,
+    MessageLogResponse,
+    MessengerChatBind,
+    MessengerChatCreate,
+    MessengerChatDetailResponse,
+    MessengerChatResponse,
+    MessengerScriptCreate,
+    MessengerScriptResponse,
+    MessengerScriptUpdate,
+    MessengerSettingResponse,
+    MessengerSettingsBulkUpdate,
+    MessengerSettingUpdate,
+    PreviewActRequest,
+    PreviewActResponse,
+    PreviewScriptRequest,
+    PreviewScriptResponse,
+    SendActRequest,
+    SendEditedScriptRequest,
+    SendFilesRequest,
+    SendInvitesRequest,
+    SendMessageRequest,
+    SendScriptMessageRequest,
+    SupervisionChatCreate,
+)
 from permissions import require_permission
 from pydantic import BaseModel
-from messenger_schemas import (
-    MessengerChatCreate, MessengerChatBind, SupervisionChatCreate,
-    MessengerChatResponse, MessengerChatDetailResponse,
-    ChatMemberInput, ChatMemberResponse,
-    MessengerScriptCreate, MessengerScriptUpdate, MessengerScriptResponse,
-    MessengerSettingUpdate, MessengerSettingResponse, MessengerSettingsBulkUpdate,
-    SendMessageRequest, SendFilesRequest, SendScriptMessageRequest, MessageLogResponse,
-    SendInvitesRequest, PreviewScriptRequest, PreviewScriptResponse, SendEditedScriptRequest,
-    PreviewActRequest, PreviewActResponse, SendActRequest,
-)
-from telegram_service import get_telegram_service, PYROGRAM_AVAILABLE
-from email_service import get_email_service
 from services.notification_service import (
-    send_invites_to_members, build_script_context, decline_name_dative,
-    trigger_messenger_notification, trigger_supervision_notification,
     _find_matching_script,
+    build_script_context,
+    decline_name_dative,
+    send_invites_to_members,
+    trigger_messenger_notification,
+    trigger_supervision_notification,
+)
+import sqlalchemy as sa
+from sqlalchemy.orm import Session
+from telegram_service import PYROGRAM_AVAILABLE, get_telegram_service
+
+from database import (
+    Client,
+    Contract,
+    CRMCard,
+    Employee,
+    MessengerChat,
+    MessengerChatMember,
+    MessengerMessageLog,
+    MessengerScript,
+    MessengerSetting,
+    ProjectFile,
+    SupervisionCard,
+    get_db,
 )
 
 logger = logging.getLogger(__name__)
@@ -54,18 +84,18 @@ _CHAT_CREATE_LOCK_NS = 900100  # namespace для pg_advisory_xact_lock(ns, card
 # HELPER-ФУНКЦИИ
 # =============================================
 
-_settings_cache = {'data': None, 'ts': 0}
+_settings_cache = {"data": None, "ts": 0}
 
 
 def load_messenger_settings(db: Session, force: bool = False) -> dict:
     """Загрузить настройки мессенджера из БД с кэшированием (TTL 60 сек)"""
-    if not force and _settings_cache['data'] is not None and time.time() - _settings_cache['ts'] < 60:
-        return _settings_cache['data']
+    if not force and _settings_cache["data"] is not None and time.time() - _settings_cache["ts"] < 60:
+        return _settings_cache["data"]
     result = {}
     for row in db.query(MessengerSetting).all():
         result[row.setting_key] = row.setting_value or ""
-    _settings_cache['data'] = result
-    _settings_cache['ts'] = time.time()
+    _settings_cache["data"] = result
+    _settings_cache["ts"] = time.time()
     return result
 
 
@@ -684,7 +714,7 @@ def _do_seed_scripts(db: Session):
             message_template=(
                 "{client_first_name}, добрый день!\n\n"
                 "По Вашему объекту ({address}) завершена стадия:\n"
-                "\"{stage_name}\".\n\n"
+                '"{stage_name}".\n\n'
                 "В приложении — отчёт по данной стадии с перечнем\n"
                 "выбранных позиций, поставщиков и стоимости.\n\n"
                 "Если у Вас есть вопросы по выбранным позициям — пишите\n"
@@ -758,9 +788,7 @@ def _do_seed_scripts(db: Session):
             script_type="personal_assigned",
             project_type="Индивидуальный",
             stage_name=None,
-            message_template=(
-                "Вы назначены {role_name} по проекту {address} ({client_name})."
-            ),
+            message_template=("Вы назначены {role_name} по проекту {address} ({client_name})."),
             use_auto_deadline=False,
             attach_stage_files=False,
             is_enabled=True,
@@ -771,9 +799,7 @@ def _do_seed_scripts(db: Session):
             script_type="personal_crm_stage",
             project_type="Индивидуальный",
             stage_name=None,
-            message_template=(
-                "Проект {address} перешёл в \"{stage_name}\". Приступайте к работе."
-            ),
+            message_template=('Проект {address} перешёл в "{stage_name}". Приступайте к работе.'),
             use_auto_deadline=False,
             attach_stage_files=False,
             is_enabled=True,
@@ -784,9 +810,7 @@ def _do_seed_scripts(db: Session):
             script_type="personal_crm_stage",
             project_type="Индивидуальный",
             stage_name=None,
-            message_template=(
-                "Проект {address} перешёл в \"{stage_name}\". Вы — проверяющий."
-            ),
+            message_template=('Проект {address} перешёл в "{stage_name}". Вы — проверяющий.'),
             use_auto_deadline=False,
             attach_stage_files=False,
             is_enabled=True,
@@ -797,9 +821,7 @@ def _do_seed_scripts(db: Session):
             script_type="personal_crm_stage",
             project_type="Индивидуальный",
             stage_name=None,
-            message_template=(
-                "{executor_role} сдал работу по проекту {address}, стадия \"{stage_name}\". Проверьте."
-            ),
+            message_template=('{executor_role} сдал работу по проекту {address}, стадия "{stage_name}". Проверьте.'),
             use_auto_deadline=False,
             attach_stage_files=False,
             is_enabled=True,
@@ -810,9 +832,7 @@ def _do_seed_scripts(db: Session):
             script_type="personal_crm_stage",
             project_type="Индивидуальный",
             stage_name=None,
-            message_template=(
-                "Работа по проекту {address} возвращена на исправление (правка #{revision_count})."
-            ),
+            message_template=("Работа по проекту {address} возвращена на исправление (правка #{revision_count})."),
             use_auto_deadline=False,
             attach_stage_files=False,
             is_enabled=True,
@@ -823,9 +843,7 @@ def _do_seed_scripts(db: Session):
             script_type="personal_crm_stage",
             project_type="Индивидуальный",
             stage_name=None,
-            message_template=(
-                "Проект {address} отправлен клиенту на согласование ({stage_name})."
-            ),
+            message_template=("Проект {address} отправлен клиенту на согласование ({stage_name})."),
             use_auto_deadline=False,
             attach_stage_files=False,
             is_enabled=True,
@@ -836,9 +854,7 @@ def _do_seed_scripts(db: Session):
             script_type="personal_crm_stage",
             project_type="Индивидуальный",
             stage_name=None,
-            message_template=(
-                "Клиент согласовал {stage_name} по проекту {address}."
-            ),
+            message_template=("Клиент согласовал {stage_name} по проекту {address}."),
             use_auto_deadline=False,
             attach_stage_files=False,
             is_enabled=True,
@@ -849,9 +865,7 @@ def _do_seed_scripts(db: Session):
             script_type="personal_crm_stage",
             project_type="Индивидуальный",
             stage_name=None,
-            message_template=(
-                "Акт по {stage_name} проекта {address} подписан."
-            ),
+            message_template=("Акт по {stage_name} проекта {address} подписан."),
             use_auto_deadline=False,
             attach_stage_files=False,
             is_enabled=True,
@@ -862,9 +876,7 @@ def _do_seed_scripts(db: Session):
             script_type="personal_crm_stage",
             project_type="Индивидуальный",
             stage_name=None,
-            message_template=(
-                "Проект {address} завершён."
-            ),
+            message_template=("Проект {address} завершён."),
             use_auto_deadline=False,
             attach_stage_files=False,
             is_enabled=True,
@@ -875,9 +887,7 @@ def _do_seed_scripts(db: Session):
             script_type="personal_deadline",
             project_type="Индивидуальный",
             stage_name=None,
-            message_template=(
-                "Дедлайн по проекту {address} через 2 рабочих дня ({deadline_date})."
-            ),
+            message_template=("Дедлайн по проекту {address} через 2 рабочих дня ({deadline_date})."),
             use_auto_deadline=False,
             attach_stage_files=False,
             is_enabled=True,
@@ -888,9 +898,7 @@ def _do_seed_scripts(db: Session):
             script_type="personal_deadline",
             project_type="Индивидуальный",
             stage_name=None,
-            message_template=(
-                "Дедлайн по проекту {address} просрочен! Было: {deadline_date}."
-            ),
+            message_template=("Дедлайн по проекту {address} просрочен! Было: {deadline_date}."),
             use_auto_deadline=False,
             attach_stage_files=False,
             is_enabled=True,
@@ -901,9 +909,7 @@ def _do_seed_scripts(db: Session):
             script_type="personal_payment",
             project_type="Индивидуальный",
             stage_name=None,
-            message_template=(
-                "Создана оплата {amount} руб. по договору {contract_number} ({address})."
-            ),
+            message_template=("Создана оплата {amount} руб. по договору {contract_number} ({address})."),
             use_auto_deadline=False,
             attach_stage_files=False,
             is_enabled=True,
@@ -917,9 +923,7 @@ def _do_seed_scripts(db: Session):
             script_type="personal_assigned",
             project_type="Шаблонный",
             stage_name=None,
-            message_template=(
-                "Вы назначены {role_name} по проекту {address} ({client_name})."
-            ),
+            message_template=("Вы назначены {role_name} по проекту {address} ({client_name})."),
             use_auto_deadline=False,
             attach_stage_files=False,
             is_enabled=True,
@@ -930,9 +934,7 @@ def _do_seed_scripts(db: Session):
             script_type="personal_crm_stage",
             project_type="Шаблонный",
             stage_name=None,
-            message_template=(
-                "Проект {address} перешёл в \"{stage_name}\". Приступайте к работе."
-            ),
+            message_template=('Проект {address} перешёл в "{stage_name}". Приступайте к работе.'),
             use_auto_deadline=False,
             attach_stage_files=False,
             is_enabled=True,
@@ -943,9 +945,7 @@ def _do_seed_scripts(db: Session):
             script_type="personal_crm_stage",
             project_type="Шаблонный",
             stage_name=None,
-            message_template=(
-                "{executor_role} сдал работу по проекту {address}. Проверьте."
-            ),
+            message_template=("{executor_role} сдал работу по проекту {address}. Проверьте."),
             use_auto_deadline=False,
             attach_stage_files=False,
             is_enabled=True,
@@ -956,9 +956,7 @@ def _do_seed_scripts(db: Session):
             script_type="personal_crm_stage",
             project_type="Шаблонный",
             stage_name=None,
-            message_template=(
-                "Проект {address} завершён."
-            ),
+            message_template=("Проект {address} завершён."),
             use_auto_deadline=False,
             attach_stage_files=False,
             is_enabled=True,
@@ -969,9 +967,7 @@ def _do_seed_scripts(db: Session):
             script_type="personal_deadline",
             project_type="Шаблонный",
             stage_name=None,
-            message_template=(
-                "Дедлайн по проекту {address} через 2 рабочих дня ({deadline_date})."
-            ),
+            message_template=("Дедлайн по проекту {address} через 2 рабочих дня ({deadline_date})."),
             use_auto_deadline=False,
             attach_stage_files=False,
             is_enabled=True,
@@ -982,9 +978,7 @@ def _do_seed_scripts(db: Session):
             script_type="personal_deadline",
             project_type="Шаблонный",
             stage_name=None,
-            message_template=(
-                "Дедлайн по проекту {address} просрочен! Было: {deadline_date}."
-            ),
+            message_template=("Дедлайн по проекту {address} просрочен! Было: {deadline_date}."),
             use_auto_deadline=False,
             attach_stage_files=False,
             is_enabled=True,
@@ -998,9 +992,7 @@ def _do_seed_scripts(db: Session):
             script_type="personal_supervision",
             project_type="Авторский надзор",
             stage_name=None,
-            message_template=(
-                "Новая карточка авторского надзора: {address} ({client_name}). Назначьте сотрудников."
-            ),
+            message_template=("Новая карточка авторского надзора: {address} ({client_name}). Назначьте сотрудников."),
             use_auto_deadline=False,
             attach_stage_files=False,
             is_enabled=True,
@@ -1011,9 +1003,7 @@ def _do_seed_scripts(db: Session):
             script_type="personal_supervision",
             project_type="Авторский надзор",
             stage_name=None,
-            message_template=(
-                "Вы назначены дизайнером авторского надзора по объекту {address} ({client_name})."
-            ),
+            message_template=("Вы назначены дизайнером авторского надзора по объекту {address} ({client_name})."),
             use_auto_deadline=False,
             attach_stage_files=False,
             is_enabled=True,
@@ -1024,9 +1014,7 @@ def _do_seed_scripts(db: Session):
             script_type="personal_deadline",
             project_type="Авторский надзор",
             stage_name=None,
-            message_template=(
-                "Дедлайн по стадии \"{stage_name}\" надзора {address} через 2 рабочих дня ({deadline_date})."
-            ),
+            message_template=('Дедлайн по стадии "{stage_name}" надзора {address} через 2 рабочих дня ({deadline_date}).'),
             use_auto_deadline=False,
             attach_stage_files=False,
             is_enabled=True,
@@ -1037,9 +1025,7 @@ def _do_seed_scripts(db: Session):
             script_type="personal_supervision",
             project_type="Авторский надзор",
             stage_name=None,
-            message_template=(
-                "Стадия \"{stage_name}\" завершена по надзору {address}."
-            ),
+            message_template=('Стадия "{stage_name}" завершена по надзору {address}.'),
             use_auto_deadline=False,
             attach_stage_files=False,
             is_enabled=True,
@@ -1050,9 +1036,7 @@ def _do_seed_scripts(db: Session):
             script_type="personal_supervision",
             project_type="Авторский надзор",
             stage_name=None,
-            message_template=(
-                "Карточка надзора {address} приостановлена. Причина: {pause_reason}."
-            ),
+            message_template=("Карточка надзора {address} приостановлена. Причина: {pause_reason}."),
             use_auto_deadline=False,
             attach_stage_files=False,
             is_enabled=True,
@@ -1063,9 +1047,7 @@ def _do_seed_scripts(db: Session):
             script_type="personal_supervision",
             project_type="Авторский надзор",
             stage_name=None,
-            message_template=(
-                "Карточка надзора {address} возобновлена."
-            ),
+            message_template=("Карточка надзора {address} возобновлена."),
             use_auto_deadline=False,
             attach_stage_files=False,
             is_enabled=True,
@@ -1076,9 +1058,7 @@ def _do_seed_scripts(db: Session):
             script_type="personal_supervision",
             project_type="Авторский надзор",
             stage_name=None,
-            message_template=(
-                "Запланирован выезд по надзору {address} на {visit_date}."
-            ),
+            message_template=("Запланирован выезд по надзору {address} на {visit_date}."),
             use_auto_deadline=False,
             attach_stage_files=False,
             is_enabled=True,
@@ -1089,9 +1069,7 @@ def _do_seed_scripts(db: Session):
             script_type="personal_supervision",
             project_type="Авторский надзор",
             stage_name=None,
-            message_template=(
-                "Авторский надзор по {address} завершён."
-            ),
+            message_template=("Авторский надзор по {address} завершён."),
             use_auto_deadline=False,
             attach_stage_files=False,
             is_enabled=True,
@@ -1107,29 +1085,26 @@ def _do_seed_scripts(db: Session):
 
 def _build_chat_title(contract: Contract, card: CRMCard) -> str:
     """Сформировать название чата по контракту и CRM-карточке"""
-    city = (contract.city or '').replace('_', '-')
-    address = (contract.address or '').replace('_', '-')
+    city = (contract.city or "").replace("_", "-")
+    address = (contract.address or "").replace("_", "-")
     if city and address:
-        city_map = {'спб': 'санкт-петербург', 'мск': 'москва', 'нск': 'новосибирск', 'екб': 'екатеринбург'}
+        city_map = {"спб": "санкт-петербург", "мск": "москва", "нск": "новосибирск", "екб": "екатеринбург"}
         full_city = city_map.get(city.lower(), city.lower())
-        addr_check = address.lower().replace('_', '-')
+        addr_check = address.lower().replace("_", "-")
         for c in [full_city, city.lower()]:
             if addr_check.startswith(c):
-                address = address[len(c):].lstrip('.,;:_ -')
+                address = address[len(c) :].lstrip(".,;:_ -")
                 break
     # Определяем префикс по типу проекта: ИН — индивидуальный, ШП — шаблонный
-    project_type = (contract.project_type or '').strip().lower()
-    if 'шаблон' in project_type:
+    project_type = (contract.project_type or "").strip().lower()
+    if "шаблон" in project_type:
         prefix = "ШП"
     else:
         prefix = "ИН"
     return f"{prefix}-{city}-{address}"
 
 
-def _add_chat_members(
-    db: Session, chat: MessengerChat, members_input: list,
-    contract: Contract, card: CRMCard = None
-) -> list:
+def _add_chat_members(db: Session, chat: MessengerChat, members_input: list, contract: Contract, card: CRMCard = None) -> list:
     """Добавить участников в чат"""
     members_resp = []
 
@@ -1138,13 +1113,13 @@ def _add_chat_members(
         email = None
 
         telegram_user_id = None
-        if m.member_type == 'employee':
+        if m.member_type == "employee":
             emp = db.query(Employee).filter(Employee.id == m.member_id).first()
             if emp:
                 phone = emp.phone
                 email = emp.email
                 telegram_user_id = emp.telegram_user_id
-        elif m.member_type == 'client':
+        elif m.member_type == "client":
             cl = db.query(Client).filter(Client.id == m.member_id).first()
             if cl:
                 phone = cl.phone
@@ -1159,7 +1134,7 @@ def _add_chat_members(
             phone=phone,
             email=email,
             telegram_user_id=telegram_user_id,
-            invite_status='pending',
+            invite_status="pending",
         )
         db.add(member)
         db.flush()
@@ -1172,12 +1147,9 @@ def _add_chat_members(
 # PREVIEW SCRIPT (предпросмотр перед отправкой)
 # =============================================
 
+
 @router.post("/preview-script", response_model=PreviewScriptResponse)
-async def preview_script(
-    data: PreviewScriptRequest,
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def preview_script(data: PreviewScriptRequest, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Предпросмотр скрипта с рендерингом переменных и списком файлов подэтапа"""
     from database import ProjectTimelineEntry, StageWorkflowState
 
@@ -1188,33 +1160,35 @@ async def preview_script(
     if not contract:
         raise HTTPException(status_code=404, detail="Договор не найден")
 
-    stage_name = data.stage_name or card.column_name or ''
-    project_type = contract.project_type or ''
+    stage_name = data.stage_name or card.column_name or ""
+    project_type = contract.project_type or ""
 
     # Определяем stage_group и текущий подэтап через workflow state
-    from routers.crm_router import _resolve_stage_group, _add_business_days
+    from routers.crm_router import _add_business_days, _resolve_stage_group
+
     stage_group = _resolve_stage_group(stage_name)
 
     # Получить текущий подэтап из workflow state → substage_group из timeline
     script_stage_name = stage_name  # fallback
-    wf = db.query(StageWorkflowState).filter(
-        StageWorkflowState.crm_card_id == data.card_id,
-        StageWorkflowState.stage_name == stage_name
-    ).first()
+    wf = db.query(StageWorkflowState).filter(StageWorkflowState.crm_card_id == data.card_id, StageWorkflowState.stage_name == stage_name).first()
 
-    substage_group = ''
+    substage_group = ""
     if wf and wf.current_substep_code and stage_group:
         # Найти timeline entry по substep_code → получить substage_group
-        tl_entry = db.query(ProjectTimelineEntry).filter(
-            ProjectTimelineEntry.contract_id == contract.id,
-            ProjectTimelineEntry.stage_code == wf.current_substep_code,
-        ).first()
+        tl_entry = (
+            db.query(ProjectTimelineEntry)
+            .filter(
+                ProjectTimelineEntry.contract_id == contract.id,
+                ProjectTimelineEntry.stage_code == wf.current_substep_code,
+            )
+            .first()
+        )
         if tl_entry and tl_entry.substage_group:
             substage_group = tl_entry.substage_group
             # Скрипты имеют stage_name в формате "Стадия N, подэтап X.Y"
             # Маппинг: STAGE1 + "Подэтап 1.1" → "Стадия 1, подэтап 1.1"
-            stage_num = stage_group.replace('STAGE', '')
-            substep_num = substage_group.replace('Подэтап ', '')
+            stage_num = stage_group.replace("STAGE", "")
+            substep_num = substage_group.replace("Подэтап ", "")
             script_stage_name = f"Стадия {stage_num}, подэтап {substep_num}"
 
     # 1. Найти подходящий скрипт
@@ -1222,18 +1196,18 @@ async def preview_script(
 
     # 2. Собрать контекст и рендерить
     ctx = build_script_context(db, card, contract)
-    ctx['stage_name'] = substage_group or stage_name
+    ctx["stage_name"] = substage_group or stage_name
 
     # Подпись отправителя = текущий пользователь (не роль из карточки)
-    sender_name = current_user.full_name or ''
-    ctx['sender_name'] = sender_name
+    sender_name = current_user.full_name or ""
+    ctx["sender_name"] = sender_name
     # Шаблоны используют {senior_manager} или {manager_name} для подписи —
     # в превью заменяем на текущего пользователя (plain text, без tg-ссылки)
-    ctx['senior_manager'] = sender_name
-    ctx['manager_name'] = sender_name
+    ctx["senior_manager"] = sender_name
+    ctx["manager_name"] = sender_name
 
     # 3. Вычислить дедлайн по норма-дням
-    deadline_str = ''
+    deadline_str = ""
     norm_days_val = 0
 
     if stage_group:
@@ -1241,39 +1215,43 @@ async def preview_script(
         client_q = db.query(ProjectTimelineEntry).filter(
             ProjectTimelineEntry.contract_id == contract.id,
             ProjectTimelineEntry.stage_group == stage_group,
-            ProjectTimelineEntry.executor_role == 'Клиент',
-            ProjectTimelineEntry.actual_date.is_(None) | (ProjectTimelineEntry.actual_date == '')
+            ProjectTimelineEntry.executor_role == "Клиент",
+            ProjectTimelineEntry.actual_date.is_(None) | (ProjectTimelineEntry.actual_date == ""),
         )
         if substage_group:
-            client_q = client_q.filter(
-                ProjectTimelineEntry.substage_group == substage_group
-            )
+            client_q = client_q.filter(ProjectTimelineEntry.substage_group == substage_group)
         client_entry = client_q.order_by(ProjectTimelineEntry.sort_order).first()
 
         if client_entry:
             norm_days_val = client_entry.custom_norm_days or client_entry.norm_days or 3
-            prev_entry = db.query(ProjectTimelineEntry).filter(
-                ProjectTimelineEntry.contract_id == contract.id,
-                ProjectTimelineEntry.sort_order < client_entry.sort_order,
-                ProjectTimelineEntry.actual_date.isnot(None),
-                ProjectTimelineEntry.actual_date != ''
-            ).order_by(ProjectTimelineEntry.sort_order.desc()).first()
+            prev_entry = (
+                db.query(ProjectTimelineEntry)
+                .filter(
+                    ProjectTimelineEntry.contract_id == contract.id,
+                    ProjectTimelineEntry.sort_order < client_entry.sort_order,
+                    ProjectTimelineEntry.actual_date.isnot(None),
+                    ProjectTimelineEntry.actual_date != "",
+                )
+                .order_by(ProjectTimelineEntry.sort_order.desc())
+                .first()
+            )
 
             base_date = prev_entry.actual_date if prev_entry else None
             if not base_date:
                 from datetime import date as date_type
-                base_date = date_type.today().strftime('%Y-%m-%d')
+
+                base_date = date_type.today().strftime("%Y-%m-%d")
 
             try:
                 deadline_date = _add_business_days(base_date, norm_days_val)
-                deadline_str = deadline_date.strftime('%d.%m.%Y')
+                deadline_str = deadline_date.strftime("%d.%m.%Y")
             except Exception:
                 pass
 
-    ctx['deadline'] = deadline_str
-    ctx['deadline_date'] = deadline_str
+    ctx["deadline"] = deadline_str
+    ctx["deadline_date"] = deadline_str
 
-    rendered_text = ''
+    rendered_text = ""
     script_id = None
     script_name = None
     if script:
@@ -1284,26 +1262,31 @@ async def preview_script(
 
     # 4. Файлы подэтапа
     # STAGE1 → stage1, STAGE2 → stage2, STAGE3 → stage3
-    file_stage_code = stage_group.lower() if stage_group else ''
-    files = db.query(ProjectFile).filter(
-        ProjectFile.contract_id == contract.id,
-        ProjectFile.stage == file_stage_code,
-    ).order_by(ProjectFile.file_order, ProjectFile.variation).all()
+    file_stage_code = stage_group.lower() if stage_group else ""
+    files = (
+        db.query(ProjectFile)
+        .filter(
+            ProjectFile.contract_id == contract.id,
+            ProjectFile.stage == file_stage_code,
+        )
+        .order_by(ProjectFile.file_order, ProjectFile.variation)
+        .all()
+    )
 
-    files_list = [{
-        'id': f.id,
-        'file_name': f.file_name,
-        'yandex_path': f.yandex_path,
-        'variation': f.variation,
-        'file_type': f.file_type or 'file',
-        'public_link': f.public_link or '',
-    } for f in files]
+    files_list = [
+        {
+            "id": f.id,
+            "file_name": f.file_name,
+            "yandex_path": f.yandex_path,
+            "variation": f.variation,
+            "file_type": f.file_type or "file",
+            "public_link": f.public_link or "",
+        }
+        for f in files
+    ]
 
     # 5. Найти чат для карточки
-    chat = db.query(MessengerChat).filter(
-        MessengerChat.crm_card_id == data.card_id,
-        MessengerChat.is_active == True
-    ).first()
+    chat = db.query(MessengerChat).filter(MessengerChat.crm_card_id == data.card_id, MessengerChat.is_active == True).first()
 
     return PreviewScriptResponse(
         rendered_text=rendered_text,
@@ -1323,12 +1306,9 @@ async def preview_script(
 # PREVIEW ACT (предпросмотр скрипта акта)
 # =============================================
 
+
 @router.post("/preview-act", response_model=PreviewActResponse)
-async def preview_act(
-    data: PreviewActRequest,
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def preview_act(data: PreviewActRequest, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Предпросмотр скрипта отправки акта клиенту"""
     card = db.query(CRMCard).filter(CRMCard.id == data.card_id).first()
     if not card:
@@ -1337,25 +1317,25 @@ async def preview_act(
     if not contract:
         raise HTTPException(status_code=404, detail="Договор не найден")
 
-    stage_name = card.column_name or ''
-    sender_name = current_user.full_name or ''
-    client_first_name = ''
+    stage_name = card.column_name or ""
+    sender_name = current_user.full_name or ""
+    client_first_name = ""
     if contract.client_id:
         client = db.query(Client).filter(Client.id == contract.client_id).first()
         if client:
-            parts = (client.full_name or '').split()
-            client_first_name = parts[1] if len(parts) > 1 else parts[0] if parts else ''
+            parts = (client.full_name or "").split()
+            client_first_name = parts[1] if len(parts) > 1 else parts[0] if parts else ""
 
-    address = contract.address or ''
+    address = contract.address or ""
 
     # Определяем описание стадии для текста (с заглавной буквы)
     stage_desc = stage_name
-    if 'планировочн' in stage_name.lower():
-        stage_desc = 'Планировочные решения'
-    elif 'концепция' in stage_name.lower() or 'дизайн' in stage_name.lower():
-        stage_desc = 'Концепция дизайна'
-    elif 'рабочие чертежи' in stage_name.lower() or 'рабочая документация' in stage_name.lower():
-        stage_desc = 'Рабочая документация'
+    if "планировочн" in stage_name.lower():
+        stage_desc = "Планировочные решения"
+    elif "концепция" in stage_name.lower() or "дизайн" in stage_name.lower():
+        stage_desc = "Концепция дизайна"
+    elif "рабочие чертежи" in stage_name.lower() or "рабочая документация" in stage_name.lower():
+        stage_desc = "Рабочая документация"
 
     # Генерируем текст скрипта акта
     rendered_text = (
@@ -1375,32 +1355,31 @@ async def preview_act(
     stage_lower = stage_name.lower()
 
     act_mappings = []
-    if 'планировочн' in stage_lower:
-        act_mappings.append(('act_planning', 'Акт ПР'))
-    elif 'концепция' in stage_lower or 'дизайн' in stage_lower:
-        act_mappings.append(('act_concept', 'Акт КД'))
-    elif 'рабочие чертежи' in stage_lower or 'рабочая документация' in stage_lower or 'чертежн' in stage_lower:
-        act_mappings.append(('act_final', 'Акт финальный'))
-        act_mappings.append(('info_letter', 'Информационное письмо'))
+    if "планировочн" in stage_lower:
+        act_mappings.append(("act_planning", "Акт ПР"))
+    elif "концепция" in stage_lower or "дизайн" in stage_lower:
+        act_mappings.append(("act_concept", "Акт КД"))
+    elif "рабочие чертежи" in stage_lower or "рабочая документация" in stage_lower or "чертежн" in stage_lower:
+        act_mappings.append(("act_final", "Акт финальный"))
+        act_mappings.append(("info_letter", "Информационное письмо"))
 
     for prefix, label in act_mappings:
-        link = getattr(contract, f'{prefix}_link', '') or ''
-        yandex_path = getattr(contract, f'{prefix}_yandex_path', '') or ''
-        file_name = getattr(contract, f'{prefix}_file_name', '') or ''
+        link = getattr(contract, f"{prefix}_link", "") or ""
+        yandex_path = getattr(contract, f"{prefix}_yandex_path", "") or ""
+        file_name = getattr(contract, f"{prefix}_file_name", "") or ""
         if link or yandex_path:
-            act_files.append({
-                'prefix': prefix,
-                'label': label,
-                'file_name': file_name or f'{label}.pdf',
-                'link': link,
-                'yandex_path': yandex_path,
-            })
+            act_files.append(
+                {
+                    "prefix": prefix,
+                    "label": label,
+                    "file_name": file_name or f"{label}.pdf",
+                    "link": link,
+                    "yandex_path": yandex_path,
+                }
+            )
 
     # Чат
-    chat = db.query(MessengerChat).filter(
-        MessengerChat.crm_card_id == data.card_id,
-        MessengerChat.is_active == True
-    ).first()
+    chat = db.query(MessengerChat).filter(MessengerChat.crm_card_id == data.card_id, MessengerChat.is_active == True).first()
 
     return PreviewActResponse(
         rendered_text=rendered_text,
@@ -1413,20 +1392,13 @@ async def preview_act(
 
 
 @router.post("/send-act")
-async def send_act(
-    data: SendActRequest,
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def send_act(data: SendActRequest, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Отправить акт в групповой чат: текст + ссылки на файлы актов из договора"""
     card = db.query(CRMCard).filter(CRMCard.id == data.card_id).first()
     if not card:
         raise HTTPException(status_code=404, detail="CRM-карточка не найдена")
 
-    chat = db.query(MessengerChat).filter(
-        MessengerChat.crm_card_id == data.card_id,
-        MessengerChat.is_active == True
-    ).first()
+    chat = db.query(MessengerChat).filter(MessengerChat.crm_card_id == data.card_id, MessengerChat.is_active == True).first()
     if not chat or not chat.telegram_chat_id:
         raise HTTPException(status_code=404, detail="Чат не найден или не привязан к Telegram")
 
@@ -1443,10 +1415,11 @@ async def send_act(
         contract = db.query(Contract).filter(Contract.id == card.contract_id).first()
         if contract:
             from yandex_disk_service import get_yandex_disk_service
+
             file_lines = []
             for prefix in data.act_prefixes:
-                yandex_path = getattr(contract, f'{prefix}_yandex_path', '') or ''
-                file_name = getattr(contract, f'{prefix}_file_name', '') or ''
+                yandex_path = getattr(contract, f"{prefix}_yandex_path", "") or ""
+                file_name = getattr(contract, f"{prefix}_file_name", "") or ""
 
                 if not yandex_path or not file_name:
                     continue
@@ -1457,7 +1430,7 @@ async def send_act(
                     yd_svc = get_yandex_disk_service()
                     public_url = yd_svc.get_public_link(file_full_path)
                 except Exception:
-                    public_url = ''
+                    public_url = ""
 
                 if public_url:
                     file_lines.append(f'<a href="{public_url}">{file_name}</a>')
@@ -1472,10 +1445,10 @@ async def send_act(
     # 3. Логируем
     log = MessengerMessageLog(
         messenger_chat_id=chat.id,
-        message_type='act',
+        message_type="act",
         message_text=data.text[:500],
         sent_by=current_user.id,
-        delivery_status='sent',
+        delivery_status="sent",
     )
     db.add(log)
     db.commit()
@@ -1484,11 +1457,7 @@ async def send_act(
 
 
 @router.post("/send-edited-script")
-async def send_edited_script(
-    data: SendEditedScriptRequest,
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def send_edited_script(data: SendEditedScriptRequest, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Отправить отредактированный скрипт в групповой чат + прикрепить выбранные файлы"""
     from database import ProjectTimelineEntry
 
@@ -1497,10 +1466,7 @@ async def send_edited_script(
         raise HTTPException(status_code=404, detail="CRM-карточка не найдена")
 
     # Найти активный чат
-    chat = db.query(MessengerChat).filter(
-        MessengerChat.crm_card_id == data.card_id,
-        MessengerChat.is_active == True
-    ).first()
+    chat = db.query(MessengerChat).filter(MessengerChat.crm_card_id == data.card_id, MessengerChat.is_active == True).first()
     if not chat or not chat.telegram_chat_id:
         raise HTTPException(status_code=404, detail="Чат не найден или не привязан к Telegram")
 
@@ -1518,14 +1484,15 @@ async def send_edited_script(
             pf = db.query(ProjectFile).filter(ProjectFile.id == file_id).first()
             if not pf:
                 continue
-            link = pf.public_link or ''
+            link = pf.public_link or ""
             if not link and pf.yandex_path:
                 # Генерируем ссылку из пути ЯД
                 from urllib.parse import quote
+
                 yd_path = pf.yandex_path
-                if yd_path.startswith('disk:'):
+                if yd_path.startswith("disk:"):
                     yd_path = yd_path[5:]
-                encoded = quote(yd_path, safe='/')
+                encoded = quote(yd_path, safe="/")
                 link = f"https://disk.yandex.ru/client/disk{encoded}"
             if link:
                 file_lines.append(f'<a href="{link}">{pf.file_name}</a>')
@@ -1539,39 +1506,53 @@ async def send_edited_script(
 
     # 3. Обновить custom_norm_days если дедлайн изменён вручную
     if data.custom_deadline and data.deadline_date:
-        from routers.crm_router import _resolve_stage_group, _add_business_days
+        from routers.crm_router import _add_business_days, _resolve_stage_group
+
         contract = db.query(Contract).filter(Contract.id == card.contract_id).first()
         stage_group = _resolve_stage_group(card.column_name)
         if stage_group and contract:
-            client_entry = db.query(ProjectTimelineEntry).filter(
-                ProjectTimelineEntry.contract_id == contract.id,
-                ProjectTimelineEntry.stage_group == stage_group,
-                ProjectTimelineEntry.executor_role == 'Клиент',
-                ProjectTimelineEntry.actual_date.is_(None) | (ProjectTimelineEntry.actual_date == '')
-            ).order_by(ProjectTimelineEntry.sort_order).first()
+            client_entry = (
+                db.query(ProjectTimelineEntry)
+                .filter(
+                    ProjectTimelineEntry.contract_id == contract.id,
+                    ProjectTimelineEntry.stage_group == stage_group,
+                    ProjectTimelineEntry.executor_role == "Клиент",
+                    ProjectTimelineEntry.actual_date.is_(None) | (ProjectTimelineEntry.actual_date == ""),
+                )
+                .order_by(ProjectTimelineEntry.sort_order)
+                .first()
+            )
 
             if client_entry:
                 # Считаем custom_norm_days из выбранного дедлайна
                 try:
                     from datetime import date as date_type
-                    dl = datetime.strptime(data.deadline_date, '%d.%m.%Y').date()
-                    # Базовая дата — предыдущая заполненная строка или сегодня
-                    prev_entry = db.query(ProjectTimelineEntry).filter(
-                        ProjectTimelineEntry.contract_id == contract.id,
-                        ProjectTimelineEntry.sort_order < client_entry.sort_order,
-                        ProjectTimelineEntry.actual_date.isnot(None),
-                        ProjectTimelineEntry.actual_date != ''
-                    ).order_by(ProjectTimelineEntry.sort_order.desc()).first()
 
-                    base = prev_entry.actual_date if prev_entry else date_type.today().strftime('%Y-%m-%d')
+                    dl = datetime.strptime(data.deadline_date, "%d.%m.%Y").date()
+                    # Базовая дата — предыдущая заполненная строка или сегодня
+                    prev_entry = (
+                        db.query(ProjectTimelineEntry)
+                        .filter(
+                            ProjectTimelineEntry.contract_id == contract.id,
+                            ProjectTimelineEntry.sort_order < client_entry.sort_order,
+                            ProjectTimelineEntry.actual_date.isnot(None),
+                            ProjectTimelineEntry.actual_date != "",
+                        )
+                        .order_by(ProjectTimelineEntry.sort_order.desc())
+                        .first()
+                    )
+
+                    base = prev_entry.actual_date if prev_entry else date_type.today().strftime("%Y-%m-%d")
                     if isinstance(base, str):
-                        base = datetime.strptime(base, '%Y-%m-%d').date()
+                        base = datetime.strptime(base, "%Y-%m-%d").date()
 
                     # Считаем рабочие дни между base и dl
                     from routers.crm_router import _is_working_day
+
                     working = 0
                     cur = base
                     from datetime import timedelta
+
                     while cur < dl:
                         cur += timedelta(days=1)
                         if _is_working_day(cur):
@@ -1580,21 +1561,18 @@ async def send_edited_script(
                     if working != (client_entry.norm_days or 3):
                         client_entry.custom_norm_days = working
                         client_entry.updated_at = datetime.utcnow()
-                        logger.info(
-                            f"custom_norm_days обновлён: {client_entry.norm_days} → {working} "
-                            f"(contract={contract.id}, stage_group={stage_group})"
-                        )
+                        logger.info(f"custom_norm_days обновлён: {client_entry.norm_days} → {working} (contract={contract.id}, stage_group={stage_group})")
                 except Exception as e:
                     logger.warning(f"Ошибка расчёта custom_norm_days: {e}")
 
     # 4. Логируем сообщение
     log = MessengerMessageLog(
         messenger_chat_id=chat.id,
-        message_type='script_manual',
+        message_type="script_manual",
         message_text=data.text,
         sent_by=current_user.id,
         telegram_message_id=msg_id,
-        delivery_status='sent' if msg_id else 'failed',
+        delivery_status="sent" if msg_id else "failed",
     )
     db.add(log)
     db.commit()
@@ -1610,25 +1588,20 @@ async def send_edited_script(
 # TRIGGER SCRIPT (ручная отправка скрипта)
 # =============================================
 
+
 class TriggerScriptRequest(BaseModel):
     card_id: int
     script_type: str  # project_start, project_end, stage_complete, supervision_start, supervision_end
-    entity_type: str = 'crm'  # 'crm' или 'supervision'
+    entity_type: str = "crm"  # 'crm' или 'supervision'
 
 
 @router.post("/trigger-script")
-async def trigger_script_endpoint(
-    request: TriggerScriptRequest,
-    current_user: Employee = Depends(require_permission("messenger.create_chat")),
-    db: Session = Depends(get_db)
-):
+async def trigger_script_endpoint(request: TriggerScriptRequest, current_user: Employee = Depends(require_permission("messenger.create_chat")), db: Session = Depends(get_db)):
     """Ручная отправка скрипта мессенджера"""
-    if request.entity_type == 'supervision':
-        await trigger_supervision_notification(request.card_id, request.script_type,
-                                                sender_id=current_user.id)
+    if request.entity_type == "supervision":
+        await trigger_supervision_notification(request.card_id, request.script_type, sender_id=current_user.id)
     else:
-        await trigger_messenger_notification(request.card_id, request.script_type,
-                                              sender_id=current_user.id)
+        await trigger_messenger_notification(request.card_id, request.script_type, sender_id=current_user.id)
 
     return {"status": "success"}
 
@@ -1638,22 +1611,16 @@ async def trigger_script_endpoint(
 # Порядок: статические пути ПЕРЕД динамическими
 # =============================================
 
+
 @router.post("/chats", response_model=MessengerChatDetailResponse)
-async def create_messenger_chat(
-    data: MessengerChatCreate,
-    current_user: Employee = Depends(require_permission("messenger.create_chat")),
-    db: Session = Depends(get_db)
-):
+async def create_messenger_chat(data: MessengerChatCreate, current_user: Employee = Depends(require_permission("messenger.create_chat")), db: Session = Depends(get_db)):
     """Создать чат автоматически (MTProto) для CRM-карточки"""
     card_id = data.crm_card_id
 
     # PostgreSQL advisory lock — работает между воркерами uvicorn
     # pg_try_advisory_xact_lock возвращает false если лок уже занят другим воркером
     try:
-        got_lock = db.execute(
-            sa.text("SELECT pg_try_advisory_xact_lock(:ns, :card_id)"),
-            {"ns": _CHAT_CREATE_LOCK_NS, "card_id": card_id}
-        ).scalar()
+        got_lock = db.execute(sa.text("SELECT pg_try_advisory_xact_lock(:ns, :card_id)"), {"ns": _CHAT_CREATE_LOCK_NS, "card_id": card_id}).scalar()
     except Exception:
         got_lock = True  # fallback для SQLite (тестов)
 
@@ -1675,10 +1642,7 @@ async def _do_create_messenger_chat(
     tg_svc.configure(messenger_settings)
 
     # Проверка: уже есть активный чат
-    existing = db.query(MessengerChat).filter(
-        MessengerChat.crm_card_id == data.crm_card_id,
-        MessengerChat.is_active == True
-    ).first()
+    existing = db.query(MessengerChat).filter(MessengerChat.crm_card_id == data.crm_card_id, MessengerChat.is_active == True).first()
     if existing:
         raise HTTPException(status_code=400, detail="Чат для этой карточки уже существует")
 
@@ -1691,22 +1655,19 @@ async def _do_create_messenger_chat(
         raise HTTPException(status_code=404, detail="Договор не найден")
 
     # Проверка обязательных ролей перед созданием чата
-    project_type = (contract.project_type or '').strip()
+    project_type = (contract.project_type or "").strip()
     missing_roles = []
     if not card.senior_manager_id:
-        missing_roles.append('Старший менеджер')
-    if project_type == 'Индивидуальный':
+        missing_roles.append("Старший менеджер")
+    if project_type == "Индивидуальный":
         if not card.sdp_id:
-            missing_roles.append('Старший дизайнер-проектировщик (СДП)')
-    elif project_type == 'Шаблонный':
+            missing_roles.append("Старший дизайнер-проектировщик (СДП)")
+    elif project_type == "Шаблонный":
         if not card.manager_id:
-            missing_roles.append('Менеджер')
+            missing_roles.append("Менеджер")
     if missing_roles:
-        roles_str = ', '.join(missing_roles)
-        raise HTTPException(
-            status_code=400,
-            detail=f"Нельзя создать чат: не назначены обязательные роли: {roles_str}"
-        )
+        roles_str = ", ".join(missing_roles)
+        raise HTTPException(status_code=400, detail=f"Нельзя создать чат: не назначены обязательные роли: {roles_str}")
 
     tg = get_telegram_service()
     if not tg.mtproto_available:
@@ -1716,15 +1677,15 @@ async def _do_create_messenger_chat(
     chat_title = data.chat_title.strip() if data.chat_title else _build_chat_title(contract, card)
 
     # Определяем фото
-    avatar_type = (contract.agent_type or '').lower()
-    if 'фестиваль' in avatar_type or 'festival' in avatar_type:
-        avatar_type = 'festival'
-    elif 'петрович' in avatar_type or 'petrovich' in avatar_type:
-        avatar_type = 'petrovich'
+    avatar_type = (contract.agent_type or "").lower()
+    if "фестиваль" in avatar_type or "festival" in avatar_type:
+        avatar_type = "festival"
+    elif "петрович" in avatar_type or "petrovich" in avatar_type:
+        avatar_type = "petrovich"
     else:
-        avatar_type = 'festival'
+        avatar_type = "festival"
 
-    photo_path = os.path.join(os.path.dirname(__file__), '..', 'resources', f'{avatar_type}_logo.png')
+    photo_path = os.path.join(os.path.dirname(__file__), "..", "resources", f"{avatar_type}_logo.png")
     if not os.path.exists(photo_path):
         photo_path = None
 
@@ -1771,31 +1732,18 @@ async def _do_create_messenger_chat(
     # Авто-триггер начального скрипта project_start
     try:
         if data.crm_card_id:
-            asyncio.create_task(
-                trigger_messenger_notification(data.crm_card_id, 'project_start',
-                                               sender_id=current_user.id)
-            )
+            asyncio.create_task(trigger_messenger_notification(data.crm_card_id, "project_start", sender_id=current_user.id))
     except Exception as e:
         logger.warning(f"Не удалось отправить project_start: {e}")
 
-    return MessengerChatDetailResponse(
-        chat=MessengerChatResponse.model_validate(chat),
-        members=members_resp
-    )
+    return MessengerChatDetailResponse(chat=MessengerChatResponse.model_validate(chat), members=members_resp)
 
 
 @router.post("/chats/bind", response_model=MessengerChatDetailResponse)
-async def bind_messenger_chat(
-    data: MessengerChatBind,
-    current_user: Employee = Depends(require_permission("messenger.create_chat")),
-    db: Session = Depends(get_db)
-):
+async def bind_messenger_chat(data: MessengerChatBind, current_user: Employee = Depends(require_permission("messenger.create_chat")), db: Session = Depends(get_db)):
     """Привязать существующий чат по invite-ссылке"""
     # Проверка: уже есть активный чат
-    existing = db.query(MessengerChat).filter(
-        MessengerChat.crm_card_id == data.crm_card_id,
-        MessengerChat.is_active == True
-    ).first()
+    existing = db.query(MessengerChat).filter(MessengerChat.crm_card_id == data.crm_card_id, MessengerChat.is_active == True).first()
     if existing:
         raise HTTPException(status_code=400, detail="Чат для этой карточки уже существует")
 
@@ -1809,11 +1757,11 @@ async def bind_messenger_chat(
     chat_title = _build_chat_title(contract, card)
 
     # Определяем avatar_type
-    avatar_type = (contract.agent_type or '').lower()
-    if 'фестиваль' in avatar_type or 'festival' in avatar_type:
-        avatar_type = 'festival'
+    avatar_type = (contract.agent_type or "").lower()
+    if "фестиваль" in avatar_type or "festival" in avatar_type:
+        avatar_type = "festival"
     else:
-        avatar_type = 'petrovich'
+        avatar_type = "petrovich"
 
     # Вступаем в чат через MTProto + добавляем бота + повышаем до админа
     tg = get_telegram_service()
@@ -1856,18 +1804,11 @@ async def bind_messenger_chat(
     # Рассылаем invite-ссылки
     asyncio.create_task(send_invites_to_members(chat.id))
 
-    return MessengerChatDetailResponse(
-        chat=MessengerChatResponse.model_validate(chat),
-        members=members_resp
-    )
+    return MessengerChatDetailResponse(chat=MessengerChatResponse.model_validate(chat), members=members_resp)
 
 
 @router.post("/chats/supervision", response_model=MessengerChatDetailResponse)
-async def create_supervision_chat(
-    data: SupervisionChatCreate,
-    current_user: Employee = Depends(require_permission("messenger.create_chat")),
-    db: Session = Depends(get_db)
-):
+async def create_supervision_chat(data: SupervisionChatCreate, current_user: Employee = Depends(require_permission("messenger.create_chat")), db: Session = Depends(get_db)):
     """Создать чат автоматически (MTProto) для карточки надзора"""
     # Перечитываем настройки
     messenger_settings = load_messenger_settings(db)
@@ -1875,10 +1816,7 @@ async def create_supervision_chat(
     tg_svc.configure(messenger_settings)
 
     # Проверка: уже есть активный чат
-    existing = db.query(MessengerChat).filter(
-        MessengerChat.supervision_card_id == data.supervision_card_id,
-        MessengerChat.is_active == True
-    ).first()
+    existing = db.query(MessengerChat).filter(MessengerChat.supervision_card_id == data.supervision_card_id, MessengerChat.is_active == True).first()
     if existing:
         raise HTTPException(status_code=400, detail="Чат для этой карточки надзора уже существует")
 
@@ -1893,45 +1831,42 @@ async def create_supervision_chat(
     # Проверка обязательных ролей для надзора
     missing_roles = []
     if not sv_card.senior_manager_id:
-        missing_roles.append('Старший менеджер')
-    dan_id = getattr(sv_card, 'dan_id', None)
+        missing_roles.append("Старший менеджер")
+    dan_id = getattr(sv_card, "dan_id", None)
     if not dan_id:
-        missing_roles.append('Руководитель надзора (ДАН)')
+        missing_roles.append("Руководитель надзора (ДАН)")
     if missing_roles:
-        roles_str = ', '.join(missing_roles)
-        raise HTTPException(
-            status_code=400,
-            detail=f"Нельзя создать чат: не назначены обязательные роли: {roles_str}"
-        )
+        roles_str = ", ".join(missing_roles)
+        raise HTTPException(status_code=400, detail=f"Нельзя создать чат: не назначены обязательные роли: {roles_str}")
 
     tg = get_telegram_service()
     if not tg.mtproto_available:
         raise HTTPException(status_code=503, detail="MTProto не настроен")
 
     # Формируем название чата: АН-Город-Адрес
-    city = (contract.city or '').replace('_', '-')
-    address = (contract.address or '').replace('_', '-')
+    city = (contract.city or "").replace("_", "-")
+    address = (contract.address or "").replace("_", "-")
     if city and address:
-        city_map = {'спб': 'санкт-петербург', 'мск': 'москва', 'нск': 'новосибирск', 'екб': 'екатеринбург'}
+        city_map = {"спб": "санкт-петербург", "мск": "москва", "нск": "новосибирск", "екб": "екатеринбург"}
         full_city = city_map.get(city.lower(), city.lower())
-        addr_check = address.lower().replace('_', '-')
+        addr_check = address.lower().replace("_", "-")
         for c in [full_city, city.lower()]:
             if addr_check.startswith(c):
-                address = address[len(c):].lstrip('.,;:_ -')
+                address = address[len(c) :].lstrip(".,;:_ -")
                 break
     # Кастомное имя или автогенерация
     chat_title = data.chat_title.strip() if data.chat_title else f"АН-{city}-{address}"
 
     # Определяем фото
-    avatar_type = (contract.agent_type or '').lower()
-    if 'фестиваль' in avatar_type or 'festival' in avatar_type:
-        avatar_type = 'festival'
-    elif 'петрович' in avatar_type or 'petrovich' in avatar_type:
-        avatar_type = 'petrovich'
+    avatar_type = (contract.agent_type or "").lower()
+    if "фестиваль" in avatar_type or "festival" in avatar_type:
+        avatar_type = "festival"
+    elif "петрович" in avatar_type or "petrovich" in avatar_type:
+        avatar_type = "petrovich"
     else:
-        avatar_type = 'festival'
+        avatar_type = "festival"
 
-    photo_path = os.path.join(os.path.dirname(__file__), '..', 'resources', f'{avatar_type}_logo.png')
+    photo_path = os.path.join(os.path.dirname(__file__), "..", "resources", f"{avatar_type}_logo.png")
     if not os.path.exists(photo_path):
         photo_path = None
 
@@ -1975,41 +1910,31 @@ async def create_supervision_chat(
     # Рассылаем invite-ссылки
     asyncio.create_task(send_invites_to_members(chat.id, db))
 
-    return MessengerChatDetailResponse(
-        chat=MessengerChatResponse.model_validate(chat),
-        members=members_resp
-    )
+    return MessengerChatDetailResponse(chat=MessengerChatResponse.model_validate(chat), members=members_resp)
 
 
-@router.get("/chats/by-card/{card_id}", response_model=MessengerChatDetailResponse)
-async def get_messenger_chat_by_card(
-    card_id: int,
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Получить чат по CRM-карточке"""
-    chat = db.query(MessengerChat).filter(
-        MessengerChat.crm_card_id == card_id,
-        MessengerChat.is_active == True
-    ).first()
+@router.get("/chats/by-card/{card_id}", response_model=Optional[MessengerChatDetailResponse])
+async def get_messenger_chat_by_card(card_id: int, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Получить чат по CRM-карточке. Возвращает null если чат не создан (не ошибка)."""
+    chat = db.query(MessengerChat).filter(MessengerChat.crm_card_id == card_id, MessengerChat.is_active == True).first()
     if not chat:
-        raise HTTPException(status_code=404, detail="Чат не найден")
+        return None
 
-    members = db.query(MessengerChatMember).filter(
-        MessengerChatMember.messenger_chat_id == chat.id
-    ).all()
+    members = db.query(MessengerChatMember).filter(MessengerChatMember.messenger_chat_id == chat.id).all()
 
     # Обогащаем именами сотрудников
-    from database import Employee as Emp, Client as Cli
+    from database import Client as Cli
+    from database import Employee as Emp
+
     enriched = []
     for m in members:
         d = {c.name: getattr(m, c.name) for c in m.__table__.columns}
-        if m.member_type == 'employee':
+        if m.member_type == "employee":
             emp = db.query(Emp).filter(Emp.id == m.member_id).first()
-            d['name'] = emp.full_name if emp else None
-        elif m.member_type == 'client':
+            d["name"] = emp.full_name if emp else None
+        elif m.member_type == "client":
             cli = db.query(Cli).filter(Cli.id == m.member_id).first()
-            d['name'] = cli.full_name if cli else None
+            d["name"] = cli.full_name if cli else None
         enriched.append(ChatMemberResponse(**d))
 
     return MessengerChatDetailResponse(
@@ -2019,33 +1944,26 @@ async def get_messenger_chat_by_card(
 
 
 @router.get("/chats/by-supervision/{supervision_card_id}", response_model=MessengerChatDetailResponse)
-async def get_messenger_chat_by_supervision(
-    supervision_card_id: int,
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def get_messenger_chat_by_supervision(supervision_card_id: int, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Получить чат по карточке надзора"""
-    chat = db.query(MessengerChat).filter(
-        MessengerChat.supervision_card_id == supervision_card_id,
-        MessengerChat.is_active == True
-    ).first()
+    chat = db.query(MessengerChat).filter(MessengerChat.supervision_card_id == supervision_card_id, MessengerChat.is_active == True).first()
     if not chat:
         raise HTTPException(status_code=404, detail="Чат не найден")
 
-    members = db.query(MessengerChatMember).filter(
-        MessengerChatMember.messenger_chat_id == chat.id
-    ).all()
+    members = db.query(MessengerChatMember).filter(MessengerChatMember.messenger_chat_id == chat.id).all()
 
-    from database import Employee as Emp, Client as Cli
+    from database import Client as Cli
+    from database import Employee as Emp
+
     enriched = []
     for m in members:
         d = {c.name: getattr(m, c.name) for c in m.__table__.columns}
-        if m.member_type == 'employee':
+        if m.member_type == "employee":
             emp = db.query(Emp).filter(Emp.id == m.member_id).first()
-            d['name'] = emp.full_name if emp else None
-        elif m.member_type == 'client':
+            d["name"] = emp.full_name if emp else None
+        elif m.member_type == "client":
             cli = db.query(Cli).filter(Cli.id == m.member_id).first()
-            d['name'] = cli.full_name if cli else None
+            d["name"] = cli.full_name if cli else None
         enriched.append(ChatMemberResponse(**d))
 
     return MessengerChatDetailResponse(
@@ -2055,11 +1973,7 @@ async def get_messenger_chat_by_supervision(
 
 
 @router.delete("/chats/{chat_id}")
-async def delete_messenger_chat(
-    chat_id: int,
-    current_user: Employee = Depends(require_permission("messenger.delete_chat")),
-    db: Session = Depends(get_db)
-):
+async def delete_messenger_chat(chat_id: int, current_user: Employee = Depends(require_permission("messenger.delete_chat")), db: Session = Depends(get_db)):
     """Удалить/отвязать чат"""
     chat = db.query(MessengerChat).filter(MessengerChat.id == chat_id).first()
     if not chat:
@@ -2069,15 +1983,13 @@ async def delete_messenger_chat(
 
     # Собираем telegram_user_id участников из БД для кика
     member_tg_ids = []
-    db_members = db.query(MessengerChatMember).filter(
-        MessengerChatMember.messenger_chat_id == chat_id
-    ).all()
+    db_members = db.query(MessengerChatMember).filter(MessengerChatMember.messenger_chat_id == chat_id).all()
     for m in db_members:
         if m.telegram_user_id:
             member_tg_ids.append(m.telegram_user_id)
 
     # Если чат был создан автоматически — пробуем удалить группу
-    if chat.creation_method == 'auto' and chat.telegram_chat_id:
+    if chat.creation_method == "auto" and chat.telegram_chat_id:
         await tg.delete_group(chat.telegram_chat_id, member_tg_ids=member_tg_ids)
     elif chat.telegram_chat_id and tg.bot_available:
         # Для привязанного чата — бот просто покидает
@@ -2086,11 +1998,7 @@ async def delete_messenger_chat(
     # Помечаем как неактивный + деактивируем orphan-чаты этой карточки
     chat.is_active = False
     if chat.crm_card_id:
-        orphans = db.query(MessengerChat).filter(
-            MessengerChat.crm_card_id == chat.crm_card_id,
-            MessengerChat.id != chat.id,
-            MessengerChat.is_active == True
-        ).all()
+        orphans = db.query(MessengerChat).filter(MessengerChat.crm_card_id == chat.crm_card_id, MessengerChat.id != chat.id, MessengerChat.is_active == True).all()
         for orphan in orphans:
             orphan.is_active = False
             logger.info(f"Деактивирован orphan-чат id={orphan.id} для карточки {chat.crm_card_id}")
@@ -2100,16 +2008,9 @@ async def delete_messenger_chat(
 
 
 @router.post("/chats/{chat_id}/message")
-async def send_chat_message(
-    chat_id: int,
-    data: SendMessageRequest,
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def send_chat_message(chat_id: int, data: SendMessageRequest, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Отправить сообщение в чат"""
-    chat = db.query(MessengerChat).filter(
-        MessengerChat.id == chat_id, MessengerChat.is_active == True
-    ).first()
+    chat = db.query(MessengerChat).filter(MessengerChat.id == chat_id, MessengerChat.is_active == True).first()
     if not chat or not chat.telegram_chat_id:
         raise HTTPException(status_code=404, detail="Чат не найден или не привязан")
 
@@ -2119,11 +2020,11 @@ async def send_chat_message(
     # Логируем
     log = MessengerMessageLog(
         messenger_chat_id=chat.id,
-        message_type='manual',
+        message_type="manual",
         message_text=data.text,
         sent_by=current_user.id,
         telegram_message_id=msg_id,
-        delivery_status='sent' if msg_id else 'failed',
+        delivery_status="sent" if msg_id else "failed",
     )
     db.add(log)
     db.commit()
@@ -2137,16 +2038,9 @@ class AddMemberRequest(BaseModel):
 
 
 @router.post("/chats/{chat_id}/add-member")
-async def add_member_to_chat(
-    chat_id: int,
-    data: AddMemberRequest,
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def add_member_to_chat(chat_id: int, data: AddMemberRequest, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Добавить сотрудника в существующий чат и отправить invite"""
-    chat = db.query(MessengerChat).filter(
-        MessengerChat.id == chat_id, MessengerChat.is_active == True
-    ).first()
+    chat = db.query(MessengerChat).filter(MessengerChat.id == chat_id, MessengerChat.is_active == True).first()
     if not chat:
         raise HTTPException(status_code=404, detail="Чат не найден")
 
@@ -2154,40 +2048,37 @@ async def add_member_to_chat(
     if not emp:
         raise HTTPException(status_code=404, detail="Сотрудник не найден")
 
-    emp_name = emp.full_name or 'Коллега'
+    emp_name = emp.full_name or "Коллега"
     has_email = bool(emp.email)
     has_telegram = bool(emp.telegram_user_id)
 
     # Нет ни email ни telegram — нельзя пригласить
     if not has_email and not has_telegram:
-        raise HTTPException(
-            status_code=400,
-            detail=f"У сотрудника {emp_name} не указаны ни email, ни Telegram ID. "
-                   f"Заполните контактные данные в карточке сотрудника."
-        )
+        raise HTTPException(status_code=400, detail=f"У сотрудника {emp_name} не указаны ни email, ни Telegram ID. Заполните контактные данные в карточке сотрудника.")
 
     # Проверяем, не добавлен ли уже
-    existing_member = db.query(MessengerChatMember).filter(
-        MessengerChatMember.messenger_chat_id == chat_id,
-        MessengerChatMember.member_id == data.employee_id,
-        MessengerChatMember.member_type == 'employee',
-    ).first()
-    if existing_member:
-        raise HTTPException(
-            status_code=409,
-            detail=f"{emp_name} уже добавлен в чат"
+    existing_member = (
+        db.query(MessengerChatMember)
+        .filter(
+            MessengerChatMember.messenger_chat_id == chat_id,
+            MessengerChatMember.member_id == data.employee_id,
+            MessengerChatMember.member_type == "employee",
         )
+        .first()
+    )
+    if existing_member:
+        raise HTTPException(status_code=409, detail=f"{emp_name} уже добавлен в чат")
 
     member = MessengerChatMember(
         messenger_chat_id=chat.id,
-        member_type='employee',
+        member_type="employee",
         member_id=data.employee_id,
         role_in_project=data.role_in_project,
         is_mandatory=False,
         phone=emp.phone,
         email=emp.email,
         telegram_user_id=emp.telegram_user_id,
-        invite_status='pending',
+        invite_status="pending",
     )
     db.add(member)
     db.commit()
@@ -2204,7 +2095,7 @@ async def add_member_to_chat(
             await email_svc.send_chat_invite(
                 to_email=emp.email,
                 recipient_name=emp_name,
-                chat_title=chat.chat_title or '',
+                chat_title=chat.chat_title or "",
                 invite_link=invite_link,
             )
             email_sent = True
@@ -2221,12 +2112,7 @@ async def add_member_to_chat(
 
 
 @router.post("/chats/{chat_id}/send-invites")
-async def send_chat_invites(
-    chat_id: int,
-    data: SendInvitesRequest,
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def send_chat_invites(chat_id: int, data: SendInvitesRequest, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Разослать invite-ссылки участникам"""
     chat = db.query(MessengerChat).filter(MessengerChat.id == chat_id).first()
     if not chat:
@@ -2237,18 +2123,11 @@ async def send_chat_invites(
 
 
 @router.post("/chats/{chat_id}/files")
-async def send_files_to_chat(
-    chat_id: int,
-    data: SendFilesRequest,
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def send_files_to_chat(chat_id: int, data: SendFilesRequest, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Отправить файлы в чат (с Яндекс.Диска)"""
     from yandex_disk_service import get_yandex_disk_service
 
-    chat = db.query(MessengerChat).filter(
-        MessengerChat.id == chat_id, MessengerChat.is_active == True
-    ).first()
+    chat = db.query(MessengerChat).filter(MessengerChat.id == chat_id, MessengerChat.is_active == True).first()
     if not chat or not chat.telegram_chat_id:
         raise HTTPException(status_code=404, detail="Чат не найден или не привязан")
 
@@ -2258,27 +2137,31 @@ async def send_files_to_chat(
 
     # Собираем Yandex пути: из file_ids + из прямых yandex_paths
     yandex_files = []
-    for file_id in (data.file_ids or []):
+    for file_id in data.file_ids or []:
         pf = db.query(ProjectFile).filter(ProjectFile.id == file_id).first()
         if pf and pf.yandex_path:
-            yandex_files.append({
-                "yandex_path": pf.yandex_path,
-                "file_name": pf.file_name or os.path.basename(pf.yandex_path),
-                "file_type": pf.file_type or "file",
-            })
+            yandex_files.append(
+                {
+                    "yandex_path": pf.yandex_path,
+                    "file_name": pf.file_name or os.path.basename(pf.yandex_path),
+                    "file_type": pf.file_type or "file",
+                }
+            )
 
-    for yp in (data.yandex_paths or []):
-        yandex_files.append({
-            "yandex_path": yp,
-            "file_name": os.path.basename(yp),
-            "file_type": "image" if any(yp.lower().endswith(ext) for ext in ['.jpg', '.jpeg', '.png', '.webp']) else "file",
-        })
+    for yp in data.yandex_paths or []:
+        yandex_files.append(
+            {
+                "yandex_path": yp,
+                "file_name": os.path.basename(yp),
+                "file_type": "image" if any(yp.lower().endswith(ext) for ext in [".jpg", ".jpeg", ".png", ".webp"]) else "file",
+            }
+        )
 
     if not yandex_files:
         raise HTTPException(status_code=400, detail="Нет файлов для отправки")
 
     # Определяем тип отправки: галерея (изображения) или документы
-    image_exts = {'.jpg', '.jpeg', '.png', '.webp', '.gif'}
+    image_exts = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 
     if data.as_gallery:
         # Отправка изображений галереей
@@ -2299,19 +2182,19 @@ async def send_files_to_chat(
                 try:
                     with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(img["file_name"])[1]) as tmp:
                         yd.download_file(img["yandex_path"], tmp.name)
-                        with open(tmp.name, 'rb') as f:
-                            photo_bytes_list.append({
-                                "bytes": f.read(),
-                                "filename": img["file_name"],
-                            })
+                        with open(tmp.name, "rb") as f:
+                            photo_bytes_list.append(
+                                {
+                                    "bytes": f.read(),
+                                    "filename": img["file_name"],
+                                }
+                            )
                     os.unlink(tmp.name)
                 except Exception as e:
                     logger.warning(f"Ошибка скачивания {img['yandex_path']}: {e}")
 
             if photo_bytes_list:
-                msg_ids = await tg.send_media_group_from_bytes(
-                    chat.telegram_chat_id, photo_bytes_list, caption=data.caption
-                )
+                msg_ids = await tg.send_media_group_from_bytes(chat.telegram_chat_id, photo_bytes_list, caption=data.caption)
                 if msg_ids:
                     sent_ids.extend(msg_ids)
 
@@ -2320,12 +2203,9 @@ async def send_files_to_chat(
             try:
                 with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(doc["file_name"])[1]) as tmp:
                     yd.download_file(doc["yandex_path"], tmp.name)
-                    with open(tmp.name, 'rb') as f:
+                    with open(tmp.name, "rb") as f:
                         file_bytes = f.read()
-                    msg_id = await tg.send_document_from_bytes(
-                        chat.telegram_chat_id, file_bytes,
-                        filename=doc["file_name"], caption=doc["file_name"]
-                    )
+                    msg_id = await tg.send_document_from_bytes(chat.telegram_chat_id, file_bytes, filename=doc["file_name"], caption=doc["file_name"])
                     if msg_id:
                         sent_ids.append(msg_id)
                 os.unlink(tmp.name)
@@ -2352,12 +2232,12 @@ async def send_files_to_chat(
     file_names = [yf["file_name"] for yf in yandex_files]
     log = MessengerMessageLog(
         messenger_chat_id=chat.id,
-        message_type='files',
+        message_type="files",
         message_text=data.caption or "",
         file_links=",".join(file_names),
         sent_by=current_user.id,
         telegram_message_id=sent_ids[0] if sent_ids else None,
-        delivery_status='sent' if sent_ids else 'failed',
+        delivery_status="sent" if sent_ids else "failed",
     )
     db.add(log)
     db.commit()
@@ -2373,19 +2253,13 @@ async def send_files_to_chat(
 # MESSENGER SCRIPTS ENDPOINTS
 # =============================================
 
+
 @router.get("/scripts", response_model=list[MessengerScriptResponse])
-async def get_messenger_scripts(
-    project_type: str = None,
-    script_type: str = None,
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def get_messenger_scripts(project_type: str = None, script_type: str = None, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Получить скрипты (с фильтрацией)"""
     query = db.query(MessengerScript)
     if project_type:
-        query = query.filter(
-            (MessengerScript.project_type == project_type) | (MessengerScript.project_type.is_(None))
-        )
+        query = query.filter((MessengerScript.project_type == project_type) | (MessengerScript.project_type.is_(None)))
     if script_type:
         query = query.filter(MessengerScript.script_type == script_type)
 
@@ -2394,11 +2268,7 @@ async def get_messenger_scripts(
 
 
 @router.post("/scripts", response_model=MessengerScriptResponse)
-async def create_messenger_script(
-    data: MessengerScriptCreate,
-    current_user: Employee = Depends(require_permission("messenger.manage_scripts")),
-    db: Session = Depends(get_db)
-):
+async def create_messenger_script(data: MessengerScriptCreate, current_user: Employee = Depends(require_permission("messenger.manage_scripts")), db: Session = Depends(get_db)):
     """Создать скрипт"""
     script = MessengerScript(**data.model_dump())
     db.add(script)
@@ -2408,12 +2278,7 @@ async def create_messenger_script(
 
 
 @router.put("/scripts/{script_id}", response_model=MessengerScriptResponse)
-async def update_messenger_script(
-    script_id: int,
-    data: MessengerScriptUpdate,
-    current_user: Employee = Depends(require_permission("messenger.manage_scripts")),
-    db: Session = Depends(get_db)
-):
+async def update_messenger_script(script_id: int, data: MessengerScriptUpdate, current_user: Employee = Depends(require_permission("messenger.manage_scripts")), db: Session = Depends(get_db)):
     """Обновить скрипт"""
     script = db.query(MessengerScript).filter(MessengerScript.id == script_id).first()
     if not script:
@@ -2429,11 +2294,7 @@ async def update_messenger_script(
 
 
 @router.delete("/scripts/{script_id}")
-async def delete_messenger_script(
-    script_id: int,
-    current_user: Employee = Depends(require_permission("messenger.manage_scripts")),
-    db: Session = Depends(get_db)
-):
+async def delete_messenger_script(script_id: int, current_user: Employee = Depends(require_permission("messenger.manage_scripts")), db: Session = Depends(get_db)):
     """Удалить скрипт"""
     script = db.query(MessengerScript).filter(MessengerScript.id == script_id).first()
     if not script:
@@ -2444,11 +2305,7 @@ async def delete_messenger_script(
 
 
 @router.patch("/scripts/{script_id}/toggle")
-async def toggle_messenger_script(
-    script_id: int,
-    current_user: Employee = Depends(require_permission("messenger.manage_scripts")),
-    db: Session = Depends(get_db)
-):
+async def toggle_messenger_script(script_id: int, current_user: Employee = Depends(require_permission("messenger.manage_scripts")), db: Session = Depends(get_db)):
     """Включить/выключить скрипт"""
     script = db.query(MessengerScript).filter(MessengerScript.id == script_id).first()
     if not script:
@@ -2463,27 +2320,19 @@ async def toggle_messenger_script(
 # MESSENGER SETTINGS ENDPOINTS
 # =============================================
 
+
 @router.get("/settings", response_model=list[MessengerSettingResponse])
-async def get_messenger_settings(
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def get_messenger_settings(current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Получить все настройки мессенджера"""
     settings_list = db.query(MessengerSetting).all()
     return [MessengerSettingResponse.model_validate(s) for s in settings_list]
 
 
 @router.put("/settings")
-async def update_messenger_settings(
-    data: MessengerSettingsBulkUpdate,
-    current_user: Employee = Depends(require_permission("messenger.create_chat")),
-    db: Session = Depends(get_db)
-):
+async def update_messenger_settings(data: MessengerSettingsBulkUpdate, current_user: Employee = Depends(require_permission("messenger.create_chat")), db: Session = Depends(get_db)):
     """Обновить настройки мессенджера (массовое обновление)"""
     for item in data.settings:
-        setting = db.query(MessengerSetting).filter(
-            MessengerSetting.setting_key == item.setting_key
-        ).first()
+        setting = db.query(MessengerSetting).filter(MessengerSetting.setting_key == item.setting_key).first()
         if setting:
             setting.setting_value = item.setting_value
             setting.updated_at = datetime.utcnow()
@@ -2537,6 +2386,7 @@ async def get_messenger_status(
 # =============================================
 # MESSENGER MTPROTO AUTHORIZATION
 # =============================================
+
 
 @router.post("/mtproto/send-code")
 async def mtproto_send_code(
@@ -2678,45 +2528,46 @@ async def mtproto_session_status(
 # SYNC MESSENGER DATA (sync_messenger_router)
 # =============================================
 
+
 @sync_messenger_router.get("/messenger-chats")
-async def sync_messenger_chats(
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def sync_messenger_chats(current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Синхронизация чатов"""
     chats = db.query(MessengerChat).all()
-    return [{
-        'id': c.id,
-        'contract_id': c.contract_id,
-        'crm_card_id': c.crm_card_id,
-        'messenger_type': c.messenger_type,
-        'telegram_chat_id': c.telegram_chat_id,
-        'chat_title': c.chat_title,
-        'invite_link': c.invite_link,
-        'avatar_type': c.avatar_type,
-        'creation_method': c.creation_method,
-        'created_by': c.created_by,
-        'created_at': c.created_at.isoformat() if c.created_at else None,
-        'is_active': c.is_active,
-    } for c in chats]
+    return [
+        {
+            "id": c.id,
+            "contract_id": c.contract_id,
+            "crm_card_id": c.crm_card_id,
+            "messenger_type": c.messenger_type,
+            "telegram_chat_id": c.telegram_chat_id,
+            "chat_title": c.chat_title,
+            "invite_link": c.invite_link,
+            "avatar_type": c.avatar_type,
+            "creation_method": c.creation_method,
+            "created_by": c.created_by,
+            "created_at": c.created_at.isoformat() if c.created_at else None,
+            "is_active": c.is_active,
+        }
+        for c in chats
+    ]
 
 
 @sync_messenger_router.get("/messenger-scripts")
-async def sync_messenger_scripts(
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def sync_messenger_scripts(current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Синхронизация скриптов"""
     scripts = db.query(MessengerScript).all()
-    return [{
-        'id': s.id,
-        'script_type': s.script_type,
-        'project_type': s.project_type,
-        'stage_name': s.stage_name,
-        'message_template': s.message_template,
-        'use_auto_deadline': s.use_auto_deadline,
-        'is_enabled': s.is_enabled,
-        'sort_order': s.sort_order,
-        'created_at': s.created_at.isoformat() if s.created_at else None,
-        'updated_at': s.updated_at.isoformat() if s.updated_at else None,
-    } for s in scripts]
+    return [
+        {
+            "id": s.id,
+            "script_type": s.script_type,
+            "project_type": s.project_type,
+            "stage_name": s.stage_name,
+            "message_template": s.message_template,
+            "use_auto_deadline": s.use_auto_deadline,
+            "is_enabled": s.is_enabled,
+            "sort_order": s.sort_order,
+            "created_at": s.created_at.isoformat() if s.created_at else None,
+            "updated_at": s.updated_at.isoformat() if s.updated_at else None,
+        }
+        for s in scripts
+    ]
