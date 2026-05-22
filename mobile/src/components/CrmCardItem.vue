@@ -185,27 +185,15 @@
         </div>
 
         <!-- Строка 2: Добавить замер / ТЗ -->
-        <div v-if="showAddMeasurement || showAddTechTask" class="row q-gutter-xs q-mb-xs">
-          <q-btn
-            v-if="showAddMeasurement"
-            unelevated
-            dense
-            no-caps
-            icon="photo_camera"
-            label="Добавить замер"
-            style="background: #F39C12; color: white; font-size: 10px; font-weight: bold; min-height: 28px; height: auto; border-radius: 4px; flex: 1"
-            @click.stop="emit('add-measurement')"
-          />
-          <q-btn
-            v-if="showAddTechTask"
-            unelevated
-            dense
-            no-caps
-            icon="description"
-            label="Добавить ТЗ"
-            style="background: #9B59B6; color: white; font-size: 10px; font-weight: bold; min-height: 28px; height: auto; border-radius: 4px; flex: 1"
-            @click.stop="emit('add-tech-task')"
-          />
+        <div v-if="showAddMeasurement || showAddTechTask" style="display: flex; gap: 4px; margin-bottom: 4px">
+          <button v-if="showAddMeasurement" class="crm-add-btn crm-add-measurement" @click.stop="emit('add-measurement')">
+            <span class="material-icons" style="font-size: 14px; flex-shrink: 0; line-height: 1">photo_camera</span>
+            Добавить замер
+          </button>
+          <button v-if="showAddTechTask" class="crm-add-btn crm-add-techtask" @click.stop="emit('add-tech-task')">
+            <span class="material-icons" style="font-size: 14px; flex-shrink: 0; line-height: 1">description</span>
+            Добавить ТЗ
+          </button>
         </div>
 
         <!-- Строка 3: Данные карточки -->
@@ -466,4 +454,26 @@ const showAddTechTask = computed(() => {
 <style scoped>
 .crm-card { border: 2px solid #CCCCCC; border-radius: 8px; background: white; }
 .crm-card:active { border-color: #909090; background: #f5f5f5; }
+
+.crm-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex: 1;
+  min-height: 28px;
+  padding: 4px 6px;
+  border: none;
+  border-radius: 4px;
+  color: white;
+  font-size: 10px;
+  font-weight: bold;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.3;
+  text-align: left;
+}
+.crm-add-measurement { background: #F39C12; }
+.crm-add-techtask { background: #9B59B6; }
 </style>
