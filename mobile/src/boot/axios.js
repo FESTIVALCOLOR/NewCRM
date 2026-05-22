@@ -110,8 +110,8 @@ api.interceptors.response.use(
     if (config?.url?.includes('/auth/')) return Promise.reject(error)
     // Не сохраняем heartbeat
     if (config?.url?.includes('/heartbeat')) return Promise.reject(error)
-    // Файловые операции на Яндекс.Диске — не сохраняем (ошибка YD, не сетевая)
-    if (config?.url?.includes('/files/folder') || config?.url?.includes('/files/move-folder')) return Promise.reject(error)
+    // Файловые операции — не сохраняем: multipart/FormData нельзя сериализовать в IndexedDB
+    if (config?.url?.includes('/files/upload') || config?.url?.includes('/files/folder') || config?.url?.includes('/files/move-folder')) return Promise.reject(error)
     // Не дублируем уже сохранённые
     if (config?._offlineQueued) return Promise.reject(error)
 

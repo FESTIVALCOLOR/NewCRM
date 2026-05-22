@@ -192,8 +192,8 @@
             dense
             no-caps
             icon="photo_camera"
-            label="Добавить замер"
-            style="background: #F39C12; color: white; font-size: 10px; font-weight: bold; height: 28px; border-radius: 4px; flex: 1"
+            label="Замер"
+            style="background: #F39C12; color: white; font-size: 10px; font-weight: bold; min-height: 28px; border-radius: 4px; flex: 1; white-space: nowrap"
             @click.stop="emit('add-measurement')"
           />
           <q-btn
@@ -202,8 +202,8 @@
             dense
             no-caps
             icon="description"
-            label="Добавить ТЗ"
-            style="background: #9B59B6; color: white; font-size: 10px; font-weight: bold; height: 28px; border-radius: 4px; flex: 1"
+            label="ТЗ"
+            style="background: #9B59B6; color: white; font-size: 10px; font-weight: bold; min-height: 28px; border-radius: 4px; flex: 1; white-space: nowrap"
             @click.stop="emit('add-tech-task')"
           />
         </div>

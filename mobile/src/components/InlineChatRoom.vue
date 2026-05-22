@@ -2509,7 +2509,16 @@ async function onMembersDialogOpen() {
       }
       for (const se of (data.stage_executors || [])) {
         if (se.executor_id) {
-          emps.set(se.executor_id, { name: se.executor_name || `Сотрудник #${se.executor_id}`, role: se.stage_name || 'Исполнитель' })
+          const stageName = se.stage_name || 'Исполнитель'
+          const existing = emps.get(se.executor_id)
+          if (existing) {
+            // Сотрудник назначен на несколько стадий — объединяем короткие номера
+            const shortStage = (s) => { const m = s.match(/^(Стадия\s*\d+)/i); return m ? m[1] : s }
+            const combined = shortStage(existing.role) + ' + ' + shortStage(stageName)
+            emps.set(se.executor_id, { name: existing.name, role: combined })
+          } else {
+            emps.set(se.executor_id, { name: se.executor_name || `Сотрудник #${se.executor_id}`, role: stageName })
+          }
         }
       }
     }
