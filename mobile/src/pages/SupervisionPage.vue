@@ -5,7 +5,7 @@
       <div class="row items-center no-wrap">
         <div class="toggle-pills">
           <button :class="{ active: !showArchive }" @click="showArchive = false; loadCards()">
-            Активные <span v-if="!showArchive && cards.length > 0" class="pill-count">{{ cards.length }}</span>
+            Активные <span v-if="activeCount > 0" class="pill-count">{{ showArchive ? activeCount : cards.length }}</span>
           </button>
           <button v-if="can('supervision.view_archive')" :class="{ active: showArchive }" @click="showArchive = true; loadCards()">
             Архив <span v-if="archiveCount > 0" class="pill-count">{{ showArchive ? cards.length : archiveCount }}</span>
@@ -315,6 +315,7 @@ const cards = ref([])
 const loading = ref(false)
 const showArchive = ref(false)
 const archiveCount = ref(0)
+const activeCount = ref(0)
 
 async function loadArchiveCount() {
   try {
@@ -396,8 +397,11 @@ async function doMove(colName) {
 
 async function loadCards() {
   loading.value = true
-  try { const { data } = await supervisionApi.getCards({ status: showArchive.value ? 'archived' : 'active' }); cards.value = data }
-  catch { cards.value = [] } finally { loading.value = false }
+  try {
+    const { data } = await supervisionApi.getCards({ status: showArchive.value ? 'archived' : 'active' })
+    cards.value = data
+    if (!showArchive.value) activeCount.value = data.length
+  } catch { cards.value = [] } finally { loading.value = false }
 }
 
 watch(showArchive, (isArchive) => { if (!isArchive && can('supervision.view_archive')) loadArchiveCount() })

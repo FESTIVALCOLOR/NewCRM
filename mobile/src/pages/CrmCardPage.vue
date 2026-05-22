@@ -3457,18 +3457,16 @@ onBeforeUnmount(() => {
   font-weight: bold;
 }
 
-/* Ландшафт: вкладка Данные — 2 колонки, минимум 150px, перенос если не влезает */
+/* Ландшафт: вкладка Данные — ровно 2 колонки, равная высота блоков в строке */
 @media (orientation: landscape) {
   .data-blocks-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    grid-template-columns: 1fr 1fr;
     gap: 12px;
-    align-items: start;
     margin-bottom: 12px;
   }
   .data-blocks-grid > .is-card {
     margin-bottom: 0 !important;
-    height: 100%;
   }
 }
 </style>

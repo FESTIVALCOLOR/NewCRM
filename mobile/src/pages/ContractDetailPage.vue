@@ -42,126 +42,188 @@
         </q-card-section>
       </q-card>
 
-      <!-- Клиент (ФИО со ссылкой) -->
-      <q-card v-if="contract.client_name || contract.client_id" class="is-card q-mb-md">
-        <q-item v-ripple clickable @click="goToClient">
-          <q-item-section avatar>
-            <q-icon name="person" color="grey-7" />
-          </q-item-section>
-          <q-item-section>
-            <q-item-label caption>
-              Клиент
-            </q-item-label>
-            <q-item-label class="text-weight-bold" style="color: #333">
-              {{ clientDisplayName }}
-            </q-item-label>
-          </q-item-section>
-          <q-item-section side>
-            <q-icon name="chevron_right" color="grey-5" />
-          </q-item-section>
-        </q-item>
-      </q-card>
-
-      <!-- Основные данные -->
-      <q-card class="is-card q-mb-md">
-        <q-card-section class="q-pb-none">
-          <div class="text-subtitle2 text-weight-bold" style="color: #333">
-            Основные данные
-          </div>
-        </q-card-section>
-        <q-card-section>
-          <div class="row">
-            <!-- Колонка 1: Дата, Срок -->
-            <div class="col-6" style="padding-right: 12px; border-right: 1px solid #E0E0E0">
-              <div v-if="contract.contract_date" class="q-mb-sm">
-                <div class="text-caption" style="color: #999">
-                  Дата договора
-                </div>
-                <div style="font-size: 13px; color: #333">
-                  {{ fmtDate(contract.contract_date) }}
-                </div>
-              </div>
-              <div v-if="contract.contract_period" class="q-mb-sm">
-                <div class="text-caption" style="color: #999">
-                  Срок договора
-                </div>
-                <div style="font-size: 13px; color: #333">
-                  {{ contract.contract_period }} раб. дней
-                </div>
-              </div>
-              <div v-if="contract.deadline || crmDeadline" class="q-mb-sm">
-                <div class="text-caption" style="color: #999">
-                  Дедлайн проекта
-                </div>
-                <div style="font-size: 13px; color: #333">
-                  {{ fmtDate(contract.deadline || crmDeadline) }}
-                </div>
-              </div>
-            </div>
-            <!-- Колонка 2: Сумма, Площадь, Город -->
-            <div class="col-6" style="padding-left: 12px">
-              <div v-if="contract.total_amount" class="q-mb-sm">
-                <div class="text-caption" style="color: #999">
-                  Сумма договора
-                </div>
-                <div style="font-size: 13px; color: #333; font-weight: bold">
-                  {{ fmtMoney(contract.total_amount) }}
-                </div>
-              </div>
-              <div v-if="contract.area" class="q-mb-sm">
-                <div class="text-caption" style="color: #999">
-                  Площадь
-                </div>
-                <div style="font-size: 13px; color: #333">
-                  {{ contract.area }} м²
-                </div>
-              </div>
-              <div v-if="contract.city">
-                <div class="text-caption" style="color: #999">
-                  Город
-                </div>
-                <div style="font-size: 13px; color: #333">
-                  {{ contract.city }}
-                </div>
-              </div>
-            </div>
-          </div>
-          <!-- Комментарий — на всю ширину -->
-          <div v-if="contract.comments" class="q-mt-md" style="border-top: 1px solid #F0F0F0; padding-top: 8px">
-            <div class="text-caption" style="color: #999">
-              Комментарий
-            </div>
-            <div style="font-size: 13px; color: #333">
-              {{ contract.comments }}
-            </div>
-          </div>
-        </q-card-section>
-      </q-card>
-
-      <!-- Платежи от клиента (индивидуальный) -->
-      <q-card v-if="contract.project_type === 'Индивидуальный'" class="is-card q-mb-md">
-        <q-card-section class="q-pb-none">
-          <div class="text-subtitle2 text-weight-bold" style="color: #333">
-            Платежи от клиента
-          </div>
-        </q-card-section>
-        <q-list dense separator>
-          <q-item v-for="pay in clientPayments" :key="pay.key">
+      <!-- Сетка: в ландшафте 2 колонки, в портрете 1 колонка -->
+      <div class="contract-detail-grid">
+        <!-- Клиент (ФИО со ссылкой) -->
+        <q-card v-if="contract.client_name || contract.client_id" class="is-card q-mb-md">
+          <q-item v-ripple clickable @click="goToClient">
+            <q-item-section avatar>
+              <q-icon name="person" color="grey-7" />
+            </q-item-section>
             <q-item-section>
-              <q-item-label class="text-weight-medium">
-                {{ pay.label }}
+              <q-item-label caption>
+                Клиент
               </q-item-label>
               <q-item-label class="text-weight-bold" style="color: #333">
-                {{ fmtMoney(pay.amount) }}
-              </q-item-label>
-              <q-item-label caption :style="{ color: pay.paidDate ? '#27AE60' : '#888' }">
-                {{ pay.paidDate ? `Оплачено ${fmtDate(pay.paidDate)}` : 'Не оплачено' }}
+                {{ clientDisplayName }}
               </q-item-label>
             </q-item-section>
-            <q-item-section side style="min-width: 110px">
-              <div class="column q-gutter-xs items-stretch">
+            <q-item-section side>
+              <q-icon name="chevron_right" color="grey-5" />
+            </q-item-section>
+          </q-item>
+        </q-card>
+
+        <!-- Основные данные -->
+        <q-card class="is-card q-mb-md">
+          <q-card-section class="q-pb-none">
+            <div class="text-subtitle2 text-weight-bold" style="color: #333">
+              Основные данные
+            </div>
+          </q-card-section>
+          <q-card-section>
+            <div class="row">
+              <!-- Колонка 1: Дата, Срок -->
+              <div class="col-6" style="padding-right: 12px; border-right: 1px solid #E0E0E0">
+                <div v-if="contract.contract_date" class="q-mb-sm">
+                  <div class="text-caption" style="color: #999">
+                    Дата договора
+                  </div>
+                  <div style="font-size: 13px; color: #333">
+                    {{ fmtDate(contract.contract_date) }}
+                  </div>
+                </div>
+                <div v-if="contract.contract_period" class="q-mb-sm">
+                  <div class="text-caption" style="color: #999">
+                    Срок договора
+                  </div>
+                  <div style="font-size: 13px; color: #333">
+                    {{ contract.contract_period }} раб. дней
+                  </div>
+                </div>
+                <div v-if="contract.deadline || crmDeadline" class="q-mb-sm">
+                  <div class="text-caption" style="color: #999">
+                    Дедлайн проекта
+                  </div>
+                  <div style="font-size: 13px; color: #333">
+                    {{ fmtDate(contract.deadline || crmDeadline) }}
+                  </div>
+                </div>
+              </div>
+              <!-- Колонка 2: Сумма, Площадь, Город -->
+              <div class="col-6" style="padding-left: 12px">
+                <div v-if="contract.total_amount" class="q-mb-sm">
+                  <div class="text-caption" style="color: #999">
+                    Сумма договора
+                  </div>
+                  <div style="font-size: 13px; color: #333; font-weight: bold">
+                    {{ fmtMoney(contract.total_amount) }}
+                  </div>
+                </div>
+                <div v-if="contract.area" class="q-mb-sm">
+                  <div class="text-caption" style="color: #999">
+                    Площадь
+                  </div>
+                  <div style="font-size: 13px; color: #333">
+                    {{ contract.area }} м²
+                  </div>
+                </div>
+                <div v-if="contract.city">
+                  <div class="text-caption" style="color: #999">
+                    Город
+                  </div>
+                  <div style="font-size: 13px; color: #333">
+                    {{ contract.city }}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- Комментарий — на всю ширину -->
+            <div v-if="contract.comments" class="q-mt-md" style="border-top: 1px solid #F0F0F0; padding-top: 8px">
+              <div class="text-caption" style="color: #999">
+                Комментарий
+              </div>
+              <div style="font-size: 13px; color: #333">
+                {{ contract.comments }}
+              </div>
+            </div>
+          </q-card-section>
+        </q-card>
+
+        <!-- Платежи от клиента (индивидуальный) -->
+        <q-card v-if="contract.project_type === 'Индивидуальный'" class="is-card q-mb-md">
+          <q-card-section class="q-pb-none">
+            <div class="text-subtitle2 text-weight-bold" style="color: #333">
+              Платежи от клиента
+            </div>
+          </q-card-section>
+          <q-list dense separator>
+            <q-item v-for="pay in clientPayments" :key="pay.key">
+              <q-item-section>
+                <q-item-label class="text-weight-medium">
+                  {{ pay.label }}
+                </q-item-label>
+                <q-item-label class="text-weight-bold" style="color: #333">
+                  {{ fmtMoney(pay.amount) }}
+                </q-item-label>
+                <q-item-label caption :style="{ color: pay.paidDate ? '#27AE60' : '#888' }">
+                  {{ pay.paidDate ? `Оплачено ${fmtDate(pay.paidDate)}` : 'Не оплачено' }}
+                </q-item-label>
+              </q-item-section>
+              <q-item-section side style="min-width: 110px">
+                <div class="column q-gutter-xs items-stretch">
+                  <q-btn
+                    v-if="!pay.paidDate"
+                    outline
+                    dense
+                    size="sm"
+                    icon="check_circle"
+                    label="Оплатить"
+                    color="positive"
+                    no-caps
+                    style="border-radius: 4px; min-width: 105px; height: 30px"
+                    @click="pickPayDate(pay.key)"
+                  />
+                  <q-badge v-else color="positive" style="padding: 6px 12px; font-size: 11px; border-radius: 4px; min-width: 105px; justify-content: center; height: 30px; display: flex; align-items: center">
+                    Оплачено
+                    <q-btn
+                      flat
+                      round
+                      dense
+                      size="xs"
+                      icon="close"
+                      color="white"
+                      class="q-ml-xs"
+                      style="margin: -4px -4px -4px 0"
+                      @click.stop="cancelPayment(pay.key)"
+                    />
+                  </q-badge>
+                  <q-btn
+                    outline
+                    dense
+                    size="sm"
+                    icon="upload_file"
+                    label="Чек"
+                    no-caps
+                    style="color: #333; border-color: #ffd93c; border-radius: 4px; min-width: 105px; height: 30px"
+                    @click="uploadReceipt(pay.key)"
+                  />
+                </div>
+              </q-item-section>
+            </q-item>
+          </q-list>
+        </q-card>
+
+        <!-- Шаблонный — 1 платёж -->
+        <q-card v-if="contract.project_type === 'Шаблонный'" class="is-card q-mb-md">
+          <q-card-section class="q-pb-none">
+            <div class="text-subtitle2 text-weight-bold" style="color: #333">
+              Оплата
+            </div>
+          </q-card-section>
+          <q-list dense>
+            <q-item>
+              <q-item-section>
+                <q-item-label class="text-weight-bold" style="color: #333">
+                  {{ fmtMoney(contract.advance_payment || contract.total_amount) }}
+                </q-item-label>
+                <q-item-label caption :style="{ color: contract.advance_payment_paid_date ? '#27AE60' : '#888' }">
+                  {{ contract.advance_payment_paid_date ? `Оплачено ${fmtDate(contract.advance_payment_paid_date)}` : 'Не оплачено' }}
+                </q-item-label>
+              </q-item-section>
+              <q-item-section side style="min-width: 110px">
                 <q-btn
-                  v-if="!pay.paidDate"
+                  v-if="!contract.advance_payment_paid_date"
                   outline
                   dense
                   size="sm"
@@ -169,10 +231,10 @@
                   label="Оплатить"
                   color="positive"
                   no-caps
-                  style="border-radius: 4px; min-width: 105px; height: 30px"
-                  @click="pickPayDate(pay.key)"
+                  style="border-radius: 4px; min-width: 105px"
+                  @click="pickPayDate('advance')"
                 />
-                <q-badge v-else color="positive" style="padding: 6px 12px; font-size: 11px; border-radius: 4px; min-width: 105px; justify-content: center; height: 30px; display: flex; align-items: center">
+                <q-badge v-else color="positive" style="padding: 5px 12px; font-size: 11px; border-radius: 4px; min-width: 105px; justify-content: center">
                   Оплачено
                   <q-btn
                     flat
@@ -182,549 +244,490 @@
                     icon="close"
                     color="white"
                     class="q-ml-xs"
-                    style="margin: -4px -4px -4px 0"
-                    @click.stop="cancelPayment(pay.key)"
+                    @click.stop="cancelPayment('advance')"
                   />
                 </q-badge>
-                <q-btn
-                  outline
-                  dense
-                  size="sm"
-                  icon="upload_file"
-                  label="Чек"
-                  no-caps
-                  style="color: #333; border-color: #ffd93c; border-radius: 4px; min-width: 105px; height: 30px"
-                  @click="uploadReceipt(pay.key)"
-                />
-              </div>
-            </q-item-section>
-          </q-item>
-        </q-list>
-      </q-card>
-
-      <!-- Шаблонный — 1 платёж -->
-      <q-card v-if="contract.project_type === 'Шаблонный'" class="is-card q-mb-md">
-        <q-card-section class="q-pb-none">
-          <div class="text-subtitle2 text-weight-bold" style="color: #333">
-            Оплата
-          </div>
-        </q-card-section>
-        <q-list dense>
-          <q-item>
-            <q-item-section>
-              <q-item-label class="text-weight-bold" style="color: #333">
-                {{ fmtMoney(contract.advance_payment || contract.total_amount) }}
-              </q-item-label>
-              <q-item-label caption :style="{ color: contract.advance_payment_paid_date ? '#27AE60' : '#888' }">
-                {{ contract.advance_payment_paid_date ? `Оплачено ${fmtDate(contract.advance_payment_paid_date)}` : 'Не оплачено' }}
-              </q-item-label>
-            </q-item-section>
-            <q-item-section side style="min-width: 110px">
-              <q-btn
-                v-if="!contract.advance_payment_paid_date"
-                outline
-                dense
-                size="sm"
-                icon="check_circle"
-                label="Оплатить"
-                color="positive"
-                no-caps
-                style="border-radius: 4px; min-width: 105px"
-                @click="pickPayDate('advance')"
-              />
-              <q-badge v-else color="positive" style="padding: 5px 12px; font-size: 11px; border-radius: 4px; min-width: 105px; justify-content: center">
-                Оплачено
-                <q-btn
-                  flat
-                  round
-                  dense
-                  size="xs"
-                  icon="close"
-                  color="white"
-                  class="q-ml-xs"
-                  @click.stop="cancelPayment('advance')"
-                />
-              </q-badge>
-            </q-item-section>
-          </q-item>
-        </q-list>
-      </q-card>
-
-      <!-- Таблица сроков -->
-      <q-card v-if="timeline.length > 0" class="is-card q-mb-md">
-        <q-card-section class="q-pb-none">
-          <div class="text-subtitle2 text-weight-bold" style="color: #333">
-            Таблица сроков
-          </div>
-        </q-card-section>
-        <q-list dense separator>
-          <q-item v-for="entry in timeline" :key="entry.id" :class="{ 'bg-green-1': entry.actual_date && entry.executor_role !== 'header' && entry.stage_code?.includes('.') }" :style="entry.executor_role === 'header' ? { background: '#EEEEEE', fontWeight: 'bold' } : (!entry.stage_code?.includes('.') ? { background: '#F5F5F5', fontWeight: '600' } : (entry.status === 'skipped' ? { background: '#FAFAFA', opacity: 0.7 } : {}))">
-            <q-item-section avatar>
-              <q-icon :name="entry.status === 'skipped' ? 'block' : (entry.actual_date ? 'check_circle' : 'radio_button_unchecked')" :color="entry.status === 'skipped' ? 'grey-4' : (entry.actual_date ? 'positive' : 'grey-5')" size="16px" />
-            </q-item-section>
-            <q-item-section>
-              <q-item-label style="font-size: 11px; color: #333" :class="{ 'text-weight-bold': !entry.stage_code?.includes('.') }">
-                {{ entry.stage_name }}
-              </q-item-label>
-              <q-item-label caption style="color: #888">
-                <span v-if="entry.norm_days">Норма: {{ entry.custom_norm_days || entry.norm_days }} дн.</span>
-                <span v-if="entry.actual_days"> | Факт: {{ entry.actual_days }} дн.</span>
-                <span v-if="entry.executor_role && entry.executor_role !== 'header'"> | {{ entry.executor_role }}</span>
-                <span v-if="entry.status === 'skipped'" style="color: #bbb; font-style: italic"> | Пропущено</span>
-              </q-item-label>
-            </q-item-section>
-            <q-item-section v-if="entry.actual_date" side>
-              <div class="text-caption" style="color: #27AE60">
-                {{ fmtDateShort(entry.actual_date) }}
-              </div>
-            </q-item-section>
-          </q-item>
-        </q-list>
-      </q-card>
-
-      <!-- Файлы: Договор / ТЗ / Доп.соглашения — в ландшафте 3 колонки -->
-      <div class="contract-files-grid">
-        <!-- Файлы: Договор -->
-        <q-card class="is-card q-mb-md">
-          <q-card-section class="q-pb-none">
-            <div class="text-subtitle2 text-weight-bold" style="color: #333">
-              Договор
-            </div>
-          </q-card-section>
-          <q-list v-if="filesByGroup.documents.length > 0" dense>
-            <q-item v-for="f in filesByGroup.documents" :key="f.id" clickable @click="openFile(f)">
-              <q-item-section avatar>
-                <q-icon :name="fileIconByName(f.file_name)" :color="fileColorByName(f.file_name)" />
-              </q-item-section>
-              <q-item-section style="min-width: 0; overflow: hidden">
-                <q-item-label style="font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
-                  {{ f.file_name }}
-                </q-item-label>
-              </q-item-section>
-              <q-item-section side>
-                <div class="row q-gutter-xs items-center">
-                  <q-btn
-                    outline
-                    dense
-                    size="xs"
-                    icon="open_in_new"
-                    color="primary"
-                    no-caps
-                    label="Открыть"
-                    style="font-size: 10px; padding: 2px 8px; border-radius: 4px"
-                    @click.stop="openFile(f)"
-                  />
-                  <q-btn
-                    v-if="canDeleteFiles"
-                    outline
-                    dense
-                    size="xs"
-                    icon="delete_outline"
-                    color="negative"
-                    no-caps
-                    style="font-size: 10px; padding: 2px 6px; border-radius: 4px"
-                    @click.stop="deleteContractFile(f)"
-                  />
-                </div>
               </q-item-section>
             </q-item>
           </q-list>
-          <q-card-section class="q-pt-xs">
-            <q-btn
-              outline
-              color="grey-7"
-              icon="gavel"
-              label="Загрузить договор"
-              no-caps
-              class="full-width"
-              dense
-              @click="uploadFor('documents')"
-            />
-          </q-card-section>
         </q-card>
 
-        <!-- Файлы: ТЗ -->
-        <q-card class="is-card q-mb-md">
+        <!-- Таблица сроков -->
+        <q-card v-if="timeline.length > 0" class="is-card q-mb-md">
           <q-card-section class="q-pb-none">
             <div class="text-subtitle2 text-weight-bold" style="color: #333">
-              Техническое задание
+              Таблица сроков
             </div>
           </q-card-section>
-          <q-list v-if="filesByGroup.tech_task.length > 0" dense>
-            <q-item v-for="f in filesByGroup.tech_task" :key="f.id" clickable @click="openFile(f)">
-              <q-item-section avatar>
-                <q-icon :name="fileIconByName(f.file_name)" :color="fileColorByName(f.file_name)" />
-              </q-item-section>
-              <q-item-section style="min-width: 0; overflow: hidden">
-                <q-item-label style="font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
-                  {{ f.file_name }}
-                </q-item-label>
-              </q-item-section>
-              <q-item-section side>
-                <div class="row q-gutter-xs items-center">
-                  <q-btn
-                    outline
-                    dense
-                    size="xs"
-                    icon="open_in_new"
-                    color="primary"
-                    no-caps
-                    label="Открыть"
-                    style="font-size: 10px; padding: 2px 8px; border-radius: 4px"
-                    @click.stop="openFile(f)"
-                  />
-                  <q-btn
-                    v-if="canDeleteFiles"
-                    outline
-                    dense
-                    size="xs"
-                    icon="delete_outline"
-                    color="negative"
-                    no-caps
-                    style="font-size: 10px; padding: 2px 6px; border-radius: 4px"
-                    @click.stop="deleteContractFile(f)"
-                  />
-                </div>
-              </q-item-section>
-            </q-item>
-          </q-list>
-          <q-card-section class="q-pt-xs">
-            <q-btn
-              outline
-              color="grey-7"
-              icon="description"
-              label="Загрузить ТЗ"
-              no-caps
-              class="full-width"
-              dense
-              @click="uploadFor('tech_task')"
-            />
-          </q-card-section>
-        </q-card>
-
-        <!-- Файлы: Доп. соглашения -->
-        <q-card class="is-card q-mb-md">
-          <q-card-section class="q-pb-none">
-            <div class="text-subtitle2 text-weight-bold" style="color: #333">
-              Доп. соглашения
-            </div>
-          </q-card-section>
-          <q-list v-if="filesByGroup.supervision.length > 0" dense>
-            <q-item v-for="f in filesByGroup.supervision" :key="f.id" clickable @click="openFile(f)">
-              <q-item-section avatar>
-                <q-icon :name="fileIconByName(f.file_name)" :color="fileColorByName(f.file_name)" />
-              </q-item-section>
-              <q-item-section style="min-width: 0; overflow: hidden">
-                <q-item-label style="font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
-                  {{ f.file_name }}
-                </q-item-label>
-              </q-item-section>
-              <q-item-section side>
-                <div class="row q-gutter-xs items-center">
-                  <q-btn
-                    outline
-                    dense
-                    size="xs"
-                    icon="open_in_new"
-                    color="primary"
-                    no-caps
-                    label="Открыть"
-                    style="font-size: 10px; padding: 2px 8px; border-radius: 4px"
-                    @click.stop="openFile(f)"
-                  />
-                  <q-btn
-                    v-if="canDeleteFiles"
-                    outline
-                    dense
-                    size="xs"
-                    icon="delete_outline"
-                    color="negative"
-                    no-caps
-                    style="font-size: 10px; padding: 2px 6px; border-radius: 4px"
-                    @click.stop="deleteContractFile(f)"
-                  />
-                </div>
-              </q-item-section>
-            </q-item>
-          </q-list>
-          <q-card-section class="q-pt-xs">
-            <q-btn
-              outline
-              color="grey-7"
-              icon="handshake"
-              label="Загрузить доп. соглашение"
-              no-caps
-              class="full-width"
-              dense
-              @click="uploadFor('supervision')"
-            />
-          </q-card-section>
-        </q-card>
-      </div><!-- /contract-files-grid -->
-
-      <!-- Файлы: Акты без подписи -->
-      <q-card class="is-card q-mb-md">
-        <q-card-section class="q-pb-none">
-          <div class="text-subtitle2 text-weight-bold" style="color: #333">
-            Акты (без подписи)
-          </div>
-        </q-card-section>
-        <div v-if="filesByGroup.acts.length > 0" class="row q-col-gutter-sm q-pa-sm">
-          <div v-for="f in filesByGroup.acts" :key="f.id" class="col-xs-12 col-sm-4">
-            <q-card flat bordered class="q-pa-sm" style="border-radius: 4px">
-              <div style="font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #333">
-                {{ f.file_name }}
-              </div>
-              <div class="text-caption" style="color: #888">
-                {{ stageLabel(f.stage) }}
-              </div>
-              <div class="row q-gutter-xs q-mt-xs">
-                <q-btn
-                  outline
-                  dense
-                  size="xs"
-                  icon="open_in_new"
-                  color="primary"
-                  no-caps
-                  style="font-size: 9px; padding: 1px 6px; border-radius: 4px; flex: 1"
-                  @click="openFile(f)"
-                />
-                <q-btn
-                  v-if="canDeleteFiles"
-                  outline
-                  dense
-                  size="xs"
-                  icon="delete"
-                  color="negative"
-                  no-caps
-                  style="font-size: 9px; padding: 1px 6px; border-radius: 4px"
-                  @click="deleteContractFile(f)"
-                />
-              </div>
-            </q-card>
-          </div>
-        </div>
-        <q-card-section class="q-pt-xs">
-          <div class="row q-col-gutter-xs">
-            <div class="col-4">
-              <q-btn
-                outline
-                color="grey-7"
-                label="Акт ПР"
-                no-caps
-                class="full-width"
-                dense
-                @click="uploadFor('act_pr')"
-              />
-            </div>
-            <div class="col-4">
-              <q-btn
-                outline
-                color="grey-7"
-                label="Акт КД"
-                no-caps
-                class="full-width"
-                dense
-                @click="uploadFor('act_kd')"
-              />
-            </div>
-            <div class="col-4">
-              <q-btn
-                outline
-                color="grey-7"
-                label="Акт РЧ"
-                no-caps
-                class="full-width"
-                dense
-                @click="uploadFor('act_rch')"
-              />
-            </div>
-          </div>
-        </q-card-section>
-      </q-card>
-
-      <!-- Файлы: Акты с подписью -->
-      <q-card class="is-card q-mb-md">
-        <q-card-section class="q-pb-none">
-          <div class="text-subtitle2 text-weight-bold" style="color: #333">
-            Акты (с подписью)
-          </div>
-        </q-card-section>
-        <div v-if="filesByGroup.actsSigned.length > 0" class="row q-col-gutter-sm q-pa-sm">
-          <div v-for="f in filesByGroup.actsSigned" :key="f.id" class="col-xs-12 col-sm-4">
-            <q-card flat bordered class="q-pa-sm" style="border-radius: 4px">
-              <div style="font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #333">
-                {{ f.file_name }}
-              </div>
-              <div class="text-caption" style="color: #888">
-                {{ stageLabel(f.stage) }}
-              </div>
-              <div class="row q-gutter-xs q-mt-xs">
-                <q-btn
-                  outline
-                  dense
-                  size="xs"
-                  icon="open_in_new"
-                  color="primary"
-                  no-caps
-                  style="font-size: 9px; padding: 1px 6px; border-radius: 4px; flex: 1"
-                  @click="openFile(f)"
-                />
-                <q-btn
-                  v-if="canDeleteFiles"
-                  outline
-                  dense
-                  size="xs"
-                  icon="delete"
-                  color="negative"
-                  no-caps
-                  style="font-size: 9px; padding: 1px 6px; border-radius: 4px"
-                  @click="deleteContractFile(f)"
-                />
-              </div>
-            </q-card>
-          </div>
-        </div>
-        <q-card-section class="q-pt-xs">
-          <div class="row q-col-gutter-xs">
-            <div class="col-4">
-              <q-btn
-                outline
-                color="grey-7"
-                label="ПР подп."
-                no-caps
-                class="full-width"
-                dense
-                @click="uploadFor('act_pr_signed')"
-              />
-            </div>
-            <div class="col-4">
-              <q-btn
-                outline
-                color="grey-7"
-                label="КД подп."
-                no-caps
-                class="full-width"
-                dense
-                @click="uploadFor('act_kd_signed')"
-              />
-            </div>
-            <div class="col-4">
-              <q-btn
-                outline
-                color="grey-7"
-                label="РЧ подп."
-                no-caps
-                class="full-width"
-                dense
-                @click="uploadFor('act_rch_signed')"
-              />
-            </div>
-          </div>
-        </q-card-section>
-      </q-card>
-
-      <!-- Блок опросов клиентов -->
-      <q-card class="is-card q-mb-md">
-        <q-card-section class="q-pb-none">
-          <div class="row items-center justify-between">
-            <div class="text-subtitle2 text-weight-bold" style="color: #333">
-              Опрос клиента
-            </div>
-            <q-btn
-              v-if="!surveys.some(s => s.status === 'pending' || s.status === 'sent')"
-              unelevated
-              dense
-              no-caps
-              icon="add_task"
-              label="Создать опрос"
-              style="background: #ffd93c; color: #333; font-size: 11px; height: 32px; border-radius: 4px"
-              :loading="surveysLoading"
-              @click="createSurvey"
-            />
-          </div>
-        </q-card-section>
-        <q-card-section v-if="surveysLoading" class="text-center">
-          <q-spinner size="24px" color="accent" />
-        </q-card-section>
-        <template v-else-if="surveys.length > 0">
           <q-list dense separator>
-            <q-item v-for="s in surveys" :key="s.id">
-              <q-item-section>
-                <q-item-label style="font-size: 12px; font-weight: bold">
-                  {{ { individual: 'Индивидуальный', template: 'Шаблонный', supervision: 'Авторский надзор' }[s.project_type] || contract.project_type }}
-                </q-item-label>
-                <q-item-label caption>
-                  <q-badge :color="surveyStatusColor(s.status)" :label="surveyStatusLabel(s.status)" dense />
-                  <span v-if="s.completed_at" class="q-ml-xs">{{ new Date(s.completed_at).toLocaleDateString('ru-RU') }}</span>
-                </q-item-label>
-                <!-- Результаты опроса -->
-                <template v-if="s.status === 'completed'">
-                  <div class="row q-gutter-xs q-mt-xs" style="flex-wrap: wrap">
-                    <div v-if="s.nps_score != null" class="text-caption" style="color: #333">
-                      NPS: <b>{{ s.nps_score }}</b>/10
-                    </div>
-                    <div v-if="s.csat_score != null" class="text-caption" style="color: #888">
-                      ·
-                    </div>
-                    <div v-if="s.csat_score != null" class="text-caption" style="color: #333">
-                      CSAT: <b>{{ s.csat_score }}</b>/5
-                    </div>
-                    <div v-if="s.design_score != null" class="text-caption" style="color: #888">
-                      ·
-                    </div>
-                    <div v-if="s.design_score != null" class="text-caption" style="color: #333">
-                      Дизайн: <b>{{ s.design_score }}</b>/5
-                    </div>
-                    <div v-if="s.deadline_score != null" class="text-caption" style="color: #888">
-                      ·
-                    </div>
-                    <div v-if="s.deadline_score != null" class="text-caption" style="color: #333">
-                      Сроки: <b>{{ s.deadline_score }}</b>/5
-                    </div>
-                    <div v-if="s.communication_score != null" class="text-caption" style="color: #888">
-                      ·
-                    </div>
-                    <div v-if="s.communication_score != null" class="text-caption" style="color: #333">
-                      Общение: <b>{{ s.communication_score }}</b>/5
-                    </div>
-                    <div v-if="s.expectations_score != null" class="text-caption" style="color: #888">
-                      ·
-                    </div>
-                    <div v-if="s.expectations_score != null" class="text-caption" style="color: #333">
-                      Ожидания: <b>{{ s.expectations_score }}</b>/5
-                    </div>
-                  </div>
-                  <div v-if="s.comment" class="text-caption q-mt-xs" style="color: #666; font-style: italic">
-                    "{{ s.comment }}"
-                  </div>
-                </template>
-                <!-- Ссылка на опрос (если не завершён) -->
-                <div v-if="s.survey_link && s.status !== 'completed'" class="q-mt-xs">
-                  <a :href="s.survey_link" target="_blank" style="color: #1677FF; font-size: 11px; word-break: break-all">{{ s.survey_link }}</a>
-                </div>
+            <q-item v-for="entry in timeline" :key="entry.id" :class="{ 'bg-green-1': entry.actual_date && entry.executor_role !== 'header' && entry.stage_code?.includes('.') }" :style="entry.executor_role === 'header' ? { background: '#EEEEEE', fontWeight: 'bold' } : (!entry.stage_code?.includes('.') ? { background: '#F5F5F5', fontWeight: '600' } : (entry.status === 'skipped' ? { background: '#FAFAFA', opacity: 0.7 } : {}))">
+              <q-item-section avatar>
+                <q-icon :name="entry.status === 'skipped' ? 'block' : (entry.actual_date ? 'check_circle' : 'radio_button_unchecked')" :color="entry.status === 'skipped' ? 'grey-4' : (entry.actual_date ? 'positive' : 'grey-5')" size="16px" />
               </q-item-section>
-              <q-item-section side style="flex-shrink: 0">
-                <q-btn
-                  v-if="s.status !== 'completed'"
-                  flat
-                  round
-                  dense
-                  size="xs"
-                  icon="send"
-                  color="positive"
-                  @click="resendSurvey(s)"
-                >
-                  <q-tooltip>Переотправить</q-tooltip>
-                </q-btn>
+              <q-item-section>
+                <q-item-label style="font-size: 11px; color: #333" :class="{ 'text-weight-bold': !entry.stage_code?.includes('.') }">
+                  {{ entry.stage_name }}
+                </q-item-label>
+                <q-item-label caption style="color: #888">
+                  <span v-if="entry.norm_days">Норма: {{ entry.custom_norm_days || entry.norm_days }} дн.</span>
+                  <span v-if="entry.actual_days"> | Факт: {{ entry.actual_days }} дн.</span>
+                  <span v-if="entry.executor_role && entry.executor_role !== 'header'"> | {{ entry.executor_role }}</span>
+                  <span v-if="entry.status === 'skipped'" style="color: #bbb; font-style: italic"> | Пропущено</span>
+                </q-item-label>
+              </q-item-section>
+              <q-item-section v-if="entry.actual_date" side>
+                <div class="text-caption" style="color: #27AE60">
+                  {{ fmtDateShort(entry.actual_date) }}
+                </div>
               </q-item-section>
             </q-item>
           </q-list>
-        </template>
-        <q-card-section v-else class="text-center" style="color: #999; font-size: 12px">
-          Опросов нет
-        </q-card-section>
-      </q-card>
+        </q-card>
+
+        <!-- Файлы: Договор / ТЗ / Доп.соглашения — в ландшафте 3 колонки -->
+        <div class="contract-files-grid">
+          <!-- Файлы: Договор -->
+          <q-card class="is-card q-mb-md">
+            <q-card-section class="q-pb-none">
+              <div class="text-subtitle2 text-weight-bold" style="color: #333">
+                Договор
+              </div>
+            </q-card-section>
+            <q-list v-if="filesByGroup.documents.length > 0" dense>
+              <q-item v-for="f in filesByGroup.documents" :key="f.id" clickable @click="openFile(f)">
+                <q-item-section avatar>
+                  <q-icon :name="fileIconByName(f.file_name)" :color="fileColorByName(f.file_name)" />
+                </q-item-section>
+                <q-item-section style="min-width: 0; overflow: hidden">
+                  <q-item-label style="font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
+                    {{ f.file_name }}
+                  </q-item-label>
+                </q-item-section>
+                <q-item-section side>
+                  <div class="row q-gutter-xs items-center">
+                    <q-btn
+                      outline
+                      dense
+                      size="xs"
+                      icon="open_in_new"
+                      color="primary"
+                      no-caps
+                      label="Открыть"
+                      style="font-size: 10px; padding: 2px 8px; border-radius: 4px"
+                      @click.stop="openFile(f)"
+                    />
+                    <q-btn
+                      v-if="canDeleteFiles"
+                      outline
+                      dense
+                      size="xs"
+                      icon="delete_outline"
+                      color="negative"
+                      no-caps
+                      style="font-size: 10px; padding: 2px 6px; border-radius: 4px"
+                      @click.stop="deleteContractFile(f)"
+                    />
+                  </div>
+                </q-item-section>
+              </q-item>
+            </q-list>
+            <q-card-section class="q-pt-xs">
+              <q-btn
+                outline
+                color="grey-7"
+                icon="gavel"
+                label="Загрузить договор"
+                no-caps
+                class="full-width"
+                dense
+                @click="uploadFor('documents')"
+              />
+            </q-card-section>
+          </q-card>
+
+          <!-- Файлы: ТЗ -->
+          <q-card class="is-card q-mb-md">
+            <q-card-section class="q-pb-none">
+              <div class="text-subtitle2 text-weight-bold" style="color: #333">
+                Техническое задание
+              </div>
+            </q-card-section>
+            <q-list v-if="filesByGroup.tech_task.length > 0" dense>
+              <q-item v-for="f in filesByGroup.tech_task" :key="f.id" clickable @click="openFile(f)">
+                <q-item-section avatar>
+                  <q-icon :name="fileIconByName(f.file_name)" :color="fileColorByName(f.file_name)" />
+                </q-item-section>
+                <q-item-section style="min-width: 0; overflow: hidden">
+                  <q-item-label style="font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
+                    {{ f.file_name }}
+                  </q-item-label>
+                </q-item-section>
+                <q-item-section side>
+                  <div class="row q-gutter-xs items-center">
+                    <q-btn
+                      outline
+                      dense
+                      size="xs"
+                      icon="open_in_new"
+                      color="primary"
+                      no-caps
+                      label="Открыть"
+                      style="font-size: 10px; padding: 2px 8px; border-radius: 4px"
+                      @click.stop="openFile(f)"
+                    />
+                    <q-btn
+                      v-if="canDeleteFiles"
+                      outline
+                      dense
+                      size="xs"
+                      icon="delete_outline"
+                      color="negative"
+                      no-caps
+                      style="font-size: 10px; padding: 2px 6px; border-radius: 4px"
+                      @click.stop="deleteContractFile(f)"
+                    />
+                  </div>
+                </q-item-section>
+              </q-item>
+            </q-list>
+            <q-card-section class="q-pt-xs">
+              <q-btn
+                outline
+                color="grey-7"
+                icon="description"
+                label="Загрузить ТЗ"
+                no-caps
+                class="full-width"
+                dense
+                @click="uploadFor('tech_task')"
+              />
+            </q-card-section>
+          </q-card>
+
+          <!-- Файлы: Доп. соглашения -->
+          <q-card class="is-card q-mb-md">
+            <q-card-section class="q-pb-none">
+              <div class="text-subtitle2 text-weight-bold" style="color: #333">
+                Доп. соглашения
+              </div>
+            </q-card-section>
+            <q-list v-if="filesByGroup.supervision.length > 0" dense>
+              <q-item v-for="f in filesByGroup.supervision" :key="f.id" clickable @click="openFile(f)">
+                <q-item-section avatar>
+                  <q-icon :name="fileIconByName(f.file_name)" :color="fileColorByName(f.file_name)" />
+                </q-item-section>
+                <q-item-section style="min-width: 0; overflow: hidden">
+                  <q-item-label style="font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
+                    {{ f.file_name }}
+                  </q-item-label>
+                </q-item-section>
+                <q-item-section side>
+                  <div class="row q-gutter-xs items-center">
+                    <q-btn
+                      outline
+                      dense
+                      size="xs"
+                      icon="open_in_new"
+                      color="primary"
+                      no-caps
+                      label="Открыть"
+                      style="font-size: 10px; padding: 2px 8px; border-radius: 4px"
+                      @click.stop="openFile(f)"
+                    />
+                    <q-btn
+                      v-if="canDeleteFiles"
+                      outline
+                      dense
+                      size="xs"
+                      icon="delete_outline"
+                      color="negative"
+                      no-caps
+                      style="font-size: 10px; padding: 2px 6px; border-radius: 4px"
+                      @click.stop="deleteContractFile(f)"
+                    />
+                  </div>
+                </q-item-section>
+              </q-item>
+            </q-list>
+            <q-card-section class="q-pt-xs">
+              <q-btn
+                outline
+                color="grey-7"
+                icon="handshake"
+                label="Загрузить доп. соглашение"
+                no-caps
+                class="full-width"
+                dense
+                @click="uploadFor('supervision')"
+              />
+            </q-card-section>
+          </q-card>
+        </div><!-- /contract-files-grid -->
+
+        <!-- Файлы: Акты без подписи -->
+        <q-card class="is-card q-mb-md">
+          <q-card-section class="q-pb-none">
+            <div class="text-subtitle2 text-weight-bold" style="color: #333">
+              Акты (без подписи)
+            </div>
+          </q-card-section>
+          <div v-if="filesByGroup.acts.length > 0" class="row q-col-gutter-sm q-pa-sm">
+            <div v-for="f in filesByGroup.acts" :key="f.id" class="col-xs-12 col-sm-4">
+              <q-card flat bordered class="q-pa-sm" style="border-radius: 4px">
+                <div style="font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #333">
+                  {{ f.file_name }}
+                </div>
+                <div class="text-caption" style="color: #888">
+                  {{ stageLabel(f.stage) }}
+                </div>
+                <div class="row q-gutter-xs q-mt-xs">
+                  <q-btn
+                    outline
+                    dense
+                    size="xs"
+                    icon="open_in_new"
+                    color="primary"
+                    no-caps
+                    style="font-size: 9px; padding: 1px 6px; border-radius: 4px; flex: 1"
+                    @click="openFile(f)"
+                  />
+                  <q-btn
+                    v-if="canDeleteFiles"
+                    outline
+                    dense
+                    size="xs"
+                    icon="delete"
+                    color="negative"
+                    no-caps
+                    style="font-size: 9px; padding: 1px 6px; border-radius: 4px"
+                    @click="deleteContractFile(f)"
+                  />
+                </div>
+              </q-card>
+            </div>
+          </div>
+          <q-card-section class="q-pt-xs">
+            <div class="row q-col-gutter-xs">
+              <div class="col-4">
+                <q-btn
+                  outline
+                  color="grey-7"
+                  label="Акт ПР"
+                  no-caps
+                  class="full-width"
+                  dense
+                  @click="uploadFor('act_pr')"
+                />
+              </div>
+              <div class="col-4">
+                <q-btn
+                  outline
+                  color="grey-7"
+                  label="Акт КД"
+                  no-caps
+                  class="full-width"
+                  dense
+                  @click="uploadFor('act_kd')"
+                />
+              </div>
+              <div class="col-4">
+                <q-btn
+                  outline
+                  color="grey-7"
+                  label="Акт РЧ"
+                  no-caps
+                  class="full-width"
+                  dense
+                  @click="uploadFor('act_rch')"
+                />
+              </div>
+            </div>
+          </q-card-section>
+        </q-card>
+
+        <!-- Файлы: Акты с подписью -->
+        <q-card class="is-card q-mb-md">
+          <q-card-section class="q-pb-none">
+            <div class="text-subtitle2 text-weight-bold" style="color: #333">
+              Акты (с подписью)
+            </div>
+          </q-card-section>
+          <div v-if="filesByGroup.actsSigned.length > 0" class="row q-col-gutter-sm q-pa-sm">
+            <div v-for="f in filesByGroup.actsSigned" :key="f.id" class="col-xs-12 col-sm-4">
+              <q-card flat bordered class="q-pa-sm" style="border-radius: 4px">
+                <div style="font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #333">
+                  {{ f.file_name }}
+                </div>
+                <div class="text-caption" style="color: #888">
+                  {{ stageLabel(f.stage) }}
+                </div>
+                <div class="row q-gutter-xs q-mt-xs">
+                  <q-btn
+                    outline
+                    dense
+                    size="xs"
+                    icon="open_in_new"
+                    color="primary"
+                    no-caps
+                    style="font-size: 9px; padding: 1px 6px; border-radius: 4px; flex: 1"
+                    @click="openFile(f)"
+                  />
+                  <q-btn
+                    v-if="canDeleteFiles"
+                    outline
+                    dense
+                    size="xs"
+                    icon="delete"
+                    color="negative"
+                    no-caps
+                    style="font-size: 9px; padding: 1px 6px; border-radius: 4px"
+                    @click="deleteContractFile(f)"
+                  />
+                </div>
+              </q-card>
+            </div>
+          </div>
+          <q-card-section class="q-pt-xs">
+            <div class="row q-col-gutter-xs">
+              <div class="col-4">
+                <q-btn
+                  outline
+                  color="grey-7"
+                  label="ПР подп."
+                  no-caps
+                  class="full-width"
+                  dense
+                  @click="uploadFor('act_pr_signed')"
+                />
+              </div>
+              <div class="col-4">
+                <q-btn
+                  outline
+                  color="grey-7"
+                  label="КД подп."
+                  no-caps
+                  class="full-width"
+                  dense
+                  @click="uploadFor('act_kd_signed')"
+                />
+              </div>
+              <div class="col-4">
+                <q-btn
+                  outline
+                  color="grey-7"
+                  label="РЧ подп."
+                  no-caps
+                  class="full-width"
+                  dense
+                  @click="uploadFor('act_rch_signed')"
+                />
+              </div>
+            </div>
+          </q-card-section>
+        </q-card>
+
+        <!-- Блок опросов клиентов -->
+        <q-card class="is-card q-mb-md">
+          <q-card-section class="q-pb-none">
+            <div class="row items-center justify-between">
+              <div class="text-subtitle2 text-weight-bold" style="color: #333">
+                Опрос клиента
+              </div>
+              <q-btn
+                v-if="!surveys.some(s => s.status === 'pending' || s.status === 'sent')"
+                unelevated
+                dense
+                no-caps
+                icon="add_task"
+                label="Создать опрос"
+                style="background: #ffd93c; color: #333; font-size: 11px; height: 32px; border-radius: 4px"
+                :loading="surveysLoading"
+                @click="createSurvey"
+              />
+            </div>
+          </q-card-section>
+          <q-card-section v-if="surveysLoading" class="text-center">
+            <q-spinner size="24px" color="accent" />
+          </q-card-section>
+          <template v-else-if="surveys.length > 0">
+            <q-list dense separator>
+              <q-item v-for="s in surveys" :key="s.id">
+                <q-item-section>
+                  <q-item-label style="font-size: 12px; font-weight: bold">
+                    {{ { individual: 'Индивидуальный', template: 'Шаблонный', supervision: 'Авторский надзор' }[s.project_type] || contract.project_type }}
+                  </q-item-label>
+                  <q-item-label caption>
+                    <q-badge :color="surveyStatusColor(s.status)" :label="surveyStatusLabel(s.status)" dense />
+                    <span v-if="s.completed_at" class="q-ml-xs">{{ new Date(s.completed_at).toLocaleDateString('ru-RU') }}</span>
+                  </q-item-label>
+                  <!-- Результаты опроса -->
+                  <template v-if="s.status === 'completed'">
+                    <div class="row q-gutter-xs q-mt-xs" style="flex-wrap: wrap">
+                      <div v-if="s.nps_score != null" class="text-caption" style="color: #333">
+                        NPS: <b>{{ s.nps_score }}</b>/10
+                      </div>
+                      <div v-if="s.csat_score != null" class="text-caption" style="color: #888">
+                        ·
+                      </div>
+                      <div v-if="s.csat_score != null" class="text-caption" style="color: #333">
+                        CSAT: <b>{{ s.csat_score }}</b>/5
+                      </div>
+                      <div v-if="s.design_score != null" class="text-caption" style="color: #888">
+                        ·
+                      </div>
+                      <div v-if="s.design_score != null" class="text-caption" style="color: #333">
+                        Дизайн: <b>{{ s.design_score }}</b>/5
+                      </div>
+                      <div v-if="s.deadline_score != null" class="text-caption" style="color: #888">
+                        ·
+                      </div>
+                      <div v-if="s.deadline_score != null" class="text-caption" style="color: #333">
+                        Сроки: <b>{{ s.deadline_score }}</b>/5
+                      </div>
+                      <div v-if="s.communication_score != null" class="text-caption" style="color: #888">
+                        ·
+                      </div>
+                      <div v-if="s.communication_score != null" class="text-caption" style="color: #333">
+                        Общение: <b>{{ s.communication_score }}</b>/5
+                      </div>
+                      <div v-if="s.expectations_score != null" class="text-caption" style="color: #888">
+                        ·
+                      </div>
+                      <div v-if="s.expectations_score != null" class="text-caption" style="color: #333">
+                        Ожидания: <b>{{ s.expectations_score }}</b>/5
+                      </div>
+                    </div>
+                    <div v-if="s.comment" class="text-caption q-mt-xs" style="color: #666; font-style: italic">
+                      "{{ s.comment }}"
+                    </div>
+                  </template>
+                  <!-- Ссылка на опрос (если не завершён) -->
+                  <div v-if="s.survey_link && s.status !== 'completed'" class="q-mt-xs">
+                    <a :href="s.survey_link" target="_blank" style="color: #1677FF; font-size: 11px; word-break: break-all">{{ s.survey_link }}</a>
+                  </div>
+                </q-item-section>
+                <q-item-section side style="flex-shrink: 0">
+                  <q-btn
+                    v-if="s.status !== 'completed'"
+                    flat
+                    round
+                    dense
+                    size="xs"
+                    icon="send"
+                    color="positive"
+                    @click="resendSurvey(s)"
+                  >
+                    <q-tooltip>Переотправить</q-tooltip>
+                  </q-btn>
+                </q-item-section>
+              </q-item>
+            </q-list>
+          </template>
+          <q-card-section v-else class="text-center" style="color: #999; font-size: 12px">
+            Опросов нет
+          </q-card-section>
+        </q-card>
+      </div><!-- /contract-detail-grid -->
 
       <!-- Кнопка удаления -->
       <q-btn
@@ -1345,6 +1348,28 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+/* Ландшафт: основная сетка — 2 колонки, равная высота блоков в строке */
+@media (orientation: landscape) {
+  .contract-detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    align-items: start;
+    margin-bottom: 0;
+  }
+  .contract-detail-grid > * {
+    margin-bottom: 0 !important;
+  }
+  /* Файлы — на всю ширину (3 колонки внутри) */
+  .contract-detail-grid > .contract-files-grid {
+    grid-column: 1 / -1;
+  }
+  /* Акты (2 карточки) — рядом */
+  .contract-detail-grid > .is-card {
+    height: 100%;
+  }
+}
+
 /* Ландшафт: Договор / ТЗ / Доп.соглашения — до 3 колонок, минимум 200px, перенос */
 @media (orientation: landscape) {
   .contract-files-grid {
@@ -1352,7 +1377,7 @@ onMounted(async () => {
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 12px;
     align-items: start;
-    margin-bottom: 16px;
+    margin-bottom: 0;
   }
   .contract-files-grid > .is-card {
     margin-bottom: 0 !important;

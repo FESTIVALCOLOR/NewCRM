@@ -103,15 +103,17 @@
       <template v-if="!crmStore.showArchive && $q.screen.lt.md && !($q.screen.width > $q.screen.height)">
         <!-- Мини-навигация колонок: горизонтальный скролл -->
         <div class="column-nav">
-          <button
-            v-for="(col, idx) in crmStore.columns"
-            :key="col.name"
-            :class="{ active: currentSlide === idx }"
-            @click="currentSlide = idx"
-          >
-            {{ col.shortName }}
-            <span class="count">{{ col.count }}</span>
-          </button>
+          <div class="column-nav-inner">
+            <button
+              v-for="(col, idx) in crmStore.columns"
+              :key="col.name"
+              :class="{ active: currentSlide === idx }"
+              @click="currentSlide = idx"
+            >
+              {{ col.shortName }}
+              <span class="count">{{ col.count }}</span>
+            </button>
+          </div>
         </div>
 
         <!-- Карусель колонок — свайп влево/вправо -->
@@ -162,9 +164,11 @@
       <!-- Планшет — тоже свайп (карусель) -->
       <template v-if="$q.screen.gt.sm && !crmStore.showArchive && !($q.screen.width > $q.screen.height)">
         <div class="column-nav">
-          <button v-for="(col, idx) in crmStore.columns" :key="col.name" :class="{ active: currentSlide === idx }" @click="currentSlide = idx">
-            {{ col.shortName }} <span class="count">{{ col.count }}</span>
-          </button>
+          <div class="column-nav-inner">
+            <button v-for="(col, idx) in crmStore.columns" :key="col.name" :class="{ active: currentSlide === idx }" @click="currentSlide = idx">
+              {{ col.shortName }} <span class="count">{{ col.count }}</span>
+            </button>
+          </div>
         </div>
         <q-carousel
           v-model="currentSlide"
@@ -939,15 +943,20 @@ onMounted(async () => {
 
 /* Column navigation mini-bar */
 .column-nav {
-  display: flex;
   overflow-x: auto;
-  padding: 6px 8px;
-  gap: 4px;
   border-bottom: 1px solid #E0E0E0;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
 }
 .column-nav::-webkit-scrollbar { display: none }
+.column-nav-inner {
+  display: inline-flex;
+  min-width: 100%;
+  justify-content: center;
+  padding: 6px 8px;
+  gap: 4px;
+  box-sizing: border-box;
+}
 .column-nav button {
   border: 1px solid #d9d9d9;
   border-radius: 16px;
