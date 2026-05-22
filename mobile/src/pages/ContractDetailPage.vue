@@ -787,6 +787,44 @@
     <div v-else class="text-center q-pa-xl">
       <q-spinner size="40px" color="accent" />
     </div>
+
+    <!-- Диалог оплаты: сумма + дата -->
+    <q-dialog v-model="payDialogOpen" persistent>
+      <q-card style="min-width: 300px; border-radius: 12px">
+        <q-card-section>
+          <div class="text-subtitle1 text-weight-bold" style="color: #333">
+            Подтвердить оплату
+          </div>
+        </q-card-section>
+        <q-card-section class="q-pt-none">
+          <q-input
+            v-model="payDialogAmount"
+            label="Сумма оплаты, ₽"
+            outlined
+            dense
+            type="number"
+            class="q-mb-sm"
+          />
+          <q-input
+            v-model="payDialogDate"
+            label="Дата оплаты"
+            outlined
+            dense
+            type="date"
+          />
+        </q-card-section>
+        <q-card-actions align="right" class="q-pt-none">
+          <q-btn flat label="Отмена" no-caps @click="payDialogOpen = false" />
+          <q-btn
+            unelevated
+            label="Подтвердить"
+            color="positive"
+            no-caps
+            @click="confirmPay"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
@@ -1010,26 +1048,33 @@ function openMap(address) { window.open(`https://yandex.ru/maps/?text=${encodeUR
 function uploadFor(stage) { uploadStage.value = stage; fileInput.value?.click() }
 function uploadReceipt(type) { receiptType.value = type; receiptInput.value?.click() }
 
-// Оплата с выбором даты через календарь
+// Диалог подтверждения оплаты (сумма + дата)
+const payDialogOpen = ref(false)
+const payDialogKey = ref('')
+const payDialogDate = ref('')
+const payDialogAmount = ref('')
+
 function pickPayDate(payKey) {
-  $q.dialog({
-    title: 'Дата оплаты',
-    message: 'Выберите дату оплаты:',
-    prompt: { model: new Date().toISOString().split('T')[0], type: 'date' },
-    cancel: { label: 'Отмена', flat: true, noCaps: true },
-    ok: { label: 'Подтвердить', noCaps: true, color: 'positive' },
-    persistent: true,
-  }).onOk(async (date) => {
-    try {
-      const update = {}
-      update[`${payKey}_payment_paid_date`] = date
-      await contractsApi.update(contract.value.id, update)
-      contract.value[`${payKey}_payment_paid_date`] = date
-      $q.notify({ type: 'positive', message: 'Оплата проведена' })
-    } catch (err) {
-      $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
-    }
-  })
+  payDialogKey.value = payKey
+  payDialogDate.value = new Date().toISOString().split('T')[0]
+  const currentAmount = contract.value[`${payKey}_payment`]
+  payDialogAmount.value = currentAmount ? String(currentAmount) : ''
+  payDialogOpen.value = true
+}
+
+async function confirmPay() {
+  const payKey = payDialogKey.value
+  try {
+    const update = { [`${payKey}_payment_paid_date`]: payDialogDate.value }
+    if (payDialogAmount.value) update[`${payKey}_payment`] = parseFloat(payDialogAmount.value)
+    await contractsApi.update(contract.value.id, update)
+    contract.value[`${payKey}_payment_paid_date`] = payDialogDate.value
+    if (payDialogAmount.value) contract.value[`${payKey}_payment`] = parseFloat(payDialogAmount.value)
+    payDialogOpen.value = false
+    $q.notify({ type: 'positive', message: 'Оплата проведена' })
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
+  }
 }
 
 // Снять оплату

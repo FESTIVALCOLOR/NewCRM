@@ -368,7 +368,7 @@ async function loadData() {
   ])
 
   if (dashR.status === 'fulfilled') dashboard.value = dashR.value.data
-  if (survR.status === 'fulfilled') surveyStats.value = survR.value.data?.total > 0 ? survR.value.data : null
+  if (survR.status === 'fulfilled') surveyStats.value = survR.value.data || null
   else surveyStats.value = null
 
   // Сотрудники — фильтрация по roleTab
@@ -419,7 +419,7 @@ const surveyKpis = computed(() => {
     { label: 'Общение', value: s.avg_communication, scale: 5 },
     { label: 'Ожидания', value: s.avg_expectations, scale: 5 },
     { label: 'Надзор', value: s.avg_supervision, scale: 5 },
-  ].filter(k => k.value != null)
+  ]
 })
 
 function empSurveyScores(emp) {
