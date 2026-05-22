@@ -775,7 +775,8 @@ async function selectMoveColumn(colName) {
           const { getStageDeadlineInfo } = await import('src/composables/useDeadline')
           const area = _cardDetail.area || 0
           const projectType = _cardDetail.project_type || 'Индивидуальный'
-          const projectSubtype = _cardDetail.project_subtype || 'Полный (с 3д визуализацией)'
+          const projectSubtype = _cardDetail.project_subtype ||
+            (projectType === 'Шаблонный' ? 'Стандарт' : 'Полный (с 3д визуализацией)')
           const agentType = _cardDetail.agent_type || 'Все агенты'
           if (area > 0) {
             const previewResp = await ax.post('/api/v1/norm-days/preview', {

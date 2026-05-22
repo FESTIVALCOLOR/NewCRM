@@ -87,8 +87,9 @@ function columnToStageGroup(columnName) {
   if (!columnName) return null
   const col = columnName.toLowerCase()
   if (col.includes('стадия 1') || col.includes('планировочн')) return 'STAGE1'
+  if (col.includes('стадия 3')) return 'STAGE3'
   if (col.includes('стадия 2') || col.includes('концепция') || col.includes('дизайн') || col.includes('визуализац')) return 'STAGE2'
-  if (col.includes('стадия 3') || col.includes('чертеж') || col.includes('чертёж')) return 'STAGE3'
+  if (col.includes('чертеж') || col.includes('чертёж')) return 'STAGE3'
   return null
 }
 
