@@ -739,10 +739,11 @@ async function selectMoveColumn(colName) {
 
     // Подстановка уже назначенного исполнителя из stage_executors
     // (если назначили заранее через команду проекта)
+    let _cardDetail = null
     try {
-      const { api: ax } = await import('src/boot/axios')
-      const { data: cardDetail } = await crmApi.getCard(moveCard.value.id)
-      const seList = cardDetail?.stage_executors || []
+      const { data } = await crmApi.getCard(moveCard.value.id)
+      _cardDetail = data
+      const seList = _cardDetail?.stage_executors || []
       const existing = seList.filter(s => s.stage_name === colName).sort((a, b) => b.id - a.id)[0]
       if (existing?.executor_id) {
         moveExecutorId.value = existing.executor_id
@@ -766,6 +767,34 @@ async function selectMoveColumn(colName) {
         moveNormDays.value = info.normDays || 0
         moveSubstepName.value = info.substepName || ''
       } catch { /* fallback ниже */ }
+
+      // Fallback: таймлайн не инициализирован (Новый заказ) — берём норм-дни из шаблона по площади
+      if (moveNormDays.value === 0 && _cardDetail) {
+        try {
+          const { api: ax } = await import('src/boot/axios')
+          const { getStageDeadlineInfo } = await import('src/composables/useDeadline')
+          const area = _cardDetail.area || 0
+          const projectType = _cardDetail.project_type || 'Индивидуальный'
+          const projectSubtype = _cardDetail.project_subtype || 'Полный (с 3д визуализацией)'
+          const agentType = _cardDetail.agent_type || 'Все агенты'
+          if (area > 0) {
+            const previewResp = await ax.post('/api/v1/norm-days/preview', {
+              project_type: projectType,
+              project_subtype: projectSubtype,
+              agent_type: agentType,
+              area,
+              floors: 1,
+            })
+            const previewEntries = previewResp.data?.entries || []
+            const previewInfo = getStageDeadlineInfo(previewEntries, colName)
+            if (previewInfo.normDays > 0) {
+              moveNormDays.value = previewInfo.normDays
+              moveSubstepName.value = previewInfo.substepName
+              if (!moveDeadline.value) moveDeadline.value = previewInfo.deadline || ''
+            }
+          }
+        } catch {}
+      }
     }
     if (!moveDeadline.value) {
       const d = new Date(); d.setDate(d.getDate() + 7)
