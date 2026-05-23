@@ -574,15 +574,18 @@ const stageDurationsChart = computed(() => {
 const supervisionMini = computed(() => {
   const s = supervisionStats.value || {}
   const sd = supervisionDetailed.value || {}
-  // Среднее визитов = site_visits / total
-  const avgVisits = sd.total && sd.site_visits ? (sd.site_visits / sd.total).toFixed(1) : '—'
+  const v = sd.visits || {}
+  const avgVisits = v.avg_per_card ?? (sd.total && sd.site_visits ? (sd.site_visits / sd.total).toFixed(1) : '—')
   return [
     { label: 'Всего надзоров', value: s.total_orders ?? '—', color: '#27AE60' },
     { label: 'Активных', value: s.active ?? '—', color: '#F39C12' },
     { label: 'По индивид.', value: s.by_individual ?? '—', color: '#F57C00' },
     { label: 'По шаблонным', value: s.by_template ?? '—', color: '#C62828' },
-    { label: 'Всего выездов', value: sd.site_visits ?? '—', color: '#E67E22' },
-    { label: 'Ср. выездов', value: avgVisits, color: '#9B59B6' },
+    { label: 'Всего выездов', value: v.total ?? sd.site_visits ?? '—', color: '#E67E22' },
+    { label: 'На объект', value: v.on_site ?? '—', color: '#27AE60' },
+    { label: 'К поставщикам', value: v.supplier ?? '—', color: '#3498DB' },
+    { label: 'Просрочено выездов', value: v.overdue ?? '—', color: '#E74C3C' },
+    { label: 'Ср. выездов/надзор', value: avgVisits, color: '#9B59B6' },
   ]
 })
 
@@ -610,6 +613,17 @@ const supervisionByAgentChart = computed(() => {
 // Надзоры по городам (из supervision-analytics)
 const supervisionByCityChart = computed(() => {
   const sd = supervisionDetailed.value
+  // Пробуем visits.by_city (с разбивкой по типу), затем by_city (общий)
+  const vcities = sd?.visits?.by_city
+  if (vcities?.length) {
+    return {
+      labels: vcities.slice(0, 10).map(e => e.city),
+      datasets: [
+        { label: 'На объект', data: vcities.slice(0, 10).map(e => e.on_site), color: '#27AE60' },
+        { label: 'К поставщикам', data: vcities.slice(0, 10).map(e => e.supplier), color: '#3498DB' },
+      ],
+    }
+  }
   if (!sd?.by_city?.length) return null
   const entries = sd.by_city.slice(0, 10)
   return {

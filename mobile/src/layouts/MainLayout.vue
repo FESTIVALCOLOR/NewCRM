@@ -738,8 +738,8 @@ const bottomTabs = [
   { to: '/employees', icon: 'badge', label: 'Сотрудники' },
   { to: '/salaries', icon: 'payments', label: 'Зарплаты' },
   { to: '/employee-reports', icon: 'assessment', label: 'Отчёты сотр.' },
-  { to: '/employee-chats', icon: 'chat', label: 'Чат' },
-  { to: '/client-chats', icon: 'support_agent', label: 'Чат клиентов' },
+  { to: '/employee-chats', icon: 'chat', label: 'Чат сотрудников' },
+  { to: '/client-chats', icon: 'support_agent', label: 'Чат с клиентами' },
   { to: '/notifications', icon: 'notifications', label: 'Уведомления' },
 ]
 

@@ -44,7 +44,7 @@
 
       <!-- Сетка: в ландшафте 2 колонки (левая=данные, правая=документы) -->
       <div class="contract-detail-grid">
-        <!-- Левая колонка: клиент, данные, платежи, таймлайн -->
+        <!-- Левая колонка: клиент, данные, платежи, документы, акты, опрос -->
         <div class="contract-left-col">
           <!-- Клиент (ФИО со ссылкой + контакты) -->
           <q-card v-if="contract.client_name || contract.client_id" class="is-card q-mb-md">
@@ -73,10 +73,10 @@
                 </a>
               </div>
               <div v-if="clientData.telegram_account" class="col-auto">
-                <span class="contact-chip contact-chip--tg">
+                <a :href="clientTelegramLink(clientData.telegram_account)" class="contact-chip contact-chip--tg" target="_blank">
                   <q-icon name="send" size="12px" />
                   {{ clientData.telegram_account }}
-                </span>
+                </a>
               </div>
               <div v-if="clientData.email" class="col-auto">
                 <a :href="`mailto:${clientData.email}`" class="contact-chip">
@@ -275,41 +275,6 @@
             </q-list>
           </q-card>
 
-          <!-- Таблица сроков -->
-          <q-card v-if="timeline.length > 0" class="is-card q-mb-md">
-            <q-card-section class="q-pb-none">
-              <div class="text-subtitle2 text-weight-bold" style="color: #333">
-                Таблица сроков
-              </div>
-            </q-card-section>
-            <q-list dense separator>
-              <q-item v-for="entry in timeline" :key="entry.id" :class="{ 'bg-green-1': entry.actual_date && entry.executor_role !== 'header' && entry.stage_code?.includes('.') }" :style="entry.executor_role === 'header' ? { background: '#EEEEEE', fontWeight: 'bold' } : (!entry.stage_code?.includes('.') ? { background: '#F5F5F5', fontWeight: '600' } : (entry.status === 'skipped' ? { background: '#FAFAFA', opacity: 0.7 } : {}))">
-                <q-item-section avatar>
-                  <q-icon :name="entry.status === 'skipped' ? 'block' : (entry.actual_date ? 'check_circle' : 'radio_button_unchecked')" :color="entry.status === 'skipped' ? 'grey-4' : (entry.actual_date ? 'positive' : 'grey-5')" size="16px" />
-                </q-item-section>
-                <q-item-section>
-                  <q-item-label style="font-size: 11px; color: #333" :class="{ 'text-weight-bold': !entry.stage_code?.includes('.') }">
-                    {{ entry.stage_name }}
-                  </q-item-label>
-                  <q-item-label caption style="color: #888">
-                    <span v-if="entry.norm_days">Норма: {{ entry.custom_norm_days || entry.norm_days }} дн.</span>
-                    <span v-if="entry.actual_days"> | Факт: {{ entry.actual_days }} дн.</span>
-                    <span v-if="entry.executor_role && entry.executor_role !== 'header'"> | {{ entry.executor_role }}</span>
-                    <span v-if="entry.status === 'skipped'" style="color: #bbb; font-style: italic"> | Пропущено</span>
-                  </q-item-label>
-                </q-item-section>
-                <q-item-section v-if="entry.actual_date" side>
-                  <div class="text-caption" style="color: #27AE60">
-                    {{ fmtDateShort(entry.actual_date) }}
-                  </div>
-                </q-item-section>
-              </q-item>
-            </q-list>
-          </q-card>
-        </div><!-- /contract-left-col -->
-
-        <!-- Правая колонка: документы, акты, опрос -->
-        <div class="contract-right-col">
           <!-- Файлы: Договор / ТЗ / Доп.соглашения — в ландшафте 3 колонки -->
           <div class="contract-files-grid">
             <!-- Файлы: Договор -->
@@ -753,6 +718,41 @@
               Опросов нет
             </q-card-section>
           </q-card>
+        </div><!-- /contract-left-col -->
+
+        <!-- Правая колонка: только таблица сроков -->
+        <div class="contract-right-col">
+          <!-- Таблица сроков -->
+          <q-card v-if="timeline.length > 0" class="is-card">
+            <q-card-section class="q-pb-none">
+              <div class="text-subtitle2 text-weight-bold" style="color: #333">
+                Таблица сроков
+              </div>
+            </q-card-section>
+            <q-list dense separator>
+              <q-item v-for="entry in timeline" :key="entry.id" :class="{ 'bg-green-1': entry.actual_date && entry.executor_role !== 'header' && entry.stage_code?.includes('.') }" :style="entry.executor_role === 'header' ? { background: '#EEEEEE', fontWeight: 'bold' } : (!entry.stage_code?.includes('.') ? { background: '#F5F5F5', fontWeight: '600' } : (entry.status === 'skipped' ? { background: '#FAFAFA', opacity: 0.7 } : {}))">
+                <q-item-section avatar>
+                  <q-icon :name="entry.status === 'skipped' ? 'block' : (entry.actual_date ? 'check_circle' : 'radio_button_unchecked')" :color="entry.status === 'skipped' ? 'grey-4' : (entry.actual_date ? 'positive' : 'grey-5')" size="16px" />
+                </q-item-section>
+                <q-item-section>
+                  <q-item-label style="font-size: 11px; color: #333" :class="{ 'text-weight-bold': !entry.stage_code?.includes('.') }">
+                    {{ entry.stage_name }}
+                  </q-item-label>
+                  <q-item-label caption style="color: #888">
+                    <span v-if="entry.norm_days">Норма: {{ entry.custom_norm_days || entry.norm_days }} дн.</span>
+                    <span v-if="entry.actual_days"> | Факт: {{ entry.actual_days }} дн.</span>
+                    <span v-if="entry.executor_role && entry.executor_role !== 'header'"> | {{ entry.executor_role }}</span>
+                    <span v-if="entry.status === 'skipped'" style="color: #bbb; font-style: italic"> | Пропущено</span>
+                  </q-item-label>
+                </q-item-section>
+                <q-item-section v-if="entry.actual_date" side>
+                  <div class="text-caption" style="color: #27AE60">
+                    {{ fmtDateShort(entry.actual_date) }}
+                  </div>
+                </q-item-section>
+              </q-item>
+            </q-list>
+          </q-card>
         </div><!-- /contract-right-col -->
       </div><!-- /contract-detail-grid -->
 
@@ -1076,6 +1076,16 @@ async function deleteContractFile(f) {
 }
 function goToClient() { if (contract.value?.client_id) router.push(`/clients/${contract.value.client_id}`) }
 function openMap(address) { window.open(`https://yandex.ru/maps/?text=${encodeURIComponent(address)}`, '_blank') }
+function clientTelegramLink(account) {
+  if (!account) return '#'
+  const clean = account.replace('@', '').trim()
+  if (!clean) return '#'
+  if (/^\+?\d+$/.test(clean.replace(/\s/g, ''))) {
+    const phone = clean.replace(/[^\d+]/g, '')
+    return `tg://msg?to=${phone.startsWith('+') ? phone : '+' + phone}`
+  }
+  return `tg://resolve?domain=${clean}`
+}
 
 function uploadFor(stage) { uploadStage.value = stage; fileInput.value?.click() }
 function uploadReceipt(type) { receiptType.value = type; receiptInput.value?.click() }

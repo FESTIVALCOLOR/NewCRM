@@ -645,12 +645,12 @@ async function filterAddresses(val, update) {
     return
   }
   try {
-    const { data } = await api.get('/api/v1/search', { params: { q: val } })
+    const { data } = await api.get('/api/v1/search', { params: { q: val, entity_types: 'contracts' } })
     const results = data.results || data || []
     const addresses = [...new Set(
       results
-        .filter(r => r.address && r.address.toLowerCase().includes(val.toLowerCase()))
-        .map(r => r.address),
+        .filter(r => r.subtitle && r.subtitle.toLowerCase().includes(val.toLowerCase()))
+        .map(r => r.subtitle),
     )].slice(0, 10)
     update(() => { addressSuggestions.value = addresses })
   } catch {

@@ -353,7 +353,7 @@ onMounted(async () => {
     display: flex;
     flex-direction: row;
     gap: 12px;
-    align-items: flex-start;
+    align-items: stretch;
   }
   .client-detail-2col > .client-contacts-card {
     flex: 1;
