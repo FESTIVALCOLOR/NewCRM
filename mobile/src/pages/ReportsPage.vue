@@ -578,19 +578,27 @@ const stageDurationsChart = computed(() => {
   const durations = (p.stage_durations || []).filter(d => !d.stage?.toUpperCase().startsWith('ДАТА НАЧАЛА'))
   if (durations.length === 0) return null
 
-  // Вычисляем группы (Стадия 1, Стадия 2, ...) из stage_groups + stage_code индексов
-  const stageGroups = p.stage_groups || []
-  const groups = stageGroups
-    .map(sg => {
-      const prefix = sg.code + '_'
-      const indices = durations.reduce((acc, d, i) => {
-        if ((d.stage_code || '').startsWith(prefix)) acc.push(i)
-        return acc
-      }, [])
-      if (!indices.length) return null
-      return { label: sg.name, startIndex: indices[0], endIndex: indices[indices.length - 1] }
-    })
-    .filter(Boolean)
+  // Группируем по stage_code префиксу (S1_, S2_, S3_).
+  // Название берём из stage_groups сервера если есть, иначе "Стадия N".
+  const serverGroups = Object.fromEntries((p.stage_groups || []).map(sg => [sg.code, sg.name]))
+  const groupMap = new Map()
+  durations.forEach((d, i) => {
+    const sc = d.stage_code || ''
+    const m = sc.match(/^(S\d+)_/)
+    if (!m) return
+    const key = m[1] // "S1", "S2", ...
+    if (!groupMap.has(key)) {
+      const num = key.slice(1)
+      groupMap.set(key, {
+        label: serverGroups[key] || `Стадия ${num}`,
+        startIndex: i,
+        endIndex: i,
+      })
+    } else {
+      groupMap.get(key).endIndex = i
+    }
+  })
+  const groups = [...groupMap.values()]
 
   return {
     labels: durations.map(d => (d.stage || '').substring(0, 20)),

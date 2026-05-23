@@ -22,42 +22,55 @@ const props = defineProps({
   groups: { type: Array, default: () => [] },
 })
 
-// Кастомный плагин для рисования разделителей и подписей стадий
+// Плагин: горизонтальная линия-скобка под каждой группой стадий + подпись
 const stageSeparatorsPlugin = {
   id: 'stageSeparators',
   afterDraw(chart) {
     if (!props.groups?.length) return
-    const { ctx, chartArea, scales } = chart
+    const { ctx, scales } = chart
     if (!scales.x) return
     const grps = props.groups
 
-    grps.forEach((group, gi) => {
-      const startPx = scales.x.getPixelForValue(group.startIndex)
-      const endPx = scales.x.getPixelForValue(group.endIndex)
+    // Шаг между центрами баров — для вычисления границ группы
+    const step =
+      grps.length > 0 && chart.data.labels.length > 1
+        ? Math.abs(scales.x.getPixelForValue(1) - scales.x.getPixelForValue(0))
+        : 20
+    const halfStep = step / 2
+
+    // Линии рисуются в нижнем padding: chart.height - padding..chart.height
+    const lineY = chart.height - 26 // горизонтальная линия
+    const capH = 5 // высота вертикальных концевых засечек
+    const textY = chart.height - 8 // подпись
+
+    grps.forEach(group => {
+      const startPx = scales.x.getPixelForValue(group.startIndex) - halfStep * 0.85
+      const endPx = scales.x.getPixelForValue(group.endIndex) + halfStep * 0.85
       const midPx = (startPx + endPx) / 2
 
-      // Вертикальный разделитель перед группой (кроме первой)
-      if (gi > 0) {
-        const prevEndPx = scales.x.getPixelForValue(grps[gi - 1].endIndex)
-        const sepX = (prevEndPx + startPx) / 2
-        ctx.save()
-        ctx.strokeStyle = '#bbb'
-        ctx.lineWidth = 1.5
-        ctx.setLineDash([5, 3])
-        ctx.beginPath()
-        ctx.moveTo(sepX, chartArea.top)
-        ctx.lineTo(sepX, chart.height - 18)
-        ctx.stroke()
-        ctx.setLineDash([])
-        ctx.restore()
-      }
-
-      // Подпись стадии у нижнего края canvas
+      // Горизонтальная линия с вертикальными засечками на концах
       ctx.save()
-      ctx.fillStyle = '#555'
+      ctx.strokeStyle = '#999'
+      ctx.lineWidth = 1.5
+      ctx.beginPath()
+      // левая засечка
+      ctx.moveTo(startPx, lineY - capH)
+      ctx.lineTo(startPx, lineY)
+      // основная линия
+      ctx.lineTo(endPx, lineY)
+      // правая засечка
+      ctx.lineTo(endPx, lineY - capH)
+      ctx.stroke()
+      ctx.restore()
+
+      // Подпись стадии по центру
+      ctx.save()
+      ctx.fillStyle = '#444'
       ctx.font = 'bold 9px Arial, sans-serif'
       ctx.textAlign = 'center'
-      ctx.fillText(group.label, midPx, chart.height - 4)
+      // Обрезаем до 28 символов
+      const label = group.label.length > 28 ? group.label.substring(0, 27) + '…' : group.label
+      ctx.fillText(label, midPx, textY)
       ctx.restore()
     })
   },
@@ -82,7 +95,7 @@ const chartOptions = computed(() => ({
   indexAxis: props.horizontal ? 'y' : 'x',
   layout: {
     // Дополнительный отступ снизу для подписей групп
-    padding: { bottom: props.groups?.length ? 22 : 0 },
+    padding: { bottom: props.groups?.length ? 36 : 0 },
   },
   plugins: {
     legend: { display: props.datasets.length > 1, position: 'bottom', labels: { font: { size: 11 } } },
