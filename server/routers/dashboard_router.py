@@ -1381,14 +1381,13 @@ async def get_crm_analytics(
         filtered_ids = {c.id for c in filtered_contracts}
 
         # --- Длительность стадий (avg actual vs norm) ---
-        # Используем ВСЕ договоры типа (без фильтра периода) — иначе при отсутствии
-        # договоров в выбранном году шаблонные проекты дают пустой график.
+        # Нормативы и порядок стадий — из ВСЕХ договоров типа (структура не зависит от периода).
+        # Фактические данные — только из period-filtered договоров (динамика по годам).
         stage_durations: list = []
         if not use_supervision:
             all_type_ids = {c.id for c in all_contracts}
             if all_type_ids:
                 all_type_timeline = db.query(ProjectTimelineEntry).filter(ProjectTimelineEntry.contract_id.in_(all_type_ids)).all()
-                _sd_actual: dict = defaultdict(list)
                 _sd_norm: dict = {}
                 _sd_order: list = []
                 _sd_order_set: set = set()
@@ -1402,8 +1401,16 @@ async def get_crm_analytics(
                         _sd_order_set.add(sname)
                     if e.norm_days and e.norm_days > 0:
                         _sd_norm[sname] = e.norm_days
-                    if e.actual_days and e.actual_days > 0:
-                        _sd_actual[sname].append(e.actual_days)
+
+                # Фактические данные — только из period-filtered договоров
+                _sd_actual: dict = defaultdict(list)
+                if filtered_ids:
+                    period_timeline = db.query(ProjectTimelineEntry).filter(ProjectTimelineEntry.contract_id.in_(filtered_ids)).all()
+                    for e in period_timeline:
+                        sc = e.stage_code or ""
+                        if not sc.endswith("_HDR") and e.actual_days and e.actual_days > 0:
+                            _sd_actual[e.stage_name].append(e.actual_days)
+
                 for sname in _sd_order:
                     norm = _sd_norm.get(sname, 0)
                     if norm <= 0:
