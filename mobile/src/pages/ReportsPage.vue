@@ -259,7 +259,13 @@
                 Время стадий vs норматив — {{ projectTab === 'template' ? 'Шаблонный' : 'Индивидуальный' }}
               </div>
               <div style="min-width: 700px">
-                <bar-chart :labels="stageDurationsChart.labels" :datasets="stageDurationsChart.datasets" :rotate-labels="90" :height="350" />
+                <bar-chart
+                  :labels="stageDurationsChart.labels"
+                  :datasets="stageDurationsChart.datasets"
+                  :groups="stageDurationsChart.groups"
+                  :rotate-labels="90"
+                  :height="370"
+                />
               </div>
             </div>
           </div>
@@ -567,18 +573,32 @@ const agentChart = computed(() => {
 })
 
 const stageDurationsChart = computed(() => {
-  // stage_durations приходят из /dashboard/reports/crm-analytics (не из /statistics/projects)
   const p = crmDetailed.value
   if (!p?.stage_durations) return null
   const durations = (p.stage_durations || []).filter(d => !d.stage?.toUpperCase().startsWith('ДАТА НАЧАЛА'))
   if (durations.length === 0) return null
+
+  // Вычисляем группы (Стадия 1, Стадия 2, ...) из stage_groups + stage_code индексов
+  const stageGroups = p.stage_groups || []
+  const groups = stageGroups
+    .map(sg => {
+      const prefix = sg.code + '_'
+      const indices = durations.reduce((acc, d, i) => {
+        if ((d.stage_code || '').startsWith(prefix)) acc.push(i)
+        return acc
+      }, [])
+      if (!indices.length) return null
+      return { label: sg.name, startIndex: indices[0], endIndex: indices[indices.length - 1] }
+    })
+    .filter(Boolean)
+
   return {
     labels: durations.map(d => (d.stage || '').substring(0, 20)),
     datasets: [
       { label: 'Норматив', data: durations.map(d => d.norm_days || 0), color: '#4CAF50' },
-      // Сервер возвращает avg_actual_days (среднее фактических дней по стадии)
       { label: 'Факт (дни)', data: durations.map(d => d.avg_actual_days ?? d.actual_days ?? 0), color: '#F39C12' },
     ],
+    groups,
   }
 })
 

@@ -1384,17 +1384,23 @@ async def get_crm_analytics(
         # Нормативы и порядок стадий — из ВСЕХ договоров типа (структура не зависит от периода).
         # Фактические данные — только из period-filtered договоров (динамика по годам).
         stage_durations: list = []
+        stage_groups: list = []  # top-level группы для визуальных разделителей на графике
         if not use_supervision:
             all_type_ids = {c.id for c in all_contracts}
             if all_type_ids:
-                # ORDER BY stage_code — чтобы подэтапы шли в правильном порядке S1_1_01 → S2_1_01
+                # ORDER BY stage_code — подэтапы идут в правильном порядке S1_1_01 → S2_1_01
                 all_type_timeline = db.query(ProjectTimelineEntry).filter(ProjectTimelineEntry.contract_id.in_(all_type_ids)).order_by(ProjectTimelineEntry.stage_code).all()
                 _sd_norm: dict = {}
-                _sd_code: dict = {}  # stage_name → stage_code для сортировки
+                _sd_code: dict = {}  # stage_name → stage_code
                 _sd_order: list = []
                 _sd_order_set: set = set()
+                _sd_groups_seen: set = set()
                 for e in all_type_timeline:
                     sc = e.stage_code or ""
+                    # Захватываем top-level HDR (S1_HDR, S2_HDR — ровно один _ до _HDR)
+                    if sc.endswith("_HDR") and sc.count("_") == 1 and sc not in _sd_groups_seen:
+                        stage_groups.append({"code": sc[:-4], "name": e.stage_name})
+                        _sd_groups_seen.add(sc)
                     if sc.endswith("_HDR"):
                         continue
                     sname = e.stage_name
@@ -1404,9 +1410,6 @@ async def get_crm_analytics(
                         _sd_code[sname] = sc
                     if e.norm_days and e.norm_days > 0:
                         _sd_norm[sname] = e.norm_days
-                # Гарантируем сортировку по stage_code (ORDER BY в запросе сортирует записи,
-                # но дедупликация по sname может нарушить порядок если разные договоры
-                # имеют разный порядок вставки — перестраховка)
                 _sd_order.sort(key=lambda sn: _sd_code.get(sn, ""))
 
                 # Фактические данные — только из period-filtered договоров
@@ -1431,6 +1434,7 @@ async def get_crm_analytics(
                     stage_durations.append(
                         {
                             "stage": sname,
+                            "stage_code": _sd_code.get(sname, ""),
                             "avg_actual_days": avg_actual,
                             "norm_days": float(norm),
                             "on_time_pct": on_time_pct_s,
@@ -1453,6 +1457,7 @@ async def get_crm_analytics(
                     "avg_deviation_days": 0.0,
                 },
                 "stage_durations": stage_durations,
+                "stage_groups": stage_groups,
                 "paused_count": 0,
                 "active_count": 0,
                 "archived_count": 0,
@@ -1609,6 +1614,7 @@ async def get_crm_analytics(
             "funnel": funnel,
             "on_time_stats": on_time_stats,
             "stage_durations": stage_durations,
+            "stage_groups": stage_groups,
             "paused_count": paused_count,
             "active_count": active_count,
             "archived_count": archived_count,
