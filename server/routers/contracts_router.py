@@ -191,6 +191,12 @@ async def update_contract(contract_id: int, contract_data: ContractUpdate, curre
         if recalc_count:
             logger.info(f"Договор {contract_id}: площадь изменена, пересчитано оплат: {recalc_count}")
 
+    # Обновить дату START таймлайна при изменении дат-триггеров
+    if any(f in update_data for f in ("contract_date", "advance_payment_paid_date")):
+        from services.timeline_service import refresh_timeline_start_date
+
+        refresh_timeline_start_date(db, contract_id)
+
     # Лог
     log = ActivityLog(employee_id=current_user.id, action_type="update", entity_type="contract", entity_id=contract.id)
     db.add(log)

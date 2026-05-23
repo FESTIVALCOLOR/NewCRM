@@ -44,6 +44,7 @@ from schemas import (
 )
 from services.notification_dispatcher import dispatch_notification
 from services.notification_service import send_survey_to_chat, trigger_messenger_notification
+from services.timeline_service import build_project_timeline_template, build_template_project_timeline, refresh_timeline_start_date
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
@@ -596,6 +597,40 @@ async def create_crm_card(card_data: CRMCardCreate, current_user: Employee = Dep
         db.add(log)
         db.commit()
 
+        # Автоматическая инициализация таблицы сроков при создании карточки
+        try:
+            if card.contract_id:
+                _c = db.query(Contract).filter(Contract.id == card.contract_id).first()
+                if _c and (_c.area or 0) > 0:
+                    _existing = db.query(ProjectTimelineEntry).filter(ProjectTimelineEntry.contract_id == card.contract_id).count()
+                    if _existing == 0:
+                        _agent = getattr(_c, "agent_type", None) or "Все агенты"
+                        if _c.project_type == "Шаблонный":
+                            _entries, _, _ = build_template_project_timeline(_c.project_subtype or "Стандарт", _c.area, floors=1, agent_type=_agent)
+                        else:
+                            _entries, _, _ = build_project_timeline_template(_c.project_type or "Индивидуальный", _c.area, _c.project_subtype, agent_type=_agent)
+                        for e in _entries:
+                            db.add(
+                                ProjectTimelineEntry(
+                                    contract_id=card.contract_id,
+                                    stage_code=e["stage_code"],
+                                    stage_name=e["stage_name"],
+                                    stage_group=e["stage_group"],
+                                    substage_group=e.get("substage_group", ""),
+                                    executor_role=e["executor_role"],
+                                    is_in_contract_scope=e["is_in_contract_scope"],
+                                    sort_order=e["sort_order"],
+                                    raw_norm_days=e.get("raw_norm_days", 0),
+                                    cumulative_days=e.get("cumulative_days", 0),
+                                    norm_days=e.get("norm_days", 0),
+                                )
+                            )
+                        db.commit()
+                        # Сразу выставляем дату START из уже имеющихся дат
+                        refresh_timeline_start_date(db, card.contract_id, card.id)
+        except Exception as _e:
+            logger.warning(f"Автоинициализация таймлайна при создании карточки: {_e}")
+
         # Личное уведомление: создание карточки
         try:
             contract = db.query(Contract).filter(Contract.id == card.contract_id).first() if card.contract_id else None
@@ -753,6 +788,10 @@ async def update_crm_card(card_id: int, updates: CRMCardUpdate, current_user: Em
 
         db.commit()
         db.refresh(card)
+
+        # Обновить дату START таймлайна при изменении дат-триггеров
+        if any(f in update_data for f in ("survey_date", "tech_task_date")) and card.contract_id:
+            refresh_timeline_start_date(db, card.contract_id, card_id)
 
         # R-11 FIX: Унифицированный формат ответа (как в create)
         return {

@@ -52,3 +52,5 @@ dispatch_notification
 build_project_timeline_template
 build_template_project_timeline
 _do_seed_scripts
+create_crm_card
+update_crm_card

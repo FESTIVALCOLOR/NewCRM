@@ -779,7 +779,7 @@ async function selectMoveColumn(colName) {
             (projectType === 'Шаблонный' ? 'Стандарт' : 'Полный (с 3д визуализацией)')
           const agentType = _cardDetail.agent_type || 'Все агенты'
           if (area > 0) {
-            const previewResp = await ax.post('/api/v1/norm-days/preview', {
+            const previewResp = await ax.post('/api/norm-days/preview', {
               project_type: projectType,
               project_subtype: projectSubtype,
               agent_type: agentType,
