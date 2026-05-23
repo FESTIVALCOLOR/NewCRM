@@ -730,12 +730,28 @@
               </div>
             </q-card-section>
             <q-list dense separator>
-              <q-item v-for="entry in timeline" :key="entry.id" :class="{ 'bg-green-1': entry.actual_date && entry.executor_role !== 'header' && entry.stage_code?.includes('.') }" :style="entry.executor_role === 'header' ? { background: '#EEEEEE', fontWeight: 'bold' } : (!entry.stage_code?.includes('.') ? { background: '#F5F5F5', fontWeight: '600' } : (entry.status === 'skipped' ? { background: '#FAFAFA', opacity: 0.7 } : {}))">
+              <q-item
+                v-for="entry in timeline"
+                :key="entry.id"
+                :class="{
+                  'bg-green-1': !entry.stage_code?.endsWith('_HDR') && entry.executor_role !== 'header' && entry.actual_days > 0 && entry.actual_days <= (entry.norm_days || 0),
+                  'bg-red-1': !entry.stage_code?.endsWith('_HDR') && entry.executor_role !== 'header' && entry.actual_days > 0 && entry.actual_days > (entry.norm_days || 0)
+                }"
+                :style="entry.executor_role === 'header'
+                  ? { background: '#EEEEEE', fontWeight: 'bold' }
+                  : (entry.stage_code?.endsWith('_HDR')
+                    ? { background: '#F5F5F5', fontWeight: '600' }
+                    : (entry.status === 'skipped' ? { background: '#FAFAFA', opacity: 0.7 } : {}))"
+              >
                 <q-item-section avatar>
-                  <q-icon :name="entry.status === 'skipped' ? 'block' : (entry.actual_date ? 'check_circle' : 'radio_button_unchecked')" :color="entry.status === 'skipped' ? 'grey-4' : (entry.actual_date ? 'positive' : 'grey-5')" size="16px" />
+                  <q-icon
+                    :name="entry.status === 'skipped' ? 'block' : (entry.actual_days > 0 ? 'check_circle' : 'radio_button_unchecked')"
+                    :color="entry.status === 'skipped' ? 'grey-4' : (entry.actual_days > 0 ? (entry.actual_days > (entry.norm_days || 0) ? 'negative' : 'positive') : 'grey-5')"
+                    size="16px"
+                  />
                 </q-item-section>
                 <q-item-section>
-                  <q-item-label style="font-size: 11px; color: #333" :class="{ 'text-weight-bold': !entry.stage_code?.includes('.') }">
+                  <q-item-label style="font-size: 11px; color: #333" :class="{ 'text-weight-bold': entry.stage_code?.endsWith('_HDR') || entry.executor_role === 'header' }">
                     {{ entry.stage_name }}
                   </q-item-label>
                   <q-item-label caption style="color: #888">
@@ -743,10 +759,11 @@
                     <span v-if="entry.actual_days"> | Факт: {{ entry.actual_days }} дн.</span>
                     <span v-if="entry.executor_role && entry.executor_role !== 'header'"> | {{ entry.executor_role }}</span>
                     <span v-if="entry.status === 'skipped'" style="color: #bbb; font-style: italic"> | Пропущено</span>
+                    <span v-if="!entry.stage_code?.endsWith('_HDR') && entry.executor_role !== 'header' && entry.actual_days > 0 && entry.actual_days > (entry.norm_days || 0)" style="color: #E74C3C; font-weight: bold"> | Просрочен</span>
                   </q-item-label>
                 </q-item-section>
                 <q-item-section v-if="entry.actual_date" side>
-                  <div class="text-caption" style="color: #27AE60">
+                  <div class="text-caption" :style="{ color: entry.actual_days > 0 && entry.actual_days > (entry.norm_days || 0) ? '#E74C3C' : '#27AE60' }">
                     {{ fmtDateShort(entry.actual_date) }}
                   </div>
                 </q-item-section>
