@@ -3112,6 +3112,20 @@ async def workflow_sign_act(card_id: int, current_user: Employee = Depends(requi
         if wf.status != "act_signing":
             raise HTTPException(status_code=400, detail="Акт можно подписать только в статусе act_signing")
 
+        # Проверяем наличие подписанного акта в договоре
+        if contract_id:
+            contract_check = db.query(Contract).filter(Contract.id == contract_id).first()
+            if contract_check:
+                stage_num = _extract_stage_number(stage_name)
+                act_field_map = {
+                    "1": "act_planning_signed_yandex_path",
+                    "2": "act_concept_signed_yandex_path",
+                    "3": "act_final_signed_yandex_path",
+                }
+                act_field = act_field_map.get(stage_num)
+                if act_field and not getattr(contract_check, act_field, None):
+                    raise HTTPException(status_code=400, detail="Загрузите подписанный акт перед закрытием стадии")
+
         # Записываем дату в строку "Акт" / "Акт подписан" / "Закрытие"
         if contract_id and stage_group:
             act_entry = (
@@ -3151,7 +3165,6 @@ async def workflow_sign_act(card_id: int, current_user: Employee = Depends(requi
         # === Обновляем report_month у Доплаты при завершении стадии ===
         try:
             current_month = datetime.utcnow().strftime("%Y-%m")
-            from database import Contract
             from database import Payment as PaymentModel
 
             contract_for_pm = db.query(Contract).filter(Contract.id == contract_id).first()
