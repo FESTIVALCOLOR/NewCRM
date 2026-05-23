@@ -578,15 +578,15 @@ const stageDurationsChart = computed(() => {
   const durations = (p.stage_durations || []).filter(d => !d.stage?.toUpperCase().startsWith('ДАТА НАЧАЛА'))
   if (durations.length === 0) return null
 
-  // Группируем по stage_code префиксу (S1_, S2_, S3_).
+  // Группируем по stage_code префиксу (S1_, S2_... для индивидуальных или T1_, T2_... для шаблонных).
   // Название берём из stage_groups сервера если есть, иначе "Стадия N".
   const serverGroups = Object.fromEntries((p.stage_groups || []).map(sg => [sg.code, sg.name]))
   const groupMap = new Map()
   durations.forEach((d, i) => {
     const sc = d.stage_code || ''
-    const m = sc.match(/^(S\d+)_/)
+    const m = sc.match(/^([ST]\d+)_/)
     if (!m) return
-    const key = m[1] // "S1", "S2", ...
+    const key = m[1] // "S1", "S2", "T1", "T2", ...
     if (!groupMap.has(key)) {
       const num = key.slice(1)
       groupMap.set(key, {
