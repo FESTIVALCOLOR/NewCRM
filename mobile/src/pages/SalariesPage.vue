@@ -95,19 +95,33 @@
     <!-- Строка 2: адрес, роль, агент -->
     <div class="row q-col-gutter-xs q-mb-md">
       <div class="col">
-        <q-input
+        <q-select
           v-model="filters.address"
-          placeholder="Адрес"
+          :options="addressSuggestions"
           outlined
           dense
           clearable
+          use-input
+          fill-input
+          hide-selected
+          input-debounce="300"
+          placeholder="Адрес"
           style="font-size: 12px"
+          @filter="filterAddresses"
           @update:model-value="loadData"
+          @clear="filters.address = ''; loadData()"
         >
           <template #prepend>
             <q-icon name="location_on" size="16px" />
           </template>
-        </q-input>
+          <template #no-option>
+            <q-item>
+              <q-item-section class="text-grey" style="font-size: 12px">
+                Нет совпадений
+              </q-item-section>
+            </q-item>
+          </template>
+        </q-select>
       </div>
       <div class="col">
         <q-select
@@ -623,6 +637,27 @@ const editPaymentTypeOpts = [
   { label: 'Оклад', value: 'Оклад' },
 ]
 
+const addressSuggestions = ref([])
+
+async function filterAddresses(val, update) {
+  if (!val || val.length < 2) {
+    update(() => { addressSuggestions.value = [] })
+    return
+  }
+  try {
+    const { data } = await api.get('/api/v1/search', { params: { q: val } })
+    const results = data.results || data || []
+    const addresses = [...new Set(
+      results
+        .filter(r => r.address && r.address.toLowerCase().includes(val.toLowerCase()))
+        .map(r => r.address),
+    )].slice(0, 10)
+    update(() => { addressSuggestions.value = addresses })
+  } catch {
+    update(() => { addressSuggestions.value = [] })
+  }
+}
+
 const paymentTabs = [
   { label: 'Все', value: 'all' }, { label: 'Инд.', value: 'individual' },
   { label: 'Шабл.', value: 'template' }, { label: 'Надзор', value: 'supervision' },
@@ -740,18 +775,22 @@ async function loadData() {
     if (filters.value.period !== 'all') {
       params.year = filters.value.year
       if (filters.value.period === 'month') params.month = filters.value.month
+      if (filters.value.period === 'quarter') params.quarter = filters.value.quarter
+      // При конкретном периоде НЕ включаем платежи "в работе" (без даты)
     } else {
-      // При "Все" — загружаем за текущий год + без месяца
+      // При "Все" — загружаем за текущий год + включаем платежи без месяца (в работе)
       params.year = currentYear
       params.include_null_month = true
     }
     if (filters.value.employee_id) params.employee_id = filters.value.employee_id
-    // Статус фильтруем на клиенте — серверный is_paid ненадёжен (NULL vs false)
-    // Всегда включаем платежи без месяца (в работе)
-    if (!params.include_null_month) params.include_null_month = true
     // Загружаем без payment_type фильтра на сервере — фильтруем на клиенте для надёжности
     const { data } = await paymentsApi.getList(params)
     let filtered = data || []
+
+    // Если выбран конкретный период — убираем платежи "в работе" (без report_month)
+    if (filters.value.period !== 'all') {
+      filtered = filtered.filter(p => !!p.report_month)
+    }
 
     // Фильтр по вкладкам — по project_type (не payment_type!)
     if (paymentTab.value === 'salary') {

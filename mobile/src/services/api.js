@@ -363,6 +363,9 @@ export const reportsApi = {
 
   getContractYears: () =>
     api.get('/api/v1/dashboard/contract-years'),
+
+  getSupervisionAnalytics: (params = {}) =>
+    api.get('/api/v1/dashboard/reports/supervision-analytics', { params }),
 }
 
 // === Supervision ===

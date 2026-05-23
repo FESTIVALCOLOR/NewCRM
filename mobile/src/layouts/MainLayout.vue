@@ -738,9 +738,9 @@ const bottomTabs = [
   { to: '/employees', icon: 'badge', label: 'Сотрудники' },
   { to: '/salaries', icon: 'payments', label: 'Зарплаты' },
   { to: '/employee-reports', icon: 'assessment', label: 'Отчёты сотр.' },
-  { to: '/notifications', icon: 'notifications', label: 'Уведомления' },
   { to: '/employee-chats', icon: 'chat', label: 'Чат' },
-  { to: '/admin', icon: 'admin_panel_settings', label: 'Админ' },
+  { to: '/client-chats', icon: 'support_agent', label: 'Чат клиентов' },
+  { to: '/notifications', icon: 'notifications', label: 'Уведомления' },
 ]
 
 function toggleDrawer() { drawerOpen.value = !drawerOpen.value }

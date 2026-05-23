@@ -282,12 +282,18 @@
               </div>
             </div>
           </div>
-          <div v-if="supervisionByAgentChart" class="row q-col-gutter-md">
-            <div class="col-12 col-md-6">
+          <div class="row q-col-gutter-md">
+            <div v-if="supervisionByAgentChart" class="col-12 col-md-6">
               <div class="text-caption text-weight-bold q-mb-xs">
                 Надзоры по агентам
               </div>
               <bar-chart :labels="supervisionByAgentChart.labels" :datasets="supervisionByAgentChart.datasets" horizontal />
+            </div>
+            <div v-if="supervisionByCityChart" class="col-12 col-md-6">
+              <div class="text-caption text-weight-bold q-mb-xs">
+                Выезды по городам
+              </div>
+              <bar-chart :labels="supervisionByCityChart.labels" :datasets="supervisionByCityChart.datasets" horizontal />
             </div>
           </div>
         </q-card-section>
@@ -298,7 +304,6 @@
 
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
-import { useAuthStore } from 'src/stores/auth'
 import { reportsApi, statisticsApi, dashboardApi } from 'src/services/api'
 import PieChart from 'src/components/charts/PieChart.vue'
 import BarChart from 'src/components/charts/BarChart.vue'
@@ -314,6 +319,7 @@ const supervisionStats = ref(null)
 const clientsDynamicsRaw = ref(null)
 const contractsByPeriodRaw = ref(null)
 const crmDetailed = ref(null)
+const supervisionDetailed = ref(null)
 const projectTab = ref('individual')
 
 const years = Array.from({ length: 7 }, (_, i) => currentYear - i)
@@ -479,8 +485,6 @@ const contractsAmountDynamics = computed(() => {
 })
 
 const topCitiesChart = computed(() => {
-  const ba = summary.value?.by_agent || []
-  // Берём города из contractsDashboard или считаем из проектов
   const p = projectStats.value
   if (p?.by_cities) {
     const entries = Object.entries(p.by_cities).sort((a, b) => b[1] - a[1]).slice(0, 8)
@@ -522,10 +526,14 @@ const projectStatCards = computed(() => {
   const p = projectStats.value || {}
   const d = crmDetailed.value || {}
   const ots = d.on_time_stats || {}
+  // Серверные поля: projects_pct, stages_pct, avg_deviation_days
+  const projectsPct = ots.projects_pct ?? ots.projects_on_time_pct
+  const stagesPct = ots.stages_pct ?? ots.stages_on_time_pct
+  const avgDev = ots.avg_deviation_days ?? ots.avg_deviation
   return [
-    { label: 'Проектов в срок', value: ots.projects_on_time_pct != null ? `${ots.projects_on_time_pct}%` : (p.total_orders ?? '—'), color: '#27AE60' },
-    { label: 'Стадий в срок', value: ots.stages_on_time_pct != null ? `${ots.stages_on_time_pct}%` : '—', color: '#F39C12' },
-    { label: 'Ср. отклонение', value: ots.avg_deviation ? `${Number(ots.avg_deviation).toFixed(1)} дн.` : '—', color: '#E74C3C' },
+    { label: 'Проектов в срок', value: projectsPct !== null && projectsPct !== undefined ? `${projectsPct}%` : (p.total_orders ?? '—'), color: '#27AE60' },
+    { label: 'Стадий в срок', value: stagesPct !== null && stagesPct !== undefined ? `${stagesPct}%` : '—', color: '#F39C12' },
+    { label: 'Ср. отклонение', value: avgDev !== null && avgDev !== undefined ? `${Number(avgDev).toFixed(1)} дн.` : '—', color: '#E74C3C' },
     { label: 'На паузе', value: d.paused_count ?? p.paused ?? '—', color: '#9B59B6' },
   ]
 })
@@ -556,7 +564,8 @@ const stageDurationsChart = computed(() => {
     labels: durations.map(d => (d.stage || '').substring(0, 20)),
     datasets: [
       { label: 'Норматив', data: durations.map(d => d.norm_days || 0), color: '#4CAF50' },
-      { label: 'Факт (дни)', data: durations.map(d => d.actual_days || 0), color: '#F39C12' },
+      // Сервер возвращает avg_actual_days (среднее фактических дней по стадии)
+      { label: 'Факт (дни)', data: durations.map(d => d.avg_actual_days ?? d.actual_days ?? 0), color: '#F39C12' },
     ],
   }
 })
@@ -564,18 +573,30 @@ const stageDurationsChart = computed(() => {
 // ========== НАДЗОР ==========
 const supervisionMini = computed(() => {
   const s = supervisionStats.value || {}
-  const ba = s.by_agents || {}
-  const agentItems = Object.entries(ba).map(([name, count]) => ({ label: `Надзоры — ${name}`, value: count, color: '#E67E22' }))
+  const sd = supervisionDetailed.value || {}
+  // Среднее визитов = site_visits / total
+  const avgVisits = sd.total && sd.site_visits ? (sd.site_visits / sd.total).toFixed(1) : '—'
   return [
     { label: 'Всего надзоров', value: s.total_orders ?? '—', color: '#27AE60' },
     { label: 'Активных', value: s.active ?? '—', color: '#F39C12' },
     { label: 'По индивид.', value: s.by_individual ?? '—', color: '#F57C00' },
     { label: 'По шаблонным', value: s.by_template ?? '—', color: '#C62828' },
-    ...agentItems,
+    { label: 'Всего выездов', value: sd.site_visits ?? '—', color: '#E67E22' },
+    { label: 'Ср. выездов', value: avgVisits, color: '#9B59B6' },
   ]
 })
 
+// Надзоры по агентам — из supervision-analytics (включает агентов с 0)
 const supervisionByAgentChart = computed(() => {
+  const sd = supervisionDetailed.value
+  if (sd?.by_agent?.length > 0) {
+    const items = sd.by_agent.filter(a => a.count > 0 || true) // все агенты, включая 0
+    return {
+      labels: items.map(a => a.agent_name),
+      datasets: [{ label: 'Надзоров', data: items.map(a => a.count), color: '#F39C12' }],
+    }
+  }
+  // Fallback: старый формат из statistics/supervision
   const s = supervisionStats.value || {}
   const ba = s.by_agents || {}
   const entries = Object.entries(ba)
@@ -583,6 +604,17 @@ const supervisionByAgentChart = computed(() => {
   return {
     labels: entries.map(([k]) => k),
     datasets: [{ label: 'Надзоров', data: entries.map(([, v]) => v), color: '#F39C12' }],
+  }
+})
+
+// Надзоры по городам (из supervision-analytics)
+const supervisionByCityChart = computed(() => {
+  const sd = supervisionDetailed.value
+  if (!sd?.by_city?.length) return null
+  const entries = sd.by_city.slice(0, 10)
+  return {
+    labels: entries.map(e => e.city),
+    datasets: [{ label: 'Надзоров', data: entries.map(e => e.count), color: '#85C1E9' }],
   }
 })
 
@@ -596,7 +628,7 @@ async function loadData() {
   if (filters.value.month) params.month = filters.value.month
   const pt = projectTab.value === 'template' ? 'Шаблонный' : 'Индивидуальный'
 
-  const [sumR, funnelR, projR, dynR, supR, contR, cbyPR, crmDetR] = await Promise.allSettled([
+  const [sumR, funnelR, projR, dynR, supR, contR, cbyPR, crmDetR, supDetR] = await Promise.allSettled([
     reportsApi.getSummary(params),
     reportsApi.getFunnel(params),
     reportsApi.getCrmAnalytics({ ...params, project_type: pt }),
@@ -605,14 +637,15 @@ async function loadData() {
     dashboardApi.getContracts(params),
     statisticsApi.getContractsByPeriod({ year: filters.value.year }),
     reportsApi.getCrmAnalyticsDetailed({ ...params, project_type: pt }),
+    reportsApi.getSupervisionAnalytics(params),
   ])
 
   console.log('[Reports] Results:', {
     sum: sumR?.status, funnel: funnelR?.status, proj: projR?.status,
     dyn: dynR?.status, sup: supR?.status, cont: contR?.status,
-    cbyP: cbyPR?.status, crmDet: crmDetR?.status,
+    cbyP: cbyPR?.status, crmDet: crmDetR?.status, supDet: supDetR?.status,
   })
-  ;[sumR, funnelR, projR, dynR, supR, contR, cbyPR, crmDetR].forEach((r, i) => {
+  ;[sumR, funnelR, projR, dynR, supR, contR, cbyPR, crmDetR, supDetR].forEach((r, i) => {
     if (r.status === 'rejected') console.error(`[Reports] Request ${i} failed:`, r.reason?.response?.status, r.reason?.message)
   })
 
@@ -632,6 +665,8 @@ async function loadData() {
   else console.error('Reports contracts by period error:', cbyPR.reason?.response?.status, cbyPR.reason?.message)
   if (crmDetR.status === 'fulfilled') crmDetailed.value = crmDetR.value.data
   else console.error('Reports CRM detailed error:', crmDetR.reason?.response?.status, crmDetR.reason?.message)
+  if (supDetR.status === 'fulfilled') supervisionDetailed.value = supDetR.value.data
+  else console.error('Reports supervision detailed error:', supDetR.reason?.response?.status, supDetR.reason?.message)
 }
 
 function exportPDF() { window.print() }
@@ -639,7 +674,6 @@ watch(projectTab, () => loadData())
 watch(filters, () => loadData(), { deep: true })
 function onRefresh(done) { loadData().finally(done) }
 
-const auth = useAuthStore()
 onMounted(() => loadData())
 </script>
 

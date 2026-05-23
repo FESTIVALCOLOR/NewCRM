@@ -42,152 +42,158 @@
         </q-card-section>
       </q-card>
 
-      <!-- Контакты: кнопки СЛЕВА вертикально, данные справа -->
-      <q-card class="is-card q-mb-md">
-        <q-card-section class="q-pb-none">
-          <div class="text-subtitle2 text-weight-bold" style="color: #333">
-            Контакты
-          </div>
-        </q-card-section>
-        <q-list>
-          <!-- Телефон -->
-          <q-item>
-            <q-item-section avatar>
-              <q-btn
-                flat
-                round
-                dense
-                :icon="client.phone ? 'phone' : 'phone_disabled'"
-                :style="{ color: client.phone ? '#333' : '#ccc' }"
-                @click="client.phone && callPhone(client.phone)"
-              />
-            </q-item-section>
-            <q-item-section>
-              <q-item-label caption>
-                Телефон
-              </q-item-label>
-              <q-item-label :style="{ color: client.phone ? '#333' : '#bbb' }">
-                {{ client.phone || 'Не указан' }}
-              </q-item-label>
-            </q-item-section>
-          </q-item>
-          <!-- Email -->
-          <q-item>
-            <q-item-section avatar>
-              <q-btn
-                flat
-                round
-                dense
-                :icon="client.email ? 'email' : 'mail_outline'"
-                :style="{ color: client.email ? '#333' : '#ccc' }"
-                @click="client.email && sendEmail(client.email)"
-              />
-            </q-item-section>
-            <q-item-section>
-              <q-item-label caption>
-                Email
-              </q-item-label>
-              <q-item-label :style="{ color: client.email ? '#333' : '#bbb' }">
-                {{ client.email || 'Не указан' }}
-              </q-item-label>
-            </q-item-section>
-          </q-item>
-          <!-- Telegram -->
-          <q-item>
-            <q-item-section avatar>
-              <q-btn
-                flat
-                round
-                dense
-                icon="send"
-                :style="{ color: telegramLink ? '#333' : '#ccc' }"
-                @click="telegramLink && openLink(telegramLink)"
-              />
-            </q-item-section>
-            <q-item-section>
-              <q-item-label caption>
-                Telegram
-              </q-item-label>
-              <q-item-label :style="{ color: client.telegram_account ? '#333' : '#bbb' }">
-                {{ client.telegram_account || 'Не указан' }}
-              </q-item-label>
-            </q-item-section>
-          </q-item>
-          <!-- Адрес / Геоточка -->
-          <q-item>
-            <q-item-section avatar>
-              <q-btn
-                flat
-                round
-                dense
-                :icon="client.registration_address ? 'location_on' : 'location_off'"
-                :style="{ color: client.registration_address ? '#333' : '#ccc' }"
-                @click="client.registration_address && openMap(client.registration_address)"
-              />
-            </q-item-section>
-            <q-item-section>
-              <q-item-label caption>
-                Адрес
-              </q-item-label>
-              <q-item-label :style="{ color: client.registration_address ? '#333' : '#bbb' }">
-                {{ client.registration_address || 'Не указан' }}
-              </q-item-label>
-            </q-item-section>
-          </q-item>
-        </q-list>
-      </q-card>
+      <!-- Ландшафт: 2 колонки (контакты слева, паспорт/реквизиты справа) -->
+      <div class="client-detail-2col q-mb-md">
+        <!-- Контакты: кнопки СЛЕВА вертикально, данные справа -->
+        <q-card class="is-card client-contacts-card">
+          <q-card-section class="q-pb-none">
+            <div class="text-subtitle2 text-weight-bold" style="color: #333">
+              Контакты
+            </div>
+          </q-card-section>
+          <q-list>
+            <!-- Телефон -->
+            <q-item>
+              <q-item-section avatar>
+                <q-btn
+                  flat
+                  round
+                  dense
+                  :icon="client.phone ? 'phone' : 'phone_disabled'"
+                  :style="{ color: client.phone ? '#333' : '#ccc' }"
+                  @click="client.phone && callPhone(client.phone)"
+                />
+              </q-item-section>
+              <q-item-section>
+                <q-item-label caption>
+                  Телефон
+                </q-item-label>
+                <q-item-label :style="{ color: client.phone ? '#333' : '#bbb' }">
+                  {{ client.phone || 'Не указан' }}
+                </q-item-label>
+              </q-item-section>
+            </q-item>
+            <!-- Email -->
+            <q-item>
+              <q-item-section avatar>
+                <q-btn
+                  flat
+                  round
+                  dense
+                  :icon="client.email ? 'email' : 'mail_outline'"
+                  :style="{ color: client.email ? '#333' : '#ccc' }"
+                  @click="client.email && sendEmail(client.email)"
+                />
+              </q-item-section>
+              <q-item-section>
+                <q-item-label caption>
+                  Email
+                </q-item-label>
+                <q-item-label :style="{ color: client.email ? '#333' : '#bbb' }">
+                  {{ client.email || 'Не указан' }}
+                </q-item-label>
+              </q-item-section>
+            </q-item>
+            <!-- Telegram -->
+            <q-item>
+              <q-item-section avatar>
+                <q-btn
+                  flat
+                  round
+                  dense
+                  icon="send"
+                  :style="{ color: telegramLink ? '#333' : '#ccc' }"
+                  @click="telegramLink && openLink(telegramLink)"
+                />
+              </q-item-section>
+              <q-item-section>
+                <q-item-label caption>
+                  Telegram
+                </q-item-label>
+                <q-item-label :style="{ color: client.telegram_account ? '#333' : '#bbb' }">
+                  {{ client.telegram_account || 'Не указан' }}
+                </q-item-label>
+              </q-item-section>
+            </q-item>
+            <!-- Адрес / Геоточка -->
+            <q-item>
+              <q-item-section avatar>
+                <q-btn
+                  flat
+                  round
+                  dense
+                  :icon="client.registration_address ? 'location_on' : 'location_off'"
+                  :style="{ color: client.registration_address ? '#333' : '#ccc' }"
+                  @click="client.registration_address && openMap(client.registration_address)"
+                />
+              </q-item-section>
+              <q-item-section>
+                <q-item-label caption>
+                  Адрес
+                </q-item-label>
+                <q-item-label :style="{ color: client.registration_address ? '#333' : '#bbb' }">
+                  {{ client.registration_address || 'Не указан' }}
+                </q-item-label>
+              </q-item-section>
+            </q-item>
+          </q-list>
+        </q-card>
 
-      <!-- Паспорт (физ. лицо) -->
-      <q-card v-if="client.passport_series || client.passport_number" class="is-card q-mb-md">
-        <q-card-section class="q-pb-none">
-          <div class="text-subtitle2 text-weight-bold" style="color: #333">
-            Паспорт
-          </div>
-        </q-card-section>
-        <q-list dense>
-          <q-item>
-            <q-item-section>
-              <q-item-label caption>
-                Серия и номер
-              </q-item-label><q-item-label>{{ client.passport_series }} {{ client.passport_number }}</q-item-label>
-            </q-item-section>
-          </q-item>
-        </q-list>
-      </q-card>
+        <!-- Правая колонка: паспорт + реквизиты -->
+        <div class="client-right-col">
+          <!-- Паспорт (физ. лицо) -->
+          <q-card v-if="client.passport_series || client.passport_number" class="is-card q-mb-md">
+            <q-card-section class="q-pb-none">
+              <div class="text-subtitle2 text-weight-bold" style="color: #333">
+                Паспорт
+              </div>
+            </q-card-section>
+            <q-list dense>
+              <q-item>
+                <q-item-section>
+                  <q-item-label caption>
+                    Серия и номер
+                  </q-item-label><q-item-label>{{ client.passport_series }} {{ client.passport_number }}</q-item-label>
+                </q-item-section>
+              </q-item>
+            </q-list>
+          </q-card>
 
-      <!-- Реквизиты (юр. лицо) -->
-      <q-card v-if="client.inn || client.ogrn" class="is-card q-mb-md">
-        <q-card-section class="q-pb-none">
-          <div class="text-subtitle2 text-weight-bold" style="color: #333">
-            Реквизиты
-          </div>
-        </q-card-section>
-        <q-list dense>
-          <q-item v-if="client.inn">
-            <q-item-section>
-              <q-item-label caption>
-                ИНН
-              </q-item-label><q-item-label>{{ client.inn }}</q-item-label>
-            </q-item-section>
-          </q-item>
-          <q-item v-if="client.ogrn">
-            <q-item-section>
-              <q-item-label caption>
-                ОГРН
-              </q-item-label><q-item-label>{{ client.ogrn }}</q-item-label>
-            </q-item-section>
-          </q-item>
-          <q-item v-if="client.account_details">
-            <q-item-section>
-              <q-item-label caption>
-                Банковские реквизиты
-              </q-item-label><q-item-label>{{ client.account_details }}</q-item-label>
-            </q-item-section>
-          </q-item>
-        </q-list>
-      </q-card>
+          <!-- Реквизиты (юр. лицо) -->
+          <q-card v-if="client.inn || client.ogrn" class="is-card q-mb-md">
+            <q-card-section class="q-pb-none">
+              <div class="text-subtitle2 text-weight-bold" style="color: #333">
+                Реквизиты
+              </div>
+            </q-card-section>
+            <q-list dense>
+              <q-item v-if="client.inn">
+                <q-item-section>
+                  <q-item-label caption>
+                    ИНН
+                  </q-item-label><q-item-label>{{ client.inn }}</q-item-label>
+                </q-item-section>
+              </q-item>
+              <q-item v-if="client.ogrn">
+                <q-item-section>
+                  <q-item-label caption>
+                    ОГРН
+                  </q-item-label><q-item-label>{{ client.ogrn }}</q-item-label>
+                </q-item-section>
+              </q-item>
+              <q-item v-if="client.account_details">
+                <q-item-section>
+                  <q-item-label caption>
+                    Банковские реквизиты
+                  </q-item-label><q-item-label>{{ client.account_details }}</q-item-label>
+                </q-item-section>
+              </q-item>
+            </q-list>
+          </q-card>
+        </div><!-- /client-right-col -->
+      </div><!-- /client-detail-2col -->
 
-      <!-- Договоры клиента -->
+      <!-- Договоры клиента (всегда на всю ширину) -->
       <q-card class="is-card">
         <q-card-section class="q-pb-none">
           <div class="text-subtitle2 text-weight-bold" style="color: #333">
@@ -340,3 +346,28 @@ onMounted(async () => {
   loaded.value = true
 })
 </script>
+
+<style scoped>
+@media (orientation: landscape) {
+  .client-detail-2col {
+    display: flex;
+    flex-direction: row;
+    gap: 12px;
+    align-items: flex-start;
+  }
+  .client-detail-2col > .client-contacts-card {
+    flex: 1;
+    min-width: 0;
+  }
+  .client-right-col {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .client-right-col > * {
+    margin-bottom: 0 !important;
+  }
+}
+</style>
