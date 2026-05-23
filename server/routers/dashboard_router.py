@@ -47,6 +47,7 @@ from constants import (
     STATUS_TERMINATED,
 )
 from fastapi import APIRouter, Depends, HTTPException
+from services.timeline_service import build_project_timeline_template
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -1381,65 +1382,89 @@ async def get_crm_analytics(
         filtered_ids = {c.id for c in filtered_contracts}
 
         # --- Длительность стадий (avg actual vs norm) ---
-        # Нормативы и порядок стадий — из ВСЕХ договоров типа (структура не зависит от периода).
+        # Базовая структура этапов строится из канонического шаблона (timeline_service),
+        # чтобы все стадии (включая T3 визуализацию) всегда присутствовали в графике.
+        # Нормы из реальных проектов перезаписывают базовые.
         # Фактические данные — только из period-filtered договоров (динамика по годам).
         stage_durations: list = []
         stage_groups: list = []  # top-level группы для визуальных разделителей на графике
         if not use_supervision:
+            _sd_norm: dict = {}
+            _sd_code: dict = {}  # stage_name → stage_code
+            _sd_order: list = []
+            _sd_order_set: set = set()
+            _sd_groups_seen: set = set()
+
+            # 1. Строим полную структуру из канонического шаблона.
+            #    Для шаблонных проектов используем подтип "с 3д визуализацией" чтобы
+            #    T3-стадии всегда присутствовали в графике (даже без реальных данных).
+            canonical_subtype = "Полный (с 3д визуализацией)" if project_type == "Шаблонный" else None
+            try:
+                canonical = build_project_timeline_template(project_type=project_type, area=50, project_subtype=canonical_subtype)
+            except Exception:
+                canonical = []
+            for e in canonical:
+                sc = e.get("stage_code", "")
+                sname = e.get("stage_name", "")
+                raw_norm = e.get("raw_norm_days", 0) or 0
+                if sc.endswith("_HDR") and sc.count("_") == 1 and sc not in _sd_groups_seen:
+                    stage_groups.append({"code": sc[:-4], "name": sname})
+                    _sd_groups_seen.add(sc)
+                if sc.endswith("_HDR") or sc == "START" or sc.endswith("_ACT"):
+                    continue
+                if sname not in _sd_order_set:
+                    _sd_order.append(sname)
+                    _sd_order_set.add(sname)
+                    _sd_code[sname] = sc
+                if raw_norm > 0:
+                    _sd_norm[sname] = raw_norm
+
+            # 2. Перезаписываем нормы из реальных проектов (кастомные шаблоны через NormDaysTemplate).
             all_type_ids = {c.id for c in all_contracts}
             if all_type_ids:
-                # ORDER BY stage_code — подэтапы идут в правильном порядке S1_1_01 → S2_1_01
                 all_type_timeline = db.query(ProjectTimelineEntry).filter(ProjectTimelineEntry.contract_id.in_(all_type_ids)).order_by(ProjectTimelineEntry.stage_code).all()
-                _sd_norm: dict = {}
-                _sd_code: dict = {}  # stage_name → stage_code
-                _sd_order: list = []
-                _sd_order_set: set = set()
-                _sd_groups_seen: set = set()
                 for e in all_type_timeline:
                     sc = e.stage_code or ""
-                    # Захватываем top-level HDR (S1_HDR, S2_HDR — ровно один _ до _HDR)
-                    if sc.endswith("_HDR") and sc.count("_") == 1 and sc not in _sd_groups_seen:
-                        stage_groups.append({"code": sc[:-4], "name": e.stage_name})
-                        _sd_groups_seen.add(sc)
-                    if sc.endswith("_HDR"):
+                    if sc.endswith("_HDR") or sc == "START" or sc.endswith("_ACT"):
                         continue
                     sname = e.stage_name
+                    if e.norm_days and e.norm_days > 0:
+                        _sd_norm[sname] = e.norm_days
                     if sname not in _sd_order_set:
                         _sd_order.append(sname)
                         _sd_order_set.add(sname)
                         _sd_code[sname] = sc
-                    if e.norm_days and e.norm_days > 0:
-                        _sd_norm[sname] = e.norm_days
-                _sd_order.sort(key=lambda sn: _sd_code.get(sn, ""))
 
-                # Фактические данные — только из period-filtered договоров
-                _sd_actual: dict = defaultdict(list)
-                if filtered_ids:
-                    period_timeline = db.query(ProjectTimelineEntry).filter(ProjectTimelineEntry.contract_id.in_(filtered_ids)).all()
-                    for e in period_timeline:
-                        sc = e.stage_code or ""
-                        if not sc.endswith("_HDR") and e.actual_days and e.actual_days > 0:
-                            _sd_actual[e.stage_name].append(e.actual_days)
+            _sd_order.sort(key=lambda sn: _sd_code.get(sn, ""))
 
-                for sname in _sd_order:
-                    norm = _sd_norm.get(sname, 0)
-                    if norm <= 0:
-                        continue
-                    days_list = _sd_actual.get(sname, [])
-                    avg_actual = round(sum(days_list) / len(days_list), 1) if days_list else 0.0
-                    on_time_pct_s = 0.0
-                    if days_list:
-                        on_time_count_s = sum(1 for d in days_list if d <= norm)
-                        on_time_pct_s = round(on_time_count_s / len(days_list) * 100, 1)
-                    stage_durations.append(
-                        {
-                            "stage": sname,
-                            "stage_code": _sd_code.get(sname, ""),
-                            "avg_actual_days": avg_actual,
-                            "norm_days": float(norm),
-                            "on_time_pct": on_time_pct_s,
-                        }
-                    )
+            # 3. Фактические данные — только из period-filtered договоров
+            _sd_actual: dict = defaultdict(list)
+            if filtered_ids:
+                period_timeline = db.query(ProjectTimelineEntry).filter(ProjectTimelineEntry.contract_id.in_(filtered_ids)).all()
+                for e in period_timeline:
+                    sc = e.stage_code or ""
+                    if not sc.endswith("_HDR") and e.actual_days and e.actual_days > 0:
+                        _sd_actual[e.stage_name].append(e.actual_days)
+
+            for sname in _sd_order:
+                norm = _sd_norm.get(sname, 0)
+                if norm <= 0:
+                    continue
+                days_list = _sd_actual.get(sname, [])
+                avg_actual = round(sum(days_list) / len(days_list), 1) if days_list else 0.0
+                on_time_pct_s = 0.0
+                if days_list:
+                    on_time_count_s = sum(1 for d in days_list if d <= norm)
+                    on_time_pct_s = round(on_time_count_s / len(days_list) * 100, 1)
+                stage_durations.append(
+                    {
+                        "stage": sname,
+                        "stage_code": _sd_code.get(sname, ""),
+                        "avg_actual_days": avg_actual,
+                        "norm_days": float(norm),
+                        "on_time_pct": on_time_pct_s,
+                    }
+                )
 
         if not filtered_ids:
             # Возвращаем структуру с нормативами (stage_durations уже заполнены выше)
