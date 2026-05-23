@@ -2708,17 +2708,22 @@ async function doAssign() {
       if (['designer', 'draftsman'].includes(roleKey) && stageName) {
         // Дизайнер/Чертёжник — upsert в stage_executors (сервер сам обновит если есть)
         await crmApi.assignExecutor(card.value.id, { stage_name: stageName, executor_id: assignEmployeeId.value, deadline: assignDeadline.value || null })
-        // Для шаблонных проектов — создаём "Полная оплата" при первом назначении
-        // (для Инд. — создаётся при перемещении на стадию)
-        if (isTemplate) {
-          try {
-            const calcRes = await paymentsApi.calculate({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, stage_name: stageName, project_subtype: card.value.project_subtype || undefined })
-            const fullAmount = typeof calcRes.data === 'number' ? calcRes.data : (calcRes.data?.amount || 0)
-            if (fullAmount > 0) {
+        // Создаём оплаты при первом назначении (аналогично переназначению)
+        try {
+          const calcRes = await paymentsApi.calculate({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, stage_name: stageName, project_subtype: card.value.project_subtype || undefined })
+          const fullAmount = typeof calcRes.data === 'number' ? calcRes.data : (calcRes.data?.amount || 0)
+          if (fullAmount > 0) {
+            if (isTemplate) {
               await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, stage_name: stageName, payment_type: 'Полная оплата', crm_card_id: card.value.id, calculated_amount: fullAmount, final_amount: fullAmount, report_month: null })
+            } else {
+              const month = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
+              const advance = Math.round(fullAmount / 2)
+              const balance = fullAmount - advance
+              await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, stage_name: stageName, payment_type: 'Аванс', crm_card_id: card.value.id, calculated_amount: advance, final_amount: advance, report_month: month })
+              await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, stage_name: stageName, payment_type: 'Доплата', crm_card_id: card.value.id, calculated_amount: balance, final_amount: balance, report_month: null })
             }
-          } catch (e) { console.warn('Ошибка создания оплаты при назначении:', e) }
-        }
+          }
+        } catch (e) { console.warn('Ошибка создания оплаты при назначении:', e) }
       } else if (roleKey === 'surveyor') {
         // Замерщик — сервер auto_create_employee_payment создаёт платёж автоматически
         await crmApi.updateCard(card.value.id, { surveyor_id: assignEmployeeId.value })
