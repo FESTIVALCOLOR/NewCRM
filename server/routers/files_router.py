@@ -359,11 +359,23 @@ async def upload_file_to_yandex(
             if ".." in yandex_path:
                 raise HTTPException(status_code=400, detail="Недопустимый путь файла")
 
+        # Автопереименование при конфликте имён: file.pdf → file (1).pdf
+        try:
+            if yd_service.file_exists(yandex_path):
+                base, ext = os.path.splitext(yandex_path)
+                counter = 1
+                while counter <= 99 and yd_service.file_exists(f"{base} ({counter}){ext}"):
+                    counter += 1
+                yandex_path = f"{base} ({counter}){ext}"
+        except Exception:
+            pass  # Если проверка не удалась — загружаем с overwrite
+
         result = yd_service.upload_file_from_bytes(file_bytes, yandex_path)
 
         if result:
             public_link = yd_service.get_public_link(yandex_path)
-            return {"status": "success", "yandex_path": yandex_path, "public_link": public_link, "file_name": file.filename}
+            actual_name = os.path.basename(yandex_path)
+            return {"status": "success", "yandex_path": yandex_path, "public_link": public_link, "file_name": actual_name}
         else:
             raise HTTPException(status_code=500, detail="Failed to upload file")
 

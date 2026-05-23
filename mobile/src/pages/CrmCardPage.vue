@@ -1333,8 +1333,8 @@
                 outline
                 no-caps
                 icon="attach_file"
-                :label="rejectFile ? rejectFile.name : 'Прикрепить файл с правками'"
-                style="width: 100%; justify-content: flex-start; text-transform: none"
+                label="Прикрепить файл с правками"
+                style="width: 100%; justify-content: flex-start"
                 @click="$refs.rejectFileInput.click()"
               />
               <input
@@ -1344,15 +1344,38 @@
                 style="display: none"
                 @change="e => { rejectFile = e.target.files[0] || null }"
               >
-              <q-btn
-                v-if="rejectFile"
-                flat
-                dense
-                icon="close"
-                size="sm"
-                class="q-ml-sm"
-                @click="rejectFile = null"
-              />
+              <div v-if="rejectFile" class="q-mt-sm row items-center no-wrap" style="background: #f5f5f5; border-radius: 8px; padding: 8px 10px; gap: 8px">
+                <img
+                  v-if="rejectFilePreviewUrl"
+                  :src="rejectFilePreviewUrl"
+                  style="width: 56px; height: 56px; object-fit: cover; border-radius: 6px; flex-shrink: 0"
+                >
+                <q-icon
+                  v-else
+                  :name="rejectFile.type === 'application/pdf' ? 'picture_as_pdf' : 'description'"
+                  :color="rejectFile.type === 'application/pdf' ? 'red-7' : 'blue-7'"
+                  size="36px"
+                  style="flex-shrink: 0"
+                />
+                <div class="col-grow" style="min-width: 0">
+                  <div style="font-size: 12px; font-weight: 500; color: #333; word-break: break-all; line-height: 1.3">
+                    {{ rejectFile.name }}
+                  </div>
+                  <div style="font-size: 11px; color: #999">
+                    {{ (rejectFile.size / 1024).toFixed(0) }} КБ
+                  </div>
+                </div>
+                <q-btn
+                  flat
+                  dense
+                  round
+                  icon="close"
+                  size="sm"
+                  color="grey-7"
+                  style="flex-shrink: 0"
+                  @click="rejectFile = null"
+                />
+              </div>
             </div>
           </q-card-section>
           <q-card-actions align="right">
@@ -1786,6 +1809,11 @@ const showRestoreDialog = ref(false)
 const restoreStage = ref(null)
 const rejectReason = ref('')
 const rejectFile = ref(null)
+const rejectFilePreviewUrl = ref(null)
+watch(rejectFile, (newFile, oldFile) => {
+  if (oldFile && rejectFilePreviewUrl.value) URL.revokeObjectURL(rejectFilePreviewUrl.value)
+  rejectFilePreviewUrl.value = newFile?.type?.startsWith('image/') ? URL.createObjectURL(newFile) : null
+})
 
 // === Telegram-чат ===
 const chatData = ref(null)
@@ -2871,22 +2899,27 @@ async function handleCrmFileUpload(event) {
       // Путь без disk: для upload API И для записи в БД (как десктоп)
       const ypClean = yp.replace(/^disk:/, '')
 
-      // Шаг 1: загрузка на ЯД
+      // Шаг 1: загрузка на ЯД (сервер автоматически переименует при конфликте)
       let publicLink = ''
+      let actualYpClean = ypClean
+      let actualFileName = file.name
       try {
         const uploadRes = await filesApi.upload(file, ypClean)
         publicLink = uploadRes.data?.public_link || ''
+        // Используем реальный путь/имя, которые вернул сервер (мог переименовать)
+        if (uploadRes.data?.yandex_path) actualYpClean = uploadRes.data.yandex_path
+        if (uploadRes.data?.file_name) actualFileName = uploadRes.data.file_name
       } catch (uploadErr) {
         $q.notify({ type: 'warning', message: `ЯД: ${uploadErr.response?.status || 'ошибка'}` })
       }
 
-      // Шаг 2: создание записи в БД (как десктоп — с disk: в yandex_path)
+      // Шаг 2: создание записи в БД
       try {
         const { api: ax } = await import('src/boot/axios')
         await ax.post('/api/v1/files/', {
-          contract_id: contractId, stage, file_name: file.name,
-          file_type: file.type?.includes('image') ? 'image' : file.name.endsWith('.pdf') ? 'pdf' : 'other',
-          public_link: publicLink, yandex_path: ypClean,
+          contract_id: contractId, stage, file_name: actualFileName,
+          file_type: file.type?.includes('image') ? 'image' : actualFileName.endsWith('.pdf') ? 'pdf' : 'other',
+          public_link: publicLink, yandex_path: actualYpClean,
           file_order: projectFiles.value.length + i + 1, variation,
         })
       } catch (dbErr) {
@@ -2912,7 +2945,7 @@ async function handleCrmFileUpload(event) {
       try {
         const folderPath = `${contractFolder}/${STAGE_FOLDERS[stage] || stage}`
         const { data: linkData } = await filesApi.getPublicLink(folderPath)
-        if (linkData.public_link) {
+        if (linkData.public_link && can('contracts.update')) {
           const upd = {}; upd[linkField] = linkData.public_link
           await contractsApi.update(card.value.contract_id, upd)
         }
@@ -3072,7 +3105,11 @@ async function doAddExtraRound() {
 async function doManagerAcceptance() {
   actionLoading.value = true
   try {
-    await crmApi.managerAcceptance(card.value.id)
+    const stageName = card.value.column_name || ''
+    const stageExec = (card.value.stage_executors || []).find(se => se.stage_name === stageName)
+    const executorName = stageExec?.executor_name || 'Исполнитель'
+    const managerId = authStore.user?.id || 0
+    await crmApi.managerAcceptance(card.value.id, { stage_name: stageName, executor_name: executorName, manager_id: managerId })
     $q.notify({ type: 'positive', message: 'Принято менеджером' })
     await reloadCard()
   } catch (err) { $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' }) }
