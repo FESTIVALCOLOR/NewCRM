@@ -1380,8 +1380,51 @@ async def get_crm_analytics(
         filtered_contracts = _apply_period_filter(all_contracts, year, quarter, month)
         filtered_ids = {c.id for c in filtered_contracts}
 
+        # --- Длительность стадий (avg actual vs norm) ---
+        # Используем ВСЕ договоры типа (без фильтра периода) — иначе при отсутствии
+        # договоров в выбранном году шаблонные проекты дают пустой график.
+        stage_durations: list = []
+        if not use_supervision:
+            all_type_ids = {c.id for c in all_contracts}
+            if all_type_ids:
+                all_type_timeline = db.query(ProjectTimelineEntry).filter(ProjectTimelineEntry.contract_id.in_(all_type_ids)).all()
+                _sd_actual: dict = defaultdict(list)
+                _sd_norm: dict = {}
+                _sd_order: list = []
+                _sd_order_set: set = set()
+                for e in all_type_timeline:
+                    sc = e.stage_code or ""
+                    if sc.endswith("_HDR"):
+                        continue
+                    sname = e.stage_name
+                    if sname not in _sd_order_set:
+                        _sd_order.append(sname)
+                        _sd_order_set.add(sname)
+                    if e.norm_days and e.norm_days > 0:
+                        _sd_norm[sname] = e.norm_days
+                    if e.actual_days and e.actual_days > 0:
+                        _sd_actual[sname].append(e.actual_days)
+                for sname in _sd_order:
+                    norm = _sd_norm.get(sname, 0)
+                    if norm <= 0:
+                        continue
+                    days_list = _sd_actual.get(sname, [])
+                    avg_actual = round(sum(days_list) / len(days_list), 1) if days_list else 0.0
+                    on_time_pct_s = 0.0
+                    if days_list:
+                        on_time_count_s = sum(1 for d in days_list if d <= norm)
+                        on_time_pct_s = round(on_time_count_s / len(days_list) * 100, 1)
+                    stage_durations.append(
+                        {
+                            "stage": sname,
+                            "avg_actual_days": avg_actual,
+                            "norm_days": float(norm),
+                            "on_time_pct": on_time_pct_s,
+                        }
+                    )
+
         if not filtered_ids:
-            # Возвращаем пустую структуру
+            # Возвращаем структуру с нормативами (stage_durations уже заполнены выше)
             return {
                 "funnel": [],
                 "on_time_stats": {
@@ -1395,7 +1438,7 @@ async def get_crm_analytics(
                     "stages_pct": 0.0,
                     "avg_deviation_days": 0.0,
                 },
-                "stage_durations": [],
+                "stage_durations": stage_durations,
                 "paused_count": 0,
                 "active_count": 0,
                 "archived_count": 0,
@@ -1540,45 +1583,7 @@ async def get_crm_analytics(
             "avg_deviation_days": avg_deviation,
         }
 
-        # --- Длительность стадий (avg actual vs norm) ---
-        # Все листовые подэтапы (не _HDR): всегда норма, факт=0 если нет данных
-        stage_durations = []
-        if not use_supervision and filtered_ids:
-            stage_actual: dict = defaultdict(list)
-            stage_norm: dict = {}
-            stage_order: list = []
-            stage_order_set: set = set()
-            for e in timeline_entries:
-                sc = e.stage_code or ""
-                if sc.endswith("_HDR"):
-                    continue
-                sname = e.stage_name
-                if sname not in stage_order_set:
-                    stage_order.append(sname)
-                    stage_order_set.add(sname)
-                if e.norm_days and e.norm_days > 0:
-                    stage_norm[sname] = e.norm_days
-                if e.actual_days and e.actual_days > 0:
-                    stage_actual[sname].append(e.actual_days)
-
-            for sname in stage_order:
-                norm = stage_norm.get(sname, 0)
-                if norm <= 0:
-                    continue  # нет нормы — не показываем
-                days_list = stage_actual.get(sname, [])
-                avg_actual = round(sum(days_list) / len(days_list), 1) if days_list else 0.0
-                on_time_pct_s = 0.0
-                if days_list:
-                    on_time_count_s = sum(1 for d in days_list if d <= norm)
-                    on_time_pct_s = round(on_time_count_s / len(days_list) * 100, 1)
-                stage_durations.append(
-                    {
-                        "stage": sname,
-                        "avg_actual_days": avg_actual,
-                        "norm_days": float(norm),
-                        "on_time_pct": on_time_pct_s,
-                    }
-                )
+        # stage_durations уже вычислены выше по всем контрактам типа
 
         # --- Счётчики статусов ---
         paused_count = sum(1 for c in crm_cards if c.column_name == "В ожидании")
