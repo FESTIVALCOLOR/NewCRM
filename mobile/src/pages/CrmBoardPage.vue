@@ -751,51 +751,44 @@ async function selectMoveColumn(colName) {
       }
     } catch {}
 
-    // Автоподстановка дедлайна + norm_days из timeline (только если дедлайн ещё не подставлен)
+    // Автоподстановка дедлайна + norm_days из timeline
     moveNormDays.value = 0
     moveSubstepName.value = ''
     const cid = moveCard.value.contract_id
     if (cid) {
-      try {
-        const { api: ax } = await import('src/boot/axios')
-        const { getStageDeadlineInfo } = await import('src/composables/useDeadline')
-        const resp = await ax.get(`/api/v1/timeline/${cid}`)
-        const entries = Array.isArray(resp.data) ? resp.data : []
-        const info = getStageDeadlineInfo(entries, colName)
-        // НЕ перезаписываем дедлайн если уже загружен из stage_executors
-        if (info.deadline && !moveDeadline.value) moveDeadline.value = info.deadline
-        moveNormDays.value = info.normDays || 0
-        moveSubstepName.value = info.substepName || ''
-      } catch { /* fallback ниже */ }
+      const { api: ax } = await import('src/boot/axios')
+      const { getStageDeadlineInfo } = await import('src/composables/useDeadline')
 
-      // Fallback: таймлайн не инициализирован (Новый заказ) — берём норм-дни из шаблона по площади
-      if (moveNormDays.value === 0 && _cardDetail) {
+      // Шаг 1: читаем timeline
+      let entries = []
+      try {
+        const resp = await ax.get(`/api/v1/timeline/${cid}`)
+        entries = Array.isArray(resp.data) ? resp.data : []
+      } catch {}
+
+      // Шаг 2: если timeline пуст и есть площадь — инициализируем его (идемпотентно)
+      if (entries.length === 0 && _cardDetail && (_cardDetail.area || 0) > 0) {
         try {
-          const { api: ax } = await import('src/boot/axios')
-          const { getStageDeadlineInfo } = await import('src/composables/useDeadline')
-          const area = _cardDetail.area || 0
           const projectType = _cardDetail.project_type || 'Индивидуальный'
           const projectSubtype = _cardDetail.project_subtype ||
             (projectType === 'Шаблонный' ? 'Стандарт' : 'Полный (с 3д визуализацией)')
-          const agentType = _cardDetail.agent_type || 'Все агенты'
-          if (area > 0) {
-            const previewResp = await ax.post('/api/norm-days/preview', {
-              project_type: projectType,
-              project_subtype: projectSubtype,
-              agent_type: agentType,
-              area,
-              floors: 1,
-            })
-            const previewEntries = previewResp.data?.entries || []
-            const previewInfo = getStageDeadlineInfo(previewEntries, colName)
-            if (previewInfo.normDays > 0) {
-              moveNormDays.value = previewInfo.normDays
-              moveSubstepName.value = previewInfo.substepName
-              if (!moveDeadline.value) moveDeadline.value = previewInfo.deadline || ''
-            }
-          }
+          await ax.post(`/api/v1/timeline/${cid}/init`, {
+            project_type: projectType,
+            project_subtype: projectSubtype,
+            area: _cardDetail.area,
+            floors: _cardDetail.floors || 1,
+          })
+          // Перечитываем после инициализации
+          const resp2 = await ax.get(`/api/v1/timeline/${cid}`)
+          entries = Array.isArray(resp2.data) ? resp2.data : []
         } catch {}
       }
+
+      // Шаг 3: считаем норм-дни из entries
+      const info = getStageDeadlineInfo(entries, colName)
+      if (info.deadline && !moveDeadline.value) moveDeadline.value = info.deadline
+      moveNormDays.value = info.normDays || 0
+      moveSubstepName.value = info.substepName || ''
     }
     if (!moveDeadline.value) {
       const d = new Date(); d.setDate(d.getDate() + 7)

@@ -128,6 +128,43 @@ async def create_contract(contract_data: ContractCreate, current_user: Employee 
         db.commit()
         db.refresh(contract)
 
+        # Авто-инициализация таймлайна (только если есть площадь)
+        if contract.project_type != "Авторский надзор" and (contract.area or 0) > 0:
+            try:
+                from services.timeline_service import (
+                    build_project_timeline_template,
+                    build_template_project_timeline,
+                    refresh_timeline_start_date,
+                )
+
+                _existing = db.query(ProjectTimelineEntry).filter(ProjectTimelineEntry.contract_id == contract.id).count()
+                if _existing == 0:
+                    _agent = contract.agent_type or "Все агенты"
+                    if contract.project_type == "Шаблонный":
+                        _entries, _, _ = build_template_project_timeline(contract.project_subtype or "Стандарт", contract.area, floors=1, agent_type=_agent)
+                    else:
+                        _entries, _, _ = build_project_timeline_template(contract.project_type or "Индивидуальный", contract.area, contract.project_subtype, agent_type=_agent)
+                    for e in _entries:
+                        db.add(
+                            ProjectTimelineEntry(
+                                contract_id=contract.id,
+                                stage_code=e["stage_code"],
+                                stage_name=e["stage_name"],
+                                stage_group=e["stage_group"],
+                                substage_group=e.get("substage_group", ""),
+                                executor_role=e["executor_role"],
+                                is_in_contract_scope=e["is_in_contract_scope"],
+                                sort_order=e["sort_order"],
+                                raw_norm_days=e.get("raw_norm_days", 0),
+                                cumulative_days=e.get("cumulative_days", 0),
+                                norm_days=e.get("norm_days", 0),
+                            )
+                        )
+                    db.commit()
+                    refresh_timeline_start_date(db, contract.id)
+            except Exception as _te:
+                logger.warning(f"Авто-инициализация таймлайна для договора {contract.id}: {_te}")
+
         return contract
 
     except IntegrityError:
