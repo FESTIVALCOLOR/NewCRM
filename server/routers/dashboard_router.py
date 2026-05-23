@@ -1387,8 +1387,10 @@ async def get_crm_analytics(
         if not use_supervision:
             all_type_ids = {c.id for c in all_contracts}
             if all_type_ids:
-                all_type_timeline = db.query(ProjectTimelineEntry).filter(ProjectTimelineEntry.contract_id.in_(all_type_ids)).all()
+                # ORDER BY stage_code — чтобы подэтапы шли в правильном порядке S1_1_01 → S2_1_01
+                all_type_timeline = db.query(ProjectTimelineEntry).filter(ProjectTimelineEntry.contract_id.in_(all_type_ids)).order_by(ProjectTimelineEntry.stage_code).all()
                 _sd_norm: dict = {}
+                _sd_code: dict = {}  # stage_name → stage_code для сортировки
                 _sd_order: list = []
                 _sd_order_set: set = set()
                 for e in all_type_timeline:
@@ -1399,8 +1401,13 @@ async def get_crm_analytics(
                     if sname not in _sd_order_set:
                         _sd_order.append(sname)
                         _sd_order_set.add(sname)
+                        _sd_code[sname] = sc
                     if e.norm_days and e.norm_days > 0:
                         _sd_norm[sname] = e.norm_days
+                # Гарантируем сортировку по stage_code (ORDER BY в запросе сортирует записи,
+                # но дедупликация по sname может нарушить порядок если разные договоры
+                # имеют разный порядок вставки — перестраховка)
+                _sd_order.sort(key=lambda sn: _sd_code.get(sn, ""))
 
                 # Фактические данные — только из period-filtered договоров
                 _sd_actual: dict = defaultdict(list)
