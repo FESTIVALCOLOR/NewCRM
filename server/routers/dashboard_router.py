@@ -1400,7 +1400,7 @@ async def get_crm_analytics(
             #    T3-стадии всегда присутствовали в графике (даже без реальных данных).
             canonical_subtype = "Полный (с 3д визуализацией)" if project_type == "Шаблонный" else None
             try:
-                canonical = build_project_timeline_template(project_type=project_type, area=50, project_subtype=canonical_subtype)
+                canonical, _, _ = build_project_timeline_template(project_type=project_type, area=50, project_subtype=canonical_subtype)
             except Exception:
                 canonical = []
             for e in canonical:
