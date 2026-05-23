@@ -1541,25 +1541,34 @@ async def get_crm_analytics(
         }
 
         # --- Длительность стадий (avg actual vs norm) ---
-        # Только листовые подэтапы (не _HDR) с фактическими данными (actual_days > 0)
+        # Все листовые подэтапы (не _HDR): всегда норма, факт=0 если нет данных
         stage_durations = []
         if not use_supervision and filtered_ids:
             stage_actual: dict = defaultdict(list)
             stage_norm: dict = {}
+            stage_order: list = []
+            stage_order_set: set = set()
             for e in timeline_entries:
                 sc = e.stage_code or ""
                 if sc.endswith("_HDR"):
                     continue
+                sname = e.stage_name
+                if sname not in stage_order_set:
+                    stage_order.append(sname)
+                    stage_order_set.add(sname)
                 if e.norm_days and e.norm_days > 0:
-                    stage_norm[e.stage_name] = e.norm_days
+                    stage_norm[sname] = e.norm_days
                 if e.actual_days and e.actual_days > 0:
-                    stage_actual[e.stage_name].append(e.actual_days)
+                    stage_actual[sname].append(e.actual_days)
 
-            for sname, days_list in stage_actual.items():
-                avg_actual = round(sum(days_list) / len(days_list), 1) if days_list else 0.0
+            for sname in stage_order:
                 norm = stage_norm.get(sname, 0)
+                if norm <= 0:
+                    continue  # нет нормы — не показываем
+                days_list = stage_actual.get(sname, [])
+                avg_actual = round(sum(days_list) / len(days_list), 1) if days_list else 0.0
                 on_time_pct_s = 0.0
-                if days_list and norm > 0:
+                if days_list:
                     on_time_count_s = sum(1 for d in days_list if d <= norm)
                     on_time_pct_s = round(on_time_count_s / len(days_list) * 100, 1)
                 stage_durations.append(

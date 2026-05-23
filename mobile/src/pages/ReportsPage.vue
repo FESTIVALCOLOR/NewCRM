@@ -220,9 +220,9 @@
             <q-tab name="template" label="Шаблонные" />
           </q-tabs>
           <div v-if="projectStats" class="q-mt-md">
-            <div class="row q-col-gutter-xs q-mb-md">
-              <div v-for="s in projectStatCards" :key="s.label" class="col-3">
-                <div class="text-center q-pa-xs" :style="{ border: `1px solid ${s.color || '#E0E0E0'}`, borderRadius: '6px' }">
+            <div class="row q-col-gutter-xs q-mb-md items-stretch">
+              <div v-for="s in projectStatCards" :key="s.label" class="col-3" style="display: flex">
+                <div class="text-center q-pa-xs" style="display: flex; flex-direction: column; justify-content: center; width: 100%" :style="{ border: `1px solid ${s.color || '#E0E0E0'}`, borderRadius: '6px' }">
                   <div class="text-subtitle1 text-weight-bold">
                     {{ s.value }}
                   </div>
