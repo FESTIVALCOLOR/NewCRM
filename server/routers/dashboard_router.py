@@ -47,7 +47,7 @@ from constants import (
     STATUS_TERMINATED,
 )
 from fastapi import APIRouter, Depends, HTTPException
-from services.timeline_service import build_project_timeline_template
+from services.timeline_service import build_project_timeline_template, build_template_project_timeline
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -1396,11 +1396,14 @@ async def get_crm_analytics(
             _sd_groups_seen: set = set()
 
             # 1. Строим полную структуру из канонического шаблона.
-            #    Для шаблонных проектов используем подтип "с 3д визуализацией" чтобы
-            #    T3-стадии всегда присутствовали в графике (даже без реальных данных).
-            canonical_subtype = "Полный (с 3д визуализацией)" if project_type == "Шаблонный" else None
+            #    Для шаблонных проектов вызываем build_template_project_timeline с подтипом
+            #    "Стандарт с визуализацией" чтобы T3-стадии всегда присутствовали в графике.
+            #    Для индивидуальных — build_project_timeline_template (S1/S2/S3).
             try:
-                canonical, _, _ = build_project_timeline_template(project_type=project_type, area=50, project_subtype=canonical_subtype)
+                if project_type == "Шаблонный":
+                    canonical, _, _ = build_template_project_timeline("Стандарт с визуализацией", area=50)
+                else:
+                    canonical, _, _ = build_project_timeline_template(project_type=project_type, area=50)
             except Exception:
                 canonical = []
             for e in canonical:
