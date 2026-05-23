@@ -1491,14 +1491,15 @@ async def get_crm_analytics(
         projects_total = projects_on_time + projects_overdue
         projects_pct = round(projects_on_time / projects_total * 100, 1) if projects_total else 0.0
 
-        # Среднее отклонение — по завершённым подэтапам (stage_code содержит '.')
+        # Среднее отклонение — по завершённым подэтапам (не _HDR, actual_days > 0)
         # actual_days - norm_days > 0 → просрочка
         deviation_days: list = []
         sub_on_time = 0
         sub_overdue = 0
         if not use_supervision and filtered_ids:
             for e in timeline_entries:
-                if "." in (e.stage_code or "") and e.actual_days and e.norm_days:
+                sc = e.stage_code or ""
+                if not sc.endswith("_HDR") and e.actual_days and e.actual_days > 0 and e.norm_days:
                     delta = e.actual_days - e.norm_days
                     deviation_days.append(delta)
                     if delta <= 0:
@@ -1540,14 +1541,19 @@ async def get_crm_analytics(
         }
 
         # --- Длительность стадий (avg actual vs norm) ---
+        # Только листовые подэтапы (не _HDR) с фактическими данными (actual_days > 0)
         stage_durations = []
         if not use_supervision and filtered_ids:
-            # Группируем timeline entries по stage_name
             stage_actual: dict = defaultdict(list)
             stage_norm: dict = {}
             for e in timeline_entries:
-                stage_actual[e.stage_name].append(e.actual_days or 0)
-                stage_norm[e.stage_name] = e.norm_days or 0
+                sc = e.stage_code or ""
+                if sc.endswith("_HDR"):
+                    continue
+                if e.norm_days and e.norm_days > 0:
+                    stage_norm[e.stage_name] = e.norm_days
+                if e.actual_days and e.actual_days > 0:
+                    stage_actual[e.stage_name].append(e.actual_days)
 
             for sname, days_list in stage_actual.items():
                 avg_actual = round(sum(days_list) / len(days_list), 1) if days_list else 0.0
