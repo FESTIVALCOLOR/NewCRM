@@ -2334,6 +2334,29 @@ async function loadCardFiles() {
         }
       }
     }
+    // Файлы правок из папок workflow (revision_file_path)
+    try {
+      const { data: states } = await api.get(`/api/v1/crm/cards/${chatCrmCardId.value}/workflow/state`)
+      const statesList = Array.isArray(states) ? states : []
+      const revFolders = [...new Set(statesList.filter(s => s.revision_file_path).map(s => s.revision_file_path))]
+      for (const folder of revFolders) {
+        try {
+          const { data: fl } = await api.get('/api/v1/files/list', { params: { folder_path: folder } })
+          const items = fl?.files || []
+          const revStage = statesList.find(s => s.revision_file_path === folder)?.stage_name || 'стадия'
+          for (const item of items) {
+            if (item.type !== 'file') continue
+            const revFile = { id: `rev-${item.path}`, file_name: item.name, yandex_path: item.path, stage: `Правки: ${revStage}`, file_type: 'file' }
+            cardFiles.value.push(revFile)
+            if (cfIsPdf(revFile) && !cfPdfThumbs[revFile.id]) {
+              getPdfThumbnail(cfImgStreamUrl(revFile), revFile.id).then(thumb => {
+                if (thumb) cfPdfThumbs[revFile.id] = thumb
+              })
+            }
+          }
+        } catch {}
+      }
+    } catch {}
   } catch {
     cardFiles.value = []
   } finally {
