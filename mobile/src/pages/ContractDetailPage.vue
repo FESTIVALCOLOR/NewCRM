@@ -1431,15 +1431,10 @@ onMounted(async () => {
   color: #1565C0;
 }
 
-/* Ландшафт: Договор / ТЗ / Доп.соглашения — горизонтальная сетка внутри правой колонки */
-@media (orientation: landscape) {
-  .contract-files-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: 8px;
-  }
-  .contract-files-grid > .is-card {
-    margin-bottom: 0 !important;
-  }
+/* В ландшафте блоки Договор/ТЗ/Доп.соглашения стоят вертикально внутри левой колонки */
+.contract-files-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
 }
 </style>

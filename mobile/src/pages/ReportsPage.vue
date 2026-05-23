@@ -272,8 +272,20 @@
           <div class="text-subtitle2 text-weight-bold q-mb-sm">
             Авторский надзор
           </div>
+          <!-- Строка 1: общие показатели надзора -->
+          <div class="row q-col-gutter-xs q-mb-xs">
+            <div v-for="s in supervisionMini.slice(0, 4)" :key="s.label" class="col-3 text-center">
+              <div class="text-subtitle1 text-weight-bold" :style="{ color: s.color || '#333' }">
+                {{ s.value }}
+              </div>
+              <div class="text-caption text-grey-7" style="font-size: 9px">
+                {{ s.label }}
+              </div>
+            </div>
+          </div>
+          <!-- Строка 2: статистика выездов -->
           <div class="row q-col-gutter-xs q-mb-md">
-            <div v-for="s in supervisionMini" :key="s.label" class="col-4 col-md-2 text-center">
+            <div v-for="s in supervisionMini.slice(4)" :key="s.label" class="col text-center">
               <div class="text-subtitle1 text-weight-bold" :style="{ color: s.color || '#333' }">
                 {{ s.value }}
               </div>

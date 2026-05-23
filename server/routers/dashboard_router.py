@@ -1476,14 +1476,11 @@ async def get_crm_analytics(
         completed_cards = [c for c in crm_cards if c.column_name == "Выполненный проект"]
         projects_on_time = 0
         projects_overdue = 0
-        deviation_days: list = []
 
         for card in completed_cards:
             if card.deadline and card.updated_at:
                 try:
                     deadline_dt = datetime.strptime(str(card.deadline).strip(), "%Y-%m-%d")
-                    delta = (card.updated_at - deadline_dt).days
-                    deviation_days.append(delta)
                     if card.updated_at <= deadline_dt:
                         projects_on_time += 1
                     else:
@@ -1493,6 +1490,21 @@ async def get_crm_analytics(
 
         projects_total = projects_on_time + projects_overdue
         projects_pct = round(projects_on_time / projects_total * 100, 1) if projects_total else 0.0
+
+        # Среднее отклонение — по завершённым подэтапам (stage_code содержит '.')
+        # actual_days - norm_days > 0 → просрочка
+        deviation_days: list = []
+        sub_on_time = 0
+        sub_overdue = 0
+        if not use_supervision and filtered_ids:
+            for e in timeline_entries:
+                if "." in (e.stage_code or "") and e.actual_days and e.norm_days:
+                    delta = e.actual_days - e.norm_days
+                    deviation_days.append(delta)
+                    if delta <= 0:
+                        sub_on_time += 1
+                    else:
+                        sub_overdue += 1
         avg_deviation = round(sum(deviation_days) / len(deviation_days), 1) if deviation_days else 0.0
 
         # Стадии (StageExecutor, только для CRM карточек)
