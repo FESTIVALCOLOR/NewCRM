@@ -210,6 +210,20 @@ class YandexDiskService:
 
         return {"status": "deleted", "path": yandex_path}
 
+    def restore_from_trash(self, trash_path: str, name: str = None, overwrite: bool = False) -> dict:
+        """Восстановить файл/папку из корзины Яндекс.Диска."""
+        params = {"path": trash_path, "overwrite": str(overwrite).lower()}
+        if name:
+            params["name"] = name
+        response = requests.put(
+            "https://cloud-api.yandex.net/v1/disk/trash/resources/restore",
+            headers=self.headers,
+            params=params,
+        )
+        if response.status_code in (201, 202):
+            return {"status": "restored", "path": trash_path}
+        raise Exception(f"Ошибка восстановления из корзины: {response.text}")
+
     def file_exists(self, yandex_path: str) -> bool:
         """
         Проверить существование файла на Яндекс.Диске

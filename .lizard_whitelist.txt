@@ -54,3 +54,5 @@ build_template_project_timeline
 _do_seed_scripts
 create_crm_card
 update_crm_card
+delete_contract
+restore_deleted_contract

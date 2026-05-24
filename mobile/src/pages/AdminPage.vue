@@ -16,6 +16,7 @@
       <q-tab name="roles" label="Роли" />
       <q-tab name="normdays" label="Нормодни" />
       <q-tab name="telegram" label="Telegram/Email" />
+      <q-tab name="trash" label="Корзина" />
     </q-tabs>
 
     <q-tab-panels v-model="tab" animated class="bg-transparent">
@@ -477,6 +478,79 @@
           </q-card-section>
         </q-card>
       </q-tab-panel>
+
+      <!-- КОРЗИНА ДОГОВОРОВ -->
+      <q-tab-panel name="trash" class="q-pa-none">
+        <div class="row items-center justify-between q-mb-sm">
+          <div class="text-subtitle2 text-weight-bold" style="color: #333">
+            Удалённые договоры
+          </div>
+          <q-btn
+            flat
+            dense
+            no-caps
+            size="sm"
+            icon="refresh"
+            label="Обновить"
+            color="grey-7"
+            :loading="trashLoading"
+            @click="loadTrash"
+          />
+        </div>
+
+        <div v-if="trashLoading" class="text-center q-pa-lg">
+          <q-spinner size="32px" color="grey-5" />
+        </div>
+
+        <div v-else-if="deletedContracts.length === 0" class="text-center q-pa-xl" style="color: #aaa">
+          <q-icon name="delete_outline" size="48px" class="q-mb-sm" />
+          <div>Корзина пуста</div>
+        </div>
+
+        <template v-else>
+          <q-card v-for="item in deletedContracts" :key="item.id" class="is-card q-mb-xs">
+            <q-card-section class="q-pa-sm">
+              <div class="row items-start justify-between no-wrap" style="gap: 8px">
+                <div class="col-grow" style="min-width: 0">
+                  <div class="text-weight-bold" style="font-size: 13px; color: #333">
+                    № {{ item.contract_number || '—' }} · {{ item.client_name }}
+                  </div>
+                  <div class="text-caption" style="color: #888">
+                    {{ item.address }} · {{ item.project_type }}
+                    <span v-if="item.project_subtype"> ({{ item.project_subtype }})</span>
+                  </div>
+                  <div class="text-caption" style="color: #aaa; font-size: 10px; margin-top: 2px">
+                    Удалён: {{ formatTrashDate(item.deleted_at) }}
+                  </div>
+                </div>
+                <div class="column" style="gap: 4px; flex-shrink: 0">
+                  <q-btn
+                    dense
+                    unelevated
+                    no-caps
+                    size="sm"
+                    color="positive"
+                    label="Восстановить"
+                    style="min-width: 110px"
+                    :loading="item._loading"
+                    @click="restoreContract(item)"
+                  />
+                  <q-btn
+                    dense
+                    unelevated
+                    no-caps
+                    size="sm"
+                    color="negative"
+                    label="Удалить навсегда"
+                    style="min-width: 110px"
+                    @click="permanentDeleteContract(item)"
+                  />
+                </div>
+              </div>
+            </q-card-section>
+          </q-card>
+        </template>
+      </q-tab-panel>
     </q-tab-panels>
 
     <!-- Диалог прав роли — ПО БЛОКАМ -->
@@ -721,14 +795,17 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useQuasar } from 'quasar'
 import { api } from 'src/boot/axios'
 import { useReferencesStore } from 'src/stores/references'
+import { deletedContractsApi } from 'src/services/api'
 
 const $q = useQuasar()
 const refs = useReferencesStore()
 const tab = ref('rates')
+const deletedContracts = ref([])
+const trashLoading = ref(false)
 const rateTab = ref('individual')
 const rates = ref([])
 const normDays = ref([])
@@ -1034,6 +1111,56 @@ async function sendInvite() {
     $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
   }
 }
+
+function formatTrashDate(iso) {
+  if (!iso) return '—'
+  try {
+    return new Date(iso).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+  } catch { return iso }
+}
+
+async function loadTrash() {
+  trashLoading.value = true
+  try {
+    const { data } = await deletedContractsApi.getList()
+    deletedContracts.value = (data || []).map(item => ({ ...item, _loading: false }))
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка загрузки корзины' })
+  } finally {
+    trashLoading.value = false
+  }
+}
+
+async function restoreContract(item) {
+  item._loading = true
+  try {
+    const { data } = await deletedContractsApi.restore(item.id)
+    $q.notify({ type: 'positive', message: data.message || 'Договор восстановлен' })
+    await loadTrash()
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка восстановления' })
+    item._loading = false
+  }
+}
+
+function permanentDeleteContract(item) {
+  $q.dialog({
+    title: 'Удалить навсегда?',
+    message: `Договор №${item.contract_number || '—'} (${item.client_name}) будет удалён безвозвратно вместе с папкой на Яндекс.Диске.`,
+    cancel: true,
+    persistent: true,
+  }).onOk(async () => {
+    try {
+      await deletedContractsApi.permanentDelete(item.id)
+      $q.notify({ type: 'positive', message: 'Удалено безвозвратно' })
+      await loadTrash()
+    } catch (err) {
+      $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка удаления' })
+    }
+  })
+}
+
+watch(tab, (val) => { if (val === 'trash') loadTrash() })
 
 onMounted(async () => {
   loadRates()

@@ -649,10 +649,12 @@ app.include_router(survey_router, prefix="/api/v1/surveys")
 
 from routers.chat_router import router as chat_router
 from routers.client_chat_router import router as client_chat_router
+from routers.deleted_contracts_router import router as deleted_contracts_router
 
 app.include_router(chat_router, prefix="/api/v1/chats")
 # Клиентский доступ без JWT + WebSocket эндпоинты — отдельный роутер
 app.include_router(client_chat_router, prefix="/api/v1")
+app.include_router(deleted_contracts_router, prefix="/api/v1/admin/deleted-contracts")
 
 
 # =========================

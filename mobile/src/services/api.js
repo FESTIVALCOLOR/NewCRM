@@ -540,3 +540,9 @@ export const surveyApi = {
   getStats: (params = {}) =>
     api.get('/api/v1/surveys/stats', { params }),
 }
+
+export const deletedContractsApi = {
+  getList: () => api.get('/api/v1/admin/deleted-contracts/'),
+  restore: (id) => api.post(`/api/v1/admin/deleted-contracts/${id}/restore`),
+  permanentDelete: (id) => api.delete(`/api/v1/admin/deleted-contracts/${id}`),
+}

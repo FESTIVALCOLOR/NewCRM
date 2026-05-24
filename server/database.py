@@ -1234,6 +1234,24 @@ class InternalChatMessageReaction(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
+class DeletedContract(Base):
+    """Снимок удалённого договора для возможности восстановления"""
+
+    __tablename__ = "deleted_contracts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    original_contract_id = Column(Integer, nullable=False)
+    contract_number = Column(String)
+    client_name = Column(String)
+    address = Column(String)
+    project_type = Column(String)
+    project_subtype = Column(String, nullable=True)
+    yandex_folder_path = Column(String, nullable=True)
+    snapshot = Column(JSON, nullable=False)
+    deleted_by_id = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    deleted_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
 def _auto_migrate_columns():
     """Автоматически добавляет недостающие столбцы в существующие таблицы.
 

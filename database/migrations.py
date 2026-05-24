@@ -147,6 +147,10 @@ class DatabaseMigrations:
             self.add_visit_yandex_folder_field()
             # ==========================================================================
 
+            # ========== МИГРАЦИЯ: корзина договоров ==========
+            self.create_deleted_contracts_table()
+            # ==================================================
+
         except Exception as e:
             print(f"[WARN] Предупреждение при миграции: {e}")
 
@@ -2062,3 +2066,35 @@ class DatabaseMigrations:
             self.close()
         except Exception as e:
             print(f"[ERROR] Ошибка миграции visit_yandex_folder: {e}")
+
+    def create_deleted_contracts_table(self):
+        """Миграция: создание таблицы корзины договоров"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='deleted_contracts'")
+            if not cursor.fetchone():
+                print("[>] Выполняется миграция: создание таблицы deleted_contracts...")
+                cursor.execute("""
+                    CREATE TABLE deleted_contracts (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        original_contract_id INTEGER NOT NULL,
+                        contract_number TEXT,
+                        client_name TEXT,
+                        address TEXT,
+                        project_type TEXT,
+                        project_subtype TEXT,
+                        yandex_folder_path TEXT,
+                        snapshot TEXT NOT NULL,
+                        deleted_by_id INTEGER REFERENCES employees(id) ON DELETE SET NULL,
+                        deleted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_deleted_contracts_deleted_at ON deleted_contracts(deleted_at)")
+                conn.commit()
+                print("[OK] Таблица deleted_contracts создана")
+            else:
+                print("[OK] Таблица deleted_contracts уже существует")
+            self.close()
+        except Exception as e:
+            print(f"[ERROR] Ошибка миграции deleted_contracts: {e}")

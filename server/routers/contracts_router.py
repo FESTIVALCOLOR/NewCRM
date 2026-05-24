@@ -22,6 +22,7 @@ from database import (
     Client,
     Contract,
     CRMCard,
+    DeletedContract,
     Employee,
     FileStorage,
     InternalChat,
@@ -402,6 +403,71 @@ async def delete_contract(contract_id: int, current_user: Employee = Depends(req
         raise HTTPException(status_code=409, detail=f"Нельзя удалить активный договор (статус: {contract.status}). Сначала переведите в архивный статус.")
 
     try:
+        # === Собираем снимок данных до удаления ===
+        client_obj = db.query(Client).filter(Client.id == contract.client_id).first()
+        client_name = client_obj.full_name if client_obj else ""
+
+        def _row_to_dict(obj):
+            d = {c.name: getattr(obj, c.name) for c in obj.__table__.columns}
+            for k, v in d.items():
+                if hasattr(v, "isoformat"):
+                    d[k] = v.isoformat()
+            return d
+
+        snap_crm_cards = []
+        for card in db.query(CRMCard).filter(CRMCard.contract_id == contract_id).all():
+            snap_crm_cards.append(
+                {
+                    "card": _row_to_dict(card),
+                    "stage_executors": [_row_to_dict(r) for r in db.query(StageExecutor).filter(StageExecutor.crm_card_id == card.id).all()],
+                    "workflow_states": [_row_to_dict(r) for r in db.query(StageWorkflowState).filter(StageWorkflowState.crm_card_id == card.id).all()],
+                    "approval_deadlines": [_row_to_dict(r) for r in db.query(ApprovalStageDeadline).filter(ApprovalStageDeadline.crm_card_id == card.id).all()],
+                    "payments": [_row_to_dict(r) for r in db.query(Payment).filter(Payment.crm_card_id == card.id).all()],
+                    "messenger_chats": [_row_to_dict(r) for r in db.query(MessengerChat).filter(MessengerChat.crm_card_id == card.id).all()],
+                    "internal_chats": [_row_to_dict(r) for r in db.query(InternalChat).filter(InternalChat.crm_card_id == card.id).all()],
+                }
+            )
+
+        snap_sup_cards = []
+        for card in db.query(SupervisionCard).filter(SupervisionCard.contract_id == contract_id).all():
+            snap_sup_cards.append(
+                {
+                    "card": _row_to_dict(card),
+                    "timeline_entries": [_row_to_dict(r) for r in db.query(SupervisionTimelineEntry).filter(SupervisionTimelineEntry.supervision_card_id == card.id).all()],
+                    "visits": [_row_to_dict(r) for r in db.query(SupervisionVisit).filter(SupervisionVisit.supervision_card_id == card.id).all()],
+                    "history": [_row_to_dict(r) for r in db.query(SupervisionProjectHistory).filter(SupervisionProjectHistory.supervision_card_id == card.id).all()],
+                    "payments": [_row_to_dict(r) for r in db.query(Payment).filter(Payment.supervision_card_id == card.id).all()],
+                }
+            )
+
+        snapshot_data = {
+            "contract": _row_to_dict(contract),
+            "crm_cards": snap_crm_cards,
+            "supervision_cards": snap_sup_cards,
+            "payments": [_row_to_dict(r) for r in db.query(Payment).filter(Payment.contract_id == contract_id).all()],
+            "salaries": [_row_to_dict(r) for r in db.query(Salary).filter(Salary.contract_id == contract_id).all()],
+            "project_files": [_row_to_dict(r) for r in db.query(ProjectFile).filter(ProjectFile.contract_id == contract_id).all()],
+            "timeline_entries": [_row_to_dict(r) for r in db.query(ProjectTimelineEntry).filter(ProjectTimelineEntry.contract_id == contract_id).all()],
+            "messenger_chats": [_row_to_dict(r) for r in db.query(MessengerChat).filter(MessengerChat.contract_id == contract_id).all()],
+            "internal_chats": [_row_to_dict(r) for r in db.query(InternalChat).filter(InternalChat.contract_id == contract_id).all()],
+            "file_storage": [_row_to_dict(r) for r in db.query(FileStorage).filter(FileStorage.contract_id == contract_id).all()],
+        }
+
+        deleted_record = DeletedContract(
+            original_contract_id=contract_id,
+            contract_number=contract.contract_number,
+            client_name=client_name,
+            address=contract.address,
+            project_type=contract.project_type,
+            project_subtype=contract.project_subtype,
+            yandex_folder_path=contract.yandex_folder_path,
+            snapshot=snapshot_data,
+            deleted_by_id=current_user.id,
+        )
+        db.add(deleted_record)
+        db.flush()
+        # ==========================================
+
         # Удаляем папки на Яндекс.Диске (до удаления записей в БД)
         try:
             from yandex_disk_service import get_yandex_disk_service
