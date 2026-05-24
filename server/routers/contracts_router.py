@@ -24,6 +24,7 @@ from database import (
     CRMCard,
     Employee,
     FileStorage,
+    InternalChat,
     MessengerChat,
     Payment,
     ProjectFile,
@@ -401,6 +402,35 @@ async def delete_contract(contract_id: int, current_user: Employee = Depends(req
         raise HTTPException(status_code=409, detail=f"Нельзя удалить активный договор (статус: {contract.status}). Сначала переведите в архивный статус.")
 
     try:
+        # Удаляем папки на Яндекс.Диске (до удаления записей в БД)
+        try:
+            from yandex_disk_service import get_yandex_disk_service
+
+            yd = get_yandex_disk_service()
+            if yd and yd.token:
+                # Папки чатов сотрудников/клиентов (InternalChat) — удаляем до CASCADE-удаления
+                chats = (
+                    db.query(InternalChat)
+                    .filter((InternalChat.contract_id == contract_id) | (InternalChat.crm_card_id.in_(db.query(CRMCard.id).filter(CRMCard.contract_id == contract_id).scalar_subquery())))
+                    .all()
+                )
+                for chat in chats:
+                    if chat.yandex_folder_path:
+                        try:
+                            yd.delete_file(chat.yandex_folder_path.replace("disk:", ""), permanently=False)
+                        except Exception:
+                            pass
+
+                # Главная папка договора на ЯД
+                if contract.yandex_folder_path:
+                    try:
+                        yd.delete_file(contract.yandex_folder_path.replace("disk:", ""), permanently=False)
+                        logger.info(f"Папка ЯД удалена: {contract.yandex_folder_path}")
+                    except Exception as e:
+                        logger.warning(f"Не удалось удалить папку ЯД {contract.yandex_folder_path}: {e}")
+        except Exception as e:
+            logger.warning(f"Ошибка при удалении данных с Яндекс.Диска: {e}")
+
         # Удаляем timeline записи проекта
         db.query(ProjectTimelineEntry).filter(ProjectTimelineEntry.contract_id == contract_id).delete()
 
