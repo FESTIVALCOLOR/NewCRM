@@ -274,15 +274,27 @@ async def calculate_payment_amount(
             query = db.query(Rate).filter(Rate.project_type == "Индивидуальный", Rate.role == role)
 
             def _find_rate_for_subtype(q, sname, subtype):
-                """Ищет тариф с учётом подтипа и стадии. Приоритет: subtype+stage > subtype > stage > NULL."""
+                """Ищет тариф с учётом подтипа и стадии.
+                Приоритет: exact(subtype+stage) > partial(subtype+stage) > exact(subtype) > partial(subtype) > stage > NULL.
+                Частичное совпадение: тариф 'Эскизный' совпадает с договором 'Эскизный (с коллажами)'.
+                """
                 if subtype and sname:
+                    # Точное совпадение
                     r = q.filter(Rate.project_subtype == subtype, Rate.stage_name == sname).first()
                     if r:
                         return r
+                    # Частичное: subtype договора начинается с subtype тарифа
+                    for cand in q.filter(Rate.project_subtype.isnot(None), Rate.stage_name == sname).all():
+                        if cand.project_subtype and subtype.lower().startswith(cand.project_subtype.lower()):
+                            return cand
                 if subtype:
                     r = q.filter(Rate.project_subtype == subtype, Rate.stage_name.is_(None)).first()
                     if r:
                         return r
+                    # Частичное без стадии
+                    for cand in q.filter(Rate.project_subtype.isnot(None), Rate.stage_name.is_(None)).all():
+                        if cand.project_subtype and subtype.lower().startswith(cand.project_subtype.lower()):
+                            return cand
                 if sname:
                     r = q.filter(Rate.project_subtype.is_(None), Rate.stage_name == sname).first()
                     if r:
