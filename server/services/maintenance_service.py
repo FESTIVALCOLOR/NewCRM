@@ -19,6 +19,9 @@ logger = logging.getLogger(__name__)
 # Пороговый возраст файлов чата для удаления с ЯД — 6 месяцев
 _FILE_RETENTION_DAYS = 180
 
+# Срок хранения удалённых договоров в корзине — 30 дней
+_TRASH_CONTRACT_RETENTION_DAYS = 30
+
 
 def _get_yd():
     """Получить YandexDiskService с проверкой токена."""
@@ -163,14 +166,72 @@ def cleanup_deleted_chat_folders(db: Session, dry_run: bool = False) -> dict:
     return stats
 
 
+def cleanup_trash_contracts(db: Session, dry_run: bool = False) -> dict:
+    """
+    Безвозвратно удалить из корзины договоры старше 30 дней:
+    — запись DeletedContract из БД
+    — папку договора из корзины Яндекс.Диска (permanently=True)
+    """
+    from database import DeletedContract
+
+    # deleted_at хранится как UTC naive (datetime.utcnow), используем тот же тип
+    cutoff = datetime.utcnow() - timedelta(days=_TRASH_CONTRACT_RETENTION_DAYS)
+    old_records = db.query(DeletedContract).filter(DeletedContract.deleted_at < cutoff).all()
+
+    stats = {"checked": len(old_records), "deleted": 0, "errors": 0, "dry_run": dry_run}
+
+    if not old_records:
+        logger.info("[maintenance] Корзина договоров: нечего чистить")
+        return stats
+
+    yd = _get_yd() if not dry_run else None
+
+    for rec in old_records:
+        if dry_run:
+            logger.info(f"[maintenance DRY] Корзина договоров: удалить #{rec.id} ({rec.contract_number})")
+            stats["deleted"] += 1
+            continue
+
+        # Безвозвратное удаление папки ЯД из корзины
+        yd_path = rec.yandex_folder_path
+        if yd and yd_path:
+            try:
+                # Путь в корзине ЯД: "disk:/..." → после удаления хранится в trash:/...
+                trash_path = yd_path.replace("disk:", "trash:", 1) if yd_path.startswith("disk:") else yd_path
+                yd.delete_file(trash_path, permanently=True)
+                logger.info(f"[maintenance] ЯД корзина очищена: {trash_path}")
+            except Exception as e:
+                logger.warning(f"[maintenance] ЯД корзина, не удалось удалить {yd_path}: {e}")
+
+        try:
+            db.delete(rec)
+            stats["deleted"] += 1
+            logger.info(f"[maintenance] Корзина договоров: удалён #{rec.id} ({rec.contract_number})")
+        except Exception as e:
+            stats["errors"] += 1
+            logger.error(f"[maintenance] Ошибка удаления записи #{rec.id}: {e}")
+
+    if not dry_run:
+        try:
+            db.commit()
+        except Exception as e:
+            logger.error(f"[maintenance] Ошибка commit корзины договоров: {e}")
+            db.rollback()
+
+    logger.info(f"[maintenance] Корзина договоров итог: {stats}")
+    return stats
+
+
 def run_all_maintenance(db: Session, dry_run: bool = False) -> dict:
     """Запустить все задачи технического обслуживания."""
     logger.info("[maintenance] Запуск технического обслуживания чатов...")
     files_stats = cleanup_old_chat_files(db, dry_run=dry_run)
     folders_stats = cleanup_deleted_chat_folders(db, dry_run=dry_run)
+    trash_stats = cleanup_trash_contracts(db, dry_run=dry_run)
     return {
         "files": files_stats,
         "folders": folders_stats,
+        "trash_contracts": trash_stats,
     }
 
 
