@@ -12,7 +12,7 @@ from constants import ARCHIVE_STATUSES
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from permissions import require_permission
 from schemas import ContractCreate, ContractFilesUpdate, ContractResponse, ContractUpdate, StatusResponse
-from sqlalchemy import func, or_
+from sqlalchemy import func, nullslast, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -55,7 +55,7 @@ async def get_contracts(skip: int = 0, limit: int = 100, response: Response = No
     Заголовок X-Total-Count содержит общее количество записей."""
     # Считаем общее количество записей для пагинации
     total = db.query(func.count(Contract.id)).scalar()
-    contracts = db.query(Contract).offset(skip).limit(limit).all()
+    contracts = db.query(Contract).order_by(nullslast(Contract.contract_date.desc())).offset(skip).limit(limit).all()
     # Устанавливаем заголовок с общим количеством записей
     if response is not None:
         response.headers["X-Total-Count"] = str(total)

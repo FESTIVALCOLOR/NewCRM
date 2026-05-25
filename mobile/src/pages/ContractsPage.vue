@@ -187,7 +187,7 @@ const showForm = ref(false)
 const statusFilter = ref(null)
 const typeFilter = ref(null)
 const agentFilter = ref(null)
-const sortBy = ref(null)
+const sortBy = ref('date')
 const sortOptions = [
   { label: 'По дате', value: 'date' },
   { label: 'По типу агента', value: 'agent' },
