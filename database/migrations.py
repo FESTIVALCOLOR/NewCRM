@@ -149,6 +149,8 @@ class DatabaseMigrations:
 
             # ========== МИГРАЦИЯ: корзина договоров ==========
             self.create_deleted_contracts_table()
+            # ========== МИГРАЦИЯ: guest_push_subscription в chat members ==========
+            self.add_guest_push_subscription()
             # ==================================================
 
         except Exception as e:
@@ -2098,3 +2100,20 @@ class DatabaseMigrations:
             self.close()
         except Exception as e:
             print(f"[ERROR] Ошибка миграции deleted_contracts: {e}")
+
+    def add_guest_push_subscription(self):
+        """Миграция: guest_push_subscription для гостей клиентского чата"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM pragma_table_info('internal_chat_members') WHERE name='guest_push_subscription'")
+            if not cursor.fetchone():
+                print("[>] Выполняется миграция: guest_push_subscription в internal_chat_members...")
+                cursor.execute("ALTER TABLE internal_chat_members ADD COLUMN guest_push_subscription TEXT")
+                conn.commit()
+                print("[OK] Колонка guest_push_subscription добавлена")
+            else:
+                print("[OK] guest_push_subscription уже существует")
+            self.close()
+        except Exception as e:
+            print(f"[ERROR] Ошибка миграции guest_push_subscription: {e}")

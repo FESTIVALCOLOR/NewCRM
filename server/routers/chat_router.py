@@ -33,6 +33,7 @@ WebSocket:
   WS  /ws/client-chat/{access_token}                   — клиент
 """
 
+import asyncio
 from datetime import datetime, timedelta
 import logging
 import os
@@ -90,6 +91,7 @@ from services.chat_service import (
 from services.chat_service import (
     manager as ws_manager,
 )
+from services.notification_dispatcher import notify_chat_message
 from sqlalchemy.orm import Session
 
 from database import (
@@ -309,6 +311,8 @@ async def send_message(
             "message": _message_to_dict(msg),
         },
     )
+    preview = (data.content or "📎 Файл")[:100]
+    asyncio.create_task(notify_chat_message(chat_id, current_user.id, current_user.full_name, preview))
     return msg
 
 
@@ -725,6 +729,9 @@ async def upload_file(
             "message": _message_to_dict(msg),
         },
     )
+    type_label = {"image": "🖼 Изображение", "voice": "🎤 Голосовое"}.get(message_type, "📎 Файл")
+    file_preview = f"{type_label}: {safe_name}"[:100]
+    asyncio.create_task(notify_chat_message(chat_id, current_user.id, current_user.full_name, file_preview))
     return msg
 
 

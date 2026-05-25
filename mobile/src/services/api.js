@@ -546,3 +546,10 @@ export const deletedContractsApi = {
   restore: (id) => api.post(`/api/v1/admin/deleted-contracts/${id}/restore`),
   permanentDelete: (id) => api.delete(`/api/v1/admin/deleted-contracts/${id}`),
 }
+
+// Push-уведомления для гостей клиентского чата (без JWT)
+export const clientPushApi = {
+  getVapidKey: (token) => api.get(`/api/v1/client-chat/${token}/push/vapid-key`),
+  subscribe: (token, subscription) => api.post(`/api/v1/client-chat/${token}/push/subscribe`, subscription),
+  unsubscribe: (token) => api.post(`/api/v1/client-chat/${token}/push/unsubscribe`),
+}

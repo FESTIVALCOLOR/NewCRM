@@ -12,6 +12,7 @@
   WS   /api/v1/ws/client-chat/{access_token}    — клиент
 """
 
+import asyncio
 from datetime import datetime
 import logging
 import os
@@ -36,9 +37,10 @@ from services.chat_service import (
 from services.chat_service import (
     manager as ws_manager,
 )
+from services.notification_dispatcher import notify_client_chat_employees, notify_client_chat_guests
 from sqlalchemy.orm import Session
 
-from database import Employee, InternalChatMember, InternalChatMessage, get_db
+from database import Employee, InternalChat, InternalChatMember, InternalChatMessage, get_db
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -176,6 +178,8 @@ async def client_send_message(
             "message": _message_to_dict(msg),
         },
     )
+    preview = (data.content or "📎 Файл")[:100]
+    asyncio.create_task(notify_client_chat_employees(chat.id, guest.guest_name, preview))
     return _message_to_dict(msg)
 
 
@@ -323,6 +327,8 @@ async def client_upload_file(
             "message": _message_to_dict(msg),
         },
     )
+    type_label = {"image": "🖼 Изображение", "voice": "🎤 Голосовое"}.get(message_type, "📎 Файл")
+    asyncio.create_task(notify_client_chat_employees(chat.id, guest.guest_name, f"{type_label}: {safe_name}"[:100]))
     return _message_to_dict(msg)
 
 
@@ -409,6 +415,53 @@ async def client_react_to_message(
 
 
 # ==============================================================
+# Push-уведомления для гостей клиентского чата
+# ==============================================================
+
+
+@router.post("/client-chat/{token}/push/subscribe")
+async def client_push_subscribe(
+    token: str,
+    body: dict,
+    db: Session = Depends(get_db),
+):
+    """Сохранить Web Push подписку гостя."""
+    import json
+
+    guest = get_guest_by_token(db, token)
+    if not guest:
+        raise HTTPException(403, "Токен не найден")
+    guest.guest_push_subscription = json.dumps(body)
+    db.commit()
+    return {"status": "subscribed"}
+
+
+@router.post("/client-chat/{token}/push/unsubscribe")
+async def client_push_unsubscribe(
+    token: str,
+    db: Session = Depends(get_db),
+):
+    """Удалить Web Push подписку гостя."""
+    guest = get_guest_by_token(db, token)
+    if not guest:
+        raise HTTPException(403, "Токен не найден")
+    guest.guest_push_subscription = None
+    db.commit()
+    return {"status": "unsubscribed"}
+
+
+@router.get("/client-chat/{token}/push/vapid-key")
+def client_push_vapid_key(token: str, db: Session = Depends(get_db)):
+    """Получить VAPID public key для Web Push подписки гостя."""
+    from config import get_settings
+
+    chat = get_chat_by_token(db, token)
+    if not chat:
+        raise HTTPException(404, "Чат не найден")
+    return {"vapid_public_key": get_settings().vapid_public_key or ""}
+
+
+# ==============================================================
 # WebSocket — сотрудник
 # ==============================================================
 
@@ -484,6 +537,13 @@ async def ws_employee_chat(
                         "type": "new_message",
                         "message": _message_to_dict(msg),
                     },
+                )
+                asyncio.create_task(
+                    notify_client_chat_guests(
+                        chat_id,
+                        _get_employee_display_name(emp),
+                        (data.get("content", "") or "📎 Файл")[:100],
+                    )
                 )
 
             elif event_type == "typing_start":

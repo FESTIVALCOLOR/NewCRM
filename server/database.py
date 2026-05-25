@@ -1173,6 +1173,9 @@ class InternalChatMember(Base):
     # Последняя активность гостя (обновляется при WS-подключении и пинге)
     last_guest_activity = Column(DateTime, nullable=True)
 
+    # Web Push подписка гостя (JSON)
+    guest_push_subscription = Column(Text, nullable=True)
+
     joined_at = Column(DateTime, default=datetime.utcnow)
     is_active = Column(Boolean, default=True)
 

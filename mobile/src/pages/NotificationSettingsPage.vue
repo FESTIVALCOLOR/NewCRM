@@ -43,7 +43,7 @@
               </q-item-label>
             </q-item-section>
             <q-item-section side>
-              <q-toggle v-model="settings.push_enabled" color="positive" @update:model-value="save" />
+              <q-toggle v-model="settings.push_enabled" color="positive" @update:model-value="onPushToggle" />
             </q-item-section>
           </q-item>
         </q-list>
@@ -181,8 +181,15 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useQuasar } from 'quasar'
-import { notificationsApi } from '../services/api.js'
+import { notificationsApi, pushApi } from '../services/api.js'
 import { useAuthStore } from '../stores/auth.js'
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
+  const rawData = window.atob(base64)
+  return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)))
+}
 
 const $q = useQuasar()
 const auth = useAuthStore()
@@ -223,5 +230,47 @@ function save() {
       $q.notify({ type: 'negative', message: 'Ошибка сохранения настроек' })
     }
   }, 500)
+}
+
+async function onPushToggle(enabled) {
+  if (enabled) {
+    if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) {
+      $q.notify({ type: 'warning', message: 'Push-уведомления не поддерживаются в этом браузере' })
+      settings.value.push_enabled = false
+      return
+    }
+    const permission = await Notification.requestPermission()
+    if (permission !== 'granted') {
+      $q.notify({ type: 'warning', message: 'Разрешение на уведомления не выдано' })
+      settings.value.push_enabled = false
+      return
+    }
+    try {
+      const { data: vapidData } = await pushApi.getVapidKey()
+      const registration = await navigator.serviceWorker.ready
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidData.vapid_public_key),
+      })
+      await pushApi.subscribe(subscription.toJSON())
+      save()
+      $q.notify({ type: 'positive', message: 'Push-уведомления включены' })
+    } catch (e) {
+      console.error('Push subscribe error:', e)
+      $q.notify({ type: 'negative', message: 'Не удалось включить push-уведомления' })
+      settings.value.push_enabled = false
+    }
+  } else {
+    try {
+      const registration = await navigator.serviceWorker.ready
+      const subscription = await registration.pushManager.getSubscription()
+      if (subscription) await subscription.unsubscribe()
+      await pushApi.unsubscribe()
+    } catch (e) {
+      console.warn('Push unsubscribe error:', e)
+    }
+    save()
+    $q.notify({ type: 'info', message: 'Push-уведомления отключены' })
+  }
 }
 </script>

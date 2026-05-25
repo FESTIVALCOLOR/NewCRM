@@ -8,35 +8,41 @@ Notification Dispatcher — центральный диспетчер уведо
 - Фильтрацию по типу проекта (individual, template, supervision)
 - 4 правила дублирования уведомлений (docs/notifications-scripts-guide.md §5)
 """
+
+from datetime import datetime
 import logging
 import re
-from datetime import datetime
-from typing import Optional, List
-from sqlalchemy.orm import Session
+from typing import List, Optional
 
 from constants import (
-    POSITION_DAN, POSITION_SENIOR_MANAGER, POSITION_STUDIO_DIRECTOR,
-    POSITION_SDP, POSITION_GAP, POSITION_MANAGER,
-    ROLE_ADMIN, ROLE_DIRECTOR,
+    POSITION_DAN,
+    POSITION_GAP,
+    POSITION_MANAGER,
+    POSITION_SDP,
+    POSITION_SENIOR_MANAGER,
+    POSITION_STUDIO_DIRECTOR,
+    ROLE_ADMIN,
+    ROLE_DIRECTOR,
 )
+from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
 # Фразы-призывы к действию, убираемые из дублей
 _ACTION_PHRASES = [
-    r'Проверьте\.',
-    r'Вы — проверяющий\.',
-    r'Приступайте к работе\.',
-    r'Назначьте сотрудников[^.]*\.',
+    r"Проверьте\.",
+    r"Вы — проверяющий\.",
+    r"Приступайте к работе\.",
+    r"Назначьте сотрудников[^.]*\.",
 ]
-_ACTION_PATTERN = re.compile(r'\s*(?:' + '|'.join(_ACTION_PHRASES) + r')\s*', re.IGNORECASE)
+_ACTION_PATTERN = re.compile(r"\s*(?:" + "|".join(_ACTION_PHRASES) + r")\s*", re.IGNORECASE)
 
 
 def _strip_action_phrases(text: str) -> str:
     """Убрать призывы к действию из текста (для информационных дублей)."""
-    result = _ACTION_PATTERN.sub(' ', text).strip()
+    result = _ACTION_PATTERN.sub(" ", text).strip()
     # Убрать двойные пробелы
-    result = re.sub(r' {2,}', ' ', result)
+    result = re.sub(r" {2,}", " ", result)
     return result
 
 
@@ -68,7 +74,7 @@ async def dispatch_notification(
         card_id: ID CRM-карточки (для правил дублирования)
         is_duplicate: Это дублированное уведомление (предотвращение рекурсии)
     """
-    from database import Notification, NotificationSettings, Employee
+    from database import Employee, Notification, NotificationSettings
 
     try:
         # 0. Проверить что сотрудник активен (не уволен, не в резерве)
@@ -76,7 +82,7 @@ async def dispatch_notification(
         if not employee_check:
             logger.warning(f"dispatch_notification: сотрудник id={employee_id} не найден, пропуск")
             return
-        if getattr(employee_check, 'status', None) in ('уволен', 'в резерве'):
+        if getattr(employee_check, "status", None) in ("уволен", "в резерве"):
             logger.info(f"dispatch_notification: сотрудник id={employee_id} имеет статус '{employee_check.status}', пропуск")
             return
 
@@ -95,23 +101,20 @@ async def dispatch_notification(
         db.flush()
 
         # 2. Загрузить настройки уведомлений сотрудника
-        settings = db.query(NotificationSettings).filter_by(
-            employee_id=employee_id
-        ).first()
+        settings = db.query(NotificationSettings).filter_by(employee_id=employee_id).first()
 
         if not settings:
             # Роли, работающие с надзором, получают notify_supervision=True по умолчанию
             employee_obj = db.query(Employee).filter_by(id=employee_id).first()
             supervision_roles = {
-                POSITION_DAN, POSITION_SENIOR_MANAGER,
-                POSITION_STUDIO_DIRECTOR, ROLE_ADMIN, ROLE_DIRECTOR,
+                POSITION_DAN,
+                POSITION_SENIOR_MANAGER,
+                POSITION_STUDIO_DIRECTOR,
+                ROLE_ADMIN,
+                ROLE_DIRECTOR,
             }
-            is_senior_manager = bool(
-                employee_obj and employee_obj.position == POSITION_SENIOR_MANAGER
-            )
-            default_supervision = bool(
-                employee_obj and employee_obj.role in supervision_roles
-            )
+            is_senior_manager = bool(employee_obj and employee_obj.position == POSITION_SENIOR_MANAGER)
+            default_supervision = bool(employee_obj and employee_obj.role in supervision_roles)
             try:
                 settings = NotificationSettings(
                     employee_id=employee_id,
@@ -145,20 +148,18 @@ async def dispatch_notification(
                 )
                 db.add(notification)
                 db.flush()
-                settings = db.query(NotificationSettings).filter_by(
-                    employee_id=employee_id
-                ).first()
+                settings = db.query(NotificationSettings).filter_by(employee_id=employee_id).first()
                 if not settings:
                     db.commit()
                     return
 
         # 3. Проверить флаг типа события
         event_flag_map = {
-            'assigned': settings.notify_assigned,
-            'crm_stage_change': settings.notify_crm_stage,
-            'deadline': settings.notify_deadline,
-            'payment': settings.notify_payment,
-            'supervision': settings.notify_supervision,
+            "assigned": settings.notify_assigned,
+            "crm_stage_change": settings.notify_crm_stage,
+            "deadline": settings.notify_deadline,
+            "payment": settings.notify_payment,
+            "supervision": settings.notify_supervision,
         }
         if not event_flag_map.get(event_type, False):
             db.commit()
@@ -167,9 +168,9 @@ async def dispatch_notification(
         # 3.1 Проверить фильтр по типу проекта
         if project_type:
             project_type_flag_map = {
-                'individual': settings.notify_individual,
-                'template': settings.notify_template,
-                'supervision': settings.notify_supervision,
+                "individual": settings.notify_individual,
+                "template": settings.notify_template,
+                "supervision": settings.notify_supervision,
             }
             if not project_type_flag_map.get(project_type, True):
                 db.commit()
@@ -183,21 +184,19 @@ async def dispatch_notification(
 
         # N5: Для уведомлений о возврате на исправление — проверить notify_revision_info
         if is_revision_info:
-            if not getattr(settings, 'notify_revision_info', True):
+            if not getattr(settings, "notify_revision_info", True):
                 db.commit()
                 return
 
         # 3.3 Для уведомлений об оплатах — проверить право доступа
-        if event_type == 'payment':
+        if event_type == "payment":
             from permissions import check_permission
+
             employee_obj = db.query(Employee).filter_by(id=employee_id).first()
             if not employee_obj:
                 db.commit()
                 return
-            has_payment_access = (
-                check_permission(employee_obj, 'payments.create', db) or
-                check_permission(employee_obj, 'payments.update', db)
-            )
+            has_payment_access = check_permission(employee_obj, "payments.create", db) or check_permission(employee_obj, "payments.update", db)
             if not has_payment_access:
                 db.commit()
                 return
@@ -205,26 +204,23 @@ async def dispatch_notification(
         db.commit()
 
         # 4. Отправить через каналы в зависимости от настроек
-        channel = getattr(settings, 'notification_channel', 'telegram') or 'telegram'
+        channel = getattr(settings, "notification_channel", "telegram") or "telegram"
         employee = db.query(Employee).filter_by(id=employee_id).first()
 
         # Telegram
-        if channel in ('telegram', 'both') and settings.telegram_enabled:
+        if channel in ("telegram", "both") and settings.telegram_enabled:
             if employee and employee.telegram_user_id:
                 await _send_telegram(employee.telegram_user_id, title, message)
 
         # Web Push
-        if channel in ('push', 'both') and getattr(settings, 'push_enabled', False):
-            push_sub = getattr(settings, 'push_subscription', None)
+        if channel in ("push", "both") and getattr(settings, "push_enabled", False):
+            push_sub = getattr(settings, "push_subscription", None)
             if push_sub:
                 await _send_web_push(push_sub, title, message, related_entity_type, related_entity_id)
 
         # 5. Применить правила дублирования (только для основных уведомлений)
         if not is_duplicate and card_id:
-            await _apply_duplication_rules(
-                db, employee_id, event_type, title, message,
-                related_entity_type, related_entity_id, project_type, card_id
-            )
+            await _apply_duplication_rules(db, employee_id, event_type, title, message, related_entity_type, related_entity_id, project_type, card_id)
 
     except Exception as e:
         logger.error(f"Ошибка dispatch_notification для employee_id={employee_id}: {e}")
@@ -253,7 +249,7 @@ async def _apply_duplication_rules(
     Правило 3: Исправления исполнителям → Ст.менеджер (обрабатывается в crm_router)
     Правило 4: Шаблонные — Менеджер/ГАП → Ст.менеджер (без призывов)
     """
-    from database import Employee, CRMCard
+    from database import CRMCard, Employee
 
     try:
         card = db.query(CRMCard).filter(CRMCard.id == card_id).first()
@@ -269,24 +265,42 @@ async def _apply_duplication_rules(
         # Правило 1: Уведомления ст.менеджеру → дублируются руководителю студии + менеджеру
         if recipient.position == POSITION_SENIOR_MANAGER:
             # → Руководитель студии
-            director = db.query(Employee).filter(
-                Employee.position == POSITION_STUDIO_DIRECTOR,
-                Employee.status == 'активный',
-            ).first()
+            director = (
+                db.query(Employee)
+                .filter(
+                    Employee.position == POSITION_STUDIO_DIRECTOR,
+                    Employee.status == "активный",
+                )
+                .first()
+            )
             if director and director.id not in already_sent:
                 await dispatch_notification(
-                    db, director.id, event_type, title, message,
-                    related_entity_type, related_entity_id,
-                    project_type, card_id, is_duplicate=True,
+                    db,
+                    director.id,
+                    event_type,
+                    title,
+                    message,
+                    related_entity_type,
+                    related_entity_id,
+                    project_type,
+                    card_id,
+                    is_duplicate=True,
                 )
                 already_sent.add(director.id)
 
             # → Менеджер (если назначен на карточку)
             if card.manager_id and card.manager_id not in already_sent:
                 await dispatch_notification(
-                    db, card.manager_id, event_type, title, message,
-                    related_entity_type, related_entity_id,
-                    project_type, card_id, is_duplicate=True,
+                    db,
+                    card.manager_id,
+                    event_type,
+                    title,
+                    message,
+                    related_entity_type,
+                    related_entity_id,
+                    project_type,
+                    card_id,
+                    is_duplicate=True,
                 )
                 already_sent.add(card.manager_id)
 
@@ -295,20 +309,34 @@ async def _apply_duplication_rules(
             if card.senior_manager_id and card.senior_manager_id not in already_sent:
                 info_message = _strip_action_phrases(message)
                 await dispatch_notification(
-                    db, card.senior_manager_id, event_type, title, info_message,
-                    related_entity_type, related_entity_id,
-                    project_type, card_id, is_duplicate=True,
+                    db,
+                    card.senior_manager_id,
+                    event_type,
+                    title,
+                    info_message,
+                    related_entity_type,
+                    related_entity_id,
+                    project_type,
+                    card_id,
+                    is_duplicate=True,
                 )
                 already_sent.add(card.senior_manager_id)
 
         # Правило 4: Шаблонные — Менеджер/ГАП → дублируются ст.менеджеру (без призывов)
-        if project_type == 'template' and recipient.position in (POSITION_MANAGER, POSITION_GAP):
+        if project_type == "template" and recipient.position in (POSITION_MANAGER, POSITION_GAP):
             if card.senior_manager_id and card.senior_manager_id not in already_sent:
                 info_message = _strip_action_phrases(message)
                 await dispatch_notification(
-                    db, card.senior_manager_id, event_type, title, info_message,
-                    related_entity_type, related_entity_id,
-                    project_type, card_id, is_duplicate=True,
+                    db,
+                    card.senior_manager_id,
+                    event_type,
+                    title,
+                    info_message,
+                    related_entity_type,
+                    related_entity_id,
+                    project_type,
+                    card_id,
+                    is_duplicate=True,
                 )
                 already_sent.add(card.senior_manager_id)
 
@@ -322,11 +350,15 @@ async def _send_web_push(
     message: str,
     entity_type: str = None,
     entity_id: int = None,
+    url_override: str = None,
+    tag: str = None,
 ) -> None:
     """Отправить Web Push уведомление"""
     try:
         import json
+
         from config import get_settings
+
         _s = get_settings()
         VAPID_PRIVATE_KEY = _s.vapid_private_key
         VAPID_CLAIMS = {"sub": _s.vapid_claims_email}
@@ -334,24 +366,34 @@ async def _send_web_push(
             logger.debug("VAPID ключи не настроены, Web Push пропущен")
             return
         try:
-            from pywebpush import webpush, WebPushException
+            from pywebpush import WebPushException, webpush
         except ImportError:
             logger.warning("pywebpush не установлен, Web Push пропущен")
             return
 
         subscription = json.loads(push_subscription_json)
         # Формируем URL для перехода при клике
-        url = '/'
-        if entity_type == 'crm_card' and entity_id:
-            url = f'/crm/{entity_id}'
-        elif entity_type == 'supervision_card' and entity_id:
-            url = f'/supervision/{entity_id}'
+        if url_override:
+            url = url_override
+        elif entity_type == "crm_card" and entity_id:
+            url = f"/crm/{entity_id}"
+        elif entity_type == "supervision_card" and entity_id:
+            url = f"/supervision/{entity_id}"
+        elif entity_type == "chat" and entity_id:
+            url = f"/employee-chats/{entity_id}"
+        elif entity_type == "client_chat" and entity_id:
+            url = f"/client-chats/{entity_id}"
+        else:
+            url = "/"
 
-        payload = json.dumps({
-            "title": title,
-            "message": message,
-            "url": url,
-        })
+        payload = json.dumps(
+            {
+                "title": title,
+                "message": message,
+                "url": url,
+                "tag": tag or "crm-notification",
+            }
+        )
 
         webpush(
             subscription_info=subscription,
@@ -363,10 +405,135 @@ async def _send_web_push(
         logger.warning(f"Не удалось отправить Web Push: {e}")
 
 
+async def notify_chat_message(
+    chat_id: int,
+    sender_employee_id: int | None,
+    sender_name: str,
+    text_preview: str,
+) -> None:
+    """Push сотрудникам-участникам чата (кроме отправителя) при новом сообщении."""
+    try:
+        from database import InternalChatMember, NotificationSettings, SessionLocal
+
+        db = SessionLocal()
+        try:
+            members = (
+                db.query(InternalChatMember)
+                .filter(
+                    InternalChatMember.chat_id == chat_id,
+                    InternalChatMember.member_type == "employee",
+                    InternalChatMember.is_active == True,  # noqa: E712
+                    InternalChatMember.employee_id.isnot(None),
+                )
+                .all()
+            )
+            for m in members:
+                if m.employee_id == sender_employee_id:
+                    continue
+                s = db.query(NotificationSettings).filter(NotificationSettings.employee_id == m.employee_id).first()
+                if not s or not getattr(s, "push_enabled", False):
+                    continue
+                sub = getattr(s, "push_subscription", None)
+                if not sub:
+                    continue
+                await _send_web_push(
+                    sub,
+                    f"💬 {sender_name}",
+                    text_preview,
+                    entity_type="chat",
+                    entity_id=chat_id,
+                    tag=f"chat-{chat_id}",
+                )
+        finally:
+            db.close()
+    except Exception as e:
+        logger.warning(f"notify_chat_message error: {e}")
+
+
+async def notify_client_chat_employees(
+    chat_id: int,
+    sender_name: str,
+    text_preview: str,
+) -> None:
+    """Push сотрудникам клиентского чата когда клиент отправил сообщение."""
+    try:
+        from database import InternalChatMember, NotificationSettings, SessionLocal
+
+        db = SessionLocal()
+        try:
+            members = (
+                db.query(InternalChatMember)
+                .filter(
+                    InternalChatMember.chat_id == chat_id,
+                    InternalChatMember.member_type == "employee",
+                    InternalChatMember.is_active == True,  # noqa: E712
+                    InternalChatMember.employee_id.isnot(None),
+                )
+                .all()
+            )
+            for m in members:
+                s = db.query(NotificationSettings).filter(NotificationSettings.employee_id == m.employee_id).first()
+                if not s or not getattr(s, "push_enabled", False):
+                    continue
+                sub = getattr(s, "push_subscription", None)
+                if not sub:
+                    continue
+                await _send_web_push(
+                    sub,
+                    f"👤 {sender_name}",
+                    text_preview,
+                    entity_type="client_chat",
+                    entity_id=chat_id,
+                    tag=f"client-chat-{chat_id}",
+                )
+        finally:
+            db.close()
+    except Exception as e:
+        logger.warning(f"notify_client_chat_employees error: {e}")
+
+
+async def notify_client_chat_guests(
+    chat_id: int,
+    sender_name: str,
+    text_preview: str,
+) -> None:
+    """Push гостям клиентского чата когда сотрудник отправил сообщение."""
+    try:
+        from database import InternalChatMember, SessionLocal
+
+        db = SessionLocal()
+        try:
+            guests = (
+                db.query(InternalChatMember)
+                .filter(
+                    InternalChatMember.chat_id == chat_id,
+                    InternalChatMember.member_type == "client_guest",
+                    InternalChatMember.is_active == True,  # noqa: E712
+                    InternalChatMember.guest_push_subscription.isnot(None),
+                )
+                .all()
+            )
+            for g in guests:
+                if not g.guest_push_subscription:
+                    continue
+                await _send_web_push(
+                    g.guest_push_subscription,
+                    f"💬 {sender_name}",
+                    text_preview,
+                    url_override=f"/c/{g.guest_access_token}",
+                    tag=f"chat-{chat_id}",
+                )
+        finally:
+            db.close()
+    except Exception as e:
+        logger.warning(f"notify_client_chat_guests error: {e}")
+
+
 async def _send_telegram(telegram_user_id: int, title: str, message: str) -> None:
     """Отправить уведомление через Telegram Bot"""
     try:
         from telegram_service import get_telegram_service
+
         tg = get_telegram_service()
         if tg.bot_available:
             text = f"<b>{title}</b>\n{message}"

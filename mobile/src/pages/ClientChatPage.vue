@@ -582,6 +582,36 @@ import { useQuasar } from 'quasar'
 import { getPdfThumbnail } from 'src/composables/usePdfThumbnail'
 import axios from 'axios'
 import PwaInstallBanner from 'src/components/PwaInstallBanner.vue'
+import { clientPushApi } from 'src/services/api.js'
+
+function _urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
+  const rawData = window.atob(base64)
+  return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)))
+}
+
+async function _trySubscribeGuestPush(token) {
+  try {
+    if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) return
+    if (Notification.permission === 'denied') return
+    // Не спрашивать повторно если уже подписан
+    if (localStorage.getItem(`push_subscribed_${token}`)) return
+    const permission = await Notification.requestPermission()
+    if (permission !== 'granted') return
+    const { data } = await clientPushApi.getVapidKey(token)
+    if (!data.vapid_public_key) return
+    const registration = await navigator.serviceWorker.ready
+    const subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: _urlBase64ToUint8Array(data.vapid_public_key),
+    })
+    await clientPushApi.subscribe(token, subscription.toJSON())
+    localStorage.setItem(`push_subscribed_${token}`, '1')
+  } catch (e) {
+    console.warn('Guest push subscribe error:', e)
+  }
+}
 
 const route = useRoute()
 const router = useRouter()
@@ -1100,6 +1130,7 @@ onMounted(async () => {
   window.addEventListener('resize', recalcChatH)
   window.visualViewport?.addEventListener('resize', recalcChatH)
   await loadMessages()
+  if (memberToken) _trySubscribeGuestPush(activeToken)
   connectClient(activeToken, {
     onMessage: (msg) => {
       const exists = messages.value.some(m => m.id === msg.id)
