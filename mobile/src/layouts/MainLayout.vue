@@ -201,6 +201,8 @@
       </q-list>
     </q-drawer>
 
+    <PwaInstallBanner inline />
+
     <q-page-container>
       <router-view />
     </q-page-container>
@@ -481,6 +483,7 @@ import { useChatUnreadStore } from 'src/stores/chatUnread'
 import { usePermissionsStore } from 'src/stores/permissions'
 import { useWebSocket } from 'src/composables/useWebSocket'
 import { pendingCount as getOfflinePendingCount, getPending, syncAll as syncOfflineAll, clearAll as clearOfflineAll } from 'src/services/offlineQueue'
+import PwaInstallBanner from 'src/components/PwaInstallBanner.vue'
 
 const $q = useQuasar()
 const route = useRoute()

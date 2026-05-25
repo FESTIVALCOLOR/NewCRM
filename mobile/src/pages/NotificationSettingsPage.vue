@@ -46,6 +46,22 @@
               <q-toggle v-model="settings.push_enabled" color="positive" @update:model-value="onPushToggle" />
             </q-item-section>
           </q-item>
+          <!-- iOS: подсказка добавить на экран «Домой» -->
+          <q-item v-if="isIosSafari" style="background: #fff8e1; border-radius: 0 0 8px 8px">
+            <q-item-section avatar>
+              <q-icon name="ios_share" color="orange-8" size="22px" />
+            </q-item-section>
+            <q-item-section>
+              <q-item-label style="font-size: 12px; font-weight: 600; color: #e65100">
+                Для уведомлений на iPhone/iPad
+              </q-item-label>
+              <q-item-label caption style="color: #bf360c; line-height: 1.4">
+                Нажмите
+                <q-icon name="ios_share" size="12px" color="blue-7" style="vertical-align: middle" />
+                в Safari → «На экран "Домой"» — затем открывайте приложение оттуда
+              </q-item-label>
+            </q-item-section>
+          </q-item>
         </q-list>
       </q-card>
 
@@ -179,10 +195,15 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useQuasar } from 'quasar'
 import { notificationsApi, pushApi } from '../services/api.js'
 import { useAuthStore } from '../stores/auth.js'
+
+// iOS Safari вне standalone — push требует установки на экран «Домой»
+const isIosSafari = computed(
+  () => /iPhone|iPad|iPod/i.test(navigator.userAgent) && !window.navigator.standalone,
+)
 
 function urlBase64ToUint8Array(base64String) {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4)

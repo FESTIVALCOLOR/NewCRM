@@ -12,7 +12,7 @@
           <div v-if="isIos" class="text-caption" style="margin-top: 2px; line-height: 1.4; color: #555">
             В Safari нажмите
             <q-icon name="ios_share" size="13px" color="blue-7" style="vertical-align: middle" />
-            → «На экран "Домой"»
+            → «На экран "Домой"» — нужно для push-уведомлений
           </div>
           <!-- Android/Chrome: одна кнопка -->
           <div v-else class="text-caption" style="margin-top: 2px; color: #777">
