@@ -418,6 +418,8 @@ const svDragCard = ref(null)
 const svDragOverCol = ref(null)
 let _svDragGhost = null
 let _svDragMoved = false
+let _svDragReady = false   // true после 150ms удержания — только тогда разрешён drag
+let _svDragTimer = null
 let _svDragStartX = 0
 let _svDragStartY = 0
 let _svDragOffsetX = 0
@@ -430,6 +432,7 @@ function onSvDragStart(e, card) {
   if (e.pointerType === 'mouse' && e.button !== 0) return
   svDragCard.value = card
   _svDragMoved = false
+  _svDragReady = false
   _svDragStartX = e.clientX
   _svDragStartY = e.clientY
   _svDragEl = e.currentTarget
@@ -438,10 +441,15 @@ function onSvDragStart(e, card) {
   const rect = e.currentTarget.getBoundingClientRect()
   _svDragOffsetX = e.clientX - rect.left
   _svDragOffsetY = e.clientY - rect.top
+  // Задержка 150ms — за это время успевают сработать обычные клики по кнопкам
+  _svDragTimer = setTimeout(() => {
+    if (svDragCard.value) _svDragReady = true
+  }, 150)
 }
 
 function onSvDragMove(e) {
   if (!svDragCard.value || e.pointerId !== _svDragPointerId) return
+  if (!_svDragReady) return  // ждём истечения задержки
   const dx = e.clientX - _svDragStartX
   const dy = e.clientY - _svDragStartY
   const threshold = _svDragPointerType === 'touch' ? 15 : 8
@@ -465,6 +473,9 @@ function onSvDragMove(e) {
 }
 
 async function onSvDragEnd() {
+  clearTimeout(_svDragTimer)
+  _svDragTimer = null
+  _svDragReady = false
   if (!svDragCard.value) return
   const targetCol = svDragOverCol.value
   if (_svDragGhost) { _svDragGhost.remove(); _svDragGhost = null }
@@ -530,10 +541,6 @@ onMounted(() => { loadCards(); if (can('supervision.view_archive')) loadArchiveC
 /* Drag-and-drop (ландшафт) */
 .drag-card-wrapper {
   touch-action: none;
-  cursor: grab;
-}
-.drag-card-wrapper:active {
-  cursor: grabbing;
 }
 .drag-source > * {
   opacity: 0.35;

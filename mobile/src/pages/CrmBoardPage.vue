@@ -488,6 +488,8 @@ const dragCard = ref(null)
 const dragOverCol = ref(null)
 let _dragGhost = null
 let _dragMoved = false
+let _dragReady = false   // true после 150ms удержания — только тогда разрешён drag
+let _dragTimer = null
 let _dragStartX = 0
 let _dragStartY = 0
 let _dragOffsetX = 0
@@ -500,6 +502,7 @@ function onDragStart(e, card) {
   if (e.pointerType === 'mouse' && e.button !== 0) return
   dragCard.value = card
   _dragMoved = false
+  _dragReady = false
   _dragStartX = e.clientX
   _dragStartY = e.clientY
   _dragEl = e.currentTarget
@@ -508,10 +511,15 @@ function onDragStart(e, card) {
   const rect = e.currentTarget.getBoundingClientRect()
   _dragOffsetX = e.clientX - rect.left
   _dragOffsetY = e.clientY - rect.top
+  // Задержка 150ms — за это время успевают сработать обычные клики по кнопкам
+  _dragTimer = setTimeout(() => {
+    if (dragCard.value) _dragReady = true
+  }, 150)
 }
 
 function onDragMove(e) {
   if (!dragCard.value || e.pointerId !== _dragPointerId) return
+  if (!_dragReady) return  // ждём истечения задержки
   const dx = e.clientX - _dragStartX
   const dy = e.clientY - _dragStartY
   const threshold = _dragPointerType === 'touch' ? 15 : 8
@@ -535,6 +543,9 @@ function onDragMove(e) {
 }
 
 async function onDragEnd() {
+  clearTimeout(_dragTimer)
+  _dragTimer = null
+  _dragReady = false
   if (!dragCard.value) return
   const targetCol = dragOverCol.value
   if (_dragGhost) { _dragGhost.remove(); _dragGhost = null }
@@ -542,7 +553,7 @@ async function onDragEnd() {
   const card = dragCard.value
   dragCard.value = null
   if (!(_dragMoved && targetCol && targetCol !== card.column_name)) {
-    _dragMoved = false // нет реального перемещения — клик должен сработать
+    _dragMoved = false
     return
   }
   if (!can('crm_cards.move')) { _dragMoved = false; return }
@@ -1217,10 +1228,6 @@ onMounted(async () => {
 /* Drag-and-drop (ландшафт) */
 .drag-card-wrapper {
   touch-action: none;
-  cursor: grab;
-}
-.drag-card-wrapper:active {
-  cursor: grabbing;
 }
 .drag-source > * {
   opacity: 0.35;
