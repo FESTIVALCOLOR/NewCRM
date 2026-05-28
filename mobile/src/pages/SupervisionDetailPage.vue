@@ -40,6 +40,21 @@
           </div>
           <!-- Статус ДАН убран — функционал завершения через кнопку "Завершить стадию" -->
         </q-card-section>
+        <!-- Прогресс закупок -->
+        <q-card-section v-if="timeline.length > 0" class="q-pt-none q-pb-sm">
+          <div class="row items-center q-mb-xs">
+            <span class="text-caption" style="color: #888">Закупки: {{ svStageProgress.done }}/{{ svStageProgress.total }} завершено</span>
+            <q-space />
+            <span class="text-caption text-weight-bold" style="color: #333">{{ svStageProgress.percent }}%</span>
+          </div>
+          <q-linear-progress
+            :value="svStageProgress.percent / 100"
+            color="positive"
+            track-color="grey-3"
+            size="8px"
+            style="border-radius: 4px"
+          />
+        </q-card-section>
       </q-card>
 
       <!-- Вкладки (как CrmCardPage) -->
@@ -770,8 +785,8 @@
                 Оплаты надзора
               </div>
             </q-card-section>
-            <q-list v-if="svPayments.length > 0" dense separator>
-              <q-item v-for="p in svPayments" :key="p.id" :style="p.is_paid ? { background: '#E8F5E9' } : {}">
+            <q-list v-if="filteredSvPayments.length > 0" dense separator>
+              <q-item v-for="p in filteredSvPayments" :key="p.id" :style="p.is_paid ? { background: '#E8F5E9' } : {}">
                 <q-item-section>
                   <q-item-label style="font-size: 12px">
                     {{ p.employee_name || 'Не указан' }}
@@ -813,11 +828,11 @@
                 </q-item-section>
               </q-item>
             </q-list>
-            <div v-if="svPayments.length > 0" class="row items-center q-px-md q-py-xs" style="background: #F5F5F5; border-top: 1px solid #E0E0E0">
+            <div v-if="filteredSvPayments.length > 0" class="row items-center q-px-md q-py-xs" style="background: #F5F5F5; border-top: 1px solid #E0E0E0">
               <span style="font-size: 12px; font-weight: bold; color: #333; flex: 1">Итого</span>
-              <span style="font-size: 13px; font-weight: bold; color: #333">{{ formatMoney(svPayments.reduce((s, p) => s + (p.final_amount || p.amount || 0), 0)) }}</span>
+              <span style="font-size: 13px; font-weight: bold; color: #333">{{ formatMoney(filteredSvPayments.reduce((s, p) => s + (p.final_amount || p.amount || 0), 0)) }}</span>
             </div>
-            <q-card-section v-if="svPayments.length === 0" class="text-center" style="color: #999; font-size: 12px">
+            <q-card-section v-if="filteredSvPayments.length === 0" class="text-center" style="color: #999; font-size: 12px">
               Нет оплат
             </q-card-section>
           </q-card>
@@ -1668,6 +1683,29 @@ const addSvMemberLoading = ref(false)
 // ДАН ли текущий пользователь
 const isDan = computed(() => {
   return card.value && card.value.dan_id === authStore.user?.id
+})
+
+// Исполнитель надзора — видит только свои выплаты (нет supervision.payments)
+const svIsExecutor = computed(() => {
+  const pos = authStore.user?.position || ''
+  const secPos = authStore.user?.secondary_position || ''
+  const execPositions = ['Дизайнер', 'Чертёжник', 'Замерщик', 'Дизайнер авторского надзора']
+  return execPositions.some(p => pos === p || secPos === p) && !can('supervision.payments')
+})
+
+// Выплаты, видимые текущему пользователю
+const filteredSvPayments = computed(() => {
+  if (!svIsExecutor.value) return svPayments.value
+  return svPayments.value.filter(p => Number(p.employee_id) === Number(authStore.user?.id))
+})
+
+// Прогресс закупок (Закуплено / Доставлено = завершённые)
+const svStageProgress = computed(() => {
+  const entries = timeline.value
+  if (!entries.length) return { done: 0, total: defaultStages.length, percent: 0 }
+  const done = entries.filter(e => e.status === 'Закуплено' || e.status === 'Доставлено').length
+  const total = entries.length
+  return { done, total, percent: Math.round(done / total * 100) }
 })
 
 // Голосовые заметки — фильтрация из истории

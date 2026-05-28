@@ -1002,7 +1002,7 @@
           </q-card>
 
           <!-- Итого -->
-          <q-card v-if="cardPayments.length > 0" class="is-card" style="border-left: 3px solid #ffd93c">
+          <q-card v-if="paymentGroups.length > 0" class="is-card" style="border-left: 3px solid #ffd93c">
             <q-card-section class="q-pa-md">
               <div class="row items-center justify-between" style="flex-wrap: wrap; gap: 4px">
                 <div class="text-subtitle2 text-weight-bold" style="color: #333">
@@ -1031,7 +1031,7 @@
             </q-card-section>
           </q-card>
 
-          <q-card-section v-if="cardPayments.length === 0" class="text-center" style="color: #999; padding: 24px">
+          <q-card-section v-if="paymentGroups.length === 0" class="text-center" style="color: #999; padding: 24px">
             <q-icon name="payments" size="32px" color="grey-4" class="q-mb-sm" /><div>Нет платежей</div>
           </q-card-section>
         </q-tab-panel>
@@ -2148,17 +2148,25 @@ const startTooltip = computed(() => {
   return `Дата договора: ${fmt(cd?.contract_date)}\nДата замера: ${fmt(c?.survey_date || cd?.measurement_date)}\nДата тех. задания: ${fmt(c?.tech_task_date || cd?.tech_task_date)}\nДата аванса: ${fmt(cd?.advance_payment_paid_date)}`
 })
 
-// Оплаты группами по роли
+// Оплаты группами по роли (исполнитель видит только свои)
 const paymentGroups = computed(() => {
+  const list = isExecutor.value
+    ? cardPayments.value.filter(p => Number(p.employee_id) === Number(authStore.user?.id))
+    : cardPayments.value
   const map = {}
-  for (const p of cardPayments.value) {
+  for (const p of list) {
     const role = p.role || p.stage_name || 'Прочее'
     if (!map[role]) map[role] = { role, items: [] }
     map[role].items.push(p)
   }
   return Object.values(map)
 })
-const paymentTotal = computed(() => cardPayments.value.reduce((sum, p) => sum + (p.final_amount || p.amount || 0), 0))
+const paymentTotal = computed(() => {
+  const list = isExecutor.value
+    ? cardPayments.value.filter(p => Number(p.employee_id) === Number(authStore.user?.id))
+    : cardPayments.value
+  return list.reduce((sum, p) => sum + (p.final_amount || p.amount || 0), 0)
+})
 
 function paymentRowStyle(p) {
   if (p.is_paid || p.payment_status === 'paid') return { background: '#E8F5E9' }
@@ -2322,6 +2330,12 @@ const substepProgress = computed(() => {
     e.executor_role !== 'header' && e.stage_code,
   )
 
+  // Если какой-либо stage_group имеет substage_group записи — плоские записи того же
+  // stage_group пропускаем (иначе появляется лишний шаг, напр. "2" перед "2.1" у Эскизного)
+  const stageGroupsWithSubstages = new Set(
+    stageEntries.filter(e => e.substage_group).map(e => e.stage_group).filter(Boolean),
+  )
+
   // Группируем: substage_group для иерархических стадий (1.x, 2.x),
   // stage_group для плоских (STAGE3 инд., STAGE2/3 шабл. где substage_group = null)
   const groups = []
@@ -2329,6 +2343,8 @@ const substepProgress = computed(() => {
   const groupDone = {}
 
   for (const e of stageEntries) {
+    // Пропускаем плоскую запись если её stage_group уже представлен подэтапами
+    if (!e.substage_group && stageGroupsWithSubstages.has(e.stage_group)) continue
     const group = e.substage_group || e.stage_group
     if (!group) continue
     if (groupDone[group] === undefined) groupDone[group] = true
