@@ -494,6 +494,7 @@ let _dragOffsetX = 0
 let _dragOffsetY = 0
 let _dragEl = null
 let _dragPointerId = null
+let _dragPointerType = ''
 
 function onDragStart(e, card) {
   if (e.pointerType === 'mouse' && e.button !== 0) return
@@ -503,6 +504,7 @@ function onDragStart(e, card) {
   _dragStartY = e.clientY
   _dragEl = e.currentTarget
   _dragPointerId = e.pointerId
+  _dragPointerType = e.pointerType
   const rect = e.currentTarget.getBoundingClientRect()
   _dragOffsetX = e.clientX - rect.left
   _dragOffsetY = e.clientY - rect.top
@@ -512,7 +514,8 @@ function onDragMove(e) {
   if (!dragCard.value || e.pointerId !== _dragPointerId) return
   const dx = e.clientX - _dragStartX
   const dy = e.clientY - _dragStartY
-  if (!_dragMoved && Math.hypot(dx, dy) < 8) return
+  const threshold = _dragPointerType === 'touch' ? 15 : 8
+  if (!_dragMoved && Math.hypot(dx, dy) < threshold) return
   if (!_dragMoved) {
     _dragMoved = true
     try { _dragEl?.setPointerCapture(_dragPointerId) } catch {}
@@ -538,8 +541,12 @@ async function onDragEnd() {
   dragOverCol.value = null
   const card = dragCard.value
   dragCard.value = null
-  if (_dragMoved && targetCol && targetCol !== card.column_name) {
-    if (!can('crm_cards.move')) return
+  if (!(_dragMoved && targetCol && targetCol !== card.column_name)) {
+    _dragMoved = false // нет реального перемещения — клик должен сработать
+    return
+  }
+  if (!can('crm_cards.move')) { _dragMoved = false; return }
+  {
     moveCard.value = card
     moveStep.value = 1
     moveExecutorId.value = null

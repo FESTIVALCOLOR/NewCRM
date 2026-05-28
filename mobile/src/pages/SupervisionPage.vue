@@ -424,6 +424,7 @@ let _svDragOffsetX = 0
 let _svDragOffsetY = 0
 let _svDragEl = null
 let _svDragPointerId = null
+let _svDragPointerType = ''
 
 function onSvDragStart(e, card) {
   if (e.pointerType === 'mouse' && e.button !== 0) return
@@ -433,6 +434,7 @@ function onSvDragStart(e, card) {
   _svDragStartY = e.clientY
   _svDragEl = e.currentTarget
   _svDragPointerId = e.pointerId
+  _svDragPointerType = e.pointerType
   const rect = e.currentTarget.getBoundingClientRect()
   _svDragOffsetX = e.clientX - rect.left
   _svDragOffsetY = e.clientY - rect.top
@@ -442,7 +444,8 @@ function onSvDragMove(e) {
   if (!svDragCard.value || e.pointerId !== _svDragPointerId) return
   const dx = e.clientX - _svDragStartX
   const dy = e.clientY - _svDragStartY
-  if (!_svDragMoved && Math.hypot(dx, dy) < 8) return
+  const threshold = _svDragPointerType === 'touch' ? 15 : 8
+  if (!_svDragMoved && Math.hypot(dx, dy) < threshold) return
   if (!_svDragMoved) {
     _svDragMoved = true
     try { _svDragEl?.setPointerCapture(_svDragPointerId) } catch {}
@@ -468,11 +471,13 @@ async function onSvDragEnd() {
   svDragOverCol.value = null
   const card = svDragCard.value
   svDragCard.value = null
-  if (_svDragMoved && targetCol && targetCol !== card.column_name) {
-    if (!can('supervision.move')) return
-    moveCard.value = card
-    await doMove(targetCol)
+  if (!(_svDragMoved && targetCol && targetCol !== card.column_name)) {
+    _svDragMoved = false // нет реального перемещения — клик должен сработать
+    return
   }
+  if (!can('supervision.move')) { _svDragMoved = false; return }
+  moveCard.value = card
+  await doMove(targetCol)
 }
 
 function suppressSvAfterDrag(e) {
