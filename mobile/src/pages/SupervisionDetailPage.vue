@@ -2880,19 +2880,30 @@ async function saveMonthlyRate() {
       city: null,
       start_date: today,
     })
-    // Сохраняем мин. выездов в месяц на карточке (shared для всех ролей)
-    const newMinVisits = minVisitsInput.value ? parseInt(minVisitsInput.value) : null
-    if (newMinVisits !== (card.value?.min_visits_per_month ?? null)) {
-      await supervisionApi.updateCard(cardId, { min_visits_per_month: newMinVisits })
-      card.value = { ...card.value, min_visits_per_month: newMinVisits }
-    }
-    $q.notify({ type: 'positive', message: `Ежемесячная ставка ${monthlyRateAmount.value} ₽ установлена` })
-    showMonthlyRateDialog.value = false
-    const { data } = await supervisionApi.getMonthlyAssignments(cardId)
-    monthlyAssignments.value = data || []
   } catch {
     $q.notify({ type: 'negative', message: 'Ошибка установки ставки' })
+    return
   }
+  // Сохраняем мин. выездов в месяц на карточке — в отдельном try, чтобы не блокировать ставку
+  const newMinVisits = minVisitsInput.value ? parseInt(minVisitsInput.value) : null
+  if (newMinVisits !== (card.value?.min_visits_per_month ?? null)) {
+    try {
+      await supervisionApi.updateCard(cardId, { min_visits_per_month: newMinVisits })
+      card.value = { ...card.value, min_visits_per_month: newMinVisits }
+    } catch {
+      // Не критично — ставка уже сохранена
+    }
+  }
+  $q.notify({ type: 'positive', message: `Ежемесячная ставка ${monthlyRateAmount.value} ₽ установлена` })
+  showMonthlyRateDialog.value = false
+  const { data } = await supervisionApi.getMonthlyAssignments(cardId)
+  monthlyAssignments.value = data || []
+  // Перезагружаем выплаты чтобы сразу отобразить новую
+  try {
+    const { api: ax } = await import('src/boot/axios')
+    const { data: payments } = await ax.get(`/api/v1/payments/by-supervision-card/${cardId}`)
+    svPayments.value = payments || []
+  } catch {}
 }
 
 async function deactivateMonthlyRate() {

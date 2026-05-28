@@ -323,6 +323,7 @@ async def get_supervision_card(card_id: int, current_user: Employee = Depends(ge
             "agent_type": contract.agent_type if contract else None,
             "project_type": contract.project_type if contract else None,
             "project_subtype": contract.project_subtype if contract else None,
+            "min_visits_per_month": card.min_visits_per_month,
             "created_at": card.created_at.isoformat() if card.created_at else None,
             "updated_at": card.updated_at.isoformat() if card.updated_at else None,
         }
@@ -459,6 +460,7 @@ async def update_supervision_card(card_id: int, updates: SupervisionCardUpdate, 
             "pause_reason": card.pause_reason,
             "paused_at": card.paused_at.isoformat() if card.paused_at else None,
             "total_pause_days": card.total_pause_days or 0,
+            "min_visits_per_month": card.min_visits_per_month,
         }
 
     except HTTPException:
