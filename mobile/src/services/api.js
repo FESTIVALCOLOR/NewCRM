@@ -386,6 +386,9 @@ export const supervisionApi = {
   getVisits: (cardId) =>
     api.get(`/api/v1/supervision-visits/${cardId}/visits`),
 
+  getVisitsSummary: (cardId) =>
+    api.get(`/api/v1/supervision-visits/${cardId}/visits/summary`),
+
   getHistory: (cardId) =>
     api.get(`/api/v1/supervision/cards/${cardId}/history`),
 

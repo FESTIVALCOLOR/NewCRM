@@ -606,6 +606,7 @@ class SupervisionCard(Base):
     pause_reason = Column(Text)
     paused_at = Column(DateTime)
     total_pause_days = Column(Integer, default=0)
+    min_visits_per_month = Column(Integer, nullable=True)  # Минимальное количество выездов в месяц
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -710,6 +711,7 @@ class SupervisionVisit(Base):
     notes = Column(Text)
     actual_date = Column(String(30), nullable=True)  # Фактическая дата выезда
     visit_type = Column(String(50), default="На объект")  # Тип: 'На объект' / 'К поставщику'
+    is_additional = Column(Boolean, default=False)  # Дополнительный выезд (сверх нормы)
     sort_order = Column(Integer, default=0)
     visit_yandex_folder = Column(String(500), nullable=True)  # Путь к папке выезда на ЯД
     created_at = Column(DateTime, default=datetime.utcnow)

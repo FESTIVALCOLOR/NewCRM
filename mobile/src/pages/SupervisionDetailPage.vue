@@ -55,6 +55,33 @@
             style="border-radius: 4px"
           />
         </q-card-section>
+        <!-- Прогресс выездов текущего месяца -->
+        <q-card-section v-if="visitProgress" class="q-pt-none q-pb-sm">
+          <div class="row items-center q-mb-xs">
+            <span class="text-caption" style="color: #888">
+              Выезды (месяц): {{ visitProgress.regular }}/{{ visitProgress.minVisits }}
+              <span v-if="visitProgress.additional > 0" style="color: #e65100"> + {{ visitProgress.additional }} доп.</span>
+            </span>
+            <q-space />
+            <span
+              class="text-caption text-weight-bold"
+              :style="{ color: visitProgress.isOver ? '#e65100' : '#2e7d32' }"
+            >
+              {{ visitProgress.isOver ? '+' + visitProgress.overflow + ' сверх нормы' : Math.round(visitProgress.percent * 100) + '%' }}
+            </span>
+          </div>
+          <q-linear-progress
+            :value="visitProgress.percent"
+            :color="visitProgress.isOver ? 'orange' : 'positive'"
+            track-color="grey-3"
+            size="8px"
+            style="border-radius: 4px; cursor: pointer"
+            @click="showVisitStatsDialog = true"
+          />
+          <div class="text-caption q-mt-xs" style="color: #aaa">
+            Нажмите для статистики по месяцам
+          </div>
+        </q-card-section>
       </q-card>
 
       <!-- Вкладки (как CrmCardPage) -->
@@ -532,6 +559,13 @@
                 <q-card-section class="q-pa-sm">
                   <div class="row items-center q-mb-xs">
                     <q-badge :color="visit.visit_type === 'К поставщику' ? 'blue' : 'green'" :label="visit.visit_type || 'На объект'" dense class="q-mr-xs" />
+                    <q-badge
+                      v-if="visit.is_additional"
+                      color="orange"
+                      label="доп."
+                      dense
+                      class="q-mr-xs"
+                    />
                     <span class="text-caption text-weight-bold" style="color: #333">{{ formatDate(visit.visit_date) }}</span>
                     <span v-if="visit.actual_date" class="text-caption q-ml-sm" style="color: #27AE60">Факт: {{ formatDate(visit.actual_date) }}</span>
                   </div>
@@ -1140,6 +1174,15 @@
             outlined
             dense
           />
+          <q-input
+            v-model.number="minVisitsInput"
+            label="Мин. выездов в месяц"
+            type="number"
+            outlined
+            dense
+            clearable
+            hint="Для ДАН и ст. менеджера вместе"
+          />
         </q-card-section>
         <q-card-actions align="right">
           <q-btn
@@ -1160,6 +1203,81 @@
             @click="saveMonthlyRate"
           />
         </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- Диалог статистики выездов по месяцам -->
+    <q-dialog v-model="showVisitStatsDialog">
+      <q-card style="min-width: 340px; max-width: 480px; border-radius: 12px">
+        <q-card-section class="row items-center q-pb-sm">
+          <div>
+            <div class="text-subtitle2 text-weight-bold">
+              Статистика выездов
+            </div>
+            <div class="text-caption" style="color: #888">
+              Норма: {{ card?.min_visits_per_month ?? '—' }} выездов/мес.
+            </div>
+          </div>
+          <q-space />
+          <q-btn
+            flat
+            round
+            dense
+            icon="close"
+            @click="showVisitStatsDialog = false"
+          />
+        </q-card-section>
+        <q-separator />
+        <q-card-section class="q-pt-sm q-pb-md">
+          <div v-if="visitStatsByMonth.length === 0" class="text-caption text-center" style="color: #bbb; padding: 16px 0">
+            Выездов пока нет
+          </div>
+          <div v-for="row in visitStatsByMonth" :key="row.ym" class="q-mb-sm">
+            <div class="row items-center q-mb-xs">
+              <span class="text-caption text-weight-medium" style="flex: 1">{{ row.label }}</span>
+              <q-chip
+                v-if="row.minVisits && row.isOver"
+                dense
+                color="orange-1"
+                text-color="orange-9"
+                size="xs"
+                icon="trending_up"
+              >
+                +{{ row.regular - row.minVisits }} сверх
+              </q-chip>
+              <q-chip
+                v-else-if="row.minVisits && row.isUnder"
+                dense
+                color="red-1"
+                text-color="red-8"
+                size="xs"
+                icon="trending_down"
+              >
+                {{ row.regular }}/{{ row.minVisits }}
+              </q-chip>
+              <q-chip
+                v-else-if="row.minVisits"
+                dense
+                color="green-1"
+                text-color="green-8"
+                size="xs"
+                icon="check"
+              >
+                в норме
+              </q-chip>
+            </div>
+            <div class="row q-gutter-x-sm" style="font-size: 12px; color: #555">
+              <span>Плановых: <b>{{ row.regular }}</b></span>
+              <span v-if="row.additional > 0">Доп.: <b style="color: #e65100">{{ row.additional }}</b></span>
+              <span>Итого: <b>{{ row.total }}</b></span>
+            </div>
+          </div>
+          <q-separator v-if="visitStatsByMonth.length > 0" class="q-my-sm" />
+          <div v-if="visitStatsByMonth.length > 0" class="row q-gutter-x-md" style="font-size: 12px; color: #333">
+            <span>Всего плановых: <b>{{ visitStatsByMonth.reduce((s, r) => s + r.regular, 0) }}</b></span>
+            <span>Всего доп.: <b style="color: #e65100">{{ visitStatsByMonth.reduce((s, r) => s + r.additional, 0) }}</b></span>
+          </div>
+        </q-card-section>
       </q-card>
     </q-dialog>
 
@@ -1616,7 +1734,9 @@ const showReassignSM = ref(false)
 const showMonthlyRateDialog = ref(false)
 const monthlyRateTarget = ref({ role: '', employee_id: null, employee_name: '' })
 const monthlyRateAmount = ref(null)
+const minVisitsInput = ref(null)
 const monthlyAssignments = ref([])
+const showVisitStatsDialog = ref(false)
 const activeMonthlyAssignment = computed(() =>
   monthlyAssignments.value.find(a => a.role === monthlyRateTarget.value.role) || null,
 )
@@ -1706,6 +1826,45 @@ const svStageProgress = computed(() => {
   const done = entries.filter(e => e.status === 'Закуплено' || e.status === 'Доставлено').length
   const total = entries.length
   return { done, total, percent: Math.round(done / total * 100) }
+})
+
+// Прогресс выездов текущего месяца
+const visitProgress = computed(() => {
+  const minVisits = card.value?.min_visits_per_month || null
+  if (!minVisits) return null
+  const now = new Date()
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  const current = visits.value.filter(v => v.visit_date?.startsWith(currentMonth))
+  const regular = current.filter(v => !v.is_additional).length
+  const additional = current.filter(v => v.is_additional).length
+  const isOver = regular > minVisits
+  const percent = Math.min(regular / minVisits, 1)
+  const overflow = regular - minVisits
+  return { minVisits, regular, additional, total: regular + additional, isOver, percent, overflow }
+})
+
+// Статистика выездов по месяцам для диалога
+const visitStatsByMonth = computed(() => {
+  const minVisits = card.value?.min_visits_per_month || null
+  const byMonth = {}
+  for (const v of visits.value) {
+    const m = v.visit_date?.slice(0, 7) || 'Без даты'
+    if (!byMonth[m]) byMonth[m] = { regular: 0, additional: 0 }
+    if (v.is_additional) byMonth[m].additional++
+    else byMonth[m].regular++
+  }
+  const monthNames = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь']
+  return Object.entries(byMonth)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([ym, c]) => {
+      const label = ym === 'Без даты' ? ym : (() => {
+        const [y, m] = ym.split('-')
+        return `${monthNames[parseInt(m) - 1]} ${y}`
+      })()
+      const isOver = minVisits ? c.regular > minVisits : false
+      const isUnder = minVisits ? c.regular < minVisits : false
+      return { ym, label, regular: c.regular, additional: c.additional, total: c.regular + c.additional, minVisits, isOver, isUnder }
+    })
 })
 
 // Голосовые заметки — фильтрация из истории
@@ -2691,6 +2850,7 @@ async function doTriggerSvScript(script) {
 
 async function openMonthlyRateDialog(role, employeeId, employeeName) {
   monthlyRateTarget.value = { role, employee_id: employeeId, employee_name: employeeName }
+  minVisitsInput.value = card.value?.min_visits_per_month || null
   const existing = monthlyAssignments.value.find(a => a.role === role)
   if (existing) {
     monthlyRateAmount.value = existing.monthly_amount
@@ -2720,6 +2880,12 @@ async function saveMonthlyRate() {
       city: null,
       start_date: today,
     })
+    // Сохраняем мин. выездов в месяц на карточке (shared для всех ролей)
+    const newMinVisits = minVisitsInput.value ? parseInt(minVisitsInput.value) : null
+    if (newMinVisits !== (card.value?.min_visits_per_month ?? null)) {
+      await supervisionApi.updateCard(cardId, { min_visits_per_month: newMinVisits })
+      card.value = { ...card.value, min_visits_per_month: newMinVisits }
+    }
     $q.notify({ type: 'positive', message: `Ежемесячная ставка ${monthlyRateAmount.value} ₽ установлена` })
     showMonthlyRateDialog.value = false
     const { data } = await supervisionApi.getMonthlyAssignments(cardId)

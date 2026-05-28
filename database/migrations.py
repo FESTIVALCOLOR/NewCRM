@@ -151,6 +151,8 @@ class DatabaseMigrations:
             self.create_deleted_contracts_table()
             # ========== МИГРАЦИЯ: guest_push_subscription в chat members ==========
             self.add_guest_push_subscription()
+            # ========== МИГРАЦИЯ: выезды — min_visits_per_month + is_additional ==========
+            self.add_visits_per_month_fields()
             # ==================================================
 
         except Exception as e:
@@ -2117,3 +2119,28 @@ class DatabaseMigrations:
             self.close()
         except Exception as e:
             print(f"[ERROR] Ошибка миграции guest_push_subscription: {e}")
+
+    def add_visits_per_month_fields(self):
+        """Миграция: min_visits_per_month в supervision_cards + is_additional в supervision_visits"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM pragma_table_info('supervision_cards') WHERE name='min_visits_per_month'")
+            if not cursor.fetchone():
+                print("[>] Выполняется миграция: min_visits_per_month в supervision_cards...")
+                cursor.execute("ALTER TABLE supervision_cards ADD COLUMN min_visits_per_month INTEGER")
+                conn.commit()
+                print("[OK] Колонка min_visits_per_month добавлена")
+            else:
+                print("[OK] min_visits_per_month уже существует")
+            cursor.execute("SELECT * FROM pragma_table_info('supervision_visits') WHERE name='is_additional'")
+            if not cursor.fetchone():
+                print("[>] Выполняется миграция: is_additional в supervision_visits...")
+                cursor.execute("ALTER TABLE supervision_visits ADD COLUMN is_additional INTEGER DEFAULT 0")
+                conn.commit()
+                print("[OK] Колонка is_additional добавлена")
+            else:
+                print("[OK] is_additional уже существует")
+            self.close()
+        except Exception as e:
+            print(f"[ERROR] Ошибка миграции visits_per_month_fields: {e}")

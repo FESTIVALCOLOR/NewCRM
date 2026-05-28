@@ -667,6 +667,7 @@ class SupervisionCardUpdate(BaseModel):
     dan_id: Optional[int] = None
     studio_director_id: Optional[int] = None
     dan_completed: Optional[bool] = None
+    min_visits_per_month: Optional[int] = None
 
     @field_validator("deadline", mode="before")
     @classmethod
@@ -687,6 +688,7 @@ class SupervisionCardResponse(SupervisionCardBase):
     is_paused: bool
     pause_reason: Optional[str] = None
     paused_at: Optional[datetime] = None
+    min_visits_per_month: Optional[int] = None
     created_at: datetime
     updated_at: datetime
 
@@ -1306,6 +1308,7 @@ class SupervisionVisitResponse(BaseModel):
     notes: Optional[str] = None
     actual_date: Optional[str] = None
     visit_type: Optional[str] = "На объект"
+    is_additional: bool = False
     sort_order: int = 0
     visit_yandex_folder: Optional[str] = None
     created_at: Optional[datetime] = None

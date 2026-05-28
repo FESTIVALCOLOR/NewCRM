@@ -362,6 +362,7 @@ async def create_visit(
         notes=data.notes,
         actual_date=data.actual_date,
         visit_type=data.visit_type,
+        is_additional=data.extra_visit,
         sort_order=max_order + 1,
         visit_yandex_folder=visit_yandex_folder,
     )
