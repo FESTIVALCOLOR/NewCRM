@@ -64,31 +64,47 @@
       <!-- АКТИВНЫЕ (ландшафт) — все колонки рядом -->
       <template v-if="!crmStore.showArchive && ($q.screen.width > $q.screen.height)">
         <div class="landscape-board">
-          <div v-for="col in crmStore.columns" :key="col.name" class="landscape-column">
+          <div
+            v-for="col in crmStore.columns"
+            :key="col.name"
+            class="landscape-column"
+            :class="{ 'drag-over': dragOverCol === col.name }"
+            :data-col="col.name"
+          >
             <div class="column-frame" style="margin: 0; height: 100%">
               <div class="column-header">
                 <span class="column-title">{{ col.name }}</span>
                 <span :class="['col-count-badge', { 'has-cards': col.count > 0 }]">{{ col.count }}</span>
               </div>
               <div v-if="col.cards.length > 0" class="column-body">
-                <crm-card-item
+                <div
                   v-for="card in col.cards"
                   :key="card.id"
-                  :card="card"
-                  @click="openCard(card.id)"
-                  @longpress="showMoveDialog(card)"
-                  @submit-work="doCardAction(card.id, 'submit')"
-                  @accept="doCardAction(card.id, 'accept')"
-                  @reject="doCardAction(card.id, 'reject')"
-                  @client-send="doCardAction(card.id, 'client-send')"
-                  @client-approved="doCardAction(card.id, 'client-approved')"
-                  @advance-round="doCardAction(card.id, 'advance-round')"
-                  @close-stage="doCardAction(card.id, 'close-stage')"
-                  @add-extra-round="doCardAction(card.id, 'add-extra-round')"
-                  @sign-act="doCardAction(card.id, 'sign-act')"
-                  @add-measurement="openMeasurementDialog(card)"
-                  @add-tech-task="openTechTaskDialog(card)"
-                />
+                  class="drag-card-wrapper"
+                  :class="{ 'drag-source': dragCard?.id === card.id }"
+                  @pointerdown="onDragStart($event, card)"
+                  @pointermove="onDragMove"
+                  @pointerup="onDragEnd"
+                  @pointercancel="onDragEnd"
+                  @click.capture="suppressAfterDrag"
+                >
+                  <crm-card-item
+                    :card="card"
+                    @click="openCard(card.id)"
+                    @longpress="showMoveDialog(card)"
+                    @submit-work="doCardAction(card.id, 'submit')"
+                    @accept="doCardAction(card.id, 'accept')"
+                    @reject="doCardAction(card.id, 'reject')"
+                    @client-send="doCardAction(card.id, 'client-send')"
+                    @client-approved="doCardAction(card.id, 'client-approved')"
+                    @advance-round="doCardAction(card.id, 'advance-round')"
+                    @close-stage="doCardAction(card.id, 'close-stage')"
+                    @add-extra-round="doCardAction(card.id, 'add-extra-round')"
+                    @sign-act="doCardAction(card.id, 'sign-act')"
+                    @add-measurement="openMeasurementDialog(card)"
+                    @add-tech-task="openTechTaskDialog(card)"
+                  />
+                </div>
               </div>
               <div v-else class="column-empty">
                 <q-icon name="inbox" size="32px" color="grey-4" />
@@ -466,6 +482,83 @@ const measSurveyorId = ref(null)
 const terminationReason = ref('')
 const archiveSearch = ref('')
 const archiveCount = ref(0)
+
+// --- Drag-and-drop (ландшафт) ---
+const dragCard = ref(null)
+const dragOverCol = ref(null)
+let _dragGhost = null
+let _dragMoved = false
+let _dragStartX = 0
+let _dragStartY = 0
+let _dragOffsetX = 0
+let _dragOffsetY = 0
+let _dragEl = null
+let _dragPointerId = null
+
+function onDragStart(e, card) {
+  if (e.pointerType === 'mouse' && e.button !== 0) return
+  dragCard.value = card
+  _dragMoved = false
+  _dragStartX = e.clientX
+  _dragStartY = e.clientY
+  _dragEl = e.currentTarget
+  _dragPointerId = e.pointerId
+  const rect = e.currentTarget.getBoundingClientRect()
+  _dragOffsetX = e.clientX - rect.left
+  _dragOffsetY = e.clientY - rect.top
+}
+
+function onDragMove(e) {
+  if (!dragCard.value || e.pointerId !== _dragPointerId) return
+  const dx = e.clientX - _dragStartX
+  const dy = e.clientY - _dragStartY
+  if (!_dragMoved && Math.hypot(dx, dy) < 8) return
+  if (!_dragMoved) {
+    _dragMoved = true
+    try { _dragEl?.setPointerCapture(_dragPointerId) } catch {}
+    const src = _dragEl
+    _dragGhost = src.cloneNode(true)
+    _dragGhost.style.cssText = `position:fixed;pointer-events:none;opacity:0.75;z-index:9999;width:${src.offsetWidth}px;box-shadow:0 6px 24px rgba(0,0,0,0.25);transform:rotate(2deg) scale(1.03);border-radius:8px;background:#fff;`
+    document.body.appendChild(_dragGhost)
+  }
+  if (_dragGhost) {
+    _dragGhost.style.left = (e.clientX - _dragOffsetX) + 'px'
+    _dragGhost.style.top = (e.clientY - _dragOffsetY) + 'px'
+    _dragGhost.style.visibility = 'hidden'
+  }
+  const el = document.elementFromPoint(e.clientX, e.clientY)
+  if (_dragGhost) _dragGhost.style.visibility = ''
+  dragOverCol.value = el?.closest('[data-col]')?.dataset.col || null
+}
+
+async function onDragEnd() {
+  if (!dragCard.value) return
+  const targetCol = dragOverCol.value
+  if (_dragGhost) { _dragGhost.remove(); _dragGhost = null }
+  dragOverCol.value = null
+  const card = dragCard.value
+  dragCard.value = null
+  if (_dragMoved && targetCol && targetCol !== card.column_name) {
+    if (!can('crm_cards.move')) return
+    moveCard.value = card
+    moveStep.value = 1
+    moveExecutorId.value = null
+    moveDeadline.value = ''
+    filteredMoveEmployees.value = employeeOpts.value
+    await selectMoveColumn(targetCol)
+    if (moveStep.value === 2 || moveStep.value === 3) {
+      moveDialogVisible.value = true
+    }
+  }
+}
+
+function suppressAfterDrag(e) {
+  if (_dragMoved) {
+    e.stopPropagation()
+    e.preventDefault()
+    _dragMoved = false
+  }
+}
 
 async function loadArchiveCount() {
   try {
@@ -1112,5 +1205,23 @@ onMounted(async () => {
 .landscape-column .column-body {
   overflow-y: auto;
   flex: 1;
+}
+
+/* Drag-and-drop (ландшафт) */
+.drag-card-wrapper {
+  touch-action: none;
+  cursor: grab;
+}
+.drag-card-wrapper:active {
+  cursor: grabbing;
+}
+.drag-source > * {
+  opacity: 0.35;
+  pointer-events: none;
+}
+.landscape-column.drag-over > .column-frame {
+  border-color: #ffd93c;
+  box-shadow: 0 0 0 2px #ffd93c;
+  background: #fffde7;
 }
 </style>

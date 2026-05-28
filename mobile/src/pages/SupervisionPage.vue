@@ -51,59 +51,77 @@
       <!-- Активные — ландшафт: все колонки рядом -->
       <template v-else-if="($q.screen.width > $q.screen.height)">
         <div class="landscape-board">
-          <div v-for="col in columns" :key="col.name" class="landscape-column">
+          <div
+            v-for="col in columns"
+            :key="col.name"
+            class="landscape-column"
+            :class="{ 'drag-over': svDragOverCol === col.name }"
+            :data-col="col.name"
+          >
             <div class="column-frame" style="margin: 0; height: 100%">
               <div class="column-header">
                 <span class="column-title">{{ col.name }}</span>
                 <span :class="['col-count-badge', { 'has-cards': col.count > 0 }]">{{ col.count }}</span>
               </div>
               <div v-if="col.cards.length > 0" class="column-body" style="overflow-y: auto; flex: 1">
-                <q-card v-for="card in col.cards" :key="card.id" class="crm-card q-mb-sm" :style="card.is_paused ? { background: '#FFF8E1', borderColor: '#F39C12' } : {}">
-                  <q-card-section class="q-pa-sm">
-                    <div class="row items-center justify-between q-mb-xs">
-                      <div style="color: #888; font-size: 10px">
-                        {{ card.contract_number || `#${card.id}` }}
+                <div
+                  v-for="card in col.cards"
+                  :key="card.id"
+                  class="drag-card-wrapper"
+                  :class="{ 'drag-source': svDragCard?.id === card.id }"
+                  @pointerdown="onSvDragStart($event, card)"
+                  @pointermove="onSvDragMove"
+                  @pointerup="onSvDragEnd"
+                  @pointercancel="onSvDragEnd"
+                  @click.capture="suppressSvAfterDrag"
+                >
+                  <q-card class="crm-card q-mb-sm" :style="card.is_paused ? { background: '#FFF8E1', borderColor: '#F39C12' } : {}">
+                    <q-card-section class="q-pa-sm">
+                      <div class="row items-center justify-between q-mb-xs">
+                        <div style="color: #888; font-size: 10px">
+                          {{ card.contract_number || `#${card.id}` }}
+                        </div>
+                        <q-badge
+                          v-if="!card.is_paused"
+                          color="blue-grey-3"
+                          text-color="blue-grey-9"
+                          :label="card.column_name"
+                          dense
+                          style="font-size: 9px"
+                        />
+                        <q-badge
+                          v-else
+                          color="warning"
+                          label="Приостановлено"
+                          dense
+                          style="font-size: 9px"
+                        />
                       </div>
-                      <q-badge
-                        v-if="!card.is_paused"
-                        color="blue-grey-3"
-                        text-color="blue-grey-9"
-                        :label="card.column_name"
-                        dense
-                        style="font-size: 9px"
-                      />
-                      <q-badge
-                        v-else
-                        color="warning"
-                        label="Приостановлено"
-                        dense
-                        style="font-size: 9px"
-                      />
-                    </div>
-                    <div class="text-weight-bold q-mb-xs" style="font-size: 13px; color: #222">
-                      {{ card.address || 'Без адреса' }}
-                    </div>
-                    <div class="row items-center justify-between q-mb-xs">
-                      <div style="font-size: 11px; color: #888">
-                        <span v-if="card.area">{{ card.area }} м²</span>
-                        <span v-if="card.area && card.city"> | </span>
-                        <span v-if="card.city">{{ card.city }}</span>
+                      <div class="text-weight-bold q-mb-xs" style="font-size: 13px; color: #222">
+                        {{ card.address || 'Без адреса' }}
                       </div>
-                      <span v-if="card.agent_type" :style="{ background: agentColorFor(card.agent_type), color: 'white', fontSize: '10px', fontWeight: 'bold', padding: '3px 8px', borderRadius: '4px' }">{{ card.agent_type }}</span>
-                    </div>
-                    <div style="border-top: 1px solid #E0E0E0; padding-top: 6px">
-                      <q-btn
-                        flat
-                        dense
-                        no-caps
-                        icon="open_in_new"
-                        label="Данные карточки"
-                        style="color: #333; font-size: 11px; height: 28px; width: 100%; background: #F5F5F5; border-radius: 4px"
-                        @click="openCard(card)"
-                      />
-                    </div>
-                  </q-card-section>
-                </q-card>
+                      <div class="row items-center justify-between q-mb-xs">
+                        <div style="font-size: 11px; color: #888">
+                          <span v-if="card.area">{{ card.area }} м²</span>
+                          <span v-if="card.area && card.city"> | </span>
+                          <span v-if="card.city">{{ card.city }}</span>
+                        </div>
+                        <span v-if="card.agent_type" :style="{ background: agentColorFor(card.agent_type), color: 'white', fontSize: '10px', fontWeight: 'bold', padding: '3px 8px', borderRadius: '4px' }">{{ card.agent_type }}</span>
+                      </div>
+                      <div style="border-top: 1px solid #E0E0E0; padding-top: 6px">
+                        <q-btn
+                          flat
+                          dense
+                          no-caps
+                          icon="open_in_new"
+                          label="Данные карточки"
+                          style="color: #333; font-size: 11px; height: 28px; width: 100%; background: #F5F5F5; border-radius: 4px"
+                          @click="openCard(card)"
+                        />
+                      </div>
+                    </q-card-section>
+                  </q-card>
+                </div><!-- /drag-card-wrapper -->
               </div>
               <div v-else class="column-empty">
                 <q-icon name="inbox" size="32px" color="grey-4" /><div>Нет карточек</div>
@@ -395,6 +413,76 @@ async function doMove(colName) {
   }
 }
 
+// --- Drag-and-drop (ландшафт) ---
+const svDragCard = ref(null)
+const svDragOverCol = ref(null)
+let _svDragGhost = null
+let _svDragMoved = false
+let _svDragStartX = 0
+let _svDragStartY = 0
+let _svDragOffsetX = 0
+let _svDragOffsetY = 0
+let _svDragEl = null
+let _svDragPointerId = null
+
+function onSvDragStart(e, card) {
+  if (e.pointerType === 'mouse' && e.button !== 0) return
+  svDragCard.value = card
+  _svDragMoved = false
+  _svDragStartX = e.clientX
+  _svDragStartY = e.clientY
+  _svDragEl = e.currentTarget
+  _svDragPointerId = e.pointerId
+  const rect = e.currentTarget.getBoundingClientRect()
+  _svDragOffsetX = e.clientX - rect.left
+  _svDragOffsetY = e.clientY - rect.top
+}
+
+function onSvDragMove(e) {
+  if (!svDragCard.value || e.pointerId !== _svDragPointerId) return
+  const dx = e.clientX - _svDragStartX
+  const dy = e.clientY - _svDragStartY
+  if (!_svDragMoved && Math.hypot(dx, dy) < 8) return
+  if (!_svDragMoved) {
+    _svDragMoved = true
+    try { _svDragEl?.setPointerCapture(_svDragPointerId) } catch {}
+    const src = _svDragEl
+    _svDragGhost = src.cloneNode(true)
+    _svDragGhost.style.cssText = `position:fixed;pointer-events:none;opacity:0.75;z-index:9999;width:${src.offsetWidth}px;box-shadow:0 6px 24px rgba(0,0,0,0.25);transform:rotate(2deg) scale(1.03);border-radius:8px;background:#fff;`
+    document.body.appendChild(_svDragGhost)
+  }
+  if (_svDragGhost) {
+    _svDragGhost.style.left = (e.clientX - _svDragOffsetX) + 'px'
+    _svDragGhost.style.top = (e.clientY - _svDragOffsetY) + 'px'
+    _svDragGhost.style.visibility = 'hidden'
+  }
+  const el = document.elementFromPoint(e.clientX, e.clientY)
+  if (_svDragGhost) _svDragGhost.style.visibility = ''
+  svDragOverCol.value = el?.closest('[data-col]')?.dataset.col || null
+}
+
+async function onSvDragEnd() {
+  if (!svDragCard.value) return
+  const targetCol = svDragOverCol.value
+  if (_svDragGhost) { _svDragGhost.remove(); _svDragGhost = null }
+  svDragOverCol.value = null
+  const card = svDragCard.value
+  svDragCard.value = null
+  if (_svDragMoved && targetCol && targetCol !== card.column_name) {
+    if (!can('supervision.move')) return
+    moveCard.value = card
+    await doMove(targetCol)
+  }
+}
+
+function suppressSvAfterDrag(e) {
+  if (_svDragMoved) {
+    e.stopPropagation()
+    e.preventDefault()
+    _svDragMoved = false
+  }
+}
+
 async function loadCards() {
   loading.value = true
   try {
@@ -433,4 +521,22 @@ onMounted(() => { loadCards(); if (can('supervision.view_archive')) loadArchiveC
 .col-count-badge.has-cards { background: #ffd93c; color: #333; }
 .landscape-column .column-frame { flex: 1; margin: 0; display: flex; flex-direction: column; overflow: hidden; height: 100%; }
 .landscape-column .column-body { overflow-y: auto; flex: 1; }
+
+/* Drag-and-drop (ландшафт) */
+.drag-card-wrapper {
+  touch-action: none;
+  cursor: grab;
+}
+.drag-card-wrapper:active {
+  cursor: grabbing;
+}
+.drag-source > * {
+  opacity: 0.35;
+  pointer-events: none;
+}
+.landscape-column.drag-over > .column-frame {
+  border-color: #ffd93c;
+  box-shadow: 0 0 0 2px #ffd93c;
+  background: #fffde7;
+}
 </style>
