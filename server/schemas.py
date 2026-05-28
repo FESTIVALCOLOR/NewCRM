@@ -1296,6 +1296,8 @@ class SupervisionVisitUpdate(BaseModel):
     notes: Optional[str] = None
     actual_date: Optional[str] = None
     visit_type: Optional[str] = None
+    is_additional: Optional[bool] = None
+    executor_role: Optional[str] = None
 
 
 class SupervisionVisitResponse(BaseModel):
@@ -1309,6 +1311,7 @@ class SupervisionVisitResponse(BaseModel):
     actual_date: Optional[str] = None
     visit_type: Optional[str] = "На объект"
     is_additional: bool = False
+    executor_role: Optional[str] = None
     sort_order: int = 0
     visit_yandex_folder: Optional[str] = None
     created_at: Optional[datetime] = None

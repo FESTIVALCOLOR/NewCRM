@@ -2341,7 +2341,7 @@ function editVisit(visit) {
     executor_name: visit.executor_name || '',
     visit_type: visit.visit_type || 'На объект',
     executor_role: visit.executor_role || 'ДАН',
-    extra_visit: visit.extra_visit || false,
+    extra_visit: visit.is_additional || false,
   }
   visitExecutorPick.value = visitExecutorOptions.value.find(
     o => o.name === visit.executor_name,

@@ -363,6 +363,7 @@ async def create_visit(
         actual_date=data.actual_date,
         visit_type=data.visit_type,
         is_additional=data.extra_visit,
+        executor_role=data.executor_role,
         sort_order=max_order + 1,
         visit_yandex_folder=visit_yandex_folder,
     )
@@ -527,6 +528,14 @@ async def patch_visit(
     if not visit:
         raise HTTPException(status_code=404, detail="Выезд не найден")
 
+    # Маппинг: extra_visit → is_additional (PWA использует extra_visit)
+    if "extra_visit" in update_data:
+        update_data["is_additional"] = update_data.pop("extra_visit")
+
+    was_additional = visit.is_additional
+    new_additional = update_data.get("is_additional", was_additional)
+    executor_role = update_data.get("executor_role") or visit.executor_role
+
     for key, value in update_data.items():
         if hasattr(visit, key):
             setattr(visit, key, value)
@@ -534,6 +543,69 @@ async def patch_visit(
     visit.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(visit)
+
+    # Создать оплату за доп. выезд если статус переключился с False на True
+    if not was_additional and new_additional and executor_role:
+        try:
+            card = db.query(SupervisionCard).filter(SupervisionCard.id == visit.supervision_card_id).first()
+            if card:
+                contract_for_pay = db.query(Contract).filter(Contract.id == card.contract_id).first()
+                card_city = getattr(contract_for_pay, "city", None) if contract_for_pay else None
+
+                emp_id = card.dan_id if executor_role == POSITION_DAN else card.senior_manager_id
+                if emp_id:
+                    emp = db.query(Employee).filter(Employee.id == emp_id).first()
+                    rate = None
+                    if card_city:
+                        rate = (
+                            db.query(Rate)
+                            .filter(
+                                Rate.project_type == "Авторский надзор",
+                                Rate.role == executor_role,
+                                Rate.fixed_price.isnot(None),
+                                Rate.city == card_city,
+                            )
+                            .first()
+                        )
+                    if not rate:
+                        rate = (
+                            db.query(Rate)
+                            .filter(
+                                Rate.project_type == "Авторский надзор",
+                                Rate.role == executor_role,
+                                Rate.fixed_price.isnot(None),
+                                Rate.city.is_(None),
+                            )
+                            .first()
+                        )
+
+                    # Проверить что оплата за этот выезд ещё не создана
+                    existing_visit_payment = db.query(Payment).filter(Payment.visit_id == visit_id).first()
+                    if rate and emp and not existing_visit_payment:
+                        visit_payment = Payment(
+                            contract_id=card.contract_id,
+                            supervision_card_id=card.id,
+                            visit_id=visit.id,
+                            employee_id=emp_id,
+                            employee_name=emp.full_name,
+                            role=executor_role,
+                            stage_name="Выезд на объект",
+                            calculated_amount=rate.fixed_price,
+                            final_amount=rate.fixed_price,
+                            payment_type="Полная оплата",
+                            report_month=datetime.utcnow().strftime("%Y-%m"),
+                            payment_status="pending",
+                            is_paid=False,
+                        )
+                        db.add(visit_payment)
+                        db.commit()
+        except Exception as pay_err:
+            logger.warning(f"Не удалось создать оплату за выезд при обновлении: {pay_err}")
+            try:
+                db.rollback()
+            except Exception:
+                pass
+
     return visit
 
 

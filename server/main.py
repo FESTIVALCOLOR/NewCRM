@@ -188,14 +188,15 @@ async def startup_event():
         if "duplicate" not in str(e).lower() and "already" not in str(e).lower():
             logger.debug(f"internal_chat_members migration note: {e}")
 
-    # Миграция: min_visits_per_month в supervision_cards + is_additional в supervision_visits
+    # Миграция: min_visits_per_month в supervision_cards + is_additional + executor_role в supervision_visits
     try:
         from sqlalchemy import text as _text_visits
 
         with engine.begin() as conn:
             conn.execute(_text_visits("ALTER TABLE supervision_cards ADD COLUMN IF NOT EXISTS min_visits_per_month INTEGER"))
             conn.execute(_text_visits("ALTER TABLE supervision_visits ADD COLUMN IF NOT EXISTS is_additional BOOLEAN DEFAULT FALSE"))
-            logger.info("Migrated: min_visits_per_month, is_additional added")
+            conn.execute(_text_visits("ALTER TABLE supervision_visits ADD COLUMN IF NOT EXISTS executor_role VARCHAR(100)"))
+            logger.info("Migrated: min_visits_per_month, is_additional, executor_role added")
     except Exception as e:
         if "duplicate" not in str(e).lower() and "already" not in str(e).lower():
             logger.debug(f"visits migration note: {e}")

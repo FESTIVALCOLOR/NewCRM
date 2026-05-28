@@ -903,7 +903,13 @@ async def create_monthly_assignment(card_id: int, data: SupervisionMonthlyAssign
 
     existing_payment = (
         db.query(Payment)
-        .filter(Payment.supervision_card_id == card_id, Payment.employee_name == data.employee_name, Payment.stage_name == "Ежемесячная ставка", Payment.report_month == current_month)
+        .filter(
+            Payment.supervision_card_id == card_id,
+            Payment.employee_name == data.employee_name,
+            Payment.role == data.role,
+            Payment.stage_name == "Ежемесячная ставка",
+            Payment.report_month == current_month,
+        )
         .first()
     )
 
