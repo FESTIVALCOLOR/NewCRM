@@ -414,11 +414,12 @@ async function doMove(colName) {
 }
 
 // --- Drag-and-drop (ландшафт) ---
-const svDragCard = ref(null)
+const svDragCard = ref(null)     // reactive: управляет .drag-source opacity — ставится ТОЛЬКО при реальном drag
 const svDragOverCol = ref(null)
+let _svPendingDragCard = null    // нереактивно: хранит карточку во время ожидания (без визуальных изменений)
 let _svDragGhost = null
 let _svDragMoved = false
-let _svDragReady = false   // true после 150ms удержания — только тогда разрешён drag
+let _svDragReady = false         // true после 150ms удержания
 let _svDragTimer = null
 let _svDragStartX = 0
 let _svDragStartY = 0
@@ -430,7 +431,7 @@ let _svDragPointerType = ''
 
 function onSvDragStart(e, card) {
   if (e.pointerType === 'mouse' && e.button !== 0) return
-  svDragCard.value = card
+  _svPendingDragCard = card   // НЕ svDragCard.value — никаких визуальных изменений пока
   _svDragMoved = false
   _svDragReady = false
   _svDragStartX = e.clientX
@@ -441,21 +442,21 @@ function onSvDragStart(e, card) {
   const rect = e.currentTarget.getBoundingClientRect()
   _svDragOffsetX = e.clientX - rect.left
   _svDragOffsetY = e.clientY - rect.top
-  // Задержка 150ms — за это время успевают сработать обычные клики по кнопкам
   _svDragTimer = setTimeout(() => {
-    if (svDragCard.value) _svDragReady = true
+    if (_svPendingDragCard) _svDragReady = true
   }, 150)
 }
 
 function onSvDragMove(e) {
-  if (!svDragCard.value || e.pointerId !== _svDragPointerId) return
-  if (!_svDragReady) return  // ждём истечения задержки
+  if (!_svPendingDragCard || e.pointerId !== _svDragPointerId) return
+  if (!_svDragReady) return
   const dx = e.clientX - _svDragStartX
   const dy = e.clientY - _svDragStartY
   const threshold = _svDragPointerType === 'touch' ? 15 : 8
   if (!_svDragMoved && Math.hypot(dx, dy) < threshold) return
   if (!_svDragMoved) {
     _svDragMoved = true
+    svDragCard.value = _svPendingDragCard  // только теперь — opacity 0.35 на источнике
     try { _svDragEl?.setPointerCapture(_svDragPointerId) } catch {}
     const src = _svDragEl
     _svDragGhost = src.cloneNode(true)
@@ -476,14 +477,15 @@ async function onSvDragEnd() {
   clearTimeout(_svDragTimer)
   _svDragTimer = null
   _svDragReady = false
-  if (!svDragCard.value) return
+  const card = _svPendingDragCard
+  _svPendingDragCard = null
+  if (!card) return
   const targetCol = svDragOverCol.value
   if (_svDragGhost) { _svDragGhost.remove(); _svDragGhost = null }
   svDragOverCol.value = null
-  const card = svDragCard.value
   svDragCard.value = null
   if (!(_svDragMoved && targetCol && targetCol !== card.column_name)) {
-    _svDragMoved = false // нет реального перемещения — клик должен сработать
+    _svDragMoved = false
     return
   }
   if (!can('supervision.move')) { _svDragMoved = false; return }
@@ -541,6 +543,12 @@ onMounted(() => { loadCards(); if (can('supervision.view_archive')) loadArchiveC
 /* Drag-and-drop (ландшафт) */
 .drag-card-wrapper {
   touch-action: none;
+  cursor: grab;
+}
+.drag-card-wrapper button,
+.drag-card-wrapper a,
+.drag-card-wrapper .q-btn {
+  cursor: pointer;
 }
 .drag-source > * {
   opacity: 0.35;

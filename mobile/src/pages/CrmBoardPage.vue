@@ -484,11 +484,12 @@ const archiveSearch = ref('')
 const archiveCount = ref(0)
 
 // --- Drag-and-drop (ландшафт) ---
-const dragCard = ref(null)
+const dragCard = ref(null)       // reactive: управляет .drag-source opacity — ставится ТОЛЬКО при реальном drag
 const dragOverCol = ref(null)
+let _pendingDragCard = null      // нереактивно: хранит карточку во время ожидания (без визуальных изменений)
 let _dragGhost = null
 let _dragMoved = false
-let _dragReady = false   // true после 150ms удержания — только тогда разрешён drag
+let _dragReady = false           // true после 150ms удержания
 let _dragTimer = null
 let _dragStartX = 0
 let _dragStartY = 0
@@ -500,7 +501,7 @@ let _dragPointerType = ''
 
 function onDragStart(e, card) {
   if (e.pointerType === 'mouse' && e.button !== 0) return
-  dragCard.value = card
+  _pendingDragCard = card   // НЕ dragCard.value — никаких визуальных изменений пока
   _dragMoved = false
   _dragReady = false
   _dragStartX = e.clientX
@@ -511,21 +512,21 @@ function onDragStart(e, card) {
   const rect = e.currentTarget.getBoundingClientRect()
   _dragOffsetX = e.clientX - rect.left
   _dragOffsetY = e.clientY - rect.top
-  // Задержка 150ms — за это время успевают сработать обычные клики по кнопкам
   _dragTimer = setTimeout(() => {
-    if (dragCard.value) _dragReady = true
+    if (_pendingDragCard) _dragReady = true
   }, 150)
 }
 
 function onDragMove(e) {
-  if (!dragCard.value || e.pointerId !== _dragPointerId) return
-  if (!_dragReady) return  // ждём истечения задержки
+  if (!_pendingDragCard || e.pointerId !== _dragPointerId) return
+  if (!_dragReady) return
   const dx = e.clientX - _dragStartX
   const dy = e.clientY - _dragStartY
   const threshold = _dragPointerType === 'touch' ? 15 : 8
   if (!_dragMoved && Math.hypot(dx, dy) < threshold) return
   if (!_dragMoved) {
     _dragMoved = true
+    dragCard.value = _pendingDragCard  // только теперь — opacity 0.35 на источнике
     try { _dragEl?.setPointerCapture(_dragPointerId) } catch {}
     const src = _dragEl
     _dragGhost = src.cloneNode(true)
@@ -546,11 +547,12 @@ async function onDragEnd() {
   clearTimeout(_dragTimer)
   _dragTimer = null
   _dragReady = false
-  if (!dragCard.value) return
+  const card = _pendingDragCard
+  _pendingDragCard = null
+  if (!card) return
   const targetCol = dragOverCol.value
   if (_dragGhost) { _dragGhost.remove(); _dragGhost = null }
   dragOverCol.value = null
-  const card = dragCard.value
   dragCard.value = null
   if (!(_dragMoved && targetCol && targetCol !== card.column_name)) {
     _dragMoved = false
@@ -1228,6 +1230,13 @@ onMounted(async () => {
 /* Drag-and-drop (ландшафт) */
 .drag-card-wrapper {
   touch-action: none;
+  cursor: grab;
+}
+/* кнопки внутри сохраняют свой курсор */
+.drag-card-wrapper button,
+.drag-card-wrapper a,
+.drag-card-wrapper .q-btn {
+  cursor: pointer;
 }
 .drag-source > * {
   opacity: 0.35;
