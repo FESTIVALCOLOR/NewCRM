@@ -1677,36 +1677,6 @@
         @click="$router.back()"
       />
     </div>
-
-    <!-- Диалог подтверждения «Сдать работу» -->
-    <q-dialog v-model="showSubmitWarningDialog" persistent>
-      <q-card style="min-width: 300px; max-width: 400px; border-radius: 8px">
-        <q-card-section>
-          <div class="text-h6" style="font-size: 16px; font-weight: bold">
-            Сдать работу
-          </div>
-        </q-card-section>
-        <q-card-section class="q-pt-none" style="font-size: 14px; color: #555">
-          Перед сдачей убедитесь, что загрузили результат работы в данные карточки. Продолжить?
-        </q-card-section>
-        <q-card-actions align="right" class="q-pb-sm q-px-md">
-          <q-btn
-            flat
-            no-caps
-            label="Отмена"
-            style="color: #666"
-            @click="onSubmitWarningCancel"
-          />
-          <q-btn
-            unelevated
-            no-caps
-            label="Сдать работу"
-            style="background: #58D68D; color: white; border-radius: 4px; font-weight: bold"
-            @click="onSubmitWarningConfirm"
-          />
-        </q-card-actions>
-      </q-card>
-    </q-dialog>
   </q-page>
 </template>
 
@@ -1808,8 +1778,6 @@ const activeTab = ref('executors')
 const chatTabVisited = ref(false)
 const notesTabVisited = ref(false)
 const actionLoading = ref(false)
-const showSubmitWarningDialog = ref(false)
-let _submitWarningResolve = null
 const employeeOptions = ref([])
 const cardPayments = ref([])
 const showCreatePayment = ref(false)
@@ -2067,10 +2035,13 @@ const cardTeamOptions = computed(() => {
 function filesByStage(stage) { return projectFiles.value.filter(f => f.stage === stage) }
 
 // Путь к файлу правок для стадии (из workflow state)
-// Показывать только для текущей стадии И при статусе revision
+// Использует label из projectStages для определения префикса (напр. "Стадия 2")
 function revisionPathForStage(stageCode) {
-  const stageMap = { stage1: 'Стадия 1', stage2: 'Стадия 2', stage3: 'Стадия 3' }
-  const prefix = stageMap[stageCode] || ''
+  const stage = projectStages.value.find(s => s.code === stageCode)
+  if (!stage) return ''
+  const m = (stage.label || '').match(/^(Стадия \d+)/)
+  const prefix = m ? m[1] : ''
+  if (!prefix) return ''
   const colName = card.value?.column_name || ''
   if (!colName.startsWith(prefix)) return ''
   const wf = workflowStates.value.find(w =>
@@ -2595,24 +2566,9 @@ function openContractEdit() {
   }
 }
 
-function _askSubmitConfirmation() {
-  return new Promise((resolve) => {
-    _submitWarningResolve = resolve
-    showSubmitWarningDialog.value = true
-  })
-}
-function onSubmitWarningConfirm() {
-  showSubmitWarningDialog.value = false
-  if (_submitWarningResolve) { _submitWarningResolve(true); _submitWarningResolve = null }
-}
-function onSubmitWarningCancel() {
-  showSubmitWarningDialog.value = false
-  if (_submitWarningResolve) { _submitWarningResolve(false); _submitWarningResolve = null }
-}
-
 async function doAction(action) {
   if (action === 'submit') {
-    const confirmed = await _askSubmitConfirmation()
+    const confirmed = window.confirm('Перед сдачей убедитесь, что загрузили результат работы в данные карточки. Продолжить?')
     if (!confirmed) return
   }
   actionLoading.value = true
@@ -3086,6 +3042,14 @@ async function loadAdditionalData(cardId) {
   try { const { data } = await contractsApi.getById(cid); contractData.value = data } catch (e) { /* ignore */ }
   try { const { data } = await crmApi.getWorkflowState(card.value.id); workflowStates.value = Array.isArray(data) ? data : data ? [data] : [] } catch { workflowStates.value = [] }
   try { const { data } = await filesApi.getContractFiles(cid); projectFiles.value = data || [] } catch (e) { projectFiles.value = [] }
+  // Фоновый скан ЯД — восстанавливает записи в БД для файлов которые там есть но не в БД
+  import('src/boot/axios').then(({ api: ax }) => {
+    ax.post(`/api/v1/files/scan/${cid}`).then(async (resp) => {
+      if ((resp.data?.new_files_added || 0) > 0) {
+        filesApi.getContractFiles(cid).then(({ data }) => { projectFiles.value = data || [] }).catch(() => {})
+      }
+    }).catch(() => {})
+  })
   try {
     const { api: ax } = await import('src/boot/axios')
     const resp = await ax.get(`/api/v1/timeline/${cid}?_t=${Date.now()}`)
