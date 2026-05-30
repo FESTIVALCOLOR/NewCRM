@@ -741,7 +741,8 @@
                 <div class="text-subtitle2 text-weight-bold" style="color: #333">
                   {{ stage.label }}
                 </div>
-                <div class="row q-gutter-xs">
+                <!-- Кнопки только для стадий без подстадий -->
+                <div v-if="!stage.substages" class="row q-gutter-xs">
                   <q-btn
                     v-if="revisionPathForStage(stage.code)"
                     outline
@@ -797,69 +798,204 @@
               </div>
             </q-card-section>
 
-            <!-- Вкладки вариаций -->
-            <q-tabs
-              v-if="getVariations(stage.code).length > 1"
-              v-model="activeVariation[stage.code]"
-              dense
-              active-color="dark"
-              indicator-color="accent"
-              no-caps
-              style="font-size: 11px"
-              align="left"
-            >
-              <q-tab v-for="v in getVariations(stage.code)" :key="v" :name="v" :label="`Вариация ${v}`" />
-            </q-tabs>
-
-            <!-- Файлы текущей вариации -->
-            <q-list v-if="filesForVariation(stage.code).length > 0" dense>
-              <q-item v-for="f in filesForVariation(stage.code)" :key="f.id">
-                <q-item-section avatar>
-                  <q-img
-                    v-if="isImageFile(f)"
-                    :src="imgStreamUrl(f)"
-                    style="width: 48px; height: 48px; border-radius: 4px; cursor: pointer"
-                    @click="openStageFile(f, stage.code)"
-                  />
-                  <q-icon v-else :name="fileIcon(f)" :color="fileColor(f)" />
-                </q-item-section>
-                <q-item-section v-if="!isImageFile(f)" style="min-width: 0">
-                  <q-item-label style="font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
-                    <a href="#" style="color: #1677FF; text-decoration: none" @click.prevent="openStageFile(f, stage.code)">{{ f.file_name }}</a>
-                  </q-item-label>
-                </q-item-section>
-                <q-item-section v-if="!isArchived" side style="flex-shrink: 0">
-                  <div class="row q-gutter-xs no-wrap">
+            <!-- Подстадии (напр. Стадия 2: Мудборды + Визуализация) -->
+            <template v-if="stage.substages">
+              <div
+                v-for="sub in stage.substages"
+                :key="sub.code"
+                style="border-top: 1px solid #F0F0F0; padding: 8px 16px 4px"
+              >
+                <div class="row items-center justify-between q-mb-xs" style="flex-wrap: wrap; gap: 4px">
+                  <div class="text-caption text-weight-bold" style="color: #555">
+                    {{ sub.label }}
+                  </div>
+                  <div class="row q-gutter-xs">
                     <q-btn
+                      v-if="revisionPathForStage(sub.code)"
                       outline
                       dense
                       size="xs"
-                      icon="open_in_new"
-                      label="Открыть"
+                      label="Правки"
+                      no-caps
+                      color="negative"
+                      style="border-radius: 4px; padding: 2px 8px; font-weight: bold"
+                      @click="openRevisionFolder(sub.code)"
+                    >
+                      <q-tooltip>Открыть папку с правками</q-tooltip>
+                    </q-btn>
+                    <q-btn
+                      v-if="canUploadForProjectStage(sub.code) && !isArchived"
+                      outline
+                      dense
+                      size="xs"
+                      icon="upload"
+                      label="Загрузить"
                       no-caps
                       color="grey-7"
                       style="border-radius: 4px; padding: 2px 8px; min-width: 88px"
-                      @click.stop="openStageFile(f, stage.code)"
+                      @click="uploadToVariation(sub.code)"
                     />
                     <q-btn
-                      v-if="canUploadForProjectStage(stage.code) && can('crm_cards.files_delete')"
+                      v-if="canUploadForProjectStage(sub.code) && !isArchived"
+                      outline
+                      dense
+                      size="xs"
+                      icon="create_new_folder"
+                      no-caps
+                      color="grey-7"
+                      style="border-radius: 4px; padding: 2px 6px"
+                      @click="addVariationTab(sub.code)"
+                    >
+                      <q-tooltip>Добавить вариацию</q-tooltip>
+                    </q-btn>
+                    <q-btn
+                      v-if="getVariations(sub.code).length > 1 && !isArchived"
                       outline
                       dense
                       size="xs"
                       icon="delete_outline"
                       no-caps
                       color="negative"
-                      style="padding: 2px 6px; border-radius: 4px"
-                      @click.stop="deleteFile(f)"
-                    />
+                      style="border-radius: 4px; padding: 2px 6px"
+                      @click="deleteVariationTab(sub.code)"
+                    >
+                      <q-tooltip>Удалить текущую вариацию</q-tooltip>
+                    </q-btn>
                   </div>
-                </q-item-section>
-              </q-item>
-            </q-list>
-            <q-card-section v-else class="q-py-sm text-center" style="color: #bbb; font-size: 11px">
-              Нет файлов
-            </q-card-section>
-            <div class="q-pb-sm" />
+                </div>
+
+                <!-- Вкладки вариаций подстадии -->
+                <q-tabs
+                  v-if="getVariations(sub.code).length > 1"
+                  v-model="activeVariation[sub.code]"
+                  dense
+                  active-color="dark"
+                  indicator-color="accent"
+                  no-caps
+                  style="font-size: 11px"
+                  align="left"
+                >
+                  <q-tab v-for="v in getVariations(sub.code)" :key="v" :name="v" :label="`Вариация ${v}`" />
+                </q-tabs>
+
+                <!-- Файлы подстадии -->
+                <q-list v-if="filesForVariation(sub.code).length > 0" dense>
+                  <q-item v-for="f in filesForVariation(sub.code)" :key="f.id">
+                    <q-item-section avatar>
+                      <q-img
+                        v-if="isImageFile(f)"
+                        :src="imgStreamUrl(f)"
+                        style="width: 48px; height: 48px; border-radius: 4px; cursor: pointer"
+                        @click="openStageFile(f, sub.code)"
+                      />
+                      <q-icon v-else :name="fileIcon(f)" :color="fileColor(f)" />
+                    </q-item-section>
+                    <q-item-section v-if="!isImageFile(f)" style="min-width: 0">
+                      <q-item-label style="font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
+                        <a href="#" style="color: #1677FF; text-decoration: none" @click.prevent="openStageFile(f, sub.code)">{{ f.file_name }}</a>
+                      </q-item-label>
+                    </q-item-section>
+                    <q-item-section v-if="!isArchived" side style="flex-shrink: 0">
+                      <div class="row q-gutter-xs no-wrap">
+                        <q-btn
+                          outline
+                          dense
+                          size="xs"
+                          icon="open_in_new"
+                          label="Открыть"
+                          no-caps
+                          color="grey-7"
+                          style="border-radius: 4px; padding: 2px 8px; min-width: 88px"
+                          @click.stop="openStageFile(f, sub.code)"
+                        />
+                        <q-btn
+                          v-if="canUploadForProjectStage(sub.code) && can('crm_cards.files_delete')"
+                          outline
+                          dense
+                          size="xs"
+                          icon="delete_outline"
+                          no-caps
+                          color="negative"
+                          style="padding: 2px 6px; border-radius: 4px"
+                          @click.stop="deleteFile(f)"
+                        />
+                      </div>
+                    </q-item-section>
+                  </q-item>
+                </q-list>
+                <div v-else class="q-py-sm text-center" style="color: #bbb; font-size: 11px">
+                  Нет файлов
+                </div>
+              </div>
+              <div class="q-pb-sm" />
+            </template>
+
+            <!-- Одиночная стадия без подстадий -->
+            <template v-else>
+              <!-- Вкладки вариаций -->
+              <q-tabs
+                v-if="getVariations(stage.code).length > 1"
+                v-model="activeVariation[stage.code]"
+                dense
+                active-color="dark"
+                indicator-color="accent"
+                no-caps
+                style="font-size: 11px"
+                align="left"
+              >
+                <q-tab v-for="v in getVariations(stage.code)" :key="v" :name="v" :label="`Вариация ${v}`" />
+              </q-tabs>
+
+              <!-- Файлы текущей вариации -->
+              <q-list v-if="filesForVariation(stage.code).length > 0" dense>
+                <q-item v-for="f in filesForVariation(stage.code)" :key="f.id">
+                  <q-item-section avatar>
+                    <q-img
+                      v-if="isImageFile(f)"
+                      :src="imgStreamUrl(f)"
+                      style="width: 48px; height: 48px; border-radius: 4px; cursor: pointer"
+                      @click="openStageFile(f, stage.code)"
+                    />
+                    <q-icon v-else :name="fileIcon(f)" :color="fileColor(f)" />
+                  </q-item-section>
+                  <q-item-section v-if="!isImageFile(f)" style="min-width: 0">
+                    <q-item-label style="font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
+                      <a href="#" style="color: #1677FF; text-decoration: none" @click.prevent="openStageFile(f, stage.code)">{{ f.file_name }}</a>
+                    </q-item-label>
+                  </q-item-section>
+                  <q-item-section v-if="!isArchived" side style="flex-shrink: 0">
+                    <div class="row q-gutter-xs no-wrap">
+                      <q-btn
+                        outline
+                        dense
+                        size="xs"
+                        icon="open_in_new"
+                        label="Открыть"
+                        no-caps
+                        color="grey-7"
+                        style="border-radius: 4px; padding: 2px 8px; min-width: 88px"
+                        @click.stop="openStageFile(f, stage.code)"
+                      />
+                      <q-btn
+                        v-if="canUploadForProjectStage(stage.code) && can('crm_cards.files_delete')"
+                        outline
+                        dense
+                        size="xs"
+                        icon="delete_outline"
+                        no-caps
+                        color="negative"
+                        style="padding: 2px 6px; border-radius: 4px"
+                        @click.stop="deleteFile(f)"
+                      />
+                    </div>
+                  </q-item-section>
+                </q-item>
+              </q-list>
+              <q-card-section v-else class="q-py-sm text-center" style="color: #bbb; font-size: 11px">
+                Нет файлов
+              </q-card-section>
+              <div class="q-pb-sm" />
+            </template>
           </q-card>
 
           <div class="q-mb-xl" />
@@ -1722,14 +1858,23 @@ function canUploadForProjectStage(stageCode) {
   const empId = authStore.user?.id
   const se = card.value.stage_executors || []
 
-  // Определяем stage_name по stageCode
-  const stageLabel = (projectStages.value.find(s => s.code === stageCode) || {}).label || ''
+  // Подэтапы Индивидуального stage2 — оба доступны исполнителям Stage 2 (концепция)
+  if ((stageCode === 'stage2_concept' || stageCode === 'stage2_3d') && card.value.project_type === 'Индивидуальный') {
+    return se.some(e => e.executor_id === empId && (e.stage_name || '').toLowerCase().includes('концепция'))
+  }
+
+  // Для остальных: ищем label в top-level stages и substages
+  let stageLabel = ''
+  for (const s of projectStages.value) {
+    if (s.code === stageCode) { stageLabel = s.label; break }
+    for (const sub of (s.substages || [])) {
+      if (sub.code === stageCode) { stageLabel = sub.label; break }
+    }
+  }
   const stageLower = stageLabel.toLowerCase()
 
-  // Проверяем является ли пользователь исполнителем этой конкретной стадии
   const isAssigned = se.some(e => {
     const eStageLower = (e.stage_name || '').toLowerCase()
-    // Совпадение по ключевым словам из стадии
     if (stageLower.includes('планировочн') && eStageLower.includes('планировочн') && e.executor_id === empId) return true
     if (stageLower.includes('концепция') && eStageLower.includes('концепция') && e.executor_id === empId) return true
     if (stageLower.includes('чертёж') && eStageLower.includes('чертеж') && e.executor_id === empId) return true
@@ -1949,7 +2094,14 @@ const projectStages = computed(() => {
   }
   return [
     { code: 'stage1', label: 'Стадия 1: Планировочное решение' },
-    { code: 'stage2_concept', label: 'Стадия 2: Концепция дизайна' },
+    {
+      code: 'stage2_group',
+      label: 'Стадия 2: Концепция дизайна',
+      substages: [
+        { code: 'stage2_concept', label: 'Мудборды' },
+        { code: 'stage2_3d', label: 'Визуализация' },
+      ],
+    },
     { code: 'stage3', label: 'Стадия 3: Чертёжная документация' },
   ]
 })
@@ -2037,10 +2189,16 @@ function filesByStage(stage) { return projectFiles.value.filter(f => f.stage ===
 // Путь к файлу правок для стадии (из workflow state)
 // Использует label из projectStages для определения префикса (напр. "Стадия 2")
 function revisionPathForStage(stageCode) {
-  const stage = projectStages.value.find(s => s.code === stageCode)
-  if (!stage) return ''
-  const m = (stage.label || '').match(/^(Стадия \d+)/)
-  const prefix = m ? m[1] : ''
+  // Подэтапы stage2_group — оба ищут ревизию Stage 2
+  let prefix
+  if (stageCode === 'stage2_concept' || stageCode === 'stage2_3d') {
+    prefix = 'Стадия 2'
+  } else {
+    const stage = projectStages.value.find(s => s.code === stageCode)
+    if (!stage) return ''
+    const m = (stage.label || '').match(/^(Стадия \d+)/)
+    prefix = m ? m[1] : ''
+  }
   if (!prefix) return ''
   const colName = card.value?.column_name || ''
   if (!colName.startsWith(prefix)) return ''
@@ -2114,9 +2272,13 @@ function deleteVariationTab(stageCode) {
 function isCurrentStage(stageCode) {
   const col = (card.value?.column_name || '').toLowerCase()
   if (stageCode === 'stage1' && col.includes('планировочн')) return true
-  if (stageCode === 'stage2_concept' && col.includes('концепция')) return true
-  if (stageCode === 'stage2_3d' && col.includes('визуализац')) return true
-  if (stageCode === 'stage3' && col.includes('чертеж')) return true
+  if ((stageCode === 'stage2_group' || stageCode === 'stage2_concept') && col.includes('концепция')) return true
+  if (stageCode === 'stage2_3d') {
+    if (col.includes('визуализац')) return true
+    // В Индивидуальном Визуализация — подэтап Концепции
+    if (card.value?.project_type === 'Индивидуальный' && col.includes('концепция')) return true
+  }
+  if (stageCode === 'stage3' && (col.includes('чертеж') || col.includes('чертёж'))) return true
   return false
 }
 
