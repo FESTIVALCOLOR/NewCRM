@@ -244,7 +244,7 @@ import { ref, computed } from 'vue'
 import { useReferencesStore } from 'src/stores/references'
 import { useAuthStore } from 'src/stores/auth'
 import { usePermission } from 'src/composables/usePermission'
-import { countWorkingDaysUntil } from 'src/composables/useDeadline'
+import { addWorkingDays, countWorkingDaysUntil } from 'src/composables/useDeadline'
 
 const props = defineProps({ card: { type: Object, required: true } })
 const emit = defineEmits(['click', 'longpress', 'submit-work', 'reject', 'client-send', 'client-approved', 'sign-act', 'send-act', 'add-measurement', 'add-tech-task', 'advance-round', 'close-stage', 'add-extra-round'])
@@ -360,14 +360,26 @@ function _deadlineDaysBg(days) {
   return '#F5F5F5'
 }
 
-// Левый блок: Общий дедлайн заказа (всегда c.deadline)
+// Левый блок: Общий дедлайн заказа — из card.deadline или вычисленный из contract_period
+const effectiveDeadline = computed(() => {
+  if (props.card.deadline) return props.card.deadline
+  const period = props.card.contract_period
+  if (!period || period <= 0) return null
+  const dates = []
+  if (props.card.contract_date) dates.push(props.card.contract_date)
+  if (props.card.survey_date) dates.push(props.card.survey_date)
+  if (props.card.tech_task_date) dates.push(props.card.tech_task_date)
+  if (!dates.length) return null
+  const latest = [...dates].sort().at(-1)
+  return addWorkingDays(latest, period)
+})
 const generalDeadlineDays = computed(() => {
-  if (!props.card.deadline) return null
-  return countWorkingDaysUntil(props.card.deadline)
+  if (!effectiveDeadline.value) return null
+  return countWorkingDaysUntil(effectiveDeadline.value)
 })
 const generalDeadlineText = computed(() => {
   if (generalDeadlineDays.value === null) return null
-  const d = new Date(props.card.deadline).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit' })
+  const d = new Date(effectiveDeadline.value).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit' })
   const days = generalDeadlineDays.value
   if (days < 0) return `${d} (−${Math.abs(days)}р.д.)`
   if (days === 0) return `${d} Сегодня!`

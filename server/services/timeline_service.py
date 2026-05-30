@@ -3,6 +3,7 @@
 Чистые функции для генерации шаблонов и расчёта нормо-дней.
 """
 
+from datetime import datetime, timedelta
 import logging
 
 from constants import POSITION_DESIGNER, POSITION_DRAFTSMAN
@@ -12,9 +13,29 @@ from database import Contract, CRMCard, NormDaysTemplate, ProjectTimelineEntry, 
 
 logger = logging.getLogger(__name__)
 
+_RUSSIAN_HOLIDAYS = {(1, 1), (1, 2), (1, 3), (1, 4), (1, 5), (1, 6), (1, 7), (1, 8), (2, 23), (3, 8), (5, 1), (5, 9), (6, 12), (11, 4)}
+
+
+def _is_working_day_tl(d):
+    return d.weekday() not in (5, 6) and (d.month, d.day) not in _RUSSIAN_HOLIDAYS
+
+
+def _add_business_days_str(start_str: str, days: int) -> str | None:
+    """Добавить рабочие дни к дате (строка YYYY-MM-DD → строка YYYY-MM-DD)."""
+    try:
+        current = datetime.strptime(start_str, "%Y-%m-%d")
+    except (ValueError, TypeError):
+        return None
+    added = 0
+    while added < days:
+        current += timedelta(days=1)
+        if _is_working_day_tl(current):
+            added += 1
+    return current.strftime("%Y-%m-%d")
+
 
 def refresh_timeline_start_date(db: Session, contract_id: int, card_id: int = None) -> None:
-    """Пересчитать actual_date записи START в таймлайне.
+    """Пересчитать actual_date записи START в таймлайне и CRMCard.deadline.
     Берёт max(contract_date, advance_payment_paid_date, survey_date, tech_task_date).
     Идентично _auto_set_start_date() в desktop timeline_widget.py.
     Вызывается из crm_router и contracts_router при изменении дат-триггеров."""
@@ -44,6 +65,13 @@ def refresh_timeline_start_date(db: Session, contract_id: int, card_id: int = No
         if start_entry and start_entry.actual_date != latest:
             start_entry.actual_date = latest
             db.commit()
+        # Установить CRMCard.deadline = latest + contract_period рабочих дней
+        if card and contract.contract_period and int(contract.contract_period) > 0:
+            new_deadline = _add_business_days_str(latest, int(contract.contract_period))
+            if new_deadline and str(card.deadline or "") != new_deadline:
+                card.deadline = new_deadline
+                db.commit()
+                logger.info(f"[Timeline] contract={contract_id} deadline → {new_deadline} (start={latest}, period={contract.contract_period})")
     except Exception as e:
         logger.warning(f"refresh_timeline_start_date contract={contract_id}: {e}")
 

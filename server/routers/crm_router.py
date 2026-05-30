@@ -414,6 +414,7 @@ async def get_crm_cards(project_type: Optional[str] = None, archived: bool = Fal
                 "project_subtype": contract.project_subtype if hasattr(contract, "project_subtype") else None,
                 "floors": contract.floors if hasattr(contract, "floors") else 1,
                 "contract_period": contract.contract_period,
+                "contract_date": str(contract.contract_date) if contract.contract_date else None,
                 "contract_status": contract.status,
                 # Поля ТЗ и замера из contracts
                 "tech_task_link": contract.tech_task_link,
@@ -563,6 +564,7 @@ async def get_crm_card(card_id: int, current_user: Employee = Depends(get_curren
                     "project_subtype": contract.project_subtype if hasattr(contract, "project_subtype") else None,
                     "floors": contract.floors if hasattr(contract, "floors") else 1,
                     "contract_period": contract.contract_period,
+                    "contract_date": str(contract.contract_date) if contract.contract_date else None,
                     "contract_status": contract.status,
                     "client_name": client.full_name if client else None,
                     "client_id": contract.client_id,

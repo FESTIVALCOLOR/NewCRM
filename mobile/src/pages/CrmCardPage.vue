@@ -174,8 +174,8 @@
                     <div class="text-caption" style="color: #999">
                       Дедлайн проекта
                     </div>
-                    <div style="font-size: 13px" :style="{ color: card.deadline ? dlHex(card.deadline) : '#333' }">
-                      {{ fmtDateShort(card.deadline) || '-' }}
+                    <div style="font-size: 13px" :style="{ color: effectiveDeadline ? dlHex(effectiveDeadline) : '#333' }">
+                      {{ fmtDateShort(effectiveDeadline) || '-' }}
                     </div>
                   </div>
                 </div>
@@ -1689,7 +1689,7 @@ import { useAuthStore } from 'src/stores/auth'
 import { useReferencesStore } from 'src/stores/references'
 import { useChatUnreadStore } from 'src/stores/chatUnread'
 import { usePermission } from 'src/composables/usePermission'
-import { calcDeadlineFromTimeline } from 'src/composables/useDeadline'
+import { addWorkingDays, calcDeadlineFromTimeline } from 'src/composables/useDeadline'
 import { crmApi, employeesApi, filesApi, contractsApi, paymentsApi, locksApi, messengerApi } from 'src/services/api'
 import MeasurementDialog from 'src/components/MeasurementDialog.vue'
 import InlineChatRoom from 'src/components/InlineChatRoom.vue'
@@ -2206,6 +2206,18 @@ const filteredHistory = computed(() => {
 function statusColor(col) { if (!col) return 'grey'; if (col.includes('Новый')) return 'info'; if (col.includes('ожидании')) return 'warning'; if (col.includes('Стадия')) return 'accent'; if (col.includes('Выполненный')) return 'positive'; return 'grey' }
 function substepColor(s) { return { pending_review: 'purple', revision: 'negative', client_approval: 'info', act_signing: 'purple', stage_completed: 'positive' }[s] || 'orange' }
 function workflowLabel(s) { return { in_progress: 'В работе', pending_review: 'На проверке', revision: 'Исправление', client_approval: 'У клиента', act_signing: 'Подписание акта', stage_completed: 'Завершено' }[s] || s || '' }
+const effectiveDeadline = computed(() => {
+  if (card.value?.deadline) return card.value.deadline
+  const period = card.value?.contract_period
+  if (!period || period <= 0) return null
+  const dates = []
+  if (card.value?.contract_date) dates.push(card.value.contract_date)
+  if (card.value?.survey_date) dates.push(card.value.survey_date)
+  if (card.value?.tech_task_date) dates.push(card.value.tech_task_date)
+  if (!dates.length) return null
+  const latest = [...dates].sort().at(-1)
+  return addWorkingDays(latest, period)
+})
 function dlHex(d) { if (!d) return '#888'; const days = Math.ceil((new Date(d)-new Date())/86400000); if (days<0) return '#E74C3C'; if (days<=2) return '#F39C12'; return '#888' }
 function dlBadgeColor(d) { if (!d) return 'grey'; const days = Math.ceil((new Date(d)-new Date())/86400000); if (days<0) return 'negative'; if (days<=2) return 'warning'; return 'positive' }
 function daysLeft(d) { if (!d) return ''; const days = Math.ceil((new Date(d)-new Date())/86400000); if (days<0) return `${Math.abs(days)} дн. просрочено`; if (days===0) return 'сегодня'; return `${days} дн.` }
@@ -2538,11 +2550,11 @@ async function onVoiceRecorded({ url, duration, path }) {
 
 // === Добавить дедлайн проекта в календарь ===
 function addDeadlineToCalendar() {
-  if (!card.value?.deadline) return
+  if (!effectiveDeadline.value) return
   addToCalendar({
     title: `CRM: ${card.value.address || card.value.contract_number} — ${card.value.column_name || 'проект'}`,
     description: `Дедлайн проекта ${card.value.contract_number}. Стадия: ${card.value.column_name || ''}`,
-    startDate: card.value.deadline,
+    startDate: effectiveDeadline.value,
     location: card.value.address || '',
     reminder: 1440, // за 1 день
   }, $q)
