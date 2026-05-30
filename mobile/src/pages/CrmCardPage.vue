@@ -286,30 +286,7 @@
                   :loading="actionLoading"
                   @click="doAction('client-send')"
                 />
-                <!-- Для Stage 2 Индивидуальный — две кнопки по подэтапам -->
-                <template v-if="isRejectStage2Individual">
-                  <q-btn
-                    unelevated
-                    dense
-                    no-caps
-                    icon="replay"
-                    label="Мудборды ↩"
-                    style="background: #F1948A; color: white; font-size: 10px; font-weight: bold; height: 36px; border-radius: 4px; flex: 1"
-                    @click="openRejectDialog('concept')"
-                  />
-                  <q-btn
-                    unelevated
-                    dense
-                    no-caps
-                    icon="replay"
-                    label="Визуализация ↩"
-                    style="background: #E59866; color: white; font-size: 10px; font-weight: bold; height: 36px; border-radius: 4px; flex: 1"
-                    @click="openRejectDialog('3d')"
-                  />
-                </template>
-                <!-- Для остальных стадий — одна кнопка -->
                 <q-btn
-                  v-else
                   unelevated
                   dense
                   no-caps
@@ -2808,10 +2785,26 @@ async function doAction(action) {
   finally { actionLoading.value = false }
 }
 
-function openRejectDialog(substage = '') {
-  rejectSubstage.value = substage
+function openRejectDialog() {
   rejectReason.value = ''
   rejectFile.value = null
+  // Для Stage 2 Индивидуальный — определяем подэтап автоматически
+  // S2_1_* / Подэтап 2.1 = Мудборды (Концепция-коллажи)
+  // S2_2_*, S2_3_*, … / Подэтап 2.2+ = Визуализация (3D)
+  if (isRejectStage2Individual.value) {
+    const wf = workflowStates.value.find(w => w.stage_name === card.value?.column_name)
+    const activeCode = wf?.current_substep_code
+    const subGroup = wf?.current_substage_group
+    if (activeCode) {
+      rejectSubstage.value = activeCode.startsWith('S2_1_') ? 'concept' : '3d'
+    } else if (subGroup) {
+      rejectSubstage.value = subGroup === 'Подэтап 2.1' ? 'concept' : '3d'
+    } else {
+      rejectSubstage.value = ''
+    }
+  } else {
+    rejectSubstage.value = ''
+  }
   showRejectDialog.value = true
 }
 
