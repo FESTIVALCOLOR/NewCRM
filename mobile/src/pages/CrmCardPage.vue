@@ -2788,20 +2788,10 @@ async function doAction(action) {
 function openRejectDialog() {
   rejectReason.value = ''
   rejectFile.value = null
-  // Для Stage 2 Индивидуальный — определяем подэтап автоматически
-  // S2_1_* / Подэтап 2.1 = Мудборды (Концепция-коллажи)
-  // S2_2_*, S2_3_*, … / Подэтап 2.2+ = Визуализация (3D)
+  // S2_1_* = Мудборды (Концепция-коллажи), S2_2_+ = Визуализация (3D)
   if (isRejectStage2Individual.value) {
-    const wf = workflowStates.value.find(w => w.stage_name === card.value?.column_name)
-    const activeCode = wf?.current_substep_code
-    const subGroup = wf?.current_substage_group
-    if (activeCode) {
-      rejectSubstage.value = activeCode.startsWith('S2_1_') ? 'concept' : '3d'
-    } else if (subGroup) {
-      rejectSubstage.value = subGroup === 'Подэтап 2.1' ? 'concept' : '3d'
-    } else {
-      rejectSubstage.value = ''
-    }
+    const activeCode = card.value?.current_substep_code
+    rejectSubstage.value = activeCode?.startsWith('S2_1_') ? 'concept' : activeCode ? '3d' : ''
   } else {
     rejectSubstage.value = ''
   }

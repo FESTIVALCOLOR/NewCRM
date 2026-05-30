@@ -712,7 +712,6 @@ async function submitBoardReject() {
   if (!boardRejectReason.value) { $q.notify({ type: 'warning', message: 'Укажите причину' }); return }
   boardRejectLoading.value = true
   try {
-    // Загрузка файла если есть
     let filePath = null
     if (boardRejectFile.value) {
       try {
@@ -722,9 +721,19 @@ async function submitBoardReject() {
         if (contractId) {
           const { data: ct } = await contractsApi.getById(contractId)
           if (ct?.yandex_folder_path) {
-            const STAGE_YD = { 'Стадия 1: планировочные решения': '1 стадия - Планировочное решение', 'Стадия 2: концепция дизайна': '2 стадия - Концепция дизайна', 'Стадия 3: рабочие чертежи': '3 стадия - Чертежный проект', 'Стадия 2: рабочие чертежи': '2 стадия - Чертежный проект', 'Стадия 3: 3д визуализация (Дополнительная)': '3D визуализация' }
-            const stageName = STAGE_YD[card.column_name] || (card.column_name || 'Стадия').replace(/:/g, ' -')
-            folder = ct.yandex_folder_path.replace(/^disk:/, '') + '/' + stageName + '/правки'
+            const base = ct.yandex_folder_path.replace(/^disk:/, '')
+            const colName = card?.column_name || ''
+            const isStage2Ind = colName.toLowerCase().includes('концепция') && card?.project_type !== 'Шаблонный'
+            if (isStage2Ind) {
+              // S2_1_* = Мудборды → Концепция-коллажи/Правки; иначе → 3D визуализация/Правки
+              const isConcept = (card?.current_substep_code || '').startsWith('S2_1_')
+              const sub = isConcept ? 'Концепция-коллажи' : '3D визуализация'
+              folder = `${base}/2 стадия - Концепция дизайна/${sub}/Правки`
+            } else {
+              const STAGE_YD = { 'Стадия 1: планировочные решения': '1 стадия - Планировочное решение', 'Стадия 2: концепция дизайна': '2 стадия - Концепция дизайна', 'Стадия 3: рабочие чертежи': '3 стадия - Чертежный проект', 'Стадия 2: рабочие чертежи': '2 стадия - Чертежный проект', 'Стадия 3: 3д визуализация (Дополнительная)': '3D визуализация' }
+              const stageName = STAGE_YD[colName] || colName.replace(/:/g, ' -')
+              folder = `${base}/${stageName}/Правки`
+            }
           }
         }
         await filesApi.upload(boardRejectFile.value, `${folder}/${boardRejectFile.value.name}`)
