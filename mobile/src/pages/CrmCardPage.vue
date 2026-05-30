@@ -2189,10 +2189,15 @@ function filesByStage(stage) { return projectFiles.value.filter(f => f.stage ===
 // Путь к файлу правок для стадии (из workflow state)
 // Использует label из projectStages для определения префикса (напр. "Стадия 2")
 function revisionPathForStage(stageCode) {
-  // Подэтапы stage2_group — оба ищут ревизию Stage 2
-  let prefix
-  if (stageCode === 'stage2_concept' || stageCode === 'stage2_3d') {
+  let prefix, substageFilter
+  if (stageCode === 'stage2_concept') {
     prefix = 'Стадия 2'
+    // Папка Мудбордов: "Концепция-коллажи" в пути
+    substageFilter = p => p.toLowerCase().includes('коллаж')
+  } else if (stageCode === 'stage2_3d') {
+    prefix = 'Стадия 2'
+    // Папка Визуализации: "визуализ" в пути (3D визуализация)
+    substageFilter = p => p.toLowerCase().includes('визуализ')
   } else {
     const stage = projectStages.value.find(s => s.code === stageCode)
     if (!stage) return ''
@@ -2202,11 +2207,14 @@ function revisionPathForStage(stageCode) {
   if (!prefix) return ''
   const colName = card.value?.column_name || ''
   if (!colName.startsWith(prefix)) return ''
-  const wf = workflowStates.value.find(w =>
-    w.stage_name && w.stage_name.startsWith(prefix) &&
-    w.revision_file_path,
+  const candidates = workflowStates.value.filter(w =>
+    w.stage_name && w.stage_name.startsWith(prefix) && w.revision_file_path,
   )
-  return wf?.revision_file_path || ''
+  if (substageFilter) {
+    // Для подэтапов: только путь, специфичный для данной подпапки
+    return candidates.find(w => substageFilter(w.revision_file_path))?.revision_file_path || ''
+  }
+  return candidates[0]?.revision_file_path || ''
 }
 
 // Вариации — вкладки как в десктопе
