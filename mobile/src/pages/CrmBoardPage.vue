@@ -407,6 +407,13 @@
             autogrow
             class="q-mb-sm"
           />
+          <div v-if="boardRejectSubstage" class="q-mb-sm row items-center q-gutter-xs">
+            <q-icon name="subdirectory_arrow_right" color="grey-6" size="16px" />
+            <span style="font-size: 12px; color: #666">Папка правок:</span>
+            <q-chip dense color="orange-2" text-color="orange-9" style="font-size: 11px">
+              {{ boardRejectSubstage === 'concept' ? 'Концепция-коллажи / Правки' : '3D визуализация / Правки' }}
+            </q-chip>
+          </div>
           <div class="q-mb-sm">
             <q-btn
               outline
@@ -701,10 +708,19 @@ const boardRejectFile = ref(null)
 const boardRejectLoading = ref(false)
 const boardRejectCardId = ref(null)
 
+const boardRejectSubstage = ref('') // 'concept' | '3d' | ''
+
 function openBoardReject(cardId) {
   boardRejectCardId.value = cardId
   boardRejectReason.value = ''
   boardRejectFile.value = null
+  const card = crmStore.cards.find(c => c.id === cardId)
+  const isStage2Ind = (card?.column_name || '').toLowerCase().includes('концепция') && card?.project_type !== 'Шаблонный'
+  if (isStage2Ind) {
+    boardRejectSubstage.value = (card?.current_substep_code || '').startsWith('S2_1_') ? 'concept' : '3d'
+  } else {
+    boardRejectSubstage.value = ''
+  }
   boardRejectVisible.value = true
 }
 
