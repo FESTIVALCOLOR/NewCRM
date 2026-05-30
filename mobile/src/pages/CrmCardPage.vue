@@ -1677,6 +1677,36 @@
         @click="$router.back()"
       />
     </div>
+
+    <!-- Диалог подтверждения «Сдать работу» -->
+    <q-dialog v-model="showSubmitWarningDialog" persistent>
+      <q-card style="min-width: 300px; max-width: 400px; border-radius: 8px">
+        <q-card-section>
+          <div class="text-h6" style="font-size: 16px; font-weight: bold">
+            Сдать работу
+          </div>
+        </q-card-section>
+        <q-card-section class="q-pt-none" style="font-size: 14px; color: #555">
+          Перед сдачей убедитесь, что загрузили результат работы в данные карточки. Продолжить?
+        </q-card-section>
+        <q-card-actions align="right" class="q-pb-sm q-px-md">
+          <q-btn
+            flat
+            no-caps
+            label="Отмена"
+            style="color: #666"
+            @click="onSubmitWarningCancel"
+          />
+          <q-btn
+            unelevated
+            no-caps
+            label="Сдать работу"
+            style="background: #58D68D; color: white; border-radius: 4px; font-weight: bold"
+            @click="onSubmitWarningConfirm"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
@@ -1778,6 +1808,8 @@ const activeTab = ref('executors')
 const chatTabVisited = ref(false)
 const notesTabVisited = ref(false)
 const actionLoading = ref(false)
+const showSubmitWarningDialog = ref(false)
+let _submitWarningResolve = null
 const employeeOptions = ref([])
 const cardPayments = ref([])
 const showCreatePayment = ref(false)
@@ -2563,16 +2595,24 @@ function openContractEdit() {
   }
 }
 
+function _askSubmitConfirmation() {
+  return new Promise((resolve) => {
+    _submitWarningResolve = resolve
+    showSubmitWarningDialog.value = true
+  })
+}
+function onSubmitWarningConfirm() {
+  showSubmitWarningDialog.value = false
+  if (_submitWarningResolve) { _submitWarningResolve(true); _submitWarningResolve = null }
+}
+function onSubmitWarningCancel() {
+  showSubmitWarningDialog.value = false
+  if (_submitWarningResolve) { _submitWarningResolve(false); _submitWarningResolve = null }
+}
+
 async function doAction(action) {
   if (action === 'submit') {
-    const confirmed = await new Promise((resolve) => {
-      $q.dialog({
-        title: 'Сдать работу',
-        message: 'Перед сдачей убедитесь, что загрузили результат работы в данные карточки. Продолжить?',
-        ok: { label: 'Сдать работу', color: 'positive', noCaps: true, unelevated: true },
-        cancel: { label: 'Отмена', flat: true, noCaps: true },
-      }).onOk(() => resolve(true)).onCancel(() => resolve(false))
-    })
+    const confirmed = await _askSubmitConfirmation()
     if (!confirmed) return
   }
   actionLoading.value = true
