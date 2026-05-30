@@ -740,6 +740,18 @@ async function submitBoardReject() {
 }
 
 async function doCardAction(cardId, action) {
+  if (action === 'submit') {
+    const confirmed = await new Promise((resolve) => {
+      $q.dialog({
+        title: 'Сдать работу',
+        message: 'Перед сдачей убедитесь, что загрузили результат работы в данные карточки. Продолжить?',
+        ok: { label: 'Сдать работу', color: 'positive', noCaps: true, unelevated: true },
+        cancel: { label: 'Отмена', flat: true, noCaps: true },
+        persistent: true,
+      }).onOk(() => resolve(true)).onCancel(() => resolve(false))
+    })
+    if (!confirmed) return
+  }
   try {
     const actions = {
       submit: () => crmApi.submitWork(cardId),
