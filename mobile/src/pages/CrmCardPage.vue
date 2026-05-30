@@ -167,15 +167,18 @@
                       Дата начала
                     </div>
                     <div style="font-size: 13px; color: #333">
-                      {{ fmtDateShort(card.start_date || contractData?.contract_date) || '-' }}
+                      {{ fmtDateShort(projectStartDate) || '-' }}
                     </div>
                   </div>
                   <div>
                     <div class="text-caption" style="color: #999">
                       Дедлайн проекта
                     </div>
-                    <div style="font-size: 13px" :style="{ color: effectiveDeadline ? dlHex(effectiveDeadline) : '#333' }">
+                    <div style="font-size: 13px; cursor: default" :style="{ color: effectiveDeadline ? dlHex(effectiveDeadline) : '#333' }">
                       {{ fmtDateShort(effectiveDeadline) || '-' }}
+                      <q-tooltip v-if="isProjectOverdue && deadlineDeviations.length" style="font-size: 12px; max-width: 260px; white-space: pre-line">
+                        {{ deadlineTooltip }}
+                      </q-tooltip>
                     </div>
                   </div>
                 </div>
@@ -1946,14 +1949,16 @@ const hasCustomNormDays = computed(() =>
 )
 const timelineTotals = computed(() => {
   let normTotal = 0, actualTotal = 0
+  const contractPeriod = contractData.value?.contract_period || 0
   for (const e of timelineEntries.value) {
     if (e.executor_role === 'header') continue
-    // Как в десктопе: считаем только строки в объёме договора (is_in_contract_scope != false)
     if (e.is_in_contract_scope !== false) {
-      normTotal += (e.custom_norm_days || e.norm_days || 0)
+      normTotal += (e.norm_days || 0)
     }
     actualTotal += (e.actual_days || 0)
   }
+  // contract_period перекрывает сумму (как в десктопе: self._contract_term or sum(...))
+  if (contractPeriod > 0) normTotal = contractPeriod
   return { normTotal, actualTotal }
 })
 const workflowStates = ref([])
@@ -2389,17 +2394,41 @@ const filteredHistory = computed(() => {
 function statusColor(col) { if (!col) return 'grey'; if (col.includes('Новый')) return 'info'; if (col.includes('ожидании')) return 'warning'; if (col.includes('Стадия')) return 'accent'; if (col.includes('Выполненный')) return 'positive'; return 'grey' }
 function substepColor(s) { return { pending_review: 'purple', revision: 'negative', client_approval: 'info', act_signing: 'purple', stage_completed: 'positive' }[s] || 'orange' }
 function workflowLabel(s) { return { in_progress: 'В работе', pending_review: 'На проверке', revision: 'Исправление', client_approval: 'У клиента', act_signing: 'Подписание акта', stage_completed: 'Завершено' }[s] || s || '' }
+// Дата начала = actual_date записи START в timeline (устанавливается автоматически как max дат)
+const projectStartDate = computed(() =>
+  timelineEntries.value.find(e => e.stage_code === 'START')?.actual_date || null,
+)
+// Дедлайн проекта = START + срок договора в рабочих днях (как в desktop timeline_widget.py:642-643)
 const effectiveDeadline = computed(() => {
-  if (card.value?.deadline) return card.value.deadline
-  const period = card.value?.contract_period
+  const startDate = projectStartDate.value
+  if (!startDate) return null
+  const period = contractData.value?.contract_period || card.value?.contract_period
   if (!period || period <= 0) return null
-  const dates = []
-  if (card.value?.contract_date) dates.push(card.value.contract_date)
-  if (card.value?.survey_date) dates.push(card.value.survey_date)
-  if (card.value?.tech_task_date) dates.push(card.value.tech_task_date)
-  if (!dates.length) return null
-  const latest = [...dates].sort().at(-1)
-  return addWorkingDays(latest, period)
+  return addWorkingDays(startDate, period)
+})
+// Просрочки по завершённым подэтапам (как в desktop _recalculate_days deviation_reasons)
+const deadlineDeviations = computed(() => {
+  const result = []
+  for (const e of timelineEntries.value) {
+    if (e.executor_role === 'header') continue
+    const ad = e.actual_days || 0
+    if (ad <= 0) continue
+    const effectiveNorm = e.custom_norm_days || e.norm_days || 0
+    if (effectiveNorm <= 0) continue
+    const diff = ad - effectiveNorm
+    if (diff > 0) result.push({ name: e.stage_name, diff })
+  }
+  return result
+})
+const isProjectOverdue = computed(() => {
+  if (!effectiveDeadline.value) return false
+  return new Date(effectiveDeadline.value) < new Date()
+})
+const deadlineTooltip = computed(() => {
+  if (!deadlineDeviations.value.length) return ''
+  const lines = deadlineDeviations.value.map(d => `• ${d.name}: +${d.diff} дн.`)
+  const total = deadlineDeviations.value.reduce((sum, d) => sum + d.diff, 0)
+  return `Просрочки по подэтапам:\n${lines.join('\n')}\nИтого задержка: ${total} дн.`
 })
 function dlHex(d) { if (!d) return '#888'; const days = Math.ceil((new Date(d)-new Date())/86400000); if (days<0) return '#E74C3C'; if (days<=2) return '#F39C12'; return '#888' }
 function dlBadgeColor(d) { if (!d) return 'grey'; const days = Math.ceil((new Date(d)-new Date())/86400000); if (days<0) return 'negative'; if (days<=2) return 'warning'; return 'positive' }
