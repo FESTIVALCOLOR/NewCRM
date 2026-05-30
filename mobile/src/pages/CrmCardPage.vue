@@ -1608,6 +1608,7 @@
             @click="openContractEdit"
           />
           <q-fab-action
+            v-if="can('access.contracts')"
             icon="description"
             style="background: #5DADE2; color: white"
             label="Посмотреть договор"
@@ -3041,9 +3042,6 @@ async function loadAdditionalData(cardId) {
   } catch (e) {
     timelineEntries.value = []
   }
-
-  // Фоновая синхронизация файлов с ЯД — убираем записи удалённых файлов
-  syncCrmFilesWithYd()
 
   // Чат — грузим всегда, чтобы данные были готовы при открытии вкладки
   loadChat()
