@@ -866,7 +866,7 @@
 
                 <!-- Вкладки вариаций подстадии -->
                 <q-tabs
-                  v-if="getVariations(sub.code).length > 1"
+                  v-if="getVariations(sub.code).length >= 1"
                   v-model="activeVariation[sub.code]"
                   dense
                   active-color="dark"
@@ -2204,7 +2204,7 @@ function revisionPathForStage(stageCode) {
   if (!colName.startsWith(prefix)) return ''
   const wf = workflowStates.value.find(w =>
     w.stage_name && w.stage_name.startsWith(prefix) &&
-    w.revision_file_path && w.status === 'revision',
+    w.revision_file_path,
   )
   return wf?.revision_file_path || ''
 }
@@ -2216,10 +2216,9 @@ const createdVariations = ref({}) // { stage_code: [variation_numbers] }
 function getVariations(stageCode) {
   const files = filesByStage(stageCode)
   const varsSet = new Set(files.map(f => f.variation || 1))
-  // Добавляем вручную созданные вариации (которые ещё без файлов)
   const created = createdVariations.value[stageCode] || []
   for (const v of created) varsSet.add(v)
-  if (varsSet.size === 0) varsSet.add(1)
+  varsSet.add(1) // Вариация 1 всегда существует по умолчанию
   if (!activeVariation.value[stageCode]) activeVariation.value[stageCode] = Math.min(...varsSet)
   return [...varsSet].sort((a, b) => a - b)
 }
