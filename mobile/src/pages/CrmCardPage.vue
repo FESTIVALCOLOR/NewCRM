@@ -1464,6 +1464,21 @@
               autogrow
               class="q-mb-sm"
             />
+            <!-- Выбор подэтапа — только для Стадии 2 Индивидуального проекта -->
+            <q-select
+              v-if="isRejectStage2Individual"
+              v-model="rejectSubstage"
+              :options="[
+                { label: 'Мудборды (Концепция-коллажи)', value: 'concept' },
+                { label: 'Визуализация (3D)', value: '3d' },
+              ]"
+              label="Подэтап *"
+              outlined
+              dense
+              emit-value
+              map-options
+              class="q-mb-sm"
+            />
             <div class="q-mb-sm">
               <q-btn
                 outline
@@ -1950,11 +1965,17 @@ const timelineTotals = computed(() => {
 })
 const workflowStates = ref([])
 const showRejectDialog = ref(false)
+const rejectSubstage = ref('') // 'concept' | '3d' | '' (для не-stage2)
 const showMeasurementDlg = ref(false)
 const showRestoreDialog = ref(false)
 const restoreStage = ref(null)
 const rejectReason = ref('')
 const rejectFile = ref(null)
+// Stage 2 Индивидуальный — нужен выбор подэтапа в диалоге правок
+const isRejectStage2Individual = computed(() =>
+  (card.value?.column_name || '').toLowerCase().includes('концепция') &&
+  card.value?.project_type !== 'Шаблонный',
+)
 const rejectFilePreviewUrl = ref(null)
 watch(rejectFile, (newFile, oldFile) => {
   if (oldFile && rejectFilePreviewUrl.value) URL.revokeObjectURL(rejectFilePreviewUrl.value)
@@ -2773,28 +2794,40 @@ async function doAction(action) {
 
 async function submitReject() {
   if (!rejectReason.value) { $q.notify({ type: 'warning', message: 'Укажите причину' }); return }
+  if (isRejectStage2Individual.value && !rejectSubstage.value) {
+    $q.notify({ type: 'warning', message: 'Выберите подэтап (Мудборды или Визуализация)' }); return
+  }
   actionLoading.value = true
   try {
     let filePath = null
     if (rejectFile.value) {
       const contractFolder = (contractData.value?.yandex_folder_path || '').replace(/^disk:/, '')
-      // Маппинг column_name → имя папки на ЯД (как в десктопе)
-      const STAGE_YD_FOLDERS = {
-        'Стадия 1: планировочные решения': '1 стадия - Планировочное решение',
-        'Стадия 2: концепция дизайна': '2 стадия - Концепция дизайна',
-        'Стадия 3: рабочие чертежи': '3 стадия - Чертежный проект',
-        'Стадия 1: планировочные решения': '1 стадия - Планировочное решение',
-        'Стадия 2: рабочие чертежи': '2 стадия - Чертежный проект',
-        'Стадия 3: 3д визуализация (Дополнительная)': '3D визуализация',
+      let corrPath
+      // Для Стадии 2 Индивидуального — раздельные папки по подэтапам
+      if (rejectSubstage.value === 'concept') {
+        corrPath = `${contractFolder}/2 стадия - Концепция дизайна/Концепция-коллажи/Правки`
+      } else if (rejectSubstage.value === '3d') {
+        corrPath = `${contractFolder}/2 стадия - Концепция дизайна/3D визуализация/Правки`
+      } else {
+        // Остальные стадии — маппинг по column_name
+        const STAGE_YD_FOLDERS = {
+          'Стадия 1: планировочные решения': '1 стадия - Планировочное решение',
+          'Стадия 2: концепция дизайна': '2 стадия - Концепция дизайна',
+          'Стадия 3: рабочие чертежи': '3 стадия - Чертежный проект',
+          'Стадия 2: рабочие чертежи': '2 стадия - Чертежный проект',
+          'Стадия 3: 3д визуализация (Дополнительная)': '3D визуализация',
+        }
+        const ydStageName = STAGE_YD_FOLDERS[card.value.column_name] || (card.value.column_name || 'Стадия').replace(/:/g, ' -')
+        corrPath = contractFolder ? `${contractFolder}/${ydStageName}/Правки` : `/CRM/Правки/${card.value.contract_number || card.value.id}`
       }
-      const ydStageName = STAGE_YD_FOLDERS[card.value.column_name] || (card.value.column_name || 'Стадия').replace(/:/g, ' -')
-      const corrPath = contractFolder ? `${contractFolder}/${ydStageName}/правки` : `/CRM/Правки/${card.value.contract_number||card.value.id}`
       const yp = `${corrPath}/${rejectFile.value.name}`
       await filesApi.upload(rejectFile.value, yp)
       filePath = corrPath
     }
     await crmApi.rejectWork(card.value.id, { reason: rejectReason.value, revision_file_path: filePath })
-    $q.notify({ type: 'positive', message: 'Отправлено на исправление' }); showRejectDialog.value = false; rejectReason.value = ''; rejectFile.value = null; await reloadCard()
+    $q.notify({ type: 'positive', message: 'Отправлено на исправление' })
+    showRejectDialog.value = false; rejectReason.value = ''; rejectFile.value = null; rejectSubstage.value = ''
+    await reloadCard()
   } catch (err) { $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' }) }
   finally { actionLoading.value = false }
 }
