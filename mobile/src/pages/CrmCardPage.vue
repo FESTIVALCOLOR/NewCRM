@@ -286,14 +286,37 @@
                   :loading="actionLoading"
                   @click="doAction('client-send')"
                 />
+                <!-- Для Stage 2 Индивидуальный — две кнопки по подэтапам -->
+                <template v-if="isRejectStage2Individual">
+                  <q-btn
+                    unelevated
+                    dense
+                    no-caps
+                    icon="replay"
+                    label="Мудборды ↩"
+                    style="background: #F1948A; color: white; font-size: 10px; font-weight: bold; height: 36px; border-radius: 4px; flex: 1"
+                    @click="openRejectDialog('concept')"
+                  />
+                  <q-btn
+                    unelevated
+                    dense
+                    no-caps
+                    icon="replay"
+                    label="Визуализация ↩"
+                    style="background: #E59866; color: white; font-size: 10px; font-weight: bold; height: 36px; border-radius: 4px; flex: 1"
+                    @click="openRejectDialog('3d')"
+                  />
+                </template>
+                <!-- Для остальных стадий — одна кнопка -->
                 <q-btn
+                  v-else
                   unelevated
                   dense
                   no-caps
                   icon="replay"
                   label="На исправление"
                   style="background: #F1948A; color: white; font-size: 11px; font-weight: bold; height: 36px; border-radius: 4px; flex: 1"
-                  @click="showRejectDialog = true"
+                  @click="openRejectDialog()"
                 />
               </div>
 
@@ -1464,21 +1487,14 @@
               autogrow
               class="q-mb-sm"
             />
-            <!-- Выбор подэтапа — только для Стадии 2 Индивидуального проекта -->
-            <q-select
-              v-if="isRejectStage2Individual"
-              v-model="rejectSubstage"
-              :options="[
-                { label: 'Мудборды (Концепция-коллажи)', value: 'concept' },
-                { label: 'Визуализация (3D)', value: '3d' },
-              ]"
-              label="Подэтап *"
-              outlined
-              dense
-              emit-value
-              map-options
-              class="q-mb-sm"
-            />
+            <!-- Показываем выбранный подэтап (предзаполнен из кнопки) -->
+            <div v-if="rejectSubstage" class="q-mb-sm row items-center q-gutter-xs">
+              <q-icon name="subdirectory_arrow_right" color="grey-6" size="16px" />
+              <span style="font-size: 12px; color: #666">Папка правок:</span>
+              <q-chip dense color="orange-2" text-color="orange-9" style="font-size: 11px">
+                {{ rejectSubstage === 'concept' ? 'Концепция-коллажи / Правки' : '3D визуализация / Правки' }}
+              </q-chip>
+            </div>
             <div class="q-mb-sm">
               <q-btn
                 outline
@@ -2792,11 +2808,15 @@ async function doAction(action) {
   finally { actionLoading.value = false }
 }
 
+function openRejectDialog(substage = '') {
+  rejectSubstage.value = substage
+  rejectReason.value = ''
+  rejectFile.value = null
+  showRejectDialog.value = true
+}
+
 async function submitReject() {
   if (!rejectReason.value) { $q.notify({ type: 'warning', message: 'Укажите причину' }); return }
-  if (isRejectStage2Individual.value && !rejectSubstage.value) {
-    $q.notify({ type: 'warning', message: 'Выберите подэтап (Мудборды или Визуализация)' }); return
-  }
   actionLoading.value = true
   try {
     let filePath = null
