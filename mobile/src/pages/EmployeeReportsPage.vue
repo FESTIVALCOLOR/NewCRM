@@ -524,9 +524,12 @@ async function exportPDF() {
     ]
 
     let body = ''
+    let secIndex = 0
     for (const sec of sections) {
       const { title, key, emps, survey, roles } = sec
       if (!emps.length) continue
+      const pageBreak = secIndex > 0 ? 'page-break-before:always;' : ''
+      secIndex++
 
       const loadData = emps.filter(e => e.total_stages > 0)
         .sort((a, b) => (b.total_stages - b.completed_stages) - (a.total_stages - a.completed_stages))
@@ -552,9 +555,12 @@ async function exportPDF() {
       ).join('')
 
       let roleHtml = ''
+      let roleIndex = 0
       for (const role of roles) {
         const rEmps = filterRole(emps, role.code, key).sort((a, b) => b.completion_rate - a.completion_rate)
         if (!rEmps.length) continue
+        const roleDivider = roleIndex > 0 ? '<hr style="border:none;border-top:2px solid #ddd;margin:18px 0 14px">' : ''
+        roleIndex++
 
         const kpiKey = `kpi_${key}_${role.code}`
         cd[kpiKey] = {
@@ -562,18 +568,32 @@ async function exportPDF() {
           data:   rEmps.map(e => Math.round(e.completion_rate || 0)),
         }
 
+        const hasVisits = key === 'sup' && rEmps.some(e => {
+          const p = e.position || ''
+          return p === 'ДАН' || p === 'Дизайнер авторского надзора' || p.toLowerCase().includes('менеджер')
+        })
+
         const empRows = rEmps.map((e, i) => {
           const kpi = e.completion_rate || 0
           const clr = kHex(kpi / 10)
-          const scores = empSurveyScores(e).filter(s => s.value !== null && s.value !== undefined)
-            .map(s => `${s.label}: ${s.value.toFixed(1)}/${s.scale}`).join(' · ')
-          let visits = ''
-          if (key === 'sup') {
+          const scoreItems = empSurveyScores(e)
+          const scoresCells = scoreItems.map(s => {
+            if (s.value === null || s.value === undefined) {
+              return `<span style="color:#ccc;font-size:9px;white-space:nowrap">${s.label}: —</span>`
+            }
+            return `<span style="color:${kHex(s.value)};font-size:9px;font-weight:600;white-space:nowrap">${s.label}: ${s.value.toFixed(1)}<span style="color:#aaa;font-weight:400">/${s.scale}</span></span>`
+          }).join(' &nbsp;')
+          let visitsTd = ''
+          if (hasVisits) {
             const isDanPos = e.position === 'ДАН' || e.position === 'Дизайнер авторского надзора'
             const isMgrPos = e.position?.toLowerCase().includes('менеджер')
             if (isDanPos || isMgrPos) {
-              visits = ` | На объект: ${e.visits_object ?? 0}  К поставщику: ${e.visits_supplier ?? 0}`
-              if ((e.visits_overdue ?? 0) > 0) visits += `  Просрочено: ${e.visits_overdue}`
+              const ov = e.visits_overdue ?? 0
+              visitsTd = '<td style="padding:5px 8px;font-size:9px;text-align:right;white-space:nowrap">' +
+                `${e.visits_object ?? 0} / ${e.visits_supplier ?? 0}` +
+                (ov > 0 ? ` <span style="color:#E74C3C">(!${ov})</span>` : '') + '</td>'
+            } else {
+              visitsTd = '<td style="padding:5px 8px"></td>'
             }
           }
           return `<tr style="background:${i % 2 ? '#fff' : '#fafafa'}">` +
@@ -581,11 +601,13 @@ async function exportPDF() {
             `<td style="padding:5px 8px;color:#888;font-size:10px">${e.position || ''}</td>` +
             `<td style="padding:5px 8px;text-align:right;font-weight:700;color:${clr}">${kpi.toFixed(0)}%</td>` +
             `<td style="padding:5px 8px;text-align:right">${e.completed_stages || 0}/${e.total_stages || 0}</td>` +
-            `<td style="padding:5px 8px;font-size:9px;color:#666">${scores}${visits}</td></tr>`
+            `<td style="padding:5px 8px">${scoresCells}</td>` +
+            `${visitsTd}</tr>`
         }).join('')
 
         const canvH = Math.max(60, rEmps.length * 24)
-        roleHtml += `<div class="ct">${role.label} — сравнение KPI</div>
+        const visitsTh = hasVisits ? '<th style="padding:5px 8px;text-align:right;white-space:nowrap">Выезды (об/пост)</th>' : ''
+        roleHtml += `${roleDivider}<div class="ct">${role.label} — сравнение KPI</div>
         <canvas id="${kpiKey}" width="700" height="${canvH}" style="break-inside:avoid;margin-bottom:6px"></canvas>
         <table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:14px">
           <thead><tr style="background:#f5f5f5">
@@ -594,6 +616,7 @@ async function exportPDF() {
             <th style="padding:5px 8px;text-align:right">KPI%</th>
             <th style="padding:5px 8px;text-align:right">Этапы</th>
             <th style="padding:5px 8px;text-align:left">Оценки клиентов</th>
+            ${visitsTh}
           </tr></thead><tbody>${empRows}</tbody></table>`
       }
 
@@ -620,7 +643,7 @@ async function exportPDF() {
       }
 
       const loadCanvH = Math.max(60, loadData.length * 24)
-      body += `<h2 style="margin:24px 0 8px;font-size:15px;color:#333;border-bottom:2px solid #eee;padding-bottom:4px">${title}</h2>
+      body += `<h2 style="margin:24px 0 8px;font-size:15px;color:#333;border-bottom:2px solid #eee;padding-bottom:4px;${pageBreak}">${title}</h2>
       <table style="border-collapse:collapse;margin-bottom:10px"><tr>${kpiRowHtml}</tr></table>
       ${loadData.length ? `<div class="ct">Нагрузка исполнителей (активных стадий)</div>
       <canvas id="load_${key}" width="700" height="${loadCanvH}" style="break-inside:avoid;margin-bottom:12px"></canvas>` : ''}
