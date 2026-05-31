@@ -58,11 +58,10 @@
             </q-select>
             <q-btn
               flat
-              round
               dense
               icon="person_add"
               color="primary"
-              class="q-mt-xs"
+              style="width: 40px; height: 40px; min-height: 40px; border-radius: 8px; flex-shrink: 0"
               @click="showCreateClient = true"
             >
               <q-tooltip>Создать нового клиента</q-tooltip>
