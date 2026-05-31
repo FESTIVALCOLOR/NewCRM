@@ -56,15 +56,14 @@
                 </q-item>
               </template>
             </q-select>
-            <q-btn
-              flat
-              icon="person_add"
-              color="primary"
+            <button
+              type="button"
               class="client-add-btn"
+              title="Создать нового клиента"
               @click="showCreateClient = true"
             >
-              <q-tooltip>Создать нового клиента</q-tooltip>
-            </q-btn>
+              <q-icon name="person_add" size="20px" />
+            </button>
           </div>
 
           <!-- Номер договора -->
@@ -621,17 +620,27 @@ async function save() {
 </script>
 
 <style scoped>
-/* Кнопка "создать клиента" — точно совпадает с высотой dense outlined q-select (40px) */
 .client-add-btn {
-  width: 40px !important;
-  height: 40px !important;
-  min-height: 40px !important;
-  border-radius: 8px !important;
+  width: 40px;
+  height: 40px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
+  color: #1976d2;
+  transition: background 0.15s;
+  outline: none;
 }
 
-.client-add-btn :deep(.q-btn__wrapper) {
-  min-height: 40px !important;
-  padding: 0 !important;
+.client-add-btn:hover {
+  background: rgba(25, 118, 210, 0.1);
+}
+
+.client-add-btn:active {
+  background: rgba(25, 118, 210, 0.2);
 }
 </style>
