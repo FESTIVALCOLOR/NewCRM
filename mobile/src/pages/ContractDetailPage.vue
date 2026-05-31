@@ -735,8 +735,18 @@
           <!-- Таблица сроков -->
           <q-card class="is-card">
             <q-card-section class="q-pb-none">
-              <div class="text-subtitle2 text-weight-bold" style="color: #333">
-                Таблица сроков
+              <div class="row items-center justify-between">
+                <div class="text-subtitle2 text-weight-bold" style="color: #333">
+                  Таблица сроков
+                </div>
+                <div v-if="timeline.length > 0" class="row q-gutter-xs">
+                  <button type="button" class="tl-export-btn" title="Скачать Excel" @click="exportTimelineExcel">
+                    <q-icon name="table_view" size="12px" /> Excel
+                  </button>
+                  <button type="button" class="tl-export-btn" title="Скачать PDF" @click="exportTimelinePdf">
+                    <q-icon name="picture_as_pdf" size="12px" /> PDF
+                  </button>
+                </div>
               </div>
             </q-card-section>
             <q-card-section v-if="timeline.length === 0" class="text-center q-py-lg">
@@ -777,6 +787,7 @@
                     <span v-if="entry.norm_days">Норма: {{ entry.custom_norm_days || entry.norm_days }} дн.</span>
                     <span v-if="entry.actual_days"> | Факт: {{ entry.actual_days }} дн.</span>
                     <span v-if="entry.executor_role && entry.executor_role !== 'header'"> | {{ entry.executor_role }}</span>
+                    <span v-if="!entry.is_in_contract_scope && entry.executor_role !== 'header' && !entry.stage_code?.endsWith('_HDR')" style="color: #999; font-style: italic"> | вне объёма</span>
                     <span v-if="entry.status === 'skipped'" style="color: #bbb; font-style: italic"> | Пропущено</span>
                     <span v-if="entry.actual_date && !entry.stage_code?.endsWith('_HDR') && entry.executor_role !== 'header' && (entry.actual_days || 0) > (entry.norm_days || 0) && (entry.norm_days || 0) > 0" style="color: #E74C3C; font-weight: bold"> | Просрочен</span>
                   </q-item-label>
@@ -788,6 +799,25 @@
                 </q-item-section>
               </q-item>
             </q-list>
+            <!-- ИТОГО таймлайна -->
+            <q-card-section v-if="timeline.length > 0" class="q-pa-sm" style="border-top: 1px solid #eee">
+              <div class="row items-center justify-between q-mb-xs">
+                <div class="text-weight-bold" style="font-size: 11px; color: #333">
+                  Итого по договору
+                </div>
+                <div class="text-weight-bold" style="font-size: 12px; color: #333">
+                  {{ timelineTotalInScope }} дн.
+                </div>
+              </div>
+              <div class="row items-center justify-between">
+                <div class="text-caption" style="color: #777">
+                  Итого с учётом вне объёма
+                </div>
+                <div class="text-caption text-weight-bold" style="color: #777">
+                  {{ timelineTotalAll }} дн.
+                </div>
+              </div>
+            </q-card-section>
           </q-card>
         </div><!-- /contract-right-col -->
       </div><!-- /contract-detail-grid -->
@@ -1026,6 +1056,129 @@ function stageLabel(s) { return STAGE_LABELS[s] || s || '' }
 function statusColor(s) { if (!s) return 'grey'; if (s === 'В работе') return 'orange'; if (s.includes('СДАН')) return 'positive'; if (s.includes('РАСТОРГНУТ')) return 'negative'; if (s.includes('НАДЗОР')) return 'purple'; return 'blue' }
 function fmtDate(d) { if (!d) return '—'; return new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }) }
 function fmtDateShort(d) { if (!d) return ''; return new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }) }
+
+const isTimelineEntry = e => e.executor_role !== 'header' && !e.stage_code?.endsWith('_HDR') && e.status !== 'skipped'
+
+const timelineTotalInScope = computed(() =>
+  timeline.value.filter(e => isTimelineEntry(e) && e.is_in_contract_scope)
+    .reduce((s, e) => s + (e.custom_norm_days || e.norm_days || 0), 0),
+)
+
+const timelineTotalAll = computed(() =>
+  timeline.value.filter(isTimelineEntry)
+    .reduce((s, e) => s + (e.custom_norm_days || e.norm_days || 0), 0),
+)
+
+async function exportTimelineExcel() {
+  const { utils, writeFile } = await import('xlsx')
+  const num = contract.value?.contract_number || ''
+  const wsData = [
+    [`Таблица сроков — Договор №${num}`],
+    [],
+    ['Этап', 'Роль', 'Норма, дн.', 'Факт, дн.', 'Дата', 'Статус', 'Примечание'],
+  ]
+  timeline.value.forEach(e => {
+    if (e.executor_role === 'header' || e.stage_code?.endsWith('_HDR')) {
+      wsData.push([e.stage_name, '', '', '', '', '', ''])
+      return
+    }
+    const norm = e.custom_norm_days || e.norm_days || ''
+    const fact = e.actual_days || ''
+    const date = e.actual_date ? new Date(e.actual_date).toLocaleDateString('ru-RU') : ''
+    let status = 'Ожидается'
+    if (e.status === 'skipped') status = 'Пропущено'
+    else if (e.actual_date) status = ((e.actual_days || 0) > (e.norm_days || 0) && (e.norm_days || 0) > 0) ? 'Просрочен' : 'В срок'
+    const note = !e.is_in_contract_scope ? 'вне объёма' : ''
+    wsData.push([e.stage_name, e.executor_role || '', norm, fact, date, status, note])
+  })
+  wsData.push([])
+  wsData.push(['Итого по договору', '', timelineTotalInScope.value, '', '', '', ''])
+  wsData.push(['Итого с учётом вне объёма', '', timelineTotalAll.value, '', '', '', ''])
+  const ws = utils.aoa_to_sheet(wsData)
+  ws['!cols'] = [{ wch: 42 }, { wch: 20 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 14 }]
+  const wb = utils.book_new()
+  utils.book_append_sheet(wb, ws, 'Таблица сроков')
+  writeFile(wb, `timeline_${num || 'contract'}.xlsx`.replace(/[/\\:*?"<>|]/g, '_'))
+}
+
+function exportTimelinePdf() {
+  const num = contract.value?.contract_number || ''
+  const addr = contract.value?.address || ''
+  let rows = ''
+  timeline.value.forEach(e => {
+    if (e.executor_role === 'header') {
+      rows += `<tr class="grp-hdr"><td colspan="6">${e.stage_name}</td></tr>`
+      return
+    }
+    if (e.stage_code?.endsWith('_HDR')) {
+      rows += `<tr class="sub-hdr"><td colspan="6">${e.stage_name}</td></tr>`
+      return
+    }
+    const norm = e.custom_norm_days || e.norm_days || '—'
+    const fact = e.actual_days || '—'
+    const date = e.actual_date ? new Date(e.actual_date).toLocaleDateString('ru-RU') : '—'
+    const isOverdue = e.actual_date && (e.actual_days || 0) > (e.norm_days || 0) && (e.norm_days || 0) > 0
+    const isOnTime = e.actual_date && !isOverdue
+    const rowCls = e.status === 'skipped' ? 'skipped' : (isOverdue ? 'overdue' : (isOnTime ? 'ontime' : ''))
+    let status = '–'
+    if (e.status === 'skipped') status = '<span class="tag-skip">Пропущено</span>'
+    else if (isOverdue) status = '<span class="tag-over">Просрочен</span>'
+    else if (isOnTime) status = '<span class="tag-ok">В срок</span>'
+    const outNote = !e.is_in_contract_scope ? '<br><span class="out-tag">вне объёма</span>' : ''
+    rows += `<tr class="${rowCls}">
+      <td>${e.stage_name}${outNote}</td>
+      <td>${e.executor_role || ''}</td>
+      <td class="num">${norm}</td>
+      <td class="num">${fact}</td>
+      <td class="num">${date}</td>
+      <td>${status}</td>
+    </tr>`
+  })
+  rows += `<tr class="total-row">
+    <td colspan="2"><b>Итого по договору</b></td>
+    <td class="num"><b>${timelineTotalInScope.value} дн.</b></td>
+    <td colspan="3"></td>
+  </tr>
+  <tr class="total-sub">
+    <td colspan="2">Итого с учётом вне объёма</td>
+    <td class="num">${timelineTotalAll.value} дн.</td>
+    <td colspan="3"></td>
+  </tr>`
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+  <title>Таблица сроков — №${num}</title>
+  <style>
+    body { font-family: Arial, sans-serif; font-size: 10px; color: #222; margin: 16px; }
+    h2 { font-size: 13px; margin: 0 0 2px; }
+    .sub { color: #666; margin-bottom: 12px; font-size: 10px; }
+    table { border-collapse: collapse; width: 100%; }
+    th { background: #ffd93c; color: #333; font-weight: bold; padding: 4px 6px; text-align: left; border: 1px solid #ddd; font-size: 10px; }
+    td { padding: 3px 6px; border: 1px solid #eee; vertical-align: middle; }
+    .num { text-align: right; white-space: nowrap; }
+    .grp-hdr td { background: #e0e0e0; font-weight: bold; font-size: 10px; }
+    .sub-hdr td { background: #f5f5f5; font-weight: 600; font-size: 10px; }
+    .ontime td { background: #f0fff4; }
+    .overdue td { background: #fff5f5; }
+    .skipped td { opacity: 0.55; }
+    .out-tag { color: #999; font-style: italic; font-size: 9px; }
+    .tag-ok { color: #27ae60; font-weight: bold; }
+    .tag-over { color: #e74c3c; font-weight: bold; }
+    .tag-skip { color: #aaa; }
+    .total-row td { border-top: 2px solid #333; font-size: 11px; }
+    .total-sub td { color: #888; }
+    @media print { @page { margin: 12mm; size: A4; } }
+  </style></head><body>
+  <h2>Таблица сроков — Договор №${num}</h2>
+  <div class="sub">${addr}</div>
+  <table>
+    <thead><tr><th>Этап</th><th>Роль</th><th>Норма</th><th>Факт</th><th>Дата</th><th>Статус</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+  <script>window.onload = () => { window.print() }<\/script>
+  </body></html>`
+  const w = window.open('', '_blank')
+  w.document.write(html)
+  w.document.close()
+}
 function fmtMoney(v) { if (!v) return '0 ₽'; return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(v) }
 
 function fileIconByName(name) {
@@ -1424,6 +1577,23 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.tl-export-btn {
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid #2196f3;
+  border-radius: 4px;
+  background: white;
+  color: #2196f3;
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  outline: none;
+}
+
 /* Ландшафт: основная сетка — 2 колонки (левая=данные, правая=документы) */
 @media (orientation: landscape) {
   .contract-detail-grid {
