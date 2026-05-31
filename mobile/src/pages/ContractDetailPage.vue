@@ -734,19 +734,17 @@
         <div class="contract-right-col">
           <!-- Таблица сроков -->
           <q-card class="is-card">
-            <q-card-section class="q-pb-none">
-              <div style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; min-height: 28px">
-                <span style="color: #333; font-weight: 600; font-size: 14px; line-height: 1; margin: 0">Таблица сроков</span>
-                <div v-if="timeline.length > 0" style="display: flex; gap: 6px; align-items: center; flex-shrink: 0">
-                  <button type="button" class="tl-export-btn" title="Скачать Excel" @click="exportTimelineExcel">
-                    <q-icon name="table_view" size="12px" /> Excel
-                  </button>
-                  <button type="button" class="tl-export-btn" title="Скачать PDF" @click="exportTimelinePdf">
-                    <q-icon name="picture_as_pdf" size="12px" /> PDF
-                  </button>
-                </div>
-              </div>
-            </q-card-section>
+            <div style="padding: 12px 16px 0; display: flex; align-items: center; gap: 8px">
+              <span style="flex: 1; font-weight: 600; font-size: 14px; color: #333">Таблица сроков</span>
+              <template v-if="timeline.length > 0">
+                <button type="button" class="tl-export-btn" @click="exportTimelineExcel">
+                  Excel
+                </button>
+                <button type="button" class="tl-export-btn" @click="exportTimelinePdf">
+                  PDF
+                </button>
+              </template>
+            </div>
             <q-card-section v-if="timeline.length === 0" class="text-center q-py-lg">
               <q-icon name="schedule" size="36px" color="grey-4" class="q-mb-sm" />
               <div style="color: #999; font-size: 13px">
@@ -1577,7 +1575,8 @@ onMounted(async () => {
 <style scoped>
 .tl-export-btn {
   height: 26px;
-  padding: 0 8px;
+  line-height: 26px;
+  padding: 0 10px;
   border: 1px solid #2196f3;
   border-radius: 4px;
   background: white;
@@ -1585,11 +1584,12 @@ onMounted(async () => {
   font-size: 11px;
   font-family: inherit;
   cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
+  flex-shrink: 0;
   outline: none;
+  white-space: nowrap;
+}
+.tl-export-btn:hover {
+  background: #e3f2fd;
 }
 
 /* Ландшафт: основная сетка — 2 колонки (левая=данные, правая=документы) */
