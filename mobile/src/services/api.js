@@ -139,6 +139,9 @@ export const crmApi = {
 
   getSubmittedStages: (cardId) =>
     api.get(`/api/v1/crm/cards/${cardId}/submitted-stages`),
+
+  inviteClientToChat: (cardId) =>
+    api.post(`/api/v1/crm/cards/${cardId}/invite-client`),
 }
 
 // === Clients ===

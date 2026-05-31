@@ -61,6 +61,19 @@
         >
           <q-tooltip>Копировать ссылку</q-tooltip>
         </q-btn>
+        <q-btn
+          v-if="props.cardId"
+          flat
+          dense
+          size="xs"
+          icon="forward_to_inbox"
+          color="green-7"
+          :loading="sendingInvite"
+          style="flex: 0 0 auto; margin-left: 2px"
+          @click="sendEmailInvite"
+        >
+          <q-tooltip>Отправить приглашение клиенту на email</q-tooltip>
+        </q-btn>
       </div>
       <!-- Блок надзора: ссылка для клиента -->
       <div
@@ -1405,6 +1418,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { api } from 'src/boot/axios'
+import { crmApi } from 'src/services/api'
 import { useChatWebSocket } from 'src/composables/useChatWebSocket'
 import { getPdfThumbnail } from 'src/composables/usePdfThumbnail'
 import { useAuthStore } from 'src/stores/auth'
@@ -2957,6 +2971,22 @@ function copyClientLink() {
   navigator.clipboard.writeText(clientLink.value).then(() => {
     $q.notify({ type: 'positive', message: 'Ссылка скопирована' })
   }).catch(() => {})
+}
+
+const sendingInvite = ref(false)
+
+async function sendEmailInvite() {
+  if (!props.cardId) return
+  sendingInvite.value = true
+  try {
+    const { data } = await crmApi.inviteClientToChat(props.cardId)
+    $q.notify({ type: 'positive', message: data.message || 'Приглашение отправлено' })
+  } catch (e) {
+    const msg = e.response?.data?.detail || 'Ошибка отправки приглашения'
+    $q.notify({ type: 'negative', message: msg })
+  } finally {
+    sendingInvite.value = false
+  }
 }
 
 onMounted(() => {
