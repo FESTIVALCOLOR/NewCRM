@@ -930,10 +930,26 @@ async function exportPDF() {
   <div class="sub">Период: ${period} &nbsp;·&nbsp; Сформирован: ${now}</div>
   ${body}
   <` + 'script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"><' + `/script>
-  <` + 'script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2/dist/chartjs-plugin-datalabels.min.js"><' + `/script>
   <` + `script>
   var __cd = ${cdJson};
   var ROPTS = { animation: false, responsive: false, maintainAspectRatio: false };
+  var PieDL = {
+    id: 'pieDL',
+    afterDraw: function(chart) {
+      if (chart.config.type !== 'pie') return;
+      var ctx = chart.ctx, ds = chart.data.datasets[0], meta = chart.getDatasetMeta(0);
+      var total = ds.data.reduce(function(a,b){return a+b;},0); if (!total) return;
+      meta.data.forEach(function(arc, i) {
+        var val = ds.data[i]; if (!val) return;
+        var pct = Math.round(val/total*100); if (pct < 3) return;
+        var angle = (arc.startAngle + arc.endAngle) / 2, r = arc.outerRadius * 0.65;
+        var x = arc.x + r * Math.cos(angle), y = arc.y + r * Math.sin(angle);
+        ctx.save(); ctx.fillStyle = '#fff'; ctx.font = 'bold 10px sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(val, x, y - 6); ctx.fillText(pct + '%', x, y + 7); ctx.restore();
+      });
+    }
+  };
   function mkScales(ix, sm) { return { x: { beginAtZero: true, ticks: { font: { size: sm||8 } } }, y: { ticks: { font: { size: sm||8 } } } }; }
   function hBar(id, labels, data, label, color) {
     var el = document.getElementById(id); if (!el) return;
@@ -957,26 +973,24 @@ async function exportPDF() {
   }
   function pieChart(id, labels, values) {
     var el = document.getElementById(id); if (!el) return;
-    new Chart(el, { type: 'pie', plugins: [ChartDataLabels],
+    new Chart(el, { type: 'pie', plugins: [PieDL],
       data: { labels: labels, datasets: [{ data: values, backgroundColor: ['#F39C12','#C62828','#27AE60','#3498DB','#9B59B6','#E74C3C'] }] },
-      options: Object.assign({}, ROPTS, { plugins: { legend: { labels: { font: { size: 9 } } },
-        datalabels: { color: '#fff', font: { size: 10, weight: 'bold' }, textAlign: 'center',
-          formatter: function(v, ctx) { var tot = ctx.dataset.data.reduce(function(a,b){return a+b;},0); return (tot>0&&v>0) ? v+'\n'+Math.round(v/tot*100)+'%' : ''; } } } }) });
+      options: Object.assign({}, ROPTS, { plugins: { legend: { labels: { font: { size: 9 } } } } }) });
   }
   window.addEventListener('load', function() {
     var cd = __cd;
-    if (cd.clientDyn) lineChart('clientDyn', cd.clientDyn.labels, [{ label: 'Новые', data: cd.clientDyn.new, color: '#27AE60' }, { label: 'Повторные', data: cd.clientDyn.ret, color: '#9B59B6' }]);
-    if (cd.clientTypePie) pieChart('clientTypePie', cd.clientTypePie.labels, cd.clientTypePie.values);
-    if (cd.conDyn) vBar('conDyn', cd.conDyn.labels, [{ label: 'Индивид.', data: cd.conDyn.ind, color: '#F39C12' }, { label: 'Шаблон.', data: cd.conDyn.tmpl, color: '#C62828' }]);
-    if (cd.funnel) hBar('funnel', cd.funnel.labels, cd.funnel.data, 'Проектов', '#F39C12');
-    if (cd.indStages) hBar2('indStages', cd.indStages.labels, [{ label: 'Норматив', data: cd.indStages.norm, color: '#4CAF50' }, { label: 'Факт', data: cd.indStages.fact, color: '#F39C12' }]);
-    if (cd.indCities) hBar('indCities', cd.indCities.labels, cd.indCities.data, 'Проектов', '#85C1E9');
-    if (cd.indAgents) hBar('indAgents', cd.indAgents.labels, cd.indAgents.data, 'Проектов', '#ffd93c');
-    if (cd.tmplStages) hBar2('tmplStages', cd.tmplStages.labels, [{ label: 'Норматив', data: cd.tmplStages.norm, color: '#4CAF50' }, { label: 'Факт', data: cd.tmplStages.fact, color: '#C62828' }]);
-    if (cd.tmplCities) hBar('tmplCities', cd.tmplCities.labels, cd.tmplCities.data, 'Проектов', '#85C1E9');
-    if (cd.tmplAgents) hBar('tmplAgents', cd.tmplAgents.labels, cd.tmplAgents.data, 'Проектов', '#C62828');
-    if (cd.supAgent) hBar('supAgent', cd.supAgent.labels, cd.supAgent.data, 'Надзоров', '#F39C12');
-    if (cd.supCity) vBar('supCity', cd.supCity.labels, cd.supCity.datasets);
+    try { if (cd.clientDyn) lineChart('clientDyn', cd.clientDyn.labels, [{ label: 'Новые', data: cd.clientDyn.new, color: '#27AE60' }, { label: 'Повторные', data: cd.clientDyn.ret, color: '#9B59B6' }]); } catch(e) {}
+    try { if (cd.clientTypePie) pieChart('clientTypePie', cd.clientTypePie.labels, cd.clientTypePie.values); } catch(e) {}
+    try { if (cd.conDyn) vBar('conDyn', cd.conDyn.labels, [{ label: 'Индивид.', data: cd.conDyn.ind, color: '#F39C12' }, { label: 'Шаблон.', data: cd.conDyn.tmpl, color: '#C62828' }]); } catch(e) {}
+    try { if (cd.funnel) hBar('funnel', cd.funnel.labels, cd.funnel.data, 'Проектов', '#F39C12'); } catch(e) {}
+    try { if (cd.indStages) hBar2('indStages', cd.indStages.labels, [{ label: 'Норматив', data: cd.indStages.norm, color: '#4CAF50' }, { label: 'Факт', data: cd.indStages.fact, color: '#F39C12' }]); } catch(e) {}
+    try { if (cd.indCities) hBar('indCities', cd.indCities.labels, cd.indCities.data, 'Проектов', '#85C1E9'); } catch(e) {}
+    try { if (cd.indAgents) hBar('indAgents', cd.indAgents.labels, cd.indAgents.data, 'Проектов', '#ffd93c'); } catch(e) {}
+    try { if (cd.tmplStages) hBar2('tmplStages', cd.tmplStages.labels, [{ label: 'Норматив', data: cd.tmplStages.norm, color: '#4CAF50' }, { label: 'Факт', data: cd.tmplStages.fact, color: '#C62828' }]); } catch(e) {}
+    try { if (cd.tmplCities) hBar('tmplCities', cd.tmplCities.labels, cd.tmplCities.data, 'Проектов', '#85C1E9'); } catch(e) {}
+    try { if (cd.tmplAgents) hBar('tmplAgents', cd.tmplAgents.labels, cd.tmplAgents.data, 'Проектов', '#C62828'); } catch(e) {}
+    try { if (cd.supAgent) hBar('supAgent', cd.supAgent.labels, cd.supAgent.data, 'Надзоров', '#F39C12'); } catch(e) {}
+    try { if (cd.supCity) vBar('supCity', cd.supCity.labels, cd.supCity.datasets); } catch(e) {}
     setTimeout(function() { try { window.focus(); window.print(); } catch(e2) {} }, 900);
   });
   <` + `/script>
