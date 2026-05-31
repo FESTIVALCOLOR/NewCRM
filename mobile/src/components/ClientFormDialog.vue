@@ -19,14 +19,10 @@
         <q-toolbar-title class="text-weight-bold" style="font-size: 14px">
           {{ isEdit ? 'Редактировать клиента' : 'Новый клиент' }}
         </q-toolbar-title>
-        <q-btn
-          label="Сохранить"
-          no-caps
-          :loading="saving"
-          outline
-          style="border: 1px solid #333; border-radius: 8px; color: #333"
-          @click="save"
-        />
+        <button type="button" class="save-btn" :disabled="saving" @click="save">
+          <q-spinner v-if="saving" size="16px" />
+          <span v-else>Сохранить</span>
+        </button>
       </q-toolbar>
 
       <q-card-section class="q-pa-md" style="max-height: calc(100vh - 50px); overflow-y: auto">
@@ -325,3 +321,27 @@ async function save() {
   }
 }
 </script>
+
+<style scoped>
+.save-btn {
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid #333;
+  border-radius: 8px;
+  background: transparent;
+  color: #333;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  outline: none;
+}
+
+.save-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+</style>

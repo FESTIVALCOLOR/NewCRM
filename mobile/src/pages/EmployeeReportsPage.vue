@@ -38,15 +38,11 @@
               @update:model-value="loadData"
             />
           </div>
-          <div class="col-auto" style="display: flex; align-items: stretch">
-            <q-btn
-              unelevated
-              icon="refresh"
-              label="Сброс"
-              no-caps
-              style="background: #ffd93c; color: #333; border-radius: 4px; min-height: 100%"
-              @click="resetFilters"
-            />
+          <div class="col-auto">
+            <button type="button" class="reset-btn" @click="resetFilters">
+              <q-icon name="refresh" size="18px" />
+              <span>Сброс</span>
+            </button>
           </div>
         </div>
       </q-card-section>
@@ -472,3 +468,26 @@ watch([projectTab, roleTab], () => loadData())
 function onRefresh(done) { loadData().finally(done) }
 onMounted(() => loadData())
 </script>
+
+<style scoped>
+.reset-btn {
+  height: 40px;
+  padding: 0 12px;
+  background: #ffd93c;
+  color: #333;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+}
+
+.reset-btn:hover {
+  background: #f0c800;
+}
+</style>
