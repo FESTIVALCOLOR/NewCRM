@@ -204,6 +204,17 @@
       </div>
     </div>
 
+    <!-- Экспорт -->
+    <div v-if="!loading && payments.length > 0" class="row justify-end q-gutter-xs q-mb-xs">
+      <button type="button" class="sal-export-btn" :disabled="salPdfLoading" @click="exportSalariesPDF">
+        <q-spinner v-if="salPdfLoading" size="14px" color="primary" />
+        <span v-else>PDF</span>
+      </button>
+      <button type="button" class="sal-export-btn" :disabled="loading" @click="exportSalariesExcel">
+        Excel
+      </button>
+    </div>
+
     <!-- Итого -->
     <q-card v-if="!loading" class="is-card q-mb-md summary-card">
       <q-card-section class="q-pa-md">
@@ -655,6 +666,7 @@ const $q = useQuasar()
 const refsStore = useReferencesStore()
 const payments = ref([])
 const loading = ref(false)
+const salPdfLoading = ref(false)
 const allEmployees = ref([])
 const paymentTab = ref('all')
 const employeeOpts = ref([])
@@ -1048,6 +1060,86 @@ async function saveEdit() {
 watch(paymentTab, () => loadData())
 function onRefresh(done) { loadData().finally(done) }
 
+const _MONTHS = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь']
+function _fmtM(m) { if (!m) return 'в работе'; try { const [y,mo]=m.split('-'); return `${_MONTHS[parseInt(mo)-1]} ${y}` } catch { return m } }
+function _fmtRub(v) { return v ? new Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB',maximumFractionDigits:0}).format(v) : '0 ₽' }
+
+function exportSalariesPDF() {
+  salPdfLoading.value = true
+  const w = window.open('', '_blank', 'width=1200,height=800')
+  if (!w) { salPdfLoading.value = false; return }
+  try { w.moveTo(0,0); w.resizeTo(screen.width, screen.height) } catch(e) {}
+  w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="font-family:sans-serif;padding:20px"><p>⏳ Формирование...</p></body></html>')
+  w.document.close()
+  try {
+    const f = filters.value
+    const tabLabels = { all:'Все', individual:'Индивидуальные', template:'Шаблонные', supervision:'Надзор', salary:'Оклады' }
+    let period = 'Все периоды'
+    if (f.period==='month') period=`${_MONTHS[f.month-1]} ${f.year}`
+    else if (f.period==='quarter') period=`${f.quarter} кв. ${f.year}`
+    else if (f.period==='year') period=`${f.year} год`
+    const tab = tabLabels[paymentTab.value] || ''
+    const now = new Date().toLocaleDateString('ru-RU')
+    const statusColor = p => (p.is_paid||p.payment_status==='paid') ? '#27AE60' : p.payment_status==='to_pay' ? '#F39C12' : '#888'
+    const fmtStatus = p => (p.is_paid||p.payment_status==='paid') ? 'Оплачено' : p.payment_status==='to_pay' ? 'К оплате' : 'В работе'
+    let body = `<div class="sbox">
+      <div class="scol"><div class="sl">Итого</div><div class="sv">${_fmtRub(totalAmount.value)}</div></div>
+      <div class="scol"><div class="sl">Оплачено</div><div class="sv" style="color:#27AE60">${paidCount.value}</div></div>
+      <div class="scol"><div class="sl">К оплате</div><div class="sv" style="color:#F39C12">${toPayCount.value}</div></div>
+      <div class="scol"><div class="sl">В работе</div><div class="sv" style="color:#888">${inWorkCount.value}</div></div>
+    </div>`
+    for (const g of groupedPayments.value) {
+      body += `<div class="eh">${g.name}<span class="er"> &nbsp;·&nbsp; ${g.role}</span></div>
+      <table><tr><th>Договор / Этап</th><th>Тип</th><th>Адрес</th><th class="num">Сумма</th><th>Месяц</th><th>Статус</th></tr>`
+      for (const p of g.items) {
+        const desc = [p.contract_number, p.stage_name, p.payment_subtype].filter(Boolean).join(' · ')
+        body += `<tr><td>${desc||'—'}</td><td>${p.payment_type||p.source||''}</td><td class="addr">${p.address||''}</td><td class="num">${_fmtRub(p.final_amount||p.amount)}</td><td>${_fmtM(p.report_month)}</td><td style="color:${statusColor(p)};font-weight:500">${fmtStatus(p)}</td></tr>`
+      }
+      body += `<tr class="tr"><td colspan="3">Итого: ${g.name}</td><td class="num">${_fmtRub(g.total)}</td><td colspan="2"></td></tr></table>`
+    }
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Зарплаты</title><style>
+*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;font-size:11px;color:#333;padding:12mm}
+h1{font-size:17px;margin-bottom:3px}.sub{color:#888;font-size:10px;margin-bottom:12px}
+.sbox{display:flex;gap:20px;background:#FFFDE7;border-left:3px solid #ffd93c;padding:10px 14px;border-radius:4px;margin-bottom:16px}
+.scol{display:flex;flex-direction:column;gap:2px;min-width:90px}.sl{font-size:9px;color:#888}.sv{font-size:15px;font-weight:bold;color:#333}
+.eh{font-weight:bold;font-size:12px;background:#F5F5F5;padding:5px 8px;border-radius:4px 4px 0 0;margin-top:14px}
+.er{font-size:10px;font-weight:normal;color:#888}
+table{width:100%;border-collapse:collapse;margin-bottom:0;break-inside:avoid}
+th{background:#F9F9F9;text-align:left;padding:4px 6px;font-size:9px;font-weight:bold;border:1px solid #E0E0E0}
+td{padding:4px 6px;border:1px solid #EEEEEE;font-size:10px;vertical-align:top}.num{text-align:right}
+.addr{font-size:9px;color:#777}.tr td{background:#FFF8E1;font-weight:bold;border-top:1px solid #DDD}
+@media print{@page{size:A4 portrait;margin:10mm}body{padding:0}}
+</style></head><body>
+<h1>Зарплаты и выплаты${tab ? ' — '+tab : ''}</h1>
+<div class="sub">Период: ${period} &nbsp;·&nbsp; Записей: ${payments.value.length} &nbsp;·&nbsp; Сформирован: ${now}</div>
+${body}
+<` + 'script>setTimeout(function(){try{window.focus();window.print();}catch(e){}},600);<' + `/script>
+</body></html>`
+    w.document.open(); w.document.write(html); w.document.close()
+  } catch(e) { console.error(e) } finally { salPdfLoading.value = false }
+}
+
+async function exportSalariesExcel() {
+  const { utils, writeFile } = await import('xlsx')
+  const wsData = [['Сотрудник','Роль','Договор','Этап / Подтип','Тип выплаты','Адрес','Сумма, ₽','Месяц','Статус']]
+  for (const p of payments.value) {
+    const status = (p.is_paid||p.payment_status==='paid') ? 'Оплачено' : p.payment_status==='to_pay' ? 'К оплате' : 'В работе'
+    wsData.push([
+      p.employee_name||'—', p.role||p.position||'—', p.contract_number||'—',
+      [p.stage_name, p.payment_subtype].filter(Boolean).join(' · ')||'—',
+      p.payment_type||p.source||'—', p.address||'',
+      p.final_amount||p.amount||0, _fmtM(p.report_month), status,
+    ])
+  }
+  wsData.push([])
+  wsData.push(['ИТОГО','','','','','',totalAmount.value,'',''])
+  const ws = utils.aoa_to_sheet(wsData)
+  ws['!cols'] = [{wch:25},{wch:20},{wch:14},{wch:28},{wch:16},{wch:25},{wch:14},{wch:18},{wch:12}]
+  const wb = utils.book_new()
+  utils.book_append_sheet(wb, ws, 'Зарплаты')
+  writeFile(wb, `salaries_${new Date().toISOString().split('T')[0]}.xlsx`)
+}
+
 onMounted(async () => {
   loadAvatars()
   loadData()
@@ -1088,4 +1180,12 @@ onMounted(async () => {
 .sal-act-orange:hover { background: #fff8e1; }
 .sal-act-red { border-color: #C10015; color: #C10015; }
 .sal-act-red:hover { background: #fff0f0; }
+.sal-export-btn {
+  height: 26px; padding: 0 10px; border: 1px solid #2196f3; border-radius: 4px;
+  background: white; color: #2196f3; font-size: 11px; font-family: inherit;
+  cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+  gap: 4px; outline: none; white-space: nowrap; flex-shrink: 0;
+}
+.sal-export-btn:hover { background: #e3f2fd; }
+.sal-export-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 </style>
