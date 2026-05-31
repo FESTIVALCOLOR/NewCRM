@@ -391,5 +391,8 @@ onMounted(async () => {
   .client-right-col > * {
     margin-bottom: 0 !important;
   }
+  .client-right-col > .is-card:last-child {
+    flex: 1;
+  }
 }
 </style>

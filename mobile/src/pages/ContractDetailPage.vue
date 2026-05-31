@@ -1430,7 +1430,7 @@ onMounted(async () => {
     display: flex;
     flex-direction: row;
     gap: 12px;
-    align-items: flex-start;
+    align-items: stretch;
   }
   .contract-left-col,
   .contract-right-col {
@@ -1446,6 +1446,9 @@ onMounted(async () => {
   .contract-left-col > *,
   .contract-right-col > * {
     margin-bottom: 0 !important;
+  }
+  .contract-right-col > .is-card {
+    flex: 1;
   }
 }
 
