@@ -2,7 +2,17 @@
   <q-page padding>
     <template v-if="client">
       <!-- Шапка -->
-      <q-card class="is-card q-mb-md">
+      <q-card class="is-card q-mb-md" style="position: relative">
+        <q-btn
+          round
+          flat
+          dense
+          icon="arrow_back"
+          style="position: absolute; top: -14px; left: -14px; z-index: 10; width: 32px; height: 32px; min-height: 32px; min-width: 32px; padding: 0; background: white; border: 1.5px solid #E0E0E0; box-shadow: 0 2px 8px rgba(0,0,0,0.13); color: #555"
+          @click="$router.back()"
+        >
+          <q-tooltip>Назад</q-tooltip>
+        </q-btn>
         <q-card-section class="text-center">
           <!-- Аватар с загрузкой фото при клике -->
           <div class="avatar-upload-wrap q-mb-sm" style="display: inline-block; position: relative; cursor: pointer" @click="$refs.clientPhotoInput.click()">
