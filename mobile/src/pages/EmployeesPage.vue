@@ -161,15 +161,16 @@
           <q-toolbar-title class="text-weight-bold" style="font-size: 14px">
             {{ editMode ? 'Редактировать' : selected.full_name }}
           </q-toolbar-title>
-          <q-btn
+          <button
             v-if="editMode"
-            label="Сохранить"
-            no-caps
-            :loading="saving"
-            outline
-            style="border: 1px solid #333; border-radius: 8px; color: #333"
+            type="button"
+            class="emp-save-btn"
+            :disabled="saving"
             @click="saveEmployee"
-          />
+          >
+            <q-spinner v-if="saving" size="16px" />
+            <span v-else>Сохранить</span>
+          </button>
         </q-toolbar>
 
         <q-card-section style="max-height: calc(100vh - 50px); overflow-y: auto">
@@ -498,14 +499,10 @@
           <q-toolbar-title class="text-weight-bold" style="font-size: 14px">
             Новый сотрудник
           </q-toolbar-title>
-          <q-btn
-            label="Сохранить"
-            no-caps
-            :loading="saving"
-            outline
-            style="border: 1px solid #333; border-radius: 8px; color: #333"
-            @click="createEmployee"
-          />
+          <button type="button" class="emp-save-btn" :disabled="saving" @click="createEmployee">
+            <q-spinner v-if="saving" size="16px" />
+            <span v-else>Сохранить</span>
+          </button>
         </q-toolbar>
         <q-card-section style="max-height: calc(100vh - 50px); overflow-y: auto">
           <q-form ref="createForm" class="q-gutter-md">
@@ -858,4 +855,21 @@ onMounted(() => loadEmployees())
 .emph-status { width: 60px; flex-shrink: 0; }
 .empv-name { font-size: 12px; font-weight: 500; color: #333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .empv-meta { color: #666; }
+.emp-save-btn {
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid #333;
+  border-radius: 8px;
+  background: transparent;
+  color: #333;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  outline: none;
+}
+.emp-save-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 </style>
