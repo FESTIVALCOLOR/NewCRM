@@ -2567,7 +2567,7 @@ async def preview_email_template(
             project_address="г. Москва, ул. Пушкина, д. 10",
             project_type="Индивидуальный",
             manager_name="Сидоров Алексей",
-            invite_link="https://t.me/+demoInviteLink123",
+            invite_link="https://crm.festivalcolor.ru/c/demo-token-abc123",
         )
 
     return HTMLResponse(content=html)

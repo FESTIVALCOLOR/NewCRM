@@ -756,7 +756,7 @@
                   />
                   <q-input
                     v-model="messengerSettings.app_download_url"
-                    label="Ссылка для скачивания CRM"
+                    label="Ссылка на мобильную версию CRM"
                     outlined
                     dense
                     class="q-mb-sm"

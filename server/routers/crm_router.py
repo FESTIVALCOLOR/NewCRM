@@ -7,6 +7,7 @@ import asyncio
 from datetime import datetime, timedelta
 import json
 import logging
+import os
 from typing import List, Optional
 
 from auth import get_current_user
@@ -56,6 +57,7 @@ from database import (
     Contract,
     CRMCard,
     Employee,
+    InternalChat,
     MessengerChat,
     Payment,
     ProjectFile,
@@ -3761,7 +3763,7 @@ async def get_accepted_stages(card_id: int, current_user: Employee = Depends(get
 
 @router.post("/cards/{card_id}/invite-client")
 async def invite_client_to_chat(card_id: int, current_user: Employee = Depends(require_permission("messenger.create_chat")), db: Session = Depends(get_db)):
-    """Отправить клиенту email-приглашение в проектный Telegram-чат"""
+    """Отправить клиенту email-приглашение в внутренний CRM-чат проекта"""
     card = db.query(CRMCard).filter(CRMCard.id == card_id).first()
     if not card:
         raise HTTPException(status_code=404, detail="CRM карточка не найдена")
@@ -3777,13 +3779,24 @@ async def invite_client_to_chat(card_id: int, current_user: Employee = Depends(r
     if not client.email:
         raise HTTPException(status_code=422, detail="Email клиента не заполнен")
 
-    # Найти чат проекта
-    chat = db.query(MessengerChat).filter(MessengerChat.crm_card_id == card_id, MessengerChat.is_active == True).first()
+    # Найти внутренний клиентский чат проекта
+    chat = (
+        db.query(InternalChat)
+        .filter(
+            InternalChat.crm_card_id == card_id,
+            InternalChat.chat_type == "client",
+            InternalChat.is_active == True,
+        )
+        .first()
+    )
     if not chat:
-        raise HTTPException(status_code=422, detail="Чат проекта не создан")
+        raise HTTPException(status_code=422, detail="Клиентский чат не создан")
 
-    if not chat.invite_link:
-        raise HTTPException(status_code=422, detail="Ссылка-приглашение для чата не сформирована")
+    if not chat.client_access_token:
+        raise HTTPException(status_code=422, detail="Токен доступа к чату не сформирован")
+
+    base_url = os.environ.get("APP_BASE_URL", "https://crm.festivalcolor.ru")
+    invite_link = f"{base_url}/c/{chat.client_access_token}"
 
     # Отправить письмо
     try:
@@ -3799,7 +3812,7 @@ async def invite_client_to_chat(card_id: int, current_user: Employee = Depends(r
             project_address=project_address,
             project_type=project_type or "Интерьерный проект",
             manager_name=manager_name,
-            invite_link=chat.invite_link,
+            invite_link=invite_link,
         )
         if sent:
             return {"ok": True, "message": f"Приглашение отправлено на {client.email}"}
