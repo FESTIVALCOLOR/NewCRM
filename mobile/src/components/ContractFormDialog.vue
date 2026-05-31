@@ -58,10 +58,9 @@
             </q-select>
             <q-btn
               flat
-              dense
               icon="person_add"
               color="primary"
-              style="width: 40px; height: 40px; min-height: 40px; border-radius: 8px; flex-shrink: 0"
+              class="client-add-btn"
               @click="showCreateClient = true"
             >
               <q-tooltip>Создать нового клиента</q-tooltip>
@@ -620,3 +619,19 @@ async function save() {
   } finally { saving.value = false }
 }
 </script>
+
+<style scoped>
+/* Кнопка "создать клиента" — точно совпадает с высотой dense outlined q-select (40px) */
+.client-add-btn {
+  width: 40px !important;
+  height: 40px !important;
+  min-height: 40px !important;
+  border-radius: 8px !important;
+  flex-shrink: 0;
+}
+
+.client-add-btn :deep(.q-btn__wrapper) {
+  min-height: 40px !important;
+  padding: 0 !important;
+}
+</style>
