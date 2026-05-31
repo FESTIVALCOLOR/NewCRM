@@ -252,14 +252,12 @@
                 outlined
                 dense
               />
-              <q-input
-                v-if="editForm.payment_type === 'Переводом на карту'"
-                v-model="editForm.payment_account"
-                label="Номер счёта"
-                outlined
-                dense
-              />
+              <template v-if="editForm.payment_type === 'Переводом на карту'">
+                <q-input v-model="editForm.payment_account" label="Номер счёта" outlined dense />
+                <q-input v-model="editForm.payment_bank_name" label="Банк" outlined dense />
+              </template>
               <template v-if="editForm.payment_type === 'Переводом по реквизитам'">
+                <q-input v-model="editForm.payment_account" label="Номер счёта" outlined dense />
                 <q-input v-model="editForm.payment_bank_name" label="Банк" outlined dense />
                 <q-input v-model="editForm.payment_bik" label="БИК" outlined dense />
                 <q-input v-model="editForm.payment_corr_account" label="Кор. счёт" outlined dense />
@@ -600,14 +598,12 @@
               outlined
               dense
             />
-            <q-input
-              v-if="form.payment_type === 'Переводом на карту'"
-              v-model="form.payment_account"
-              label="Номер счёта"
-              outlined
-              dense
-            />
+            <template v-if="form.payment_type === 'Переводом на карту'">
+              <q-input v-model="form.payment_account" label="Номер счёта" outlined dense />
+              <q-input v-model="form.payment_bank_name" label="Банк" outlined dense />
+            </template>
             <template v-if="form.payment_type === 'Переводом по реквизитам'">
+              <q-input v-model="form.payment_account" label="Номер счёта" outlined dense />
               <q-input v-model="form.payment_bank_name" label="Банк" outlined dense />
               <q-input v-model="form.payment_bik" label="БИК" outlined dense />
               <q-input v-model="form.payment_corr_account" label="Кор. счёт" outlined dense />

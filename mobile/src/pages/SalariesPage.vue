@@ -261,6 +261,53 @@
                 {{ group.role }}
               </div>
             </div>
+            <q-btn
+              flat
+              round
+              dense
+              icon="more_vert"
+              size="sm"
+              color="grey-6"
+              class="q-mr-xs"
+              @click.stop
+            >
+              <q-menu auto-close>
+                <div class="q-pa-md" style="min-width: 220px">
+                  <div class="text-subtitle2 q-mb-sm" style="color: #333">
+                    Реквизиты для оплаты
+                  </div>
+                  <template v-if="group.paymentInfo && group.paymentInfo.payment_type">
+                    <div class="q-mb-xs">
+                      <span class="text-caption" style="color: #888">Способ:</span>
+                      <span class="text-caption q-ml-xs text-weight-medium">{{ group.paymentInfo.payment_type }}</span>
+                    </div>
+                    <div v-if="group.paymentInfo.payment_phone" class="q-mb-xs">
+                      <span class="text-caption" style="color: #888">Телефон:</span>
+                      <span class="text-caption q-ml-xs">{{ group.paymentInfo.payment_phone }}</span>
+                    </div>
+                    <div v-if="group.paymentInfo.payment_account" class="q-mb-xs">
+                      <span class="text-caption" style="color: #888">Счёт:</span>
+                      <span class="text-caption q-ml-xs">{{ group.paymentInfo.payment_account }}</span>
+                    </div>
+                    <div v-if="group.paymentInfo.payment_bank_name" class="q-mb-xs">
+                      <span class="text-caption" style="color: #888">Банк:</span>
+                      <span class="text-caption q-ml-xs">{{ group.paymentInfo.payment_bank_name }}</span>
+                    </div>
+                    <div v-if="group.paymentInfo.payment_bik" class="q-mb-xs">
+                      <span class="text-caption" style="color: #888">БИК:</span>
+                      <span class="text-caption q-ml-xs">{{ group.paymentInfo.payment_bik }}</span>
+                    </div>
+                    <div v-if="group.paymentInfo.payment_corr_account" class="q-mb-xs">
+                      <span class="text-caption" style="color: #888">Кор. счёт:</span>
+                      <span class="text-caption q-ml-xs">{{ group.paymentInfo.payment_corr_account }}</span>
+                    </div>
+                  </template>
+                  <div v-else class="text-caption" style="color: #aaa">
+                    Способ оплаты не указан
+                  </div>
+                </div>
+              </q-menu>
+            </q-btn>
             <div class="text-right">
               <div class="text-weight-bold" style="font-size: 14px; color: #333">
                 {{ formatMoney(group.total) }}
@@ -729,10 +776,18 @@ const groupedPayments = computed(() => {
   for (const p of payments.value) {
     const key = p.employee_id || p.employee_name || 'unknown'
     if (!map[key]) {
-      // Состояние expanded берём из реактивного объекта (по умолчанию развёрнуто)
       // eslint-disable-next-line vue/no-side-effects-in-computed-properties
       if (!(key in expandedGroups.value)) expandedGroups.value[key] = true
-      map[key] = { employeeId: key, name: p.employee_name || 'Без исполнителя', role: p.role || p.position || '', initial: (p.employee_name || '?')[0], total: 0, items: [] }
+      const emp = allEmployees.value.find(e => e.id === p.employee_id)
+      const paymentInfo = emp ? {
+        payment_type: emp.payment_type,
+        payment_phone: emp.payment_phone,
+        payment_account: emp.payment_account,
+        payment_bank_name: emp.payment_bank_name,
+        payment_bik: emp.payment_bik,
+        payment_corr_account: emp.payment_corr_account,
+      } : null
+      map[key] = { employeeId: key, name: p.employee_name || 'Без исполнителя', role: p.role || p.position || '', initial: (p.employee_name || '?')[0], total: 0, items: [], paymentInfo }
     }
     map[key].items.push(p); map[key].total += p.final_amount || p.amount || 0
   }
