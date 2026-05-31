@@ -151,6 +151,18 @@
 
         <!-- Правая колонка: паспорт + реквизиты -->
         <div class="client-right-col">
+          <!-- Заглушка если нет ни паспорта, ни реквизитов -->
+          <q-card v-if="!client.passport_series && !client.passport_number && !client.inn && !client.ogrn" class="is-card q-mb-md">
+            <q-card-section class="text-center q-py-lg">
+              <q-icon name="info_outline" size="32px" color="grey-4" class="q-mb-sm" />
+              <div style="color: #999; font-size: 13px">
+                Данные не заполнены
+              </div>
+              <div style="color: #bbb; font-size: 11px; margin-top: 4px">
+                Паспорт и реквизиты отсутствуют
+              </div>
+            </q-card-section>
+          </q-card>
           <!-- Паспорт (физ. лицо) -->
           <q-card v-if="client.passport_series || client.passport_number" class="is-card q-mb-md">
             <q-card-section class="q-pb-none">

@@ -733,13 +733,22 @@
         <!-- Правая колонка: только таблица сроков -->
         <div class="contract-right-col">
           <!-- Таблица сроков -->
-          <q-card v-if="timeline.length > 0" class="is-card">
+          <q-card class="is-card">
             <q-card-section class="q-pb-none">
               <div class="text-subtitle2 text-weight-bold" style="color: #333">
                 Таблица сроков
               </div>
             </q-card-section>
-            <q-list dense separator>
+            <q-card-section v-if="timeline.length === 0" class="text-center q-py-lg">
+              <q-icon name="schedule" size="36px" color="grey-4" class="q-mb-sm" />
+              <div style="color: #999; font-size: 13px">
+                Таблица сроков не создана
+              </div>
+              <div style="color: #bbb; font-size: 11px; margin-top: 4px">
+                Создайте её в CRM-карточке проекта
+              </div>
+            </q-card-section>
+            <q-list v-else dense separator>
               <q-item
                 v-for="entry in timeline"
                 :key="entry.id"
