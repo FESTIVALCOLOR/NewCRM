@@ -17,6 +17,7 @@ from auth import get_current_user
 from constants import SUPERUSER_ROLES
 from email_service import get_email_service
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import HTMLResponse
 from messenger_schemas import (
     ChatMemberInput,
     ChatMemberResponse,
@@ -2522,6 +2523,124 @@ async def mtproto_session_status(
     except Exception as e:
         logger.error(f"Ошибка проверки MTProto сессии: {e}")
         return {"valid": False, "error": str(e)}
+
+
+# =============================================
+# EMAIL TEMPLATES
+# =============================================
+
+
+class _EmailTemplateUpdate(BaseModel):
+    html: str
+
+
+@router.get("/email-preview/{email_type}", response_class=HTMLResponse)
+async def preview_email_template(
+    email_type: str,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Превью welcome-письма с демо-данными (возвращает HTML)"""
+    if current_user.role not in SUPERUSER_ROLES:
+        raise HTTPException(status_code=403, detail="Только администратор")
+    if email_type not in ("employee", "client"):
+        raise HTTPException(status_code=400, detail="email_type должен быть 'employee' или 'client'")
+
+    messenger_settings = load_messenger_settings(db)
+    email_svc = get_email_service()
+    email_svc.configure(messenger_settings)
+
+    bot_username = messenger_settings.get("telegram_bot_username", "festival_color_crm_bot")
+
+    if email_type == "employee":
+        html = email_svc.build_employee_welcome_html(
+            employee_name="Иванов Иван Иванович",
+            login="ivanov",
+            password="temp_12345",
+            telegram_token="demo_token_abc123",
+            bot_username=bot_username,
+            download_link=messenger_settings.get("app_download_url", "#"),
+        )
+    else:
+        html = email_svc.build_client_invite_html(
+            client_name="Петрова Мария Ивановна",
+            project_address="г. Москва, ул. Пушкина, д. 10",
+            project_type="Индивидуальный",
+            manager_name="Сидоров Алексей",
+            invite_link="https://t.me/+demoInviteLink123",
+        )
+
+    return HTMLResponse(content=html)
+
+
+@router.get("/email-template/{email_type}")
+async def get_email_template(
+    email_type: str,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Получить кастомный HTML-шаблон email (пустая строка = стандартный)"""
+    if current_user.role not in SUPERUSER_ROLES:
+        raise HTTPException(status_code=403, detail="Только администратор")
+    if email_type not in ("employee", "client"):
+        raise HTTPException(status_code=400, detail="Неверный тип")
+
+    key = f"email_template_{email_type}"
+    row = db.query(MessengerSetting).filter(MessengerSetting.setting_key == key).first()
+    return {"html": row.setting_value if row and row.setting_value else ""}
+
+
+@router.put("/email-template/{email_type}")
+async def save_email_template(
+    email_type: str,
+    data: _EmailTemplateUpdate,
+    current_user: Employee = Depends(require_permission("messenger.create_chat")),
+    db: Session = Depends(get_db),
+):
+    """Сохранить кастомный HTML-шаблон email"""
+    if current_user.role not in SUPERUSER_ROLES:
+        raise HTTPException(status_code=403, detail="Только администратор")
+    if email_type not in ("employee", "client"):
+        raise HTTPException(status_code=400, detail="Неверный тип")
+
+    key = f"email_template_{email_type}"
+    row = db.query(MessengerSetting).filter(MessengerSetting.setting_key == key).first()
+    if row:
+        row.setting_value = data.html
+    else:
+        db.add(MessengerSetting(setting_key=key, setting_value=data.html))
+    db.commit()
+    _settings_cache["data"] = None
+
+    messenger_settings = load_messenger_settings(db, force=True)
+    email_svc = get_email_service()
+    email_svc.configure(messenger_settings)
+
+    return {"ok": True}
+
+
+@router.delete("/email-template/{email_type}")
+async def reset_email_template(
+    email_type: str,
+    current_user: Employee = Depends(require_permission("messenger.create_chat")),
+    db: Session = Depends(get_db),
+):
+    """Сбросить шаблон email до стандартного"""
+    if current_user.role not in SUPERUSER_ROLES:
+        raise HTTPException(status_code=403, detail="Только администратор")
+    if email_type not in ("employee", "client"):
+        raise HTTPException(status_code=400, detail="Неверный тип")
+
+    key = f"email_template_{email_type}"
+    db.query(MessengerSetting).filter(MessengerSetting.setting_key == key).delete()
+    db.commit()
+    _settings_cache["data"] = None
+
+    messenger_settings = load_messenger_settings(db, force=True)
+    email_svc = get_email_service()
+    email_svc.configure(messenger_settings)
+
+    return {"ok": True}
 
 
 # =============================================

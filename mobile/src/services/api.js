@@ -503,6 +503,22 @@ export const messengerApi = {
   getScripts: (params) => api.get('/api/v1/messenger/scripts', { params }),
   triggerScript: (scriptId, chatId) => api.post(`/api/v1/messenger/scripts/${scriptId}/trigger`, { chat_id: chatId }),
   sendSurvey: (chatId, data) => api.post(`/api/v1/messenger/chats/${chatId}/send-survey`, data),
+  // Настройки сервера
+  getSettings: () => api.get('/api/v1/messenger/settings'),
+  updateSettings: (settings) => api.put('/api/v1/messenger/settings', {
+    settings: Object.entries(settings).map(([setting_key, setting_value]) => ({ setting_key, setting_value: setting_value ?? '' })),
+  }),
+  getStatus: () => api.get('/api/v1/messenger/status'),
+  // MTProto авторизация
+  mtprotoSendCode: () => api.post('/api/v1/messenger/mtproto/send-code'),
+  mtprotoVerifyCode: (code) => api.post('/api/v1/messenger/mtproto/verify-code', { code }),
+  mtprotoResendSms: () => api.post('/api/v1/messenger/mtproto/resend-sms'),
+  mtprotoSessionStatus: () => api.get('/api/v1/messenger/mtproto/session-status'),
+  // Email шаблоны
+  previewEmail: (type) => api.get(`/api/v1/messenger/email-preview/${type}`),
+  getEmailTemplate: (type) => api.get(`/api/v1/messenger/email-template/${type}`),
+  saveEmailTemplate: (type, html) => api.put(`/api/v1/messenger/email-template/${type}`, { html }),
+  resetEmailTemplate: (type) => api.delete(`/api/v1/messenger/email-template/${type}`),
 }
 
 // === Files (Яндекс.Диск) ===

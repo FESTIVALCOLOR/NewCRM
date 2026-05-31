@@ -499,132 +499,453 @@
 
       <!-- TELEGRAM / EMAIL -->
       <q-tab-panel name="telegram" class="q-pa-none">
-        <q-card class="is-card q-mb-md">
-          <q-card-section>
-            <div class="text-subtitle2 text-weight-bold q-mb-sm" style="color: #333">
-              Telegram
-            </div>
-            <div class="text-caption q-mb-md" style="color: #888">
-              Управление подключением Telegram бота для уведомлений сотрудников
-            </div>
-            <q-btn
-              unelevated
-              label="Отправить тестовое уведомление"
-              icon="send"
-              no-caps
-              style="background: #ffd93c; color: #333; border-radius: 4px"
-              class="full-width q-mb-sm"
-              @click="sendTestNotification"
-            />
-          </q-card-section>
-        </q-card>
+        <!-- Индикатор загрузки -->
+        <div v-if="settingsLoading" class="row justify-center q-py-lg">
+          <q-spinner color="yellow-8" size="32px" />
+        </div>
 
-        <q-card class="is-card q-mb-md">
-          <q-card-section>
-            <div class="text-subtitle2 text-weight-bold q-mb-sm" style="color: #333">
-              Приглашения сотрудникам
-            </div>
-            <div class="text-caption q-mb-md" style="color: #888">
-              Отправить welcome-email с ссылкой на Telegram бот и временным паролем
-            </div>
-            <q-select
-              v-model="inviteEmployeeId"
-              :options="inviteEmployeeOpts"
-              label="Сотрудник"
-              outlined
-              dense
-              emit-value
-              map-options
-              class="q-mb-sm"
-            />
-            <q-btn
-              unelevated
-              label="Отправить приглашение"
-              icon="mail"
-              no-caps
-              style="background: #27AE60; color: white; border-radius: 4px"
-              class="full-width"
-              :disable="!inviteEmployeeId"
-              @click="sendInvite"
-            />
-          </q-card-section>
-        </q-card>
+        <template v-else>
+          <!-- Статус сервисов -->
+          <q-card v-if="messengerStatus" class="is-card q-mb-md">
+            <q-card-section class="q-py-sm">
+              <div class="row q-gutter-md">
+                <div class="row items-center q-gutter-xs">
+                  <q-icon
+                    :name="messengerStatus.telegram_bot_available ? 'check_circle' : 'cancel'"
+                    :color="messengerStatus.telegram_bot_available ? 'positive' : 'negative'"
+                    size="18px"
+                  />
+                  <span style="font-size: 12px">Бот</span>
+                </div>
+                <div class="row items-center q-gutter-xs">
+                  <q-icon
+                    :name="messengerStatus.telegram_mtproto_available ? 'check_circle' : 'cancel'"
+                    :color="messengerStatus.telegram_mtproto_available ? 'positive' : 'negative'"
+                    size="18px"
+                  />
+                  <span style="font-size: 12px">MTProto</span>
+                </div>
+                <div class="row items-center q-gutter-xs">
+                  <q-icon
+                    :name="messengerStatus.email_available ? 'check_circle' : 'cancel'"
+                    :color="messengerStatus.email_available ? 'positive' : 'negative'"
+                    size="18px"
+                  />
+                  <span style="font-size: 12px">Email</span>
+                </div>
+              </div>
+            </q-card-section>
+          </q-card>
 
-        <!-- Токены сотрудников для ручного подключения -->
-        <q-card class="is-card q-mb-md">
-          <q-card-section>
-            <div class="text-subtitle2 text-weight-bold q-mb-sm" style="color: #333">
-              Telegram-токены сотрудников
-            </div>
-            <div class="text-caption q-mb-md" style="color: #888">
-              Если сотрудник не может открыть ссылку — отправьте ему инструкцию вручную
-            </div>
-            <q-select
-              v-model="tgInfoEmployeeId"
-              :options="inviteEmployeeOpts"
-              label="Выберите сотрудника"
-              outlined
-              dense
-              emit-value
-              map-options
-              class="q-mb-sm"
-              @update:model-value="loadTgInfo"
-            />
-            <template v-if="tgInfo">
-              <q-card flat bordered class="q-pa-sm q-mb-sm" style="border-radius: 8px">
-                <div class="row items-center q-mb-xs">
-                  <q-icon :name="tgInfo.telegram_connected ? 'check_circle' : 'radio_button_unchecked'" :color="tgInfo.telegram_connected ? 'positive' : 'warning'" size="20px" class="q-mr-xs" />
-                  <span style="font-size: 12px; color: #333">{{ tgInfo.telegram_connected ? 'Telegram подключён' : 'Не подключён' }}</span>
-                </div>
-                <template v-if="tgInfo.token_command">
-                  <div class="text-caption q-mb-xs" style="color: #888">
-                    Инструкция для сотрудника:
+          <!-- Внутренние вкладки -->
+          <q-tabs
+            v-model="settingsSubTab"
+            dense
+            no-caps
+            align="left"
+            class="q-mb-md"
+            style="border-bottom: 2px solid #e0e0e0"
+            active-color="yellow-9"
+            indicator-color="yellow-8"
+          >
+            <q-tab name="telegram" label="Telegram" />
+            <q-tab name="smtp" label="Email (SMTP)" />
+            <q-tab name="welcome" label="Welcome письма" />
+            <q-tab name="invites" label="Приглашения" />
+          </q-tabs>
+
+          <q-tab-panels v-model="settingsSubTab" animated>
+            <!-- ─── Telegram бот ─── -->
+            <q-tab-panel name="telegram" class="q-pa-none">
+              <q-card class="is-card q-mb-md">
+                <q-card-section>
+                  <div class="text-subtitle2 text-weight-bold q-mb-md" style="color: #333">
+                    Настройки Telegram бота
                   </div>
-                  <div style="background: #F5F5F5; border-radius: 6px; padding: 8px; font-family: monospace; font-size: 11px; color: #333; word-break: break-all">
-                    Откройте Telegram → найдите бота @festival_color_crm_bot → отправьте:<br>
-                    <strong>{{ tgInfo.token_command }}</strong>
+
+                  <q-input
+                    v-model="messengerSettings.telegram_bot_token"
+                    :type="showBotToken ? 'text' : 'password'"
+                    label="Bot Token"
+                    outlined
+                    dense
+                    class="q-mb-sm"
+                  >
+                    <template #append>
+                      <q-icon
+                        :name="showBotToken ? 'visibility_off' : 'visibility'"
+                        class="cursor-pointer"
+                        @click="showBotToken = !showBotToken"
+                      />
+                    </template>
+                  </q-input>
+
+                  <q-input
+                    v-model="messengerSettings.telegram_api_id"
+                    label="API ID"
+                    outlined
+                    dense
+                    class="q-mb-sm"
+                  />
+
+                  <q-input
+                    v-model="messengerSettings.telegram_api_hash"
+                    :type="showApiHash ? 'text' : 'password'"
+                    label="API Hash"
+                    outlined
+                    dense
+                    class="q-mb-sm"
+                  >
+                    <template #append>
+                      <q-icon
+                        :name="showApiHash ? 'visibility_off' : 'visibility'"
+                        class="cursor-pointer"
+                        @click="showApiHash = !showApiHash"
+                      />
+                    </template>
+                  </q-input>
+
+                  <q-input
+                    v-model="messengerSettings.telegram_phone"
+                    label="Номер телефона (+7...)"
+                    outlined
+                    dense
+                    class="q-mb-md"
+                  />
+
+                  <!-- MTProto авторизация -->
+                  <div class="text-caption text-weight-bold q-mb-sm" style="color: #555">
+                    MTProto авторизация
                   </div>
-                  <div class="row q-gutter-xs q-mt-sm">
+                  <div v-if="!mtprotoCodeSent">
                     <q-btn
-                      flat
-                      dense
-                      size="sm"
-                      icon="content_copy"
-                      label="Копировать команду"
+                      unelevated
                       no-caps
-                      color="grey-7"
-                      @click="copyToClipboard(tgInfo.token_command)"
-                    />
-                    <q-btn
-                      flat
-                      dense
-                      size="sm"
-                      icon="link"
-                      label="Копировать tg://"
-                      no-caps
-                      color="grey-7"
-                      @click="copyToClipboard(tgInfo.tg_link)"
+                      label="Отправить код подтверждения"
+                      icon="sms"
+                      style="background: #2AABEE; color: white; border-radius: 4px"
+                      class="full-width"
+                      @click="mtprotoSendCode"
                     />
                   </div>
-                </template>
-                <div v-else class="text-caption" style="color: #999">
-                  {{ tgInfo.telegram_connected ? 'Уже подключён, токен не нужен' : 'Токен не создан — отправьте приглашение' }}
-                </div>
+                  <div v-else>
+                    <q-input
+                      v-model="mtprotoCode"
+                      label="Код из Telegram"
+                      outlined
+                      dense
+                      class="q-mb-sm"
+                      @keyup.enter="mtprotoVerifyCode"
+                    />
+                    <div class="row q-gutter-sm">
+                      <q-btn
+                        unelevated
+                        no-caps
+                        flex-1
+                        label="Подтвердить"
+                        icon="check"
+                        style="background: #27AE60; color: white; border-radius: 4px"
+                        :loading="mtprotoVerifying"
+                        @click="mtprotoVerifyCode"
+                      />
+                      <q-btn
+                        flat
+                        no-caps
+                        label="Получить SMS"
+                        style="border-radius: 4px"
+                        @click="mtprotoResendSms"
+                      />
+                    </div>
+                  </div>
+                </q-card-section>
               </q-card>
-            </template>
-          </q-card-section>
-        </q-card>
 
-        <q-card class="is-card">
-          <q-card-section>
-            <div class="text-subtitle2 text-weight-bold q-mb-sm" style="color: #333">
-              Email сервис
-            </div>
-            <div class="text-caption" style="color: #888">
-              SMTP настроен на сервере.
-            </div>
-          </q-card-section>
-        </q-card>
+              <q-card class="is-card q-mb-md">
+                <q-card-section>
+                  <div class="text-subtitle2 text-weight-bold q-mb-sm" style="color: #333">
+                    Тестовое уведомление
+                  </div>
+                  <q-btn
+                    unelevated
+                    no-caps
+                    label="Отправить тестовое уведомление"
+                    icon="send"
+                    style="background: #ffd93c; color: #333; border-radius: 4px"
+                    class="full-width"
+                    @click="sendTestNotification"
+                  />
+                </q-card-section>
+              </q-card>
+
+              <div class="row justify-end q-mt-md">
+                <q-btn
+                  unelevated
+                  no-caps
+                  label="Сохранить настройки Telegram"
+                  icon="save"
+                  style="background: #ffd93c; color: #333; border-radius: 4px"
+                  :loading="settingsSaving"
+                  @click="saveMessengerSettings"
+                />
+              </div>
+            </q-tab-panel>
+
+            <!-- ─── Email SMTP ─── -->
+            <q-tab-panel name="smtp" class="q-pa-none">
+              <q-card class="is-card q-mb-md">
+                <q-card-section>
+                  <div class="text-subtitle2 text-weight-bold q-mb-md" style="color: #333">
+                    Настройки SMTP
+                  </div>
+
+                  <q-input
+                    v-model="messengerSettings.smtp_host"
+                    label="SMTP Host"
+                    outlined
+                    dense
+                    class="q-mb-sm"
+                  />
+                  <q-input
+                    v-model="messengerSettings.smtp_port"
+                    label="SMTP Port"
+                    outlined
+                    dense
+                    class="q-mb-sm"
+                    type="number"
+                  />
+                  <q-input
+                    v-model="messengerSettings.smtp_username"
+                    label="Логин (email)"
+                    outlined
+                    dense
+                    class="q-mb-sm"
+                  />
+
+                  <q-input
+                    v-model="messengerSettings.smtp_password"
+                    :type="showSmtpPassword ? 'text' : 'password'"
+                    label="Пароль"
+                    outlined
+                    dense
+                    class="q-mb-sm"
+                  >
+                    <template #append>
+                      <q-icon
+                        :name="showSmtpPassword ? 'visibility_off' : 'visibility'"
+                        class="cursor-pointer"
+                        @click="showSmtpPassword = !showSmtpPassword"
+                      />
+                    </template>
+                  </q-input>
+
+                  <q-toggle
+                    v-model="messengerSettings.smtp_use_tls"
+                    :true-value="'true'"
+                    :false-value="'false'"
+                    label="Использовать TLS"
+                    class="q-mb-sm"
+                    color="yellow-8"
+                  />
+
+                  <q-input
+                    v-model="messengerSettings.smtp_from_name"
+                    label="Имя отправителя"
+                    outlined
+                    dense
+                    class="q-mb-sm"
+                  />
+                  <q-input
+                    v-model="messengerSettings.app_download_url"
+                    label="Ссылка для скачивания CRM"
+                    outlined
+                    dense
+                    class="q-mb-sm"
+                  />
+                  <q-input v-model="messengerSettings.review_link" label="Ссылка для отзыва" outlined dense />
+                </q-card-section>
+              </q-card>
+
+              <div class="row justify-end q-mt-md">
+                <q-btn
+                  unelevated
+                  no-caps
+                  label="Сохранить настройки Email"
+                  icon="save"
+                  style="background: #ffd93c; color: #333; border-radius: 4px"
+                  :loading="settingsSaving"
+                  @click="saveMessengerSettings"
+                />
+              </div>
+            </q-tab-panel>
+
+            <!-- ─── Welcome письма ─── -->
+            <q-tab-panel name="welcome" class="q-pa-none">
+              <q-card class="is-card q-mb-md">
+                <q-card-section>
+                  <div class="text-subtitle2 text-weight-bold q-mb-md" style="color: #333">
+                    Welcome письма
+                  </div>
+
+                  <!-- Письмо сотруднику -->
+                  <div class="text-caption text-weight-bold q-mb-xs" style="color: #555">
+                    Письмо сотруднику
+                  </div>
+                  <div class="text-caption q-mb-sm" style="color: #888">
+                    Отправляется новому сотруднику при добавлении в систему. Содержит логин, пароль и ссылку на Telegram-бот.
+                  </div>
+                  <div class="row q-gutter-sm q-mb-lg">
+                    <q-btn
+                      unelevated
+                      no-caps
+                      label="Просмотр"
+                      icon="visibility"
+                      style="background: #f5f5f5; color: #333; border: 1px solid #ddd; border-radius: 4px"
+                      @click="previewEmail('employee')"
+                    />
+                    <q-btn
+                      unelevated
+                      no-caps
+                      label="Редактировать"
+                      icon="edit"
+                      style="background: #ffd93c; color: #333; border-radius: 4px"
+                      @click="editEmail('employee')"
+                    />
+                  </div>
+
+                  <!-- Письмо клиенту -->
+                  <div class="text-caption text-weight-bold q-mb-xs" style="color: #555">
+                    Приглашение клиенту
+                  </div>
+                  <div class="text-caption q-mb-sm" style="color: #888">
+                    Отправляется клиенту при создании проектного Telegram-чата. Содержит ссылку-приглашение и данные проекта.
+                  </div>
+                  <div class="row q-gutter-sm">
+                    <q-btn
+                      unelevated
+                      no-caps
+                      label="Просмотр"
+                      icon="visibility"
+                      style="background: #f5f5f5; color: #333; border: 1px solid #ddd; border-radius: 4px"
+                      @click="previewEmail('client')"
+                    />
+                    <q-btn
+                      unelevated
+                      no-caps
+                      label="Редактировать"
+                      icon="edit"
+                      style="background: #ffd93c; color: #333; border-radius: 4px"
+                      @click="editEmail('client')"
+                    />
+                  </div>
+                </q-card-section>
+              </q-card>
+            </q-tab-panel>
+
+            <!-- ─── Приглашения ─── -->
+            <q-tab-panel name="invites" class="q-pa-none">
+              <q-card class="is-card q-mb-md">
+                <q-card-section>
+                  <div class="text-subtitle2 text-weight-bold q-mb-sm" style="color: #333">
+                    Приглашения сотрудникам
+                  </div>
+                  <div class="text-caption q-mb-md" style="color: #888">
+                    Отправить welcome-email с ссылкой на Telegram бот и временным паролем
+                  </div>
+                  <q-select
+                    v-model="inviteEmployeeId"
+                    :options="inviteEmployeeOpts"
+                    label="Сотрудник"
+                    outlined
+                    dense
+                    emit-value
+                    map-options
+                    class="q-mb-sm"
+                  />
+                  <q-btn
+                    unelevated
+                    no-caps
+                    label="Отправить приглашение"
+                    icon="mail"
+                    style="background: #27AE60; color: white; border-radius: 4px"
+                    class="full-width"
+                    :disable="!inviteEmployeeId"
+                    @click="sendInvite"
+                  />
+                </q-card-section>
+              </q-card>
+
+              <!-- Токены сотрудников для ручного подключения -->
+              <q-card class="is-card q-mb-md">
+                <q-card-section>
+                  <div class="text-subtitle2 text-weight-bold q-mb-sm" style="color: #333">
+                    Telegram-токены сотрудников
+                  </div>
+                  <div class="text-caption q-mb-md" style="color: #888">
+                    Если сотрудник не может открыть ссылку — отправьте ему инструкцию вручную
+                  </div>
+                  <q-select
+                    v-model="tgInfoEmployeeId"
+                    :options="inviteEmployeeOpts"
+                    label="Выберите сотрудника"
+                    outlined
+                    dense
+                    emit-value
+                    map-options
+                    class="q-mb-sm"
+                    @update:model-value="loadTgInfo"
+                  />
+                  <template v-if="tgInfo">
+                    <q-card flat bordered class="q-pa-sm q-mb-sm" style="border-radius: 8px">
+                      <div class="row items-center q-mb-xs">
+                        <q-icon
+                          :name="tgInfo.telegram_connected ? 'check_circle' : 'radio_button_unchecked'"
+                          :color="tgInfo.telegram_connected ? 'positive' : 'warning'"
+                          size="20px"
+                          class="q-mr-xs"
+                        />
+                        <span style="font-size: 12px; color: #333">{{ tgInfo.telegram_connected ? 'Telegram подключён' : 'Не подключён' }}</span>
+                      </div>
+                      <template v-if="tgInfo.token_command">
+                        <div class="text-caption q-mb-xs" style="color: #888">
+                          Инструкция для сотрудника:
+                        </div>
+                        <div style="background: #F5F5F5; border-radius: 6px; padding: 8px; font-family: monospace; font-size: 11px; color: #333; word-break: break-all">
+                          Откройте Telegram → найдите бота @festival_color_crm_bot → отправьте:<br>
+                          <strong>{{ tgInfo.token_command }}</strong>
+                        </div>
+                        <div class="row q-gutter-xs q-mt-sm">
+                          <q-btn
+                            flat
+                            dense
+                            size="sm"
+                            icon="content_copy"
+                            label="Копировать команду"
+                            no-caps
+                            color="grey-7"
+                            @click="copyToClipboard(tgInfo.token_command)"
+                          />
+                          <q-btn
+                            flat
+                            dense
+                            size="sm"
+                            icon="link"
+                            label="Копировать tg://"
+                            no-caps
+                            color="grey-7"
+                            @click="copyToClipboard(tgInfo.tg_link)"
+                          />
+                        </div>
+                      </template>
+                      <div v-else class="text-caption" style="color: #999">
+                        {{ tgInfo.telegram_connected ? 'Уже подключён, токен не нужен' : 'Токен не создан — отправьте приглашение' }}
+                      </div>
+                    </q-card>
+                  </template>
+                </q-card-section>
+              </q-card>
+            </q-tab-panel>
+          </q-tab-panels>
+        </template>
       </q-tab-panel>
 
       <!-- КОРЗИНА ДОГОВОРОВ -->
@@ -939,6 +1260,86 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
+
+    <!-- Диалог превью email письма -->
+    <q-dialog v-model="emailPreviewDialog" maximized>
+      <q-card style="display:flex; flex-direction:column; height:100%">
+        <q-bar style="background: #333; color: white">
+          <q-icon name="visibility" />
+          <div class="q-ml-sm">
+            Превью: {{ emailEditorType === 'employee' ? 'Письмо сотруднику' : 'Приглашение клиенту' }}
+          </div>
+          <q-space />
+          <q-btn v-close-popup dense flat icon="close" />
+        </q-bar>
+        <div style="flex:1; overflow:auto">
+          <iframe
+            v-if="emailPreviewHtml"
+            :srcdoc="emailPreviewHtml"
+            style="width:100%; height:100%; border:none; min-height:600px"
+            sandbox="allow-same-origin"
+          />
+        </div>
+      </q-card>
+    </q-dialog>
+
+    <!-- Диалог редактора HTML шаблона -->
+    <q-dialog v-model="emailEditorDialog" maximized>
+      <q-card style="display:flex; flex-direction:column; height:100%">
+        <q-bar style="background: #333; color: white">
+          <q-icon name="edit" />
+          <div class="q-ml-sm">
+            Редактор: {{ emailEditorType === 'employee' ? 'Письмо сотруднику' : 'Приглашение клиенту' }}
+          </div>
+          <q-space />
+          <q-btn v-close-popup dense flat icon="close" />
+        </q-bar>
+        <div class="q-pa-sm" style="flex:1; display:flex; flex-direction:column; overflow:hidden">
+          <div class="text-caption q-mb-xs" style="color: #888">
+            Доступные переменные:
+            <template v-if="emailEditorType === 'employee'">
+              <code>&#123;&#123;first_name&#125;&#125;</code> <code>&#123;&#123;login&#125;&#125;</code> <code>&#123;&#123;password&#125;&#125;</code>
+              <code>&#123;&#123;telegram_link&#125;&#125;</code> <code>&#123;&#123;telegram_link_tg&#125;&#125;</code> <code>&#123;&#123;download_link&#125;&#125;</code>
+            </template>
+            <template v-else>
+              <code>&#123;&#123;first_name&#125;&#125;</code> <code>&#123;&#123;project_address&#125;&#125;</code> <code>&#123;&#123;project_type&#125;&#125;</code>
+              <code>&#123;&#123;manager_name&#125;&#125;</code> <code>&#123;&#123;invite_link&#125;&#125;</code> <code>&#123;&#123;telegram_link_tg&#125;&#125;</code>
+            </template>
+          </div>
+          <div class="text-caption q-mb-sm" style="color: #aaa">
+            Пустой шаблон = использовать стандартный дизайн.
+          </div>
+          <q-input
+            v-model="emailEditorHtml"
+            type="textarea"
+            outlined
+            dense
+            style="flex:1; font-family: monospace; font-size: 12px"
+            input-style="height:100%; resize:none; min-height:300px"
+            placeholder="Введите HTML шаблон или оставьте пустым для стандартного..."
+          />
+        </div>
+        <q-card-actions align="right" style="border-top: 1px solid #e0e0e0">
+          <q-btn
+            flat
+            no-caps
+            label="Сбросить до стандартного"
+            color="negative"
+            @click="resetEmailTemplate"
+          />
+          <q-btn v-close-popup flat no-caps label="Отмена" />
+          <q-btn
+            unelevated
+            no-caps
+            label="Сохранить"
+            icon="save"
+            style="background: #ffd93c; color: #333"
+            :loading="emailEditorSaving"
+            @click="saveEmailTemplate"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
@@ -947,7 +1348,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useQuasar } from 'quasar'
 import { api } from 'src/boot/axios'
 import { useReferencesStore } from 'src/stores/references'
-import { deletedContractsApi } from 'src/services/api'
+import { deletedContractsApi, messengerApi } from 'src/services/api'
 
 const $q = useQuasar()
 const refs = useReferencesStore()
@@ -982,6 +1383,26 @@ const inviteEmployeeId = ref(null)
 const inviteEmployeeOpts = ref([])
 const tgInfoEmployeeId = ref(null)
 const tgInfo = ref(null)
+
+// Messenger settings (Telegram / Email / MTProto)
+const settingsSubTab = ref('telegram')
+const messengerSettings = ref({})
+const settingsLoading = ref(false)
+const settingsSaving = ref(false)
+const messengerStatus = ref(null)
+const mtprotoCodeSent = ref(false)
+const mtprotoCode = ref('')
+const mtprotoVerifying = ref(false)
+const showBotToken = ref(false)
+const showApiHash = ref(false)
+const showSmtpPassword = ref(false)
+// Email template editor/preview
+const emailEditorDialog = ref(false)
+const emailEditorType = ref('employee')
+const emailEditorHtml = ref('')
+const emailEditorSaving = ref(false)
+const emailPreviewDialog = ref(false)
+const emailPreviewHtml = ref('')
 
 // Блоки прав как в десктопе
 const PERMISSION_GROUPS = {
@@ -1451,6 +1872,122 @@ function editCity(city) {
     })
 }
 
+async function loadMessengerSettings() {
+  settingsLoading.value = true
+  try {
+    const { data } = await messengerApi.getSettings()
+    const obj = {}
+    for (const item of data) {
+      obj[item.setting_key] = item.setting_value ?? ''
+    }
+    messengerSettings.value = obj
+    const statusRes = await messengerApi.getStatus()
+    messengerStatus.value = statusRes.data
+  } catch (err) {
+    $q.notify({ type: 'negative', message: 'Ошибка загрузки настроек' })
+  } finally {
+    settingsLoading.value = false
+  }
+}
+
+async function saveMessengerSettings() {
+  settingsSaving.value = true
+  try {
+    await messengerApi.updateSettings(messengerSettings.value)
+    $q.notify({ type: 'positive', message: 'Настройки сохранены' })
+    await loadMessengerSettings()
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка сохранения' })
+  } finally {
+    settingsSaving.value = false
+  }
+}
+
+async function mtprotoSendCode() {
+  try {
+    await messengerApi.mtprotoSendCode()
+    mtprotoCodeSent.value = true
+    $q.notify({ type: 'positive', message: 'Код отправлен в Telegram' })
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка отправки кода' })
+  }
+}
+
+async function mtprotoVerifyCode() {
+  if (!mtprotoCode.value) return
+  mtprotoVerifying.value = true
+  try {
+    await messengerApi.mtprotoVerifyCode(mtprotoCode.value)
+    $q.notify({ type: 'positive', message: 'MTProto авторизован успешно' })
+    mtprotoCodeSent.value = false
+    mtprotoCode.value = ''
+    await loadMessengerSettings()
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Неверный код' })
+  } finally {
+    mtprotoVerifying.value = false
+  }
+}
+
+async function mtprotoResendSms() {
+  try {
+    await messengerApi.mtprotoResendSms()
+    $q.notify({ type: 'positive', message: 'SMS отправлено' })
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
+  }
+}
+
+async function previewEmail(type) {
+  try {
+    const res = await messengerApi.previewEmail(type)
+    emailPreviewHtml.value = res.data
+    emailPreviewDialog.value = true
+  } catch (err) {
+    $q.notify({ type: 'negative', message: 'Ошибка загрузки превью' })
+  }
+}
+
+async function editEmail(type) {
+  emailEditorType.value = type
+  try {
+    const { data } = await messengerApi.getEmailTemplate(type)
+    emailEditorHtml.value = data.html || ''
+    emailEditorDialog.value = true
+  } catch (err) {
+    $q.notify({ type: 'negative', message: 'Ошибка загрузки шаблона' })
+  }
+}
+
+async function saveEmailTemplate() {
+  emailEditorSaving.value = true
+  try {
+    await messengerApi.saveEmailTemplate(emailEditorType.value, emailEditorHtml.value)
+    $q.notify({ type: 'positive', message: 'Шаблон сохранён' })
+    emailEditorDialog.value = false
+  } catch (err) {
+    $q.notify({ type: 'negative', message: 'Ошибка сохранения шаблона' })
+  } finally {
+    emailEditorSaving.value = false
+  }
+}
+
+function resetEmailTemplate() {
+  $q.dialog({
+    title: 'Сбросить шаблон?',
+    message: 'Вернуть стандартный шаблон письма? Ваши изменения будут удалены.',
+    cancel: true,
+  }).onOk(async () => {
+    try {
+      await messengerApi.resetEmailTemplate(emailEditorType.value)
+      $q.notify({ type: 'positive', message: 'Шаблон сброшен до стандартного' })
+      emailEditorDialog.value = false
+    } catch (err) {
+      $q.notify({ type: 'negative', message: 'Ошибка' })
+    }
+  })
+}
+
 async function loadTgInfo() {
   if (!tgInfoEmployeeId.value) { tgInfo.value = null; return }
   try {
@@ -1536,6 +2073,7 @@ function permanentDeleteContract(item) {
 watch(tab, (val) => {
   if (val === 'trash') loadTrash()
   if (val === 'normdays') loadNormDays()
+  if (val === 'telegram') loadMessengerSettings()
 })
 
 onMounted(async () => {
