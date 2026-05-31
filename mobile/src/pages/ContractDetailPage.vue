@@ -735,11 +735,9 @@
           <!-- Таблица сроков -->
           <q-card class="is-card">
             <q-card-section class="q-pb-none">
-              <div class="row items-center justify-between">
-                <div class="text-subtitle2 text-weight-bold" style="color: #333">
-                  Таблица сроков
-                </div>
-                <div v-if="timeline.length > 0" style="display: flex; gap: 6px; align-items: center">
+              <div style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; min-height: 28px">
+                <span style="color: #333; font-weight: 600; font-size: 14px; line-height: 1; margin: 0">Таблица сроков</span>
+                <div v-if="timeline.length > 0" style="display: flex; gap: 6px; align-items: center; flex-shrink: 0">
                   <button type="button" class="tl-export-btn" title="Скачать Excel" @click="exportTimelineExcel">
                     <q-icon name="table_view" size="12px" /> Excel
                   </button>
