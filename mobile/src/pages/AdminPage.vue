@@ -300,7 +300,8 @@
 
       <!-- НОРМОДНИ -->
       <q-tab-panel name="normdays" class="q-pa-none">
-        <div class="row q-col-gutter-sm q-mb-md">
+        <!-- Фильтры: тип и подтип -->
+        <div class="row q-col-gutter-sm q-mb-sm">
           <div class="col-6">
             <q-select
               v-model="ndProjectType"
@@ -308,43 +309,142 @@
               label="Тип"
               outlined
               dense
-              @update:model-value="loadNormDays"
+              @update:model-value="onNdTypeChange"
             />
           </div>
           <div class="col-6">
             <q-select
               v-model="ndSubtype"
-              :options="refs.projectSubtypes"
+              :options="ndSubtypeOptions"
               label="Подтип"
               outlined
               dense
-              @update:model-value="loadNormDays"
+              @update:model-value="onNdSubtypeChange"
             />
           </div>
         </div>
-        <q-card class="is-card">
-          <q-list v-if="normDays.length > 0" dense separator>
-            <q-item v-for="nd in normDays" :key="nd.sort_order" :class="{ 'bg-grey-2': !nd.stage_code?.includes('.') }">
-              <q-item-section>
-                <q-item-label style="font-size: 11px; color: #333" :class="{ 'text-weight-bold': !nd.stage_code?.includes('.') }">
-                  {{ nd.stage_name }}
-                </q-item-label>
-                <q-item-label caption style="color: #888">
-                  {{ nd.executor_role }}
-                </q-item-label>
-              </q-item-section>
-              <q-item-section side>
-                <div class="text-weight-bold" style="color: #333; font-size: 12px">
-                  {{ nd.base_norm_days || nd.norm_days || '—' }} дн.
+
+        <!-- Блок расчёта -->
+        <q-card v-if="normDays.length > 0" class="is-card q-mb-sm" flat bordered>
+          <q-card-section class="q-pa-sm">
+            <div class="row items-center q-gutter-sm">
+              <div class="col">
+                <q-input
+                  v-model.number="ndArea"
+                  label="Площадь, м²"
+                  outlined
+                  dense
+                  type="number"
+                  min="1"
+                  @update:model-value="previewNormDays"
+                />
+              </div>
+              <div class="col-auto text-caption" style="color: #555; line-height: 1.8">
+                <div v-if="ndProjectType === 'Индивидуальный'">
+                  K = <b>{{ ndK }}</b>
                 </div>
-              </q-item-section>
-            </q-item>
-          </q-list>
-          <q-card-section v-else class="text-center" style="color: #999">
-            <q-spinner v-if="ndLoading" size="30px" color="accent" />
-            <div v-else>
-              Выберите тип и подтип проекта
+                <div>Срок = <b>{{ ndContractTerm }}</b> дн.</div>
+              </div>
             </div>
+            <div class="text-caption q-mt-xs" style="color: #999">
+              <template v-if="ndProjectType === 'Индивидуальный'">
+                Формула: норм-дни = <b>base</b> + K × <b>mult</b>, K = ⌊(м² − 1) ÷ 100⌋
+              </template>
+              <template v-else>
+                Шаблонные: K = 0, нормодни фиксированы (зависят от площади только срок договора)
+              </template>
+            </div>
+          </q-card-section>
+        </q-card>
+
+        <!-- Кнопки действий -->
+        <div v-if="normDays.length > 0" class="row q-gutter-xs q-mb-sm">
+          <template v-if="!ndEditMode">
+            <button type="button" class="nd-btn" @click="enterEditMode">
+              <q-icon name="edit" size="14px" /> Редактировать
+            </button>
+            <button type="button" class="nd-btn nd-btn-reset" @click="resetNormDays">
+              <q-icon name="restore" size="14px" /> Сбросить к формулам
+            </button>
+          </template>
+          <template v-else>
+            <button type="button" class="nd-btn nd-btn-save" :disabled="ndSaving" @click="saveNormDays">
+              <q-spinner v-if="ndSaving" size="14px" /><q-icon v-else name="save" size="14px" /> Сохранить
+            </button>
+            <button type="button" class="nd-btn nd-btn-cancel" @click="cancelEdit">
+              Отмена
+            </button>
+          </template>
+        </div>
+
+        <!-- Таблица нормодней, сгруппированная по стадиям -->
+        <div v-if="ndLoading" class="text-center q-pa-md">
+          <q-spinner size="30px" color="accent" />
+        </div>
+        <template v-else-if="normDays.length > 0">
+          <q-card v-for="group in normDaysGrouped" :key="group.key" class="is-card q-mb-sm">
+            <div class="nd-group-header">
+              {{ group.name }}
+            </div>
+            <q-list dense separator>
+              <template v-for="nd in group.items" :key="nd.stage_code">
+                <!-- Заголовок подэтапа -->
+                <q-item v-if="nd.executor_role === 'header'" class="nd-subheader">
+                  <q-item-section>
+                    <q-item-label class="text-weight-bold" style="font-size: 11px; color: #555">
+                      {{ nd.stage_name }}
+                    </q-item-label>
+                  </q-item-section>
+                </q-item>
+                <!-- Запись нормодней -->
+                <q-item v-else>
+                  <q-item-section>
+                    <q-item-label style="font-size: 11px; color: #333">
+                      {{ nd.stage_name }}
+                    </q-item-label>
+                    <q-item-label caption style="color: #888">
+                      {{ nd.executor_role }}<span v-if="!nd.is_in_contract_scope" style="color: #e74c3c"> · вне объёма</span>
+                    </q-item-label>
+                  </q-item-section>
+                  <!-- Просмотр -->
+                  <q-item-section v-if="!ndEditMode" side style="text-align: right; min-width: 72px">
+                    <div class="text-weight-bold" style="font-size: 12px; color: #333">
+                      {{ ndPreviewMap[nd.stage_code] !== undefined ? ndPreviewMap[nd.stage_code] : (nd.base_norm_days ?? '—') }} дн.
+                    </div>
+                    <div v-if="ndProjectType === 'Индивидуальный' && nd.k_multiplier > 0" class="text-caption" style="color: #aaa; font-size: 9px">
+                      {{ nd.base_norm_days }} + {{ nd.k_multiplier }}×K
+                    </div>
+                  </q-item-section>
+                  <!-- Редактирование -->
+                  <q-item-section v-else side style="min-width: 130px">
+                    <div class="row q-gutter-xs no-wrap items-center">
+                      <q-input
+                        v-model.number="ndEditMap[nd.stage_code].base_norm_days"
+                        dense
+                        outlined
+                        type="number"
+                        label="Дни"
+                        style="width: 58px"
+                      />
+                      <q-input
+                        v-if="ndProjectType === 'Индивидуальный'"
+                        v-model.number="ndEditMap[nd.stage_code].k_multiplier"
+                        dense
+                        outlined
+                        type="number"
+                        label="×K"
+                        style="width: 48px"
+                      />
+                    </div>
+                  </q-item-section>
+                </q-item>
+              </template>
+            </q-list>
+          </q-card>
+        </template>
+        <q-card v-else class="is-card">
+          <q-card-section class="text-center" style="color: #999">
+            Выберите тип и подтип проекта
           </q-card-section>
         </q-card>
       </q-tab-panel>
@@ -811,7 +911,17 @@ const rates = ref([])
 const normDays = ref([])
 const ndLoading = ref(false)
 const ndProjectType = ref('Индивидуальный')
+const ND_SUBTYPES_INDIVIDUAL = ['Полный (с 3д визуализацией)', 'Эскизный (с коллажами)', 'Планировочный']
+const ND_SUBTYPES_TEMPLATE = ['Стандарт', 'Стандарт с визуализацией', 'Проект ванной комнаты', 'Проект ванной комнаты с визуализацией']
+const ndSubtypeOptions = computed(() => ndProjectType.value === 'Шаблонный' ? ND_SUBTYPES_TEMPLATE : ND_SUBTYPES_INDIVIDUAL)
 const ndSubtype = ref('Полный (с 3д визуализацией)')
+const ndArea = ref(100)
+const ndK = ref(0)
+const ndContractTerm = ref(0)
+const ndPreview = ref([])
+const ndEditMode = ref(false)
+const ndEditMap = ref({})
+const ndSaving = ref(false)
 const showRoleDialog = ref(false)
 const selectedRole = ref('')
 const rolePermissions = ref([])
@@ -886,14 +996,121 @@ async function loadRates() {
   try { const { data } = await api.get('/api/v1/rates'); rates.value = data } catch { rates.value = [] }
 }
 
+const STAGE_GROUP_LABELS = { START: 'Начало проекта', STAGE1: 'Стадия 1', STAGE2: 'Стадия 2', STAGE3: 'Стадия 3', FINISH: 'Завершение проекта' }
+
+const normDaysGrouped = computed(() => {
+  const order = []
+  const map = {}
+  normDays.value.forEach(nd => {
+    const k = nd.stage_group || 'OTHER'
+    if (!map[k]) { map[k] = { key: k, name: STAGE_GROUP_LABELS[k] || k, items: [] }; order.push(k) }
+    map[k].items.push(nd)
+  })
+  return order.map(k => map[k])
+})
+
+const ndPreviewMap = computed(() => {
+  const m = {}
+  ndPreview.value.forEach(e => { if (e.stage_code) m[e.stage_code] = e.norm_days })
+  return m
+})
+
+async function previewNormDays() {
+  if (!ndProjectType.value || !ndSubtype.value) return
+  try {
+    const { data } = await api.post('/api/v1/norm-days/templates/preview', {
+      area: ndArea.value || 100,
+      project_type: ndProjectType.value,
+      project_subtype: ndSubtype.value,
+    })
+    ndPreview.value = data.entries || []
+    ndContractTerm.value = data.contract_term || 0
+    ndK.value = data.k_coefficient || 0
+  } catch { ndPreview.value = [] }
+}
+
 async function loadNormDays() {
   if (!ndProjectType.value || !ndSubtype.value) return
   ndLoading.value = true
   try {
     const { data } = await api.get('/api/v1/norm-days/templates', { params: { project_type: ndProjectType.value, project_subtype: ndSubtype.value } })
     normDays.value = data.entries || data || []
+    await previewNormDays()
   } catch { normDays.value = [] }
   finally { ndLoading.value = false }
+}
+
+function onNdTypeChange() {
+  ndSubtype.value = ndSubtypeOptions.value[0]
+  ndEditMode.value = false
+  ndEditMap.value = {}
+  loadNormDays()
+}
+
+function onNdSubtypeChange() {
+  ndEditMode.value = false
+  ndEditMap.value = {}
+  loadNormDays()
+}
+
+function enterEditMode() {
+  const m = {}
+  normDays.value.forEach(nd => { m[nd.stage_code] = { base_norm_days: nd.base_norm_days, k_multiplier: nd.k_multiplier || 0 } })
+  ndEditMap.value = m
+  ndEditMode.value = true
+}
+
+function cancelEdit() {
+  ndEditMode.value = false
+  ndEditMap.value = {}
+}
+
+async function saveNormDays() {
+  ndSaving.value = true
+  try {
+    const entries = normDays.value
+      .filter(nd => nd.executor_role !== 'header')
+      .map(nd => {
+        const edited = ndEditMap.value[nd.stage_code] || {}
+        return {
+          stage_code: nd.stage_code,
+          stage_name: nd.stage_name,
+          stage_group: nd.stage_group,
+          substage_group: nd.substage_group,
+          base_norm_days: Number(edited.base_norm_days ?? nd.base_norm_days),
+          k_multiplier: Number(edited.k_multiplier ?? nd.k_multiplier ?? 0),
+          executor_role: nd.executor_role,
+          is_in_contract_scope: nd.is_in_contract_scope,
+          sort_order: nd.sort_order,
+        }
+      })
+    await api.put('/api/v1/norm-days/templates', { project_type: ndProjectType.value, project_subtype: ndSubtype.value, entries })
+    $q.notify({ type: 'positive', message: 'Нормодни сохранены' })
+    ndEditMode.value = false
+    ndEditMap.value = {}
+    await loadNormDays()
+  } catch {
+    $q.notify({ type: 'negative', message: 'Ошибка сохранения' })
+  } finally { ndSaving.value = false }
+}
+
+async function resetNormDays() {
+  $q.dialog({
+    title: 'Сбросить нормодни?',
+    message: 'Вернуть стандартные формулы из кода для этого типа и подтипа? Все кастомные изменения будут удалены.',
+    cancel: { label: 'Отмена', flat: true },
+    ok: { label: 'Сбросить', color: 'negative' },
+    persistent: true,
+  }).onOk(async () => {
+    try {
+      await api.post('/api/v1/norm-days/templates/reset', { project_type: ndProjectType.value, project_subtype: ndSubtype.value })
+      $q.notify({ type: 'positive', message: 'Нормодни сброшены к стандартным' })
+      ndEditMode.value = false
+      await loadNormDays()
+    } catch {
+      $q.notify({ type: 'negative', message: 'Ошибка сброса' })
+    }
+  })
 }
 
 function editRate(rate) {
@@ -1171,3 +1388,55 @@ onMounted(async () => {
   } catch {}
 })
 </script>
+
+<style scoped>
+.nd-group-header {
+  background: #ffd93c;
+  color: #333;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 12px;
+}
+
+.nd-subheader {
+  background: #f5f5f5 !important;
+}
+
+.nd-btn {
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid #bbb;
+  border-radius: 4px;
+  background: white;
+  color: #333;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  outline: none;
+}
+
+.nd-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.nd-btn-save {
+  background: #4caf50;
+  border-color: #4caf50;
+  color: white;
+}
+
+.nd-btn-reset {
+  border-color: #e74c3c;
+  color: #e74c3c;
+}
+
+.nd-btn-cancel {
+  background: #f5f5f5;
+  border-color: #ccc;
+}
+</style>
