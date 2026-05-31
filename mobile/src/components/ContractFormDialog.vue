@@ -631,16 +631,16 @@ async function save() {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  color: #1976d2;
+  color: #757575;
   transition: background 0.15s;
   outline: none;
 }
 
 .client-add-btn:hover {
-  background: rgba(25, 118, 210, 0.1);
+  background: rgba(0, 0, 0, 0.06);
 }
 
 .client-add-btn:active {
-  background: rgba(25, 118, 210, 0.2);
+  background: rgba(0, 0, 0, 0.12);
 }
 </style>
