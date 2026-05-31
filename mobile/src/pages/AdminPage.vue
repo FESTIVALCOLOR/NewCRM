@@ -346,12 +346,31 @@
                 <div>Срок = <b>{{ ndContractTerm }}</b> дн.</div>
               </div>
             </div>
-            <div class="text-caption q-mt-xs" style="color: #999">
+            <div class="text-caption q-mt-xs nd-formula-hint">
               <template v-if="ndProjectType === 'Индивидуальный'">
-                Формула: норм-дни = <b>base</b> + K × <b>mult</b>, K = ⌊(м² − 1) ÷ 100⌋
+                <div><b>Норм-дни = base + K × mult</b></div>
+                <div>· <b>base</b> — базовые дни этапа, не зависят от площади</div>
+                <div>· <b>mult</b> — прибавка за каждые 100 м² сверх первых 100 м²</div>
+                <div>· <b>K</b> = ⌊(площадь − 1) ÷ 100⌋ → ≤100 м²: K=0 · 101–200: K=1 · 201–300: K=2</div>
+                <div>Итоговые дни распределяются пропорционально в рамках срока договора</div>
               </template>
               <template v-else>
-                Шаблонные: K = 0, нормодни фиксированы (зависят от площади только срок договора)
+                <template v-if="ndSubtype && ndSubtype.toLowerCase().includes('ванн')">
+                  <div><b>Ванная комната — фиксированный срок:</b></div>
+                  <div>· Без визуализации: 10 рабочих дней</div>
+                  <div>· С визуализацией: 20 рабочих дней</div>
+                  <div>Нормодни распределяются пропорционально в рамках этого срока</div>
+                </template>
+                <template v-else>
+                  <div><b>Стандарт — срок нарастает с площадью:</b></div>
+                  <div>· до 90 м²: 20 рабочих дней</div>
+                  <div>· за каждые 50 м² сверх 90 → +10 дней (91–140: 30 дн., 141–190: 40 дн., …)</div>
+                  <template v-if="ndSubtype && ndSubtype.toLowerCase().includes('визуализ')">
+                    <div>· визуализация: +25 дней базово; за каждые 50 м² сверх 90 → ещё +15 дней</div>
+                  </template>
+                  <div>· этажность: +10 дн. за каждый доп. этаж (с визуализацией +20 дн.)</div>
+                  <div>Нормодни каждого этапа пропорциональны общему сроку</div>
+                </template>
               </template>
             </div>
           </q-card-section>
@@ -397,7 +416,7 @@
                   </q-item-section>
                 </q-item>
                 <!-- Запись нормодней -->
-                <q-item v-else>
+                <q-item v-else :class="{ 'nd-out-of-scope': !nd.is_in_contract_scope }">
                   <q-item-section>
                     <q-item-label style="font-size: 11px; color: #333">
                       {{ nd.stage_name }}
@@ -1438,5 +1457,18 @@ onMounted(async () => {
 .nd-btn-cancel {
   background: #f5f5f5;
   border-color: #ccc;
+}
+
+.nd-out-of-scope {
+  background: #f5f5f5 !important;
+}
+
+.nd-formula-hint {
+  color: #888;
+  line-height: 1.7;
+}
+
+.nd-formula-hint div {
+  margin-bottom: 1px;
 }
 </style>
