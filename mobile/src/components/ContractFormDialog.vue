@@ -165,6 +165,17 @@
                 style="font-size: 10px; color: #666"
                 @click="toggleManualPeriod"
               />
+              <q-btn
+                flat
+                round
+                dense
+                icon="priority_high"
+                size="xs"
+                style="width: 22px; height: 22px; min-width: 22px; min-height: 22px; max-width: 22px; max-height: 22px; padding: 0; overflow: hidden; color: #888; border: 1.5px solid #ccc; background: #f5f5f5"
+                @click="showTermTable = true"
+              >
+                <q-tooltip>Как считается срок</q-tooltip>
+              </q-btn>
             </div>
             <q-input
               v-model.number="form.contract_period"
@@ -224,6 +235,132 @@
       </q-card-section>
     </q-card>
   </q-dialog>
+
+  <!-- Диалог: таблица сроков -->
+  <q-dialog v-model="showTermTable">
+    <q-card style="min-width: 300px; max-width: 520px; width: 92vw">
+      <q-toolbar style="background: #f5f5f5; min-height: 44px">
+        <q-toolbar-title class="text-weight-bold" style="font-size: 13px; color: #333">
+          {{ form.project_type === 'Шаблонный' ? 'Таблица сроков (шаблонные)' : 'Таблица сроков (индивидуальные)' }}
+        </q-toolbar-title>
+        <q-btn
+          flat
+          round
+          dense
+          icon="close"
+          style="color: #333"
+          @click="showTermTable = false"
+        />
+      </q-toolbar>
+
+      <q-card-section class="q-pa-sm">
+        <!-- Индивидуальный -->
+        <template v-if="form.project_type !== 'Шаблонный'">
+          <div class="text-caption q-mb-sm" style="color: #666">
+            Срок договора (рабочих дней) в зависимости от площади и подтипа:
+          </div>
+          <div style="overflow-x: auto">
+            <table style="width: 100%; border-collapse: collapse; font-size: 12px">
+              <thead>
+                <tr>
+                  <th style="background:#f5f5f5; border:1px solid #e0e0e0; padding:5px 6px; text-align:center; white-space:nowrap">
+                    Площадь (м²)
+                  </th>
+                  <th style="background:#f5f5f5; border:1px solid #e0e0e0; padding:5px 6px; text-align:center">
+                    Полный
+                  </th>
+                  <th style="background:#f5f5f5; border:1px solid #e0e0e0; padding:5px 6px; text-align:center">
+                    Эскизный
+                  </th>
+                  <th style="background:#f5f5f5; border:1px solid #e0e0e0; padding:5px 6px; text-align:center">
+                    Планировочный
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in individualTableRows" :key="row.label">
+                  <td style="border:1px solid #e0e0e0; padding:4px 6px; text-align:center; white-space:nowrap">
+                    {{ row.label }}
+                  </td>
+                  <td style="border:1px solid #e0e0e0; padding:4px 6px; text-align:center">
+                    {{ row.full }}
+                  </td>
+                  <td style="border:1px solid #e0e0e0; padding:4px 6px; text-align:center">
+                    {{ row.sketch }}
+                  </td>
+                  <td style="border:1px solid #e0e0e0; padding:4px 6px; text-align:center">
+                    {{ row.plan }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </template>
+
+        <!-- Шаблонный -->
+        <template v-else>
+          <div class="text-caption q-mb-sm" style="color: #666; line-height: 1.5">
+            Срок договора (рабочих дней) для шаблонных проектов.<br>
+            Стандарт и Стандарт с визуализацией зависят от площади и этажей.<br>
+            Ванная комната — фиксированный срок.<br>
+            <span style="color:#888">Этажность: Стандарт +10 раб.дн. / Стандарт+Визуал. +20 раб.дн. за каждый доп. этаж.</span>
+          </div>
+          <div style="overflow-x: auto">
+            <table style="width: 100%; border-collapse: collapse; font-size: 11px">
+              <thead>
+                <tr>
+                  <th style="background:#f5f5f5; border:1px solid #e0e0e0; padding:5px 4px; text-align:center; white-space:nowrap">
+                    Площадь (м²)
+                  </th>
+                  <th style="background:#f5f5f5; border:1px solid #e0e0e0; padding:5px 4px; text-align:center">
+                    Стандарт
+                  </th>
+                  <th style="background:#f5f5f5; border:1px solid #e0e0e0; padding:5px 4px; text-align:center">
+                    Ст.+Визуал.
+                  </th>
+                  <th style="background:#f5f5f5; border:1px solid #e0e0e0; padding:5px 4px; text-align:center">
+                    Ванная
+                  </th>
+                  <th style="background:#f5f5f5; border:1px solid #e0e0e0; padding:5px 4px; text-align:center">
+                    Ванная+Виз.
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in templateTableRows" :key="row.label">
+                  <td style="border:1px solid #e0e0e0; padding:4px 4px; text-align:center; white-space:nowrap">
+                    {{ row.label }}
+                  </td>
+                  <td style="border:1px solid #e0e0e0; padding:4px 4px; text-align:center">
+                    {{ row.std }}
+                  </td>
+                  <td style="border:1px solid #e0e0e0; padding:4px 4px; text-align:center">
+                    {{ row.stdViz }}
+                  </td>
+                  <td style="border:1px solid #e0e0e0; padding:4px 4px; text-align:center">
+                    {{ row.bath }}
+                  </td>
+                  <td style="border:1px solid #e0e0e0; padding:4px 4px; text-align:center">
+                    {{ row.bathViz }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </template>
+      </q-card-section>
+
+      <q-card-actions align="right" class="q-pt-none">
+        <q-btn
+          flat
+          label="Закрыть"
+          color="grey-7"
+          no-caps
+          @click="showTermTable = false"
+        />
+      </q-card-actions>
+    </q-card>
+  </q-dialog>
 </template>
 
 <script setup>
@@ -247,6 +384,7 @@ const formRef = ref(null)
 const isEdit = ref(false)
 const clientOptions = ref([])
 const manualPeriod = ref(false)
+const showTermTable = ref(false)
 
 const today = new Date().toISOString().split('T')[0]
 
@@ -268,6 +406,29 @@ const agentOptions = refs.agentNames()
 const subtypeOptions = computed(() => {
   if (form.value.project_type === 'Шаблонный') return TEMPLATE_SUBTYPES
   return PROJECT_SUBTYPES
+})
+
+// Строки таблицы сроков для индивидуальных проектов
+const individualTableRows = computed(() => {
+  const areas = [70, 100, 130, 160, 190, 220, 250, 300, 350, 400, 450, 500]
+  return areas.map((a, i) => ({
+    label: i === 0 ? 'до 70' : `от ${areas[i - 1]} до ${a}`,
+    full: calcIndividualTerm(1, a),
+    sketch: calcIndividualTerm(2, a),
+    plan: calcIndividualTerm(3, a),
+  }))
+})
+
+// Строки таблицы сроков для шаблонных проектов
+const templateTableRows = computed(() => {
+  const areas = [90, 140, 190, 240, 290, 340]
+  return areas.map((a, i) => ({
+    label: i === 0 ? 'до 90' : `от ${areas[i - 1]} до ${a}`,
+    std: calcTemplateTerm('Стандарт', a, 1),
+    stdViz: calcTemplateTerm('Стандарт с визуализацией', a, 1),
+    bath: calcTemplateTerm('Проект ванной комнаты', a, 1),
+    bathViz: calcTemplateTerm('Проект ванной комнаты с визуализацией', a, 1),
+  }))
 })
 
 watch(() => props.modelValue, (val) => {
