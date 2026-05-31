@@ -166,8 +166,8 @@
       </div>
     </div>
 
-    <!-- Период -->
-    <div v-if="filters.period !== 'all'" class="row q-col-gutter-xs q-mb-md">
+    <!-- Период + кнопки экспорта в одной строке -->
+    <div v-if="filters.period !== 'all'" class="row q-col-gutter-xs q-mb-md items-center">
       <div class="col">
         <q-select
           v-model="filters.year"
@@ -202,10 +202,19 @@
           @update:model-value="loadData"
         />
       </div>
+      <div v-if="!loading && payments.length > 0" class="col-auto" style="display:flex;gap:4px;align-items:center">
+        <button type="button" class="sal-export-btn" :disabled="salPdfLoading" @click="exportSalariesPDF">
+          <q-spinner v-if="salPdfLoading" size="14px" color="primary" />
+          <span v-else>PDF</span>
+        </button>
+        <button type="button" class="sal-export-btn" :disabled="loading" @click="exportSalariesExcel">
+          Excel
+        </button>
+      </div>
     </div>
 
-    <!-- Экспорт -->
-    <div v-if="!loading && payments.length > 0" class="row justify-end q-gutter-xs q-mb-xs">
+    <!-- Экспорт (только когда период не выбран) -->
+    <div v-if="filters.period === 'all' && !loading && payments.length > 0" class="row justify-end q-gutter-xs q-mb-xs">
       <button type="button" class="sal-export-btn" :disabled="salPdfLoading" @click="exportSalariesPDF">
         <q-spinner v-if="salPdfLoading" size="14px" color="primary" />
         <span v-else>PDF</span>
