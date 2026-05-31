@@ -83,6 +83,7 @@
             label="Подтип проекта"
             outlined
             dense
+            @update:model-value="recalcPeriod"
           />
 
           <!-- Адрес -->
@@ -169,9 +170,9 @@
                 flat
                 round
                 dense
-                icon="priority_high"
                 size="xs"
-                style="width: 22px; height: 22px; min-width: 22px; min-height: 22px; max-width: 22px; max-height: 22px; padding: 0; overflow: hidden; color: #888; border: 1.5px solid #ccc; background: #f5f5f5"
+                icon="help_outline"
+                color="grey-6"
                 @click="showTermTable = true"
               >
                 <q-tooltip>Как считается срок</q-tooltip>
