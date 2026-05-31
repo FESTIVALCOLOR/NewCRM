@@ -739,7 +739,7 @@
                 <div class="text-subtitle2 text-weight-bold" style="color: #333">
                   Таблица сроков
                 </div>
-                <div v-if="timeline.length > 0" class="row q-gutter-xs">
+                <div v-if="timeline.length > 0" style="display: flex; gap: 6px; align-items: center">
                   <button type="button" class="tl-export-btn" title="Скачать Excel" @click="exportTimelineExcel">
                     <q-icon name="table_view" size="12px" /> Excel
                   </button>
@@ -787,7 +787,7 @@
                     <span v-if="entry.norm_days">Норма: {{ entry.custom_norm_days || entry.norm_days }} дн.</span>
                     <span v-if="entry.actual_days"> | Факт: {{ entry.actual_days }} дн.</span>
                     <span v-if="entry.executor_role && entry.executor_role !== 'header'"> | {{ entry.executor_role }}</span>
-                    <span v-if="!entry.is_in_contract_scope && entry.executor_role !== 'header' && !entry.stage_code?.endsWith('_HDR')" style="color: #999; font-style: italic"> | вне объёма</span>
+                    <span v-if="!entry.is_in_contract_scope && entry.executor_role !== 'header' && !entry.stage_code?.endsWith('_HDR')" style="color: #e74c3c; font-style: italic"> | вне объёма</span>
                     <span v-if="entry.status === 'skipped'" style="color: #bbb; font-style: italic"> | Пропущено</span>
                     <span v-if="entry.actual_date && !entry.stage_code?.endsWith('_HDR') && entry.executor_role !== 'header' && (entry.actual_days || 0) > (entry.norm_days || 0) && (entry.norm_days || 0) > 0" style="color: #E74C3C; font-weight: bold"> | Просрочен</span>
                   </q-item-label>

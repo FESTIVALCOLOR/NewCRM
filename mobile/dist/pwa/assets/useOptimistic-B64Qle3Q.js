@@ -1,1 +1,0 @@
-import{kt as e}from"./index-Cui8WGkr.js";function t(){let t=e();async function n(e,n,r,i){let a=e();try{return await n(),i&&t.notify({type:`positive`,message:i}),!0}catch(e){r(a);let n=e.response?.data?.detail,i=typeof n==`string`?n:`сервер недоступен`;return t.notify({type:`negative`,message:`Ошибка: ${i}. Изменения отменены.`}),!1}}return{optimistic:n}}export{t};
