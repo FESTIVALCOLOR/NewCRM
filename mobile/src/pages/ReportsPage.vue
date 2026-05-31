@@ -820,22 +820,36 @@ async function exportPDF() {
     const sbc = supervisionByCityChart.value
     if (sbc) chartData.supCity = { labels: sbc.labels, datasets: sbc.datasets.map(d => ({ label: d.label, data: d.data, color: d.color })) }
 
-    // Build body HTML
+    // Build body HTML — таблицы + компактные графики рядом
+    const funnelH = chartData.funnel ? Math.max(120, chartData.funnel.labels.length * 24 + 40) : 120
+    const indStH = chartData.indStages ? Math.max(150, chartData.indStages.labels.length * 22 + 50) : 150
+    const tmplStH = chartData.tmplStages ? Math.max(150, chartData.tmplStages.labels.length * 22 + 50) : 150
+    const indCitH = chartData.indCities ? Math.max(100, chartData.indCities.labels.length * 20 + 30) : 100
+    const tmplCitH = chartData.tmplCities ? Math.max(100, chartData.tmplCities.labels.length * 20 + 30) : 100
+    const supAgH = chartData.supAgent ? Math.max(100, chartData.supAgent.labels.length * 20 + 30) : 100
+
     let body = ''
 
+    // ---- KPI ----
     body += `<h2>Ключевые показатели</h2>${kpiGrid(kpiCards.value)}`
     if (agentKpi.value.length > 0) {
       body += `<h3>По агентам</h3>${listTable([{ key: 'label', label: 'Показатель' }, { key: 'value', label: 'Значение', r: true }], agentKpi.value)}`
     }
 
+    // ---- Клиенты ----
     body += `<h2>Клиенты</h2>${horzTable(clientMini.value)}`
-    if (chartData.clientDyn) body += '<h3>Динамика клиентов</h3><canvas id="clientDyn" height="180"></canvas>'
-    if (chartData.clientTypePie) body += '<h3>Тип проектов</h3><canvas id="clientTypePie" height="200" style="max-width:380px"></canvas>'
+    if (chartData.clientDyn || chartData.clientTypePie) {
+      body += '<div class="cr">'
+      if (chartData.clientDyn) body += '<div><div class="ct">Динамика клиентов</div><canvas id="clientDyn" width="360" height="150" style="display:block;max-width:100%;height:150px"></canvas></div>'
+      if (chartData.clientTypePie) body += '<div><div class="ct">Тип проектов</div><canvas id="clientTypePie" width="260" height="150" style="display:block;max-width:260px;height:150px"></canvas></div>'
+      body += '</div>'
+    }
     const cba = clientsByAgentChart.value
     if (cba) body += `<h3>Клиенты по агентам</h3>${listTable([{ key: 'label', label: 'Агент' }, { key: 'val', label: 'Клиентов', r: true }], cba.labels.map((l, i) => ({ label: l, val: cba.datasets[0].data[i] })))}`
 
+    // ---- Договоры ----
     body += `<h2>Договоры</h2>${horzTable(contractMini.value)}`
-    if (chartData.conDyn) body += '<h3>Договоры по месяцам</h3><canvas id="conDyn" height="180"></canvas>'
+    if (chartData.conDyn) body += '<div class="ct">Договоры по месяцам</div><canvas id="conDyn" width="700" height="140" style="display:block;max-width:100%;height:140px"></canvas>'
     const amtDyn = contractsAmountDynamics.value
     if (amtDyn) {
       body += `<h3>Стоимость по месяцам</h3><table><tr><th>Месяц</th><th class="num">Стоимость</th></tr>${amtDyn.labels.map((l, i) => `<tr><td>${l}</td><td class="num">${fmtMoney(amtDyn.datasets[0].data[i] || 0)}</td></tr>`).join('')}</table>`
@@ -850,22 +864,43 @@ async function exportPDF() {
       body += `<h3>Договоры по агентам</h3>${listTable(cols, cbA.labels.map((l, i) => ({ label: l, cnt: cbA.datasets[0].data[i], amt: abA ? fmtMoney(abA.datasets[0].data[i] || 0) : '' })))}`
     }
 
+    // ---- CRM Индивидуальные ----
     const indCards = computeStatCards(indStat, indDet)
     body += `<h2>CRM Аналитика — Индивидуальные</h2>${kpiGrid(indCards)}`
-    if (chartData.funnel) body += '<h3>Воронка проектов</h3><canvas id="funnel" height="220"></canvas>'
-    if (chartData.indStages) body += '<h3>Длительность этапов (Индивид.)</h3><canvas id="indStages" height="260"></canvas>'
-    if (chartData.indCities) body += '<h3>По городам</h3><canvas id="indCities" height="200"></canvas>'
-    if (chartData.indAgents) body += '<h3>По агентам</h3><canvas id="indAgents" height="160"></canvas>'
+    if (chartData.funnel) body += `<div class="ct">Воронка проектов</div><canvas id="funnel" width="700" height="${funnelH}" style="display:block;max-width:100%;height:${funnelH}px"></canvas>`
+    if (chartData.indStages) body += `<div class="ct">Длительность этапов — норматив vs факт (дни)</div><canvas id="indStages" width="700" height="${indStH}" style="display:block;max-width:100%;height:${indStH}px"></canvas>`
+    if (chartData.indCities || chartData.indAgents) {
+      body += '<div class="cr">'
+      if (chartData.indCities) body += `<div><div class="ct">По городам</div><canvas id="indCities" width="350" height="${indCitH}" style="display:block;max-width:100%;height:${indCitH}px"></canvas></div>`
+      if (chartData.indAgents) body += '<div><div class="ct">По агентам</div><canvas id="indAgents" width="350" height="120" style="display:block;max-width:100%;height:120px"></canvas></div>'
+      body += '</div>'
+    }
 
+    // ---- CRM Шаблонные ----
     const tmplCards = computeStatCards(tmplStat, tmplDet)
     body += `<h2>CRM Аналитика — Шаблонные</h2>${kpiGrid(tmplCards)}`
-    if (chartData.tmplStages) body += '<h3>Длительность этапов (Шаблон.)</h3><canvas id="tmplStages" height="260"></canvas>'
-    if (chartData.tmplCities) body += '<h3>По городам</h3><canvas id="tmplCities" height="200"></canvas>'
-    if (chartData.tmplAgents) body += '<h3>По агентам</h3><canvas id="tmplAgents" height="160"></canvas>'
+    if (chartData.tmplStages) body += `<div class="ct">Длительность этапов — норматив vs факт (дни)</div><canvas id="tmplStages" width="700" height="${tmplStH}" style="display:block;max-width:100%;height:${tmplStH}px"></canvas>`
+    if (chartData.tmplCities || chartData.tmplAgents) {
+      body += '<div class="cr">'
+      if (chartData.tmplCities) body += `<div><div class="ct">По городам</div><canvas id="tmplCities" width="350" height="${tmplCitH}" style="display:block;max-width:100%;height:${tmplCitH}px"></canvas></div>`
+      if (chartData.tmplAgents) body += '<div><div class="ct">По агентам</div><canvas id="tmplAgents" width="350" height="120" style="display:block;max-width:100%;height:120px"></canvas></div>'
+      body += '</div>'
+    }
 
+    // ---- Надзор ----
     body += `<h2>Авторский надзор</h2>${horzTable(supervisionMini.value)}`
-    if (chartData.supAgent) body += '<h3>По агентам</h3><canvas id="supAgent" height="200"></canvas>'
-    if (chartData.supCity) body += '<h3>Выезды по городам</h3><canvas id="supCity" height="220"></canvas>'
+    if (chartData.supAgent || chartData.supCity) {
+      body += '<div class="cr">'
+      if (chartData.supAgent) body += `<div><div class="ct">Надзоры по агентам</div><canvas id="supAgent" width="350" height="${supAgH}" style="display:block;max-width:100%;height:${supAgH}px"></canvas></div>`
+      if (chartData.supCity) body += '<div><div class="ct">Выезды по городам</div><canvas id="supCity" width="350" height="160" style="display:block;max-width:100%;height:160px"></canvas></div>'
+      body += '</div>'
+    }
+    const sba2 = supervisionByAgentChart.value
+    if (sba2) body += `<h3>По агентам (таблица)</h3>${listTable([{ key: 'label', label: 'Агент' }, { key: 'val', label: 'Надзоров', r: true }], sba2.labels.map((l, i) => ({ label: l, val: sba2.datasets[0].data[i] })))}`
+    const sbc2 = supervisionByCityChart.value
+    if (sbc2) {
+      body += `<h3>По городам (таблица)</h3><table><tr><th>Город</th>${sbc2.datasets.map(d => `<th class="num">${d.label}</th>`).join('')}</tr>${sbc2.labels.map((l, i) => `<tr><td>${l}</td>${sbc2.datasets.map(d => `<td class="num">${d.data[i] || 0}</td>`).join('')}</tr>`).join('')}</table>`
+    }
 
     const cdJson = JSON.stringify(chartData).replace(/<\//g, '<\\/')
 
@@ -876,7 +911,7 @@ async function exportPDF() {
     body { font-family: Arial, sans-serif; font-size: 11px; color: #222; margin: 20px; }
     h1 { font-size: 16px; margin: 0 0 4px; }
     .sub { color: #888; font-size: 10px; margin-bottom: 16px; }
-    h2 { font-size: 13px; margin: 20px 0 6px; border-bottom: 2px solid #333; padding-bottom: 3px; }
+    h2 { font-size: 13px; margin: 18px 0 6px; border-bottom: 2px solid #333; padding-bottom: 3px; }
     h3 { font-size: 11px; margin: 10px 0 4px; color: #555; }
     table { border-collapse: collapse; width: 100%; margin-bottom: 10px; break-inside: avoid; }
     th { background: #f0f0f0; text-align: left; padding: 4px 8px; border: 1px solid #ccc; font-size: 10px; }
@@ -885,8 +920,10 @@ async function exportPDF() {
     .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 10px; break-inside: avoid; }
     .kpi-card { border-left: 3px solid #aaa; background: #fafafa; padding: 5px 8px; border-radius: 4px; }
     .kpi-val { font-size: 15px; font-weight: bold; } .kpi-lbl { font-size: 9px; color: #777; }
-    canvas { max-width: 100%; margin-bottom: 12px; break-inside: avoid; }
-    @media print { @page { size: A4 landscape; margin: 10mm; } body { margin: 0; } }
+    .cr { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 8px; break-inside: avoid; }
+    .ct { font-size: 10px; color: #555; font-weight: bold; margin: 8px 0 3px; }
+    canvas { display: block; max-width: 100%; margin-bottom: 8px; break-inside: avoid; }
+    @media print { @page { size: A4 portrait; margin: 10mm; } body { margin: 0; } }
   </style>
 </head><body>
   <h1>Отчёты и Статистика</h1>
@@ -895,41 +932,48 @@ async function exportPDF() {
   <` + 'script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"><' + `/script>
   <` + `script>
   var __cd = ${cdJson};
+  var ROPTS = { animation: false, responsive: false, maintainAspectRatio: false };
+  function mkScales(ix, sm) { return { x: { beginAtZero: true, ticks: { font: { size: sm||8 } } }, y: { ticks: { font: { size: sm||8 } } } }; }
   function hBar(id, labels, data, label, color) {
     var el = document.getElementById(id); if (!el) return;
     new Chart(el, { type: 'bar', data: { labels: labels, datasets: [{ label: label, data: data, backgroundColor: color || '#3498DB' }] },
-      options: { animation: false, indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true } } } });
+      options: Object.assign({}, ROPTS, { indexAxis: 'y', plugins: { legend: { display: false } }, scales: mkScales('y') }) });
+  }
+  function hBar2(id, labels, datasets) {
+    var el = document.getElementById(id); if (!el) return;
+    new Chart(el, { type: 'bar', data: { labels: labels, datasets: datasets.map(function(d) { return { label: d.label, data: d.data, backgroundColor: d.color || '#3498DB' }; }) },
+      options: Object.assign({}, ROPTS, { indexAxis: 'y', plugins: { legend: { display: true, labels: { font: { size: 9 }, boxWidth: 10 } } }, scales: mkScales('y') }) });
   }
   function vBar(id, labels, datasets) {
     var el = document.getElementById(id); if (!el) return;
     new Chart(el, { type: 'bar', data: { labels: labels, datasets: datasets.map(function(d) { return { label: d.label, data: d.data, backgroundColor: d.color || '#3498DB' }; }) },
-      options: { animation: false, plugins: { legend: { display: datasets.length > 1 } }, scales: { x: { beginAtZero: true } } } });
+      options: Object.assign({}, ROPTS, { plugins: { legend: { display: datasets.length > 1, labels: { font: { size: 9 }, boxWidth: 10 } } }, scales: { x: { ticks: { font: { size: 8 } } }, y: { beginAtZero: true, ticks: { font: { size: 9 } } } } }) });
   }
   function lineChart(id, labels, datasets) {
     var el = document.getElementById(id); if (!el) return;
-    new Chart(el, { type: 'line', data: { labels: labels, datasets: datasets.map(function(d) { return { label: d.label, data: d.data, borderColor: d.color || '#3498DB', backgroundColor: (d.color || '#3498DB') + '33', fill: false, tension: 0.3 }; }) },
-      options: { animation: false, plugins: { legend: { display: datasets.length > 1 } }, scales: { y: { beginAtZero: true } } } });
+    new Chart(el, { type: 'line', data: { labels: labels, datasets: datasets.map(function(d) { return { label: d.label, data: d.data, borderColor: d.color || '#3498DB', backgroundColor: (d.color||'#3498DB')+'33', fill: false, tension: 0.3 }; }) },
+      options: Object.assign({}, ROPTS, { plugins: { legend: { display: datasets.length > 1, labels: { font: { size: 9 }, boxWidth: 10 } } }, scales: { y: { beginAtZero: true, ticks: { font: { size: 9 } } }, x: { ticks: { font: { size: 9 } } } } }) });
   }
   function pieChart(id, labels, values) {
     var el = document.getElementById(id); if (!el) return;
     new Chart(el, { type: 'pie', data: { labels: labels, datasets: [{ data: values, backgroundColor: ['#F39C12','#C62828','#27AE60','#3498DB','#9B59B6','#E74C3C'] }] },
-      options: { animation: false } });
+      options: Object.assign({}, ROPTS, { plugins: { legend: { labels: { font: { size: 9 } } } } }) });
   }
   window.addEventListener('load', function() {
     var cd = __cd;
     if (cd.clientDyn) lineChart('clientDyn', cd.clientDyn.labels, [{ label: 'Новые', data: cd.clientDyn.new, color: '#27AE60' }, { label: 'Повторные', data: cd.clientDyn.ret, color: '#9B59B6' }]);
     if (cd.clientTypePie) pieChart('clientTypePie', cd.clientTypePie.labels, cd.clientTypePie.values);
     if (cd.conDyn) vBar('conDyn', cd.conDyn.labels, [{ label: 'Индивид.', data: cd.conDyn.ind, color: '#F39C12' }, { label: 'Шаблон.', data: cd.conDyn.tmpl, color: '#C62828' }]);
-    if (cd.funnel) hBar('funnel', cd.funnel.labels, cd.funnel.data, 'Проектов', '#ffd93c');
-    if (cd.indStages) vBar('indStages', cd.indStages.labels, [{ label: 'Норматив', data: cd.indStages.norm, color: '#4CAF50' }, { label: 'Факт', data: cd.indStages.fact, color: '#F39C12' }]);
+    if (cd.funnel) hBar('funnel', cd.funnel.labels, cd.funnel.data, 'Проектов', '#F39C12');
+    if (cd.indStages) hBar2('indStages', cd.indStages.labels, [{ label: 'Норматив', data: cd.indStages.norm, color: '#4CAF50' }, { label: 'Факт', data: cd.indStages.fact, color: '#F39C12' }]);
     if (cd.indCities) hBar('indCities', cd.indCities.labels, cd.indCities.data, 'Проектов', '#85C1E9');
     if (cd.indAgents) hBar('indAgents', cd.indAgents.labels, cd.indAgents.data, 'Проектов', '#ffd93c');
-    if (cd.tmplStages) vBar('tmplStages', cd.tmplStages.labels, [{ label: 'Норматив', data: cd.tmplStages.norm, color: '#4CAF50' }, { label: 'Факт', data: cd.tmplStages.fact, color: '#C62828' }]);
+    if (cd.tmplStages) hBar2('tmplStages', cd.tmplStages.labels, [{ label: 'Норматив', data: cd.tmplStages.norm, color: '#4CAF50' }, { label: 'Факт', data: cd.tmplStages.fact, color: '#C62828' }]);
     if (cd.tmplCities) hBar('tmplCities', cd.tmplCities.labels, cd.tmplCities.data, 'Проектов', '#85C1E9');
     if (cd.tmplAgents) hBar('tmplAgents', cd.tmplAgents.labels, cd.tmplAgents.data, 'Проектов', '#C62828');
     if (cd.supAgent) hBar('supAgent', cd.supAgent.labels, cd.supAgent.data, 'Надзоров', '#F39C12');
     if (cd.supCity) vBar('supCity', cd.supCity.labels, cd.supCity.datasets);
-    setTimeout(function() { try { window.focus(); window.print(); } catch(e) {} }, 800);
+    setTimeout(function() { try { window.focus(); window.print(); } catch(e2) {} }, 900);
   });
   <` + `/script>
 </body></html>`
