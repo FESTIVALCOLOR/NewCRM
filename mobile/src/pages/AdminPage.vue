@@ -1428,7 +1428,10 @@ function permanentDeleteContract(item) {
   })
 }
 
-watch(tab, (val) => { if (val === 'trash') loadTrash() })
+watch(tab, (val) => {
+  if (val === 'trash') loadTrash()
+  if (val === 'normdays') loadNormDays()
+})
 
 onMounted(async () => {
   loadRates()
