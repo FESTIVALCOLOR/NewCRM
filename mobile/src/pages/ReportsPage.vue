@@ -4,15 +4,10 @@
       <div class="text-subtitle1 text-weight-bold" style="color: #333">
         Отчёты и Статистика
       </div>
-      <q-btn
-        flat
-        dense
-        icon="picture_as_pdf"
-        color="grey-7"
-        @click="exportPDF"
-      >
-        <q-tooltip>Экспорт PDF</q-tooltip>
-      </q-btn>
+      <button type="button" class="rep-export-btn" :disabled="pdfLoading" @click="exportPDF">
+        <q-spinner v-if="pdfLoading" size="14px" color="primary" />
+        <span v-else>PDF</span>
+      </button>
     </div>
 
     <!-- Фильтры -->
@@ -339,6 +334,7 @@ const contractsByPeriodRaw = ref(null)
 const crmDetailed = ref(null)
 const supervisionDetailed = ref(null)
 const projectTab = ref('individual')
+const pdfLoading = ref(false)
 
 const years = Array.from({ length: 7 }, (_, i) => currentYear - i)
 const quarters = [{ label: 'Все', value: null }, { label: 'Q1', value: 1 }, { label: 'Q2', value: 2 }, { label: 'Q3', value: 3 }, { label: 'Q4', value: 4 }]
@@ -723,163 +719,230 @@ async function loadData() {
   else console.error('Reports supervision detailed error:', supDetR.reason?.response?.status, supDetR.reason?.message)
 }
 
-function exportPDF() {
-  const yr = filters.value.year
-  const qLabel = filters.value.quarter ? `Q${filters.value.quarter}` : ''
-  const mLabel = filters.value.month ? monthOpts.find(m => m.value === filters.value.month)?.label : ''
-  const period = [yr, qLabel, mLabel].filter(Boolean).join(' / ')
-  const now = new Date().toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
+async function exportPDF() {
+  pdfLoading.value = true
+  // Open popup BEFORE any await — popup blockers only allow this in synchronous click context
+  const w = window.open('', '_blank', 'width=1200,height=800')
+  if (!w) { pdfLoading.value = false; return }
+  try { w.moveTo(0, 0); w.resizeTo(screen.width, screen.height) } catch(e) {}
+  w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Загрузка...</title></head><body style="font-family:Arial;padding:40px;color:#555;text-align:center"><p style="font-size:18px">⏳ Формирование отчёта...</p></body></html>')
+  w.document.close()
 
-  const kpiGrid = (items) =>
-    `<div class="kpi-grid">${items.map(k =>
-      `<div class="kpi-card" style="border-left-color:${k.color || '#aaa'}">
-        <div class="kpi-val">${k.value}</div>
-        <div class="kpi-lbl">${k.label}</div>
-      </div>`).join('')}</div>`
+  try {
+    const params = { year: filters.value.year }
+    if (filters.value.quarter) params.quarter = filters.value.quarter
+    if (filters.value.month) params.month = filters.value.month
 
-  const horzTable = (items) =>
-    `<table><tr>${items.map(m => `<th class="tc">${m.label}</th>`).join('')}</tr>
-    <tr>${items.map(m => `<td class="tc fw" style="color:${m.color || '#333'}">${m.value}</td>`).join('')}</tr></table>`
+    const [indStatR, tmplStatR, indDetR, tmplDetR] = await Promise.allSettled([
+      reportsApi.getCrmAnalytics({ ...params, project_type: 'Индивидуальный' }),
+      reportsApi.getCrmAnalytics({ ...params, project_type: 'Шаблонный' }),
+      reportsApi.getCrmAnalyticsDetailed({ ...params, project_type: 'Индивидуальный' }),
+      reportsApi.getCrmAnalyticsDetailed({ ...params, project_type: 'Шаблонный' }),
+    ])
 
-  const listTable = (cols, rows) =>
-    `<table><tr>${cols.map(c => `<th${c.r ? ' class="num"' : ''}>${c.label}</th>`).join('')}</tr>
-    ${rows.map(r => `<tr>${cols.map(c => `<td${c.r ? ' class="num"' : ''}>${r[c.key] ?? ''}</td>`).join('')}</tr>`).join('')}</table>`
+    const indStat = indStatR.status === 'fulfilled' ? indStatR.value.data : null
+    const tmplStat = tmplStatR.status === 'fulfilled' ? tmplStatR.value.data : null
+    const indDet = indDetR.status === 'fulfilled' ? indDetR.value.data : null
+    const tmplDet = tmplDetR.status === 'fulfilled' ? tmplDetR.value.data : null
 
-  let body = ''
+    const yr = filters.value.year
+    const qLabel = filters.value.quarter ? `Q${filters.value.quarter}` : ''
+    const mLabel = filters.value.month ? monthOpts.find(m => m.value === filters.value.month)?.label : ''
+    const period = [yr, qLabel, mLabel].filter(Boolean).join(' / ')
+    const now = new Date().toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
 
-  // ---- KPI ----
-  body += `<h2>Ключевые показатели</h2>${kpiGrid(kpiCards.value)}`
-  if (agentKpi.value.length > 0) {
-    body += `<h3>По агентам</h3>${listTable(
-      [{ key: 'label', label: 'Показатель' }, { key: 'value', label: 'Значение', r: true }],
-      agentKpi.value,
-    )}`
-  }
+    const kpiGrid = (items) =>
+      `<div class="kpi-grid">${items.map(k =>
+        `<div class="kpi-card" style="border-left-color:${k.color || '#aaa'}">
+          <div class="kpi-val">${k.value}</div><div class="kpi-lbl">${k.label}</div>
+        </div>`).join('')}</div>`
 
-  // ---- Клиенты ----
-  body += `<h2>Клиенты</h2>${horzTable(clientMini.value)}`
-  const cd = clientsDynamics.value
-  if (cd) {
-    body += `<h3>Динамика клиентов</h3><table><tr><th>Период</th>${cd.datasets.map(d => `<th class="num">${d.label}</th>`).join('')}</tr>
-      ${cd.labels.map((l, i) => `<tr><td>${l}</td>${cd.datasets.map(d => `<td class="num">${d.data[i] || 0}</td>`).join('')}</tr>`).join('')}</table>`
-  }
-  const cba = clientsByAgentChart.value
-  if (cba) {
-    body += `<h3>Клиенты по агентам</h3>${listTable(
-      [{ key: 'label', label: 'Агент' }, { key: 'val', label: 'Клиентов', r: true }],
-      cba.labels.map((l, i) => ({ label: l, val: cba.datasets[0].data[i] })),
-    )}`
-  }
+    const horzTable = (items) =>
+      `<table><tr>${items.map(m => `<th class="tc">${m.label}</th>`).join('')}</tr>
+      <tr>${items.map(m => `<td class="tc fw" style="color:${m.color || '#333'}">${m.value}</td>`).join('')}</tr></table>`
 
-  // ---- Договоры ----
-  body += `<h2>Договоры</h2>${horzTable(contractMini.value)}`
-  const conDyn = contractsDynamics.value
-  const amtDyn = contractsAmountDynamics.value
-  if (conDyn) {
-    body += `<h3>Договоры по месяцам</h3><table>
-      <tr><th>Месяц</th>${conDyn.datasets.map(d => `<th class="num">${d.label}</th>`).join('')}${amtDyn ? '<th class="num">Стоимость</th>' : ''}</tr>
-      ${conDyn.labels.map((l, i) => `<tr><td>${l}</td>${conDyn.datasets.map(d => `<td class="num">${d.data[i] || 0}</td>`).join('')}${amtDyn ? `<td class="num">${fmtMoney(amtDyn.datasets[0].data[i] || 0)}</td>` : ''}</tr>`).join('')}</table>`
-  }
-  const tc = topCitiesChart.value
-  if (tc) {
-    body += `<h3>ТОП городов</h3>${listTable(
-      [{ key: 'label', label: 'Город' }, { key: 'val', label: 'Договоров', r: true }],
-      tc.labels.map((l, i) => ({ label: l, val: tc.datasets[0].data[i] })),
-    )}`
-  }
-  const cbA = contractsByAgentChart.value
-  const abA = amountByAgentChart.value
-  if (cbA) {
-    const cols = [{ key: 'label', label: 'Агент' }, { key: 'cnt', label: 'Договоров', r: true }]
-    if (abA) cols.push({ key: 'amt', label: 'Стоимость', r: true })
-    body += `<h3>Договоры по агентам</h3>${listTable(cols,
-      cbA.labels.map((l, i) => ({ label: l, cnt: cbA.datasets[0].data[i], amt: abA ? fmtMoney(abA.datasets[0].data[i] || 0) : '' })),
-    )}`
-  }
+    const listTable = (cols, rows) =>
+      `<table><tr>${cols.map(c => `<th${c.r ? ' class="num"' : ''}>${c.label}</th>`).join('')}</tr>
+      ${rows.map(r => `<tr>${cols.map(c => `<td${c.r ? ' class="num"' : ''}>${r[c.key] ?? ''}</td>`).join('')}</tr>`).join('')}</table>`
 
-  // ---- CRM ----
-  const ptLabel = projectTab.value === 'template' ? 'Шаблонные' : 'Индивидуальные'
-  body += `<h2>CRM Аналитика (${ptLabel})</h2>${kpiGrid(projectStatCards.value)}`
-  const fc = funnelChart.value
-  if (fc) {
-    body += `<h3>Воронка проектов</h3>${listTable(
-      [{ key: 'label', label: 'Этап' }, { key: 'val', label: 'Проектов', r: true }],
-      fc.labels.map((l, i) => ({ label: l, val: fc.datasets[0].data[i] })),
-    )}`
-  }
-  const sdc = stageDurationsChart.value
-  if (sdc) {
-    body += `<h3>Длительность этапов</h3><table>
-      <tr><th>Этап</th><th class="num">Норматив</th><th class="num">Факт</th></tr>
-      ${sdc.labels.map((l, i) => {
-        const norm = sdc.datasets[0].data[i]
-        const fact = sdc.datasets[1].data[i]
-        const over = norm > 0 && fact > norm
-        return `<tr><td>${l}</td><td class="num">${norm}</td><td class="num"${over ? ' style="color:#e74c3c;font-weight:bold"' : ''}>${fact}</td></tr>`
-      }).join('')}</table>`
-  }
-  const ch = cityChart.value
-  if (ch) {
-    body += `<h3>По городам</h3>${listTable(
-      [{ key: 'label', label: 'Город' }, { key: 'val', label: 'Проектов', r: true }],
-      ch.labels.map((l, i) => ({ label: l, val: ch.datasets[0].data[i] })),
-    )}`
-  }
-  const ag = agentChart.value
-  if (ag) {
-    body += `<h3>По агентам</h3>${listTable(
-      [{ key: 'label', label: 'Агент' }, { key: 'val', label: 'Проектов', r: true }],
-      ag.labels.map((l, i) => ({ label: l, val: ag.datasets[0].data[i] })),
-    )}`
-  }
+    const computeStatCards = (stat, det) => {
+      const p = stat || {}
+      const d = det || {}
+      const ots = d.on_time_stats || {}
+      const projectsPct = ots.projects_pct ?? ots.projects_on_time_pct
+      const stagesPct = ots.stages_pct ?? ots.stages_on_time_pct
+      const avgDev = ots.avg_deviation_days ?? ots.avg_deviation
+      return [
+        { label: 'Проектов в срок', value: projectsPct != null ? `${projectsPct}%` : (p.total_orders ?? '—'), color: '#27AE60' },
+        { label: 'Стадий в срок', value: stagesPct != null ? `${stagesPct}%` : '—', color: '#F39C12' },
+        { label: 'Ср. отклонение', value: avgDev != null ? `${Number(avgDev).toFixed(1)} дн.` : '—', color: '#E74C3C' },
+        { label: 'На паузе', value: d.paused_count ?? p.paused ?? '—', color: '#9B59B6' },
+      ]
+    }
 
-  // ---- Надзор ----
-  body += `<h2>Авторский надзор</h2>${horzTable(supervisionMini.value)}`
-  const sba = supervisionByAgentChart.value
-  if (sba) {
-    body += `<h3>По агентам</h3>${listTable(
-      [{ key: 'label', label: 'Агент' }, { key: 'val', label: 'Надзоров', r: true }],
-      sba.labels.map((l, i) => ({ label: l, val: sba.datasets[0].data[i] })),
-    )}`
-  }
-  const sbc = supervisionByCityChart.value
-  if (sbc) {
-    body += `<h3>По городам</h3><table><tr><th>Город</th>${sbc.datasets.map(d => `<th class="num">${d.label}</th>`).join('')}</tr>
-      ${sbc.labels.map((l, i) => `<tr><td>${l}</td>${sbc.datasets.map(d => `<td class="num">${d.data[i] || 0}</td>`).join('')}</tr>`).join('')}</table>`
-  }
+    const computeStageDurations = (det) => {
+      if (!det?.stage_durations) return null
+      const durs = det.stage_durations.filter(d => !d.stage?.toUpperCase().startsWith('ДАТА НАЧАЛА'))
+      if (!durs.length) return null
+      return {
+        labels: durs.map(d => (d.stage || '').substring(0, 22)),
+        norm: durs.map(d => d.norm_days || 0),
+        fact: durs.map(d => d.avg_actual_days ?? d.actual_days ?? 0),
+      }
+    }
 
-  const fullHtml = `<!DOCTYPE html><html><head>
+    // Collect chart data for inline script
+    const chartData = {}
+
+    const clientDyn = clientsDynamics.value
+    if (clientDyn) chartData.clientDyn = { labels: clientDyn.labels, new: clientDyn.datasets[0].data, ret: clientDyn.datasets[1].data }
+
+    if (contractsDashboard.value) chartData.clientTypePie = { labels: ['Индивидуальные', 'Шаблонные'], values: [contractsDashboard.value.individual_orders || 0, contractsDashboard.value.template_orders || 0] }
+
+    const conDyn = contractsDynamics.value
+    if (conDyn) chartData.conDyn = { labels: conDyn.labels, ind: conDyn.datasets[0].data, tmpl: conDyn.datasets[1].data }
+
+    const fc = funnelChart.value
+    if (fc) chartData.funnel = { labels: fc.labels, data: fc.datasets[0].data }
+
+    const indSD = computeStageDurations(indDet)
+    if (indSD) chartData.indStages = indSD
+    if (indStat?.by_cities) { const e = Object.entries(indStat.by_cities).sort((a, b) => b[1] - a[1]).slice(0, 8); if (e.length) chartData.indCities = { labels: e.map(([k]) => k), data: e.map(([, v]) => v) } }
+    if (indStat?.by_agents) { const e = Object.entries(indStat.by_agents).sort((a, b) => b[1] - a[1]).slice(0, 8); if (e.length) chartData.indAgents = { labels: e.map(([k]) => k), data: e.map(([, v]) => v) } }
+
+    const tmplSD = computeStageDurations(tmplDet)
+    if (tmplSD) chartData.tmplStages = tmplSD
+    if (tmplStat?.by_cities) { const e = Object.entries(tmplStat.by_cities).sort((a, b) => b[1] - a[1]).slice(0, 8); if (e.length) chartData.tmplCities = { labels: e.map(([k]) => k), data: e.map(([, v]) => v) } }
+    if (tmplStat?.by_agents) { const e = Object.entries(tmplStat.by_agents).sort((a, b) => b[1] - a[1]).slice(0, 8); if (e.length) chartData.tmplAgents = { labels: e.map(([k]) => k), data: e.map(([, v]) => v) } }
+
+    const sba = supervisionByAgentChart.value
+    if (sba) chartData.supAgent = { labels: sba.labels, data: sba.datasets[0].data }
+    const sbc = supervisionByCityChart.value
+    if (sbc) chartData.supCity = { labels: sbc.labels, datasets: sbc.datasets.map(d => ({ label: d.label, data: d.data, color: d.color })) }
+
+    // Build body HTML
+    let body = ''
+
+    body += `<h2>Ключевые показатели</h2>${kpiGrid(kpiCards.value)}`
+    if (agentKpi.value.length > 0) {
+      body += `<h3>По агентам</h3>${listTable([{ key: 'label', label: 'Показатель' }, { key: 'value', label: 'Значение', r: true }], agentKpi.value)}`
+    }
+
+    body += `<h2>Клиенты</h2>${horzTable(clientMini.value)}`
+    if (chartData.clientDyn) body += '<h3>Динамика клиентов</h3><canvas id="clientDyn" height="180"></canvas>'
+    if (chartData.clientTypePie) body += '<h3>Тип проектов</h3><canvas id="clientTypePie" height="200" style="max-width:380px"></canvas>'
+    const cba = clientsByAgentChart.value
+    if (cba) body += `<h3>Клиенты по агентам</h3>${listTable([{ key: 'label', label: 'Агент' }, { key: 'val', label: 'Клиентов', r: true }], cba.labels.map((l, i) => ({ label: l, val: cba.datasets[0].data[i] })))}`
+
+    body += `<h2>Договоры</h2>${horzTable(contractMini.value)}`
+    if (chartData.conDyn) body += '<h3>Договоры по месяцам</h3><canvas id="conDyn" height="180"></canvas>'
+    const amtDyn = contractsAmountDynamics.value
+    if (amtDyn) {
+      body += `<h3>Стоимость по месяцам</h3><table><tr><th>Месяц</th><th class="num">Стоимость</th></tr>${amtDyn.labels.map((l, i) => `<tr><td>${l}</td><td class="num">${fmtMoney(amtDyn.datasets[0].data[i] || 0)}</td></tr>`).join('')}</table>`
+    }
+    const tc = topCitiesChart.value
+    if (tc) body += `<h3>ТОП городов</h3>${listTable([{ key: 'label', label: 'Город' }, { key: 'val', label: 'Договоров', r: true }], tc.labels.map((l, i) => ({ label: l, val: tc.datasets[0].data[i] })))}`
+    const cbA = contractsByAgentChart.value
+    const abA = amountByAgentChart.value
+    if (cbA) {
+      const cols = [{ key: 'label', label: 'Агент' }, { key: 'cnt', label: 'Договоров', r: true }]
+      if (abA) cols.push({ key: 'amt', label: 'Стоимость', r: true })
+      body += `<h3>Договоры по агентам</h3>${listTable(cols, cbA.labels.map((l, i) => ({ label: l, cnt: cbA.datasets[0].data[i], amt: abA ? fmtMoney(abA.datasets[0].data[i] || 0) : '' })))}`
+    }
+
+    const indCards = computeStatCards(indStat, indDet)
+    body += `<h2>CRM Аналитика — Индивидуальные</h2>${kpiGrid(indCards)}`
+    if (chartData.funnel) body += '<h3>Воронка проектов</h3><canvas id="funnel" height="220"></canvas>'
+    if (chartData.indStages) body += '<h3>Длительность этапов (Индивид.)</h3><canvas id="indStages" height="260"></canvas>'
+    if (chartData.indCities) body += '<h3>По городам</h3><canvas id="indCities" height="200"></canvas>'
+    if (chartData.indAgents) body += '<h3>По агентам</h3><canvas id="indAgents" height="160"></canvas>'
+
+    const tmplCards = computeStatCards(tmplStat, tmplDet)
+    body += `<h2>CRM Аналитика — Шаблонные</h2>${kpiGrid(tmplCards)}`
+    if (chartData.tmplStages) body += '<h3>Длительность этапов (Шаблон.)</h3><canvas id="tmplStages" height="260"></canvas>'
+    if (chartData.tmplCities) body += '<h3>По городам</h3><canvas id="tmplCities" height="200"></canvas>'
+    if (chartData.tmplAgents) body += '<h3>По агентам</h3><canvas id="tmplAgents" height="160"></canvas>'
+
+    body += `<h2>Авторский надзор</h2>${horzTable(supervisionMini.value)}`
+    if (chartData.supAgent) body += '<h3>По агентам</h3><canvas id="supAgent" height="200"></canvas>'
+    if (chartData.supCity) body += '<h3>Выезды по городам</h3><canvas id="supCity" height="220"></canvas>'
+
+    const cdJson = JSON.stringify(chartData).replace(/<\//g, '<\\/')
+
+    const fullHtml = `<!DOCTYPE html><html><head>
   <meta charset="utf-8">
   <title>Отчёт — ${period}</title>
   <style>
     body { font-family: Arial, sans-serif; font-size: 11px; color: #222; margin: 20px; }
     h1 { font-size: 16px; margin: 0 0 4px; }
     .sub { color: #888; font-size: 10px; margin-bottom: 16px; }
-    h2 { font-size: 13px; margin: 18px 0 6px; border-bottom: 2px solid #333; padding-bottom: 3px; }
+    h2 { font-size: 13px; margin: 20px 0 6px; border-bottom: 2px solid #333; padding-bottom: 3px; }
     h3 { font-size: 11px; margin: 10px 0 4px; color: #555; }
     table { border-collapse: collapse; width: 100%; margin-bottom: 10px; break-inside: avoid; }
     th { background: #f0f0f0; text-align: left; padding: 4px 8px; border: 1px solid #ccc; font-size: 10px; }
     td { padding: 3px 8px; border: 1px solid #eee; font-size: 10px; }
-    .num { text-align: right; }
-    .tc { text-align: center; }
-    .fw { font-weight: bold; }
+    .num { text-align: right; } .tc { text-align: center; } .fw { font-weight: bold; }
     .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 10px; break-inside: avoid; }
     .kpi-card { border-left: 3px solid #aaa; background: #fafafa; padding: 5px 8px; border-radius: 4px; }
-    .kpi-val { font-size: 15px; font-weight: bold; }
-    .kpi-lbl { font-size: 9px; color: #777; }
-    @media print { @page { size: A4 portrait; margin: 10mm; } body { margin: 0; } }
+    .kpi-val { font-size: 15px; font-weight: bold; } .kpi-lbl { font-size: 9px; color: #777; }
+    canvas { max-width: 100%; margin-bottom: 12px; break-inside: avoid; }
+    @media print { @page { size: A4 landscape; margin: 10mm; } body { margin: 0; } }
   </style>
 </head><body>
   <h1>Отчёты и Статистика</h1>
   <div class="sub">Период: ${period} &nbsp;·&nbsp; Сформирован: ${now}</div>
   ${body}
+  <` + 'script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"><' + `/script>
+  <` + `script>
+  var __cd = ${cdJson};
+  function hBar(id, labels, data, label, color) {
+    var el = document.getElementById(id); if (!el) return;
+    new Chart(el, { type: 'bar', data: { labels: labels, datasets: [{ label: label, data: data, backgroundColor: color || '#3498DB' }] },
+      options: { animation: false, indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true } } } });
+  }
+  function vBar(id, labels, datasets) {
+    var el = document.getElementById(id); if (!el) return;
+    new Chart(el, { type: 'bar', data: { labels: labels, datasets: datasets.map(function(d) { return { label: d.label, data: d.data, backgroundColor: d.color || '#3498DB' }; }) },
+      options: { animation: false, plugins: { legend: { display: datasets.length > 1 } }, scales: { x: { beginAtZero: true } } } });
+  }
+  function lineChart(id, labels, datasets) {
+    var el = document.getElementById(id); if (!el) return;
+    new Chart(el, { type: 'line', data: { labels: labels, datasets: datasets.map(function(d) { return { label: d.label, data: d.data, borderColor: d.color || '#3498DB', backgroundColor: (d.color || '#3498DB') + '33', fill: false, tension: 0.3 }; }) },
+      options: { animation: false, plugins: { legend: { display: datasets.length > 1 } }, scales: { y: { beginAtZero: true } } } });
+  }
+  function pieChart(id, labels, values) {
+    var el = document.getElementById(id); if (!el) return;
+    new Chart(el, { type: 'pie', data: { labels: labels, datasets: [{ data: values, backgroundColor: ['#F39C12','#C62828','#27AE60','#3498DB','#9B59B6','#E74C3C'] }] },
+      options: { animation: false } });
+  }
+  window.addEventListener('load', function() {
+    var cd = __cd;
+    if (cd.clientDyn) lineChart('clientDyn', cd.clientDyn.labels, [{ label: 'Новые', data: cd.clientDyn.new, color: '#27AE60' }, { label: 'Повторные', data: cd.clientDyn.ret, color: '#9B59B6' }]);
+    if (cd.clientTypePie) pieChart('clientTypePie', cd.clientTypePie.labels, cd.clientTypePie.values);
+    if (cd.conDyn) vBar('conDyn', cd.conDyn.labels, [{ label: 'Индивид.', data: cd.conDyn.ind, color: '#F39C12' }, { label: 'Шаблон.', data: cd.conDyn.tmpl, color: '#C62828' }]);
+    if (cd.funnel) hBar('funnel', cd.funnel.labels, cd.funnel.data, 'Проектов', '#ffd93c');
+    if (cd.indStages) vBar('indStages', cd.indStages.labels, [{ label: 'Норматив', data: cd.indStages.norm, color: '#4CAF50' }, { label: 'Факт', data: cd.indStages.fact, color: '#F39C12' }]);
+    if (cd.indCities) hBar('indCities', cd.indCities.labels, cd.indCities.data, 'Проектов', '#85C1E9');
+    if (cd.indAgents) hBar('indAgents', cd.indAgents.labels, cd.indAgents.data, 'Проектов', '#ffd93c');
+    if (cd.tmplStages) vBar('tmplStages', cd.tmplStages.labels, [{ label: 'Норматив', data: cd.tmplStages.norm, color: '#4CAF50' }, { label: 'Факт', data: cd.tmplStages.fact, color: '#C62828' }]);
+    if (cd.tmplCities) hBar('tmplCities', cd.tmplCities.labels, cd.tmplCities.data, 'Проектов', '#85C1E9');
+    if (cd.tmplAgents) hBar('tmplAgents', cd.tmplAgents.labels, cd.tmplAgents.data, 'Проектов', '#C62828');
+    if (cd.supAgent) hBar('supAgent', cd.supAgent.labels, cd.supAgent.data, 'Надзоров', '#F39C12');
+    if (cd.supCity) vBar('supCity', cd.supCity.labels, cd.supCity.datasets);
+    setTimeout(function() { try { window.focus(); window.print(); } catch(e) {} }, 800);
+  });
+  <` + `/script>
 </body></html>`
 
-  const w = window.open('', '_blank', 'width=900,height=700')
-  if (!w) return
-  w.document.write(fullHtml)
-  w.document.close()
-  w.onload = () => { w.focus(); w.print() }
+    w.document.open()
+    w.document.write(fullHtml)
+    w.document.close()
+
+  } catch(e) {
+    console.error('exportPDF error:', e)
+  } finally {
+    pdfLoading.value = false
+  }
 }
 watch(projectTab, () => loadData())
 watch(filters, () => loadData(), { deep: true })
@@ -889,5 +952,23 @@ onMounted(() => loadData())
 </script>
 
 <style scoped>
-/* нет правил для print — отчёт генерируется в отдельном окне */
+.rep-export-btn {
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid #2196f3;
+  border-radius: 4px;
+  background: white;
+  color: #2196f3;
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  flex-shrink: 0;
+  outline: none;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.rep-export-btn:hover { background: #e3f2fd; }
+.rep-export-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 </style>
