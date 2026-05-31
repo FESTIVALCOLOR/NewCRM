@@ -723,7 +723,164 @@ async function loadData() {
   else console.error('Reports supervision detailed error:', supDetR.reason?.response?.status, supDetR.reason?.message)
 }
 
-function exportPDF() { window.print() }
+function exportPDF() {
+  const yr = filters.value.year
+  const qLabel = filters.value.quarter ? `Q${filters.value.quarter}` : ''
+  const mLabel = filters.value.month ? monthOpts.find(m => m.value === filters.value.month)?.label : ''
+  const period = [yr, qLabel, mLabel].filter(Boolean).join(' / ')
+  const now = new Date().toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
+
+  const kpiGrid = (items) =>
+    `<div class="kpi-grid">${items.map(k =>
+      `<div class="kpi-card" style="border-left-color:${k.color || '#aaa'}">
+        <div class="kpi-val">${k.value}</div>
+        <div class="kpi-lbl">${k.label}</div>
+      </div>`).join('')}</div>`
+
+  const horzTable = (items) =>
+    `<table><tr>${items.map(m => `<th class="tc">${m.label}</th>`).join('')}</tr>
+    <tr>${items.map(m => `<td class="tc fw" style="color:${m.color || '#333'}">${m.value}</td>`).join('')}</tr></table>`
+
+  const listTable = (cols, rows) =>
+    `<table><tr>${cols.map(c => `<th${c.r ? ' class="num"' : ''}>${c.label}</th>`).join('')}</tr>
+    ${rows.map(r => `<tr>${cols.map(c => `<td${c.r ? ' class="num"' : ''}>${r[c.key] ?? ''}</td>`).join('')}</tr>`).join('')}</table>`
+
+  let body = ''
+
+  // ---- KPI ----
+  body += `<h2>Ключевые показатели</h2>${kpiGrid(kpiCards.value)}`
+  if (agentKpi.value.length > 0) {
+    body += `<h3>По агентам</h3>${listTable(
+      [{ key: 'label', label: 'Показатель' }, { key: 'value', label: 'Значение', r: true }],
+      agentKpi.value,
+    )}`
+  }
+
+  // ---- Клиенты ----
+  body += `<h2>Клиенты</h2>${horzTable(clientMini.value)}`
+  const cd = clientsDynamics.value
+  if (cd) {
+    body += `<h3>Динамика клиентов</h3><table><tr><th>Период</th>${cd.datasets.map(d => `<th class="num">${d.label}</th>`).join('')}</tr>
+      ${cd.labels.map((l, i) => `<tr><td>${l}</td>${cd.datasets.map(d => `<td class="num">${d.data[i] || 0}</td>`).join('')}</tr>`).join('')}</table>`
+  }
+  const cba = clientsByAgentChart.value
+  if (cba) {
+    body += `<h3>Клиенты по агентам</h3>${listTable(
+      [{ key: 'label', label: 'Агент' }, { key: 'val', label: 'Клиентов', r: true }],
+      cba.labels.map((l, i) => ({ label: l, val: cba.datasets[0].data[i] })),
+    )}`
+  }
+
+  // ---- Договоры ----
+  body += `<h2>Договоры</h2>${horzTable(contractMini.value)}`
+  const conDyn = contractsDynamics.value
+  const amtDyn = contractsAmountDynamics.value
+  if (conDyn) {
+    body += `<h3>Договоры по месяцам</h3><table>
+      <tr><th>Месяц</th>${conDyn.datasets.map(d => `<th class="num">${d.label}</th>`).join('')}${amtDyn ? '<th class="num">Стоимость</th>' : ''}</tr>
+      ${conDyn.labels.map((l, i) => `<tr><td>${l}</td>${conDyn.datasets.map(d => `<td class="num">${d.data[i] || 0}</td>`).join('')}${amtDyn ? `<td class="num">${fmtMoney(amtDyn.datasets[0].data[i] || 0)}</td>` : ''}</tr>`).join('')}</table>`
+  }
+  const tc = topCitiesChart.value
+  if (tc) {
+    body += `<h3>ТОП городов</h3>${listTable(
+      [{ key: 'label', label: 'Город' }, { key: 'val', label: 'Договоров', r: true }],
+      tc.labels.map((l, i) => ({ label: l, val: tc.datasets[0].data[i] })),
+    )}`
+  }
+  const cbA = contractsByAgentChart.value
+  const abA = amountByAgentChart.value
+  if (cbA) {
+    const cols = [{ key: 'label', label: 'Агент' }, { key: 'cnt', label: 'Договоров', r: true }]
+    if (abA) cols.push({ key: 'amt', label: 'Стоимость', r: true })
+    body += `<h3>Договоры по агентам</h3>${listTable(cols,
+      cbA.labels.map((l, i) => ({ label: l, cnt: cbA.datasets[0].data[i], amt: abA ? fmtMoney(abA.datasets[0].data[i] || 0) : '' })),
+    )}`
+  }
+
+  // ---- CRM ----
+  const ptLabel = projectTab.value === 'template' ? 'Шаблонные' : 'Индивидуальные'
+  body += `<h2>CRM Аналитика (${ptLabel})</h2>${kpiGrid(projectStatCards.value)}`
+  const fc = funnelChart.value
+  if (fc) {
+    body += `<h3>Воронка проектов</h3>${listTable(
+      [{ key: 'label', label: 'Этап' }, { key: 'val', label: 'Проектов', r: true }],
+      fc.labels.map((l, i) => ({ label: l, val: fc.datasets[0].data[i] })),
+    )}`
+  }
+  const sdc = stageDurationsChart.value
+  if (sdc) {
+    body += `<h3>Длительность этапов</h3><table>
+      <tr><th>Этап</th><th class="num">Норматив</th><th class="num">Факт</th></tr>
+      ${sdc.labels.map((l, i) => {
+        const norm = sdc.datasets[0].data[i]
+        const fact = sdc.datasets[1].data[i]
+        const over = norm > 0 && fact > norm
+        return `<tr><td>${l}</td><td class="num">${norm}</td><td class="num"${over ? ' style="color:#e74c3c;font-weight:bold"' : ''}>${fact}</td></tr>`
+      }).join('')}</table>`
+  }
+  const ch = cityChart.value
+  if (ch) {
+    body += `<h3>По городам</h3>${listTable(
+      [{ key: 'label', label: 'Город' }, { key: 'val', label: 'Проектов', r: true }],
+      ch.labels.map((l, i) => ({ label: l, val: ch.datasets[0].data[i] })),
+    )}`
+  }
+  const ag = agentChart.value
+  if (ag) {
+    body += `<h3>По агентам</h3>${listTable(
+      [{ key: 'label', label: 'Агент' }, { key: 'val', label: 'Проектов', r: true }],
+      ag.labels.map((l, i) => ({ label: l, val: ag.datasets[0].data[i] })),
+    )}`
+  }
+
+  // ---- Надзор ----
+  body += `<h2>Авторский надзор</h2>${horzTable(supervisionMini.value)}`
+  const sba = supervisionByAgentChart.value
+  if (sba) {
+    body += `<h3>По агентам</h3>${listTable(
+      [{ key: 'label', label: 'Агент' }, { key: 'val', label: 'Надзоров', r: true }],
+      sba.labels.map((l, i) => ({ label: l, val: sba.datasets[0].data[i] })),
+    )}`
+  }
+  const sbc = supervisionByCityChart.value
+  if (sbc) {
+    body += `<h3>По городам</h3><table><tr><th>Город</th>${sbc.datasets.map(d => `<th class="num">${d.label}</th>`).join('')}</tr>
+      ${sbc.labels.map((l, i) => `<tr><td>${l}</td>${sbc.datasets.map(d => `<td class="num">${d.data[i] || 0}</td>`).join('')}</tr>`).join('')}</table>`
+  }
+
+  const fullHtml = `<!DOCTYPE html><html><head>
+  <meta charset="utf-8">
+  <title>Отчёт — ${period}</title>
+  <style>
+    body { font-family: Arial, sans-serif; font-size: 11px; color: #222; margin: 20px; }
+    h1 { font-size: 16px; margin: 0 0 4px; }
+    .sub { color: #888; font-size: 10px; margin-bottom: 16px; }
+    h2 { font-size: 13px; margin: 18px 0 6px; border-bottom: 2px solid #333; padding-bottom: 3px; }
+    h3 { font-size: 11px; margin: 10px 0 4px; color: #555; }
+    table { border-collapse: collapse; width: 100%; margin-bottom: 10px; break-inside: avoid; }
+    th { background: #f0f0f0; text-align: left; padding: 4px 8px; border: 1px solid #ccc; font-size: 10px; }
+    td { padding: 3px 8px; border: 1px solid #eee; font-size: 10px; }
+    .num { text-align: right; }
+    .tc { text-align: center; }
+    .fw { font-weight: bold; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 10px; break-inside: avoid; }
+    .kpi-card { border-left: 3px solid #aaa; background: #fafafa; padding: 5px 8px; border-radius: 4px; }
+    .kpi-val { font-size: 15px; font-weight: bold; }
+    .kpi-lbl { font-size: 9px; color: #777; }
+    @media print { @page { size: A4 portrait; margin: 10mm; } body { margin: 0; } }
+  </style>
+</head><body>
+  <h1>Отчёты и Статистика</h1>
+  <div class="sub">Период: ${period} &nbsp;·&nbsp; Сформирован: ${now}</div>
+  ${body}
+</body></html>`
+
+  const w = window.open('', '_blank', 'width=900,height=700')
+  if (!w) return
+  w.document.write(fullHtml)
+  w.document.close()
+  w.onload = () => { w.focus(); w.print() }
+}
 watch(projectTab, () => loadData())
 watch(filters, () => loadData(), { deep: true })
 function onRefresh(done) { loadData().finally(done) }
@@ -731,61 +888,6 @@ function onRefresh(done) { loadData().finally(done) }
 onMounted(() => loadData())
 </script>
 
-<style>
-@media print {
-  /* Убираем навигацию, header, footer */
-  .q-header, .q-footer, .q-drawer, .q-page-sticky,
-  [class*="bottom-bar"], nav, footer { display: none !important; }
-
-  /* Контент на всю ширину */
-  .q-page { padding: 0 !important; margin: 0 !important; }
-  .q-page-container { padding: 0 !important; margin-left: 0 !important; }
-  .q-layout { min-height: auto !important; }
-  body, html { margin: 0; padding: 0; }
-
-  /* Карточки без теней и рамок */
-  .is-card { box-shadow: none !important; border: 1px solid #E0E0E0 !important; break-inside: avoid; }
-
-  /* Графики по центру */
-  canvas { max-width: 100% !important; display: block !important; margin: 0 auto !important; }
-
-  /* KPI и мини-карточки — ровная сетка по центру */
-  .q-page .row {
-    display: flex !important;
-    flex-wrap: wrap !important;
-    justify-content: center !important;
-  }
-  .q-page .row > [class*="col-"] {
-    flex: 0 0 auto !important;
-    text-align: center !important;
-  }
-  /* KPI блоки — фиксированная ширина для равномерности */
-  .q-page .row > .col-4,
-  .q-page .row > .col-6 {
-    width: 30% !important;
-    max-width: 30% !important;
-    padding: 4px !important;
-  }
-  .q-page .row > .col-3 {
-    width: 24% !important;
-    max-width: 24% !important;
-  }
-  .q-page .row > .col-12 {
-    width: 48% !important;
-    max-width: 48% !important;
-  }
-
-  /* Карточки с серым фоном как в программе */
-  .is-card { box-shadow: none !important; border: 1px solid #E0E0E0 !important; background: #FAFAFA !important; break-inside: avoid; margin-bottom: 8px !important; }
-  .q-card-section { padding: 8px !important; }
-
-  /* Шрифты для печати */
-  .text-h6 { font-size: 14px !important; }
-  .text-subtitle1 { font-size: 12px !important; }
-  .text-subtitle2 { font-size: 11px !important; }
-  .text-caption { font-size: 9px !important; }
-
-  /* Landscape A4 */
-  @page { size: A4 landscape; margin: 8mm; }
-}
+<style scoped>
+/* нет правил для print — отчёт генерируется в отдельном окне */
 </style>
