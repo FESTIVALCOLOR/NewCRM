@@ -36,12 +36,14 @@ export function usePwaInstall() {
   }
 
   function _isIos() {
-    return /iPhone|iPad|iPod/i.test(navigator.userAgent) && !window.navigator.standalone
+    const ua = navigator.userAgent
+    const isIpad = /iPad/i.test(ua) || (/Macintosh/i.test(ua) && navigator.maxTouchPoints > 1)
+    return (isIpad || /iPhone|iPod/i.test(ua)) && !window.navigator.standalone
   }
 
   function dismiss() {
     dismissed.value = true
-    localStorage.setItem('pwa_install_dismissed', '1')
+    localStorage.setItem('pwa_install_dismissed', Date.now().toString())
   }
 
   async function install() {
@@ -60,7 +62,8 @@ export function usePwaInstall() {
   onMounted(() => {
     isInstalled.value = _isInstalled()
     isIos.value = _isIos()
-    dismissed.value = localStorage.getItem('pwa_install_dismissed') === '1'
+    const ts = localStorage.getItem('pwa_install_dismissed')
+    dismissed.value = !!ts && Date.now() - parseInt(ts) < 14 * 24 * 60 * 60 * 1000
     canInstall.value = !!_deferredPrompt
     _updateCallbacks.push(_onPromptAvailable)
   })
