@@ -394,6 +394,14 @@
               Отмена
             </button>
           </template>
+          <!-- Экспорт -->
+          <div style="flex: 1" />
+          <button type="button" class="nd-btn nd-btn-export" title="Скачать Excel" @click="exportNormDaysExcel">
+            <q-icon name="table_view" size="14px" /> Excel
+          </button>
+          <button type="button" class="nd-btn nd-btn-export" title="Скачать PDF" @click="exportNormDaysPdf">
+            <q-icon name="picture_as_pdf" size="14px" /> PDF
+          </button>
         </div>
 
         <!-- Таблица нормодней, сгруппированная по стадиям -->
@@ -1164,6 +1172,103 @@ async function resetNormDays() {
   })
 }
 
+function buildNdRows() {
+  const rows = []
+  normDaysGrouped.value.forEach(group => {
+    group.items.forEach(nd => {
+      if (nd.executor_role === 'header') {
+        rows.push({ group: group.name, name: nd.stage_name, role: '', days: '', outOfScope: false, isHeader: true })
+      } else {
+        const days = ndPreviewMap.value[nd.stage_code] !== undefined ? ndPreviewMap.value[nd.stage_code] : (nd.base_norm_days ?? 0)
+        rows.push({ group: group.name, name: nd.stage_name, role: nd.executor_role, days, outOfScope: !nd.is_in_contract_scope, isHeader: false })
+      }
+    })
+  })
+  return rows
+}
+
+async function exportNormDaysExcel() {
+  const { utils, writeFile } = await import('xlsx')
+  const rows = buildNdRows()
+  const title = `${ndProjectType.value} — ${ndSubtype.value} (${ndArea.value} м²)`
+
+  const wsData = [
+    [title],
+    [],
+    ['Стадия', 'Этап', 'Роль', 'Норма, дн.', 'Вне объёма'],
+  ]
+  let lastGroup = ''
+  rows.forEach(r => {
+    if (r.isHeader) {
+      wsData.push([r.group, r.name, '', '', ''])
+    } else {
+      wsData.push([r.group !== lastGroup ? r.group : '', r.name, r.role, r.days, r.outOfScope ? 'вне объёма' : ''])
+    }
+    lastGroup = r.group
+  })
+  wsData.push([])
+  wsData.push(['', 'Итого по договору', '', ndContractTerm.value, ''])
+  wsData.push(['', 'Итого с учётом вне объёма', '', ndTotalAll.value, ''])
+
+  const ws = utils.aoa_to_sheet(wsData)
+  ws['!cols'] = [{ wch: 22 }, { wch: 38 }, { wch: 22 }, { wch: 12 }, { wch: 12 }]
+  const wb = utils.book_new()
+  utils.book_append_sheet(wb, ws, 'Нормодни')
+  const fileName = `normdays_${ndProjectType.value}_${ndSubtype.value}_${ndArea.value}m2.xlsx`
+    .replace(/[^\wа-яёА-ЯЁ._-]/gi, '_')
+  writeFile(wb, fileName)
+}
+
+function exportNormDaysPdf() {
+  const rows = buildNdRows()
+  const title = `Нормодни: ${ndProjectType.value} — ${ndSubtype.value}`
+  const subtitle = `Площадь: ${ndArea.value} м²&nbsp;&nbsp;|&nbsp;&nbsp;Срок: ${ndContractTerm.value} дн.`
+
+  let tableRows = ''
+  let lastGroup = ''
+  rows.forEach(r => {
+    if (r.isHeader) {
+      tableRows += `<tr class="sub-hdr"><td colspan="4">${r.name}</td></tr>`
+    } else {
+      const grpCell = r.group !== lastGroup ? `<td class="grp">${r.group}</td>` : '<td class="grp"></td>'
+      const outCls = r.outOfScope ? ' class="out"' : ''
+      tableRows += `<tr${outCls}>${grpCell}<td>${r.name}</td><td>${r.role}</td><td class="num">${r.days} дн.</td></tr>`
+      lastGroup = r.group
+    }
+  })
+  tableRows += `
+    <tr class="total-row"><td></td><td colspan="2"><b>ИТОГО по договору</b></td><td class="num"><b>${ndContractTerm.value} дн.</b></td></tr>
+    <tr class="total-sub"><td></td><td colspan="2">ИТОГО с учётом вне объёма</td><td class="num">${ndTotalAll.value} дн.</td></tr>`
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+  <title>${title}</title>
+  <style>
+    body { font-family: Arial, sans-serif; font-size: 11px; color: #222; margin: 20px; }
+    h2 { font-size: 14px; margin: 0 0 4px; }
+    .sub { color: #666; margin-bottom: 14px; font-size: 11px; }
+    table { border-collapse: collapse; width: 100%; }
+    th { background: #ffd93c; color: #333; font-weight: bold; padding: 5px 8px; text-align: left; border: 1px solid #ddd; }
+    td { padding: 4px 8px; border: 1px solid #eee; vertical-align: middle; }
+    .grp { color: #555; font-size: 10px; width: 22%; }
+    .num { text-align: right; width: 10%; white-space: nowrap; }
+    .sub-hdr td { background: #f0f0f0; font-weight: bold; font-size: 10px; color: #444; }
+    .out td { color: #aaa; }
+    .total-row td { border-top: 2px solid #333; font-size: 12px; }
+    .total-sub td { color: #888; }
+    @media print { @page { margin: 15mm; } }
+  </style></head><body>
+  <h2>${title}</h2>
+  <div class="sub">${subtitle}</div>
+  <table><thead><tr><th>Стадия</th><th>Этап</th><th>Роль</th><th>Дни</th></tr></thead>
+  <tbody>${tableRows}</tbody></table>
+  <script>window.onload = () => { window.print() }<\/script>
+  </body></html>`
+
+  const w = window.open('', '_blank')
+  w.document.write(html)
+  w.document.close()
+}
+
 function editRate(rate) {
   editingRate.value = { ...rate }
   showRateDialog.value = true
@@ -1492,6 +1597,11 @@ onMounted(async () => {
 .nd-btn-cancel {
   background: #f5f5f5;
   border-color: #ccc;
+}
+
+.nd-btn-export {
+  border-color: #2196f3;
+  color: #2196f3;
 }
 
 .nd-out-of-scope {
