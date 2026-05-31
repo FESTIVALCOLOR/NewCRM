@@ -44,6 +44,12 @@
               <span>Сброс</span>
             </button>
           </div>
+          <div class="col-auto">
+            <button type="button" class="emp-pdf-btn" :disabled="pdfLoading || loading" @click="exportPDF">
+              <q-spinner v-if="pdfLoading" size="14px" />
+              <span v-else>PDF</span>
+            </button>
+          </div>
         </div>
       </q-card-section>
     </q-card>
@@ -319,6 +325,7 @@ const dashboard = ref(null)
 const executorLoad = ref([])
 const roleEmployees = ref([])
 const loading = ref(false)
+const pdfLoading = ref(false)
 const surveyStats = ref(null)
 const selectedEmp = ref(null)
 const empDialog = computed({
@@ -459,6 +466,100 @@ function showVisitStats(emp) {
   return isDan || isManager
 }
 
+function exportPDF() {
+  pdfLoading.value = true
+  const popup = window.open('', '_blank', 'width=900,height=700')
+  if (!popup) { pdfLoading.value = false; return }
+
+  const _MONTHS = ['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек']
+  let periodLabel = String(filters.value.year)
+  if (filters.value.month) periodLabel += ' · ' + _MONTHS[filters.value.month - 1]
+  else if (filters.value.quarter) periodLabel += ' · Q' + filters.value.quarter
+  const ptLabel = projectTab.value === 'template' ? 'Шаблонные' : projectTab.value === 'supervision' ? 'Авт. надзор' : 'Индивидуальные'
+  const roleLabel = roleTabs.value.find(r => r.code === roleTab.value)?.label || roleTab.value
+
+  const kpiRowHtml = dashboardKpi.value.map(k =>
+    '<td style="text-align:center;padding:10px 16px;border:1px solid #eee">' +
+    `<div style="font-size:22px;font-weight:700;color:#333">${k.value}</div>` +
+    `<div style="font-size:10px;color:#888;margin-top:2px">${k.label}</div></td>`,
+  ).join('')
+
+  let loadHtml = ''
+  if (executorLoad.value.length > 0) {
+    const rows = executorLoad.value.map((e, i) =>
+      `<tr style="background:${i % 2 ? '#fff' : '#fafafa'}">` +
+      `<td style="padding:5px 8px">${e.name}</td>` +
+      `<td style="padding:5px 8px;text-align:right;font-weight:600">${e.active_stages}</td></tr>`,
+    ).join('')
+    loadHtml = `<h3 style="margin:18px 0 6px;font-size:13px;color:#333">Нагрузка исполнителей</h3>
+    <table style="width:100%;border-collapse:collapse;font-size:11px">
+      <thead><tr style="background:#f5f5f5">
+        <th style="padding:6px 8px;text-align:left">Сотрудник</th>
+        <th style="padding:6px 8px;text-align:right">Активных стадий</th>
+      </tr></thead><tbody>${rows}</tbody></table>`
+  }
+
+  let empHtml = ''
+  if (roleEmployees.value.length > 0) {
+    const rows = roleEmployees.value.map((e, i) => {
+      const kpi = (e.completion_rate || 0)
+      const clr = kpiColor(kpi / 10)
+      return `<tr style="background:${i % 2 ? '#fff' : '#fafafa'}">` +
+        `<td style="padding:5px 8px">${e.full_name || e.name || ''}</td>` +
+        `<td style="padding:5px 8px;color:#888">${e.position || ''}</td>` +
+        `<td style="padding:5px 8px;text-align:right;font-weight:700;color:${clr}">${kpi.toFixed(0)}%</td>` +
+        `<td style="padding:5px 8px;text-align:right">${e.completed_stages || 0}/${e.total_stages || 0}</td></tr>`
+    }).join('')
+    empHtml = `<h3 style="margin:18px 0 6px;font-size:13px;color:#333">${roleLabel}</h3>
+    <table style="width:100%;border-collapse:collapse;font-size:11px">
+      <thead><tr style="background:#f5f5f5">
+        <th style="padding:6px 8px;text-align:left">Сотрудник</th>
+        <th style="padding:6px 8px;text-align:left">Должность</th>
+        <th style="padding:6px 8px;text-align:right">KPI%</th>
+        <th style="padding:6px 8px;text-align:right">Этапы</th>
+      </tr></thead><tbody>${rows}</tbody></table>`
+  }
+
+  let surveyHtml = ''
+  if (surveyStats.value) {
+    const s = surveyStats.value
+    const rows = surveyKpis.value.filter(k => k.value != null).map((k, i) =>
+      `<tr style="background:${i % 2 ? '#fff' : '#fafafa'}">` +
+      `<td style="padding:5px 8px">${k.label}</td>` +
+      `<td style="padding:5px 8px;text-align:right;font-weight:700;color:${kpiColor(k.value)}">${k.value.toFixed(1)}</td>` +
+      `<td style="padding:5px 8px;color:#888">из ${k.scale}</td></tr>`,
+    ).join('')
+    surveyHtml = `<h3 style="margin:18px 0 4px;font-size:13px;color:#333">Качество проектов (опросы клиентов)</h3>
+    <div style="font-size:10px;color:#888;margin-bottom:6px">${s.completed}/${s.total} завершённых опросов</div>
+    <table style="width:100%;border-collapse:collapse;font-size:11px">
+      <thead><tr style="background:#f5f5f5">
+        <th style="padding:6px 8px;text-align:left">Метрика</th>
+        <th style="padding:6px 8px;text-align:right">Оценка</th>
+        <th style="padding:6px 8px;text-align:left">Шкала</th>
+      </tr></thead><tbody>${rows}</tbody></table>`
+  }
+
+  const html = `<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8">
+  <title>Отчёт по сотрудникам</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 16px; color: #333; font-size: 12px; }
+    h1 { font-size: 16px; margin: 0 0 2px; }
+    .sub { color: #888; font-size: 11px; margin-bottom: 14px; }
+    @page { margin: 12mm; size: A4 portrait; }
+    @media print { body { padding: 0; } }
+  </style></head><body>
+  <h1>Отчёты по сотрудникам</h1>
+  <div class="sub">${periodLabel} · ${ptLabel}</div>
+  <table style="border-collapse:collapse;margin-bottom:4px"><tr>${kpiRowHtml}</tr></table>
+  ${loadHtml}${empHtml}${surveyHtml}
+  <` + 'script>window.addEventListener(\'load\',function(){setTimeout(function(){window.focus();window.print();},600);});<' + `/script>
+  </body></html>`
+
+  popup.document.write(html)
+  popup.document.close()
+  pdfLoading.value = false
+}
+
 function resetFilters() {
   filters.value = { year: currentYear, quarter: null, month: null }
   loadData()
@@ -490,4 +591,25 @@ onMounted(() => loadData())
 .reset-btn:hover {
   background: #f0c800;
 }
+
+.emp-pdf-btn {
+  height: 40px;
+  padding: 0 14px;
+  border: 1px solid #2196f3;
+  border-radius: 4px;
+  background: white;
+  color: #2196f3;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  outline: none;
+  white-space: nowrap;
+}
+
+.emp-pdf-btn:hover { background: #e3f2fd; }
+.emp-pdf-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 </style>
