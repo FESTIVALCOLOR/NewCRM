@@ -466,97 +466,234 @@ function showVisitStats(emp) {
   return isDan || isManager
 }
 
-function exportPDF() {
+async function exportPDF() {
   pdfLoading.value = true
-  const popup = window.open('', '_blank', 'width=900,height=700')
+  const popup = window.open('', '_blank', 'width=1200,height=800')
   if (!popup) { pdfLoading.value = false; return }
-
-  const _MONTHS = ['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек']
-  let periodLabel = String(filters.value.year)
-  if (filters.value.month) periodLabel += ' · ' + _MONTHS[filters.value.month - 1]
-  else if (filters.value.quarter) periodLabel += ' · Q' + filters.value.quarter
-  const ptLabel = projectTab.value === 'template' ? 'Шаблонные' : projectTab.value === 'supervision' ? 'Авт. надзор' : 'Индивидуальные'
-  const roleLabel = roleTabs.value.find(r => r.code === roleTab.value)?.label || roleTab.value
-
-  const kpiRowHtml = dashboardKpi.value.map(k =>
-    '<td style="text-align:center;padding:10px 16px;border:1px solid #eee">' +
-    `<div style="font-size:22px;font-weight:700;color:#333">${k.value}</div>` +
-    `<div style="font-size:10px;color:#888;margin-top:2px">${k.label}</div></td>`,
-  ).join('')
-
-  let loadHtml = ''
-  if (executorLoad.value.length > 0) {
-    const rows = executorLoad.value.map((e, i) =>
-      `<tr style="background:${i % 2 ? '#fff' : '#fafafa'}">` +
-      `<td style="padding:5px 8px">${e.name}</td>` +
-      `<td style="padding:5px 8px;text-align:right;font-weight:600">${e.active_stages}</td></tr>`,
-    ).join('')
-    loadHtml = `<h3 style="margin:18px 0 6px;font-size:13px;color:#333">Нагрузка исполнителей</h3>
-    <table style="width:100%;border-collapse:collapse;font-size:11px">
-      <thead><tr style="background:#f5f5f5">
-        <th style="padding:6px 8px;text-align:left">Сотрудник</th>
-        <th style="padding:6px 8px;text-align:right">Активных стадий</th>
-      </tr></thead><tbody>${rows}</tbody></table>`
-  }
-
-  let empHtml = ''
-  if (roleEmployees.value.length > 0) {
-    const rows = roleEmployees.value.map((e, i) => {
-      const kpi = (e.completion_rate || 0)
-      const clr = kpiColor(kpi / 10)
-      return `<tr style="background:${i % 2 ? '#fff' : '#fafafa'}">` +
-        `<td style="padding:5px 8px">${e.full_name || e.name || ''}</td>` +
-        `<td style="padding:5px 8px;color:#888">${e.position || ''}</td>` +
-        `<td style="padding:5px 8px;text-align:right;font-weight:700;color:${clr}">${kpi.toFixed(0)}%</td>` +
-        `<td style="padding:5px 8px;text-align:right">${e.completed_stages || 0}/${e.total_stages || 0}</td></tr>`
-    }).join('')
-    empHtml = `<h3 style="margin:18px 0 6px;font-size:13px;color:#333">${roleLabel}</h3>
-    <table style="width:100%;border-collapse:collapse;font-size:11px">
-      <thead><tr style="background:#f5f5f5">
-        <th style="padding:6px 8px;text-align:left">Сотрудник</th>
-        <th style="padding:6px 8px;text-align:left">Должность</th>
-        <th style="padding:6px 8px;text-align:right">KPI%</th>
-        <th style="padding:6px 8px;text-align:right">Этапы</th>
-      </tr></thead><tbody>${rows}</tbody></table>`
-  }
-
-  let surveyHtml = ''
-  if (surveyStats.value) {
-    const s = surveyStats.value
-    const rows = surveyKpis.value.filter(k => k.value != null).map((k, i) =>
-      `<tr style="background:${i % 2 ? '#fff' : '#fafafa'}">` +
-      `<td style="padding:5px 8px">${k.label}</td>` +
-      `<td style="padding:5px 8px;text-align:right;font-weight:700;color:${kpiColor(k.value)}">${k.value.toFixed(1)}</td>` +
-      `<td style="padding:5px 8px;color:#888">из ${k.scale}</td></tr>`,
-    ).join('')
-    surveyHtml = `<h3 style="margin:18px 0 4px;font-size:13px;color:#333">Качество проектов (опросы клиентов)</h3>
-    <div style="font-size:10px;color:#888;margin-bottom:6px">${s.completed}/${s.total} завершённых опросов</div>
-    <table style="width:100%;border-collapse:collapse;font-size:11px">
-      <thead><tr style="background:#f5f5f5">
-        <th style="padding:6px 8px;text-align:left">Метрика</th>
-        <th style="padding:6px 8px;text-align:right">Оценка</th>
-        <th style="padding:6px 8px;text-align:left">Шкала</th>
-      </tr></thead><tbody>${rows}</tbody></table>`
-  }
-
-  const html = `<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8">
-  <title>Отчёт по сотрудникам</title>
-  <style>
-    body { font-family: Arial, sans-serif; padding: 16px; color: #333; font-size: 12px; }
-    h1 { font-size: 16px; margin: 0 0 2px; }
-    .sub { color: #888; font-size: 11px; margin-bottom: 14px; }
-    @page { margin: 12mm; size: A4 portrait; }
-    @media print { body { padding: 0; } }
-  </style></head><body>
-  <h1>Отчёты по сотрудникам</h1>
-  <div class="sub">${periodLabel} · ${ptLabel}</div>
-  <table style="border-collapse:collapse;margin-bottom:4px"><tr>${kpiRowHtml}</tr></table>
-  ${loadHtml}${empHtml}${surveyHtml}
-  <` + 'script>window.addEventListener(\'load\',function(){setTimeout(function(){window.focus();window.print();},600);});<' + `/script>
-  </body></html>`
-
-  popup.document.write(html)
+  try { popup.moveTo(0, 0); popup.resizeTo(screen.width, screen.height) } catch(_e) {}
+  popup.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Загрузка...</title></head><body style="font-family:Arial;padding:40px;color:#555;text-align:center"><p style="font-size:18px">&#8987; Формирование отчёта...</p></body></html>')
   popup.document.close()
+
+  try {
+    const params = { year: filters.value.year }
+    if (filters.value.quarter) params.quarter = filters.value.quarter
+    if (filters.value.month) params.month = filters.value.month
+
+    const [indR, tmplR, supR, survIndR, survTmplR, survSupR] = await Promise.allSettled([
+      statisticsApi.getEmployees({ ...params, project_type: 'individual' }),
+      statisticsApi.getEmployees({ ...params, project_type: 'template' }),
+      statisticsApi.getEmployees({ ...params, project_type: 'supervision' }),
+      surveyApi.getStats({ project_type: 'individual' }),
+      surveyApi.getStats({ project_type: 'template' }),
+      surveyApi.getStats({ project_type: 'supervision' }),
+    ])
+
+    const indEmps  = indR.status   === 'fulfilled' ? (indR.value.data   || []) : []
+    const tmplEmps = tmplR.status  === 'fulfilled' ? (tmplR.value.data  || []) : []
+    const supEmps  = supR.status   === 'fulfilled' ? (supR.value.data   || []) : []
+    const survInd  = survIndR.status  === 'fulfilled' ? survIndR.value.data  : null
+    const survTmpl = survTmplR.status === 'fulfilled' ? survTmplR.value.data : null
+    const survSup  = survSupR.status  === 'fulfilled' ? survSupR.value.data  : null
+
+    const _MONTHS = ['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек']
+    let periodLabel = String(filters.value.year)
+    if (filters.value.month) periodLabel += ' · ' + _MONTHS[filters.value.month - 1]
+    else if (filters.value.quarter) periodLabel += ' · Q' + filters.value.quarter
+
+    function shortN(n) { if (!n) return '?'; const p = n.split(' '); return p.length >= 2 ? p[0] + ' ' + p[1] : n }
+    function kHex(v) { if (v === null || v === undefined) return '#888'; if (v >= 8) return '#27AE60'; if (v >= 6) return '#F39C12'; return '#E74C3C' }
+
+    function filterRole(emps, rt, pt) {
+      if (rt === 'sdp') return emps.filter(e => e.position?.includes('СДП'))
+      if (rt === 'gap') return emps.filter(e => e.position?.includes('ГАП'))
+      if (rt === 'manager') return emps.filter(e => e.position?.toLowerCase().includes('менеджер'))
+      if (rt === 'dan') return emps.filter(e => e.position === 'ДАН' || e.position === 'Дизайнер авторского надзора')
+      if (rt === 'visualization') return emps.filter(e => e.position === 'Дизайнер')
+      if (rt === 'executor') {
+        if (pt === 'tmpl') return emps.filter(e => e.position?.includes('Чертёжник'))
+        return emps.filter(e => ['Дизайнер','Чертёжник','Замерщик'].some(p => e.position?.includes(p)) && e.position !== 'ДАН' && e.position !== 'Дизайнер авторского надзора')
+      }
+      return []
+    }
+
+    const cd = {}
+    const sections = [
+      { title: 'Индивидуальные',  key: 'ind',  emps: indEmps,  survey: survInd,  roles: ROLE_TABS.individual },
+      { title: 'Шаблонные',       key: 'tmpl', emps: tmplEmps, survey: survTmpl, roles: ROLE_TABS.template },
+      { title: 'Авторский надзор', key: 'sup',  emps: supEmps,  survey: survSup,  roles: ROLE_TABS.supervision },
+    ]
+
+    let body = ''
+    for (const sec of sections) {
+      const { title, key, emps, survey, roles } = sec
+      if (!emps.length) continue
+
+      const loadData = emps.filter(e => e.total_stages > 0)
+        .sort((a, b) => (b.total_stages - b.completed_stages) - (a.total_stages - a.completed_stages))
+        .slice(0, 12)
+      if (loadData.length) {
+        cd[`load_${key}`] = {
+          labels: loadData.map(e => shortN(e.full_name)),
+          data:   loadData.map(e => e.total_stages - e.completed_stages),
+        }
+      }
+
+      const totalEmps = emps.length
+      const avgKpi = totalEmps ? (emps.reduce((s, e) => s + (e.completion_rate || 0), 0) / totalEmps).toFixed(0) : '—'
+      const activeEmps = emps.filter(e => e.total_stages > 0).length
+      const kpiRowHtml = [
+        { label: 'Сотрудников', value: totalEmps },
+        { label: 'Ср. KPI', value: totalEmps ? `${avgKpi}%` : '—' },
+        { label: 'С активными этапами', value: activeEmps },
+      ].map(k =>
+        '<td style="text-align:center;padding:8px 14px;border:1px solid #eee">' +
+        `<div style="font-size:20px;font-weight:700;color:#333">${k.value}</div>` +
+        `<div style="font-size:9px;color:#888;margin-top:2px">${k.label}</div></td>`,
+      ).join('')
+
+      let roleHtml = ''
+      for (const role of roles) {
+        const rEmps = filterRole(emps, role.code, key).sort((a, b) => b.completion_rate - a.completion_rate)
+        if (!rEmps.length) continue
+
+        const kpiKey = `kpi_${key}_${role.code}`
+        cd[kpiKey] = {
+          labels: rEmps.map(e => shortN(e.full_name || e.name)),
+          data:   rEmps.map(e => Math.round(e.completion_rate || 0)),
+        }
+
+        const empRows = rEmps.map((e, i) => {
+          const kpi = e.completion_rate || 0
+          const clr = kHex(kpi / 10)
+          const scores = empSurveyScores(e).filter(s => s.value !== null && s.value !== undefined)
+            .map(s => `${s.label}: ${s.value.toFixed(1)}/${s.scale}`).join(' · ')
+          let visits = ''
+          if (key === 'sup') {
+            const isDanPos = e.position === 'ДАН' || e.position === 'Дизайнер авторского надзора'
+            const isMgrPos = e.position?.toLowerCase().includes('менеджер')
+            if (isDanPos || isMgrPos) {
+              visits = ` | На объект: ${e.visits_object ?? 0}  К поставщику: ${e.visits_supplier ?? 0}`
+              if ((e.visits_overdue ?? 0) > 0) visits += `  Просрочено: ${e.visits_overdue}`
+            }
+          }
+          return `<tr style="background:${i % 2 ? '#fff' : '#fafafa'}">` +
+            `<td style="padding:5px 8px">${e.full_name || e.name || ''}</td>` +
+            `<td style="padding:5px 8px;color:#888;font-size:10px">${e.position || ''}</td>` +
+            `<td style="padding:5px 8px;text-align:right;font-weight:700;color:${clr}">${kpi.toFixed(0)}%</td>` +
+            `<td style="padding:5px 8px;text-align:right">${e.completed_stages || 0}/${e.total_stages || 0}</td>` +
+            `<td style="padding:5px 8px;font-size:9px;color:#666">${scores}${visits}</td></tr>`
+        }).join('')
+
+        const canvH = Math.max(60, rEmps.length * 24)
+        roleHtml += `<div class="ct">${role.label} — сравнение KPI</div>
+        <canvas id="${kpiKey}" width="700" height="${canvH}" style="break-inside:avoid;margin-bottom:6px"></canvas>
+        <table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:14px">
+          <thead><tr style="background:#f5f5f5">
+            <th style="padding:5px 8px;text-align:left">Сотрудник</th>
+            <th style="padding:5px 8px;text-align:left">Должность</th>
+            <th style="padding:5px 8px;text-align:right">KPI%</th>
+            <th style="padding:5px 8px;text-align:right">Этапы</th>
+            <th style="padding:5px 8px;text-align:left">Оценки клиентов</th>
+          </tr></thead><tbody>${empRows}</tbody></table>`
+      }
+
+      let survHtml = ''
+      if (survey) {
+        const kpis = [
+          { label: 'NPS', value: survey.avg_nps, scale: 10 },
+          { label: 'CSAT', value: survey.avg_csat, scale: 5 },
+          { label: 'Дизайн', value: survey.avg_design, scale: 5 },
+          { label: 'Сроки', value: survey.avg_deadline, scale: 5 },
+          { label: 'Общение', value: survey.avg_communication, scale: 5 },
+          { label: 'Ожидания', value: survey.avg_expectations, scale: 5 },
+          { label: 'Надзор', value: survey.avg_supervision, scale: 5 },
+        ].filter(k => k.value !== null && k.value !== undefined)
+        if (kpis.length) {
+          const cells = kpis.map(k =>
+            '<td style="text-align:center;padding:6px 10px;border:1px solid #eee">' +
+            `<div style="font-size:15px;font-weight:700;color:${kHex(k.value)}">${k.value.toFixed(1)}</div>` +
+            `<div style="font-size:9px;color:#888">${k.label} / ${k.scale}</div></td>`,
+          ).join('')
+          survHtml = `<div class="ct">Опросы клиентов (${survey.completed}/${survey.total} завершено)</div>
+          <table style="border-collapse:collapse;margin-bottom:14px"><tr>${cells}</tr></table>`
+        }
+      }
+
+      const loadCanvH = Math.max(60, loadData.length * 24)
+      body += `<h2 style="margin:24px 0 8px;font-size:15px;color:#333;border-bottom:2px solid #eee;padding-bottom:4px">${title}</h2>
+      <table style="border-collapse:collapse;margin-bottom:10px"><tr>${kpiRowHtml}</tr></table>
+      ${loadData.length ? `<div class="ct">Нагрузка исполнителей (активных стадий)</div>
+      <canvas id="load_${key}" width="700" height="${loadCanvH}" style="break-inside:avoid;margin-bottom:12px"></canvas>` : ''}
+      ${roleHtml}${survHtml}`
+    }
+
+    let chartCalls = ''
+    for (const sec of sections) {
+      if (cd[`load_${sec.key}`]) {
+        chartCalls += `try{hBar('load_${sec.key}',cd.load_${sec.key}.labels,cd.load_${sec.key}.data,'Стадий','#ffd93c');}catch(e){}\n`
+      }
+      for (const role of sec.roles) {
+        const k = `kpi_${sec.key}_${role.code}`
+        if (cd[k]) {
+          chartCalls += `try{hBar('${k}',cd.${k.replace(/-/g,'_')}.labels,cd.${k.replace(/-/g,'_')}.data,'KPI%','#27AE60');}catch(e){}\n`
+        }
+      }
+    }
+    // cd keys don't have dashes, use bracket access
+    chartCalls = ''
+    for (const sec of sections) {
+      if (cd[`load_${sec.key}`]) {
+        chartCalls += `try{hBar('load_${sec.key}',cd['load_${sec.key}'].labels,cd['load_${sec.key}'].data,'Стадий','#ffd93c');}catch(e){}\n`
+      }
+      for (const role of sec.roles) {
+        const k = `kpi_${sec.key}_${role.code}`
+        if (cd[k]) {
+          chartCalls += `try{hBar('${k}',cd['${k}'].labels,cd['${k}'].data,'KPI%','#27AE60');}catch(e){}\n`
+        }
+      }
+    }
+
+    const now = new Date().toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    const cdJson = JSON.stringify(cd)
+
+    const html = `<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8">
+    <title>Отчёты по сотрудникам</title>
+    <style>
+      body { font-family: Arial, sans-serif; padding: 16px; color: #333; font-size: 12px; }
+      h1 { font-size: 18px; margin: 0 0 3px; }
+      .sub { color: #888; font-size: 11px; margin-bottom: 14px; }
+      .ct { font-size: 11px; color: #555; font-weight: bold; margin: 10px 0 4px; }
+      canvas { display: block; max-width: 100%; break-inside: avoid; }
+      @page { size: A4 portrait; margin: 10mm; }
+      @media print { body { padding: 0; } }
+    </style></head><body>
+    <h1>Отчёты по сотрудникам</h1>
+    <div class="sub">${periodLabel} &nbsp;·&nbsp; Сформирован: ${now}</div>
+    ${body}
+    <` + 'script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"><' + `/script>
+    <` + `script>
+    var __cd = ${cdJson};
+    var ROPTS = { animation: false, responsive: false, maintainAspectRatio: false };
+    function mkScales() { return { x: { beginAtZero: true, ticks: { font: { size: 8 } } }, y: { ticks: { font: { size: 8 } } } }; }
+    function hBar(id, labels, data, label, color) {
+      var el = document.getElementById(id); if (!el) return;
+      new Chart(el, { type: 'bar', data: { labels: labels, datasets: [{ label: label, data: data, backgroundColor: color || '#3498DB' }] },
+        options: Object.assign({}, ROPTS, { indexAxis: 'y', plugins: { legend: { display: false } }, scales: mkScales() }) });
+    }
+    window.addEventListener('load', function() {
+      var cd = __cd;
+      ${chartCalls}
+      setTimeout(function() { try { window.focus(); window.print(); } catch(e2) {} }, 900);
+    });
+    <` + `/script>
+    </body></html>`
+
+    popup.document.open()
+    popup.document.write(html)
+    popup.document.close()
+  } catch (err) {
+    try { popup.document.body.innerHTML = '<p style="padding:20px;color:#c00">Ошибка: ' + (err.message || err) + '</p>' } catch(_e2) {}
+  }
   pdfLoading.value = false
 }
 
