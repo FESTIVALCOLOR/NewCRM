@@ -734,7 +734,7 @@
         <div class="contract-right-col">
           <!-- Таблица сроков -->
           <q-card class="is-card">
-            <div style="padding: 12px 16px 0; display: flex; align-items: center; gap: 8px">
+            <div style="padding: 8px 16px; display: flex; align-items: center; gap: 8px">
               <span style="flex: 1; font-weight: 600; font-size: 14px; color: #333">Таблица сроков</span>
               <template v-if="timeline.length > 0">
                 <button type="button" class="tl-export-btn" @click="exportTimelineExcel">
@@ -1575,7 +1575,6 @@ onMounted(async () => {
 <style scoped>
 .tl-export-btn {
   height: 26px;
-  line-height: 26px;
   padding: 0 10px;
   border: 1px solid #2196f3;
   border-radius: 4px;
@@ -1587,6 +1586,9 @@ onMounted(async () => {
   flex-shrink: 0;
   outline: none;
   white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .tl-export-btn:hover {
   background: #e3f2fd;
