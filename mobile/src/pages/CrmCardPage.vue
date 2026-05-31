@@ -174,11 +174,13 @@
                     <div class="text-caption" style="color: #999">
                       Дедлайн проекта
                     </div>
-                    <div style="font-size: 13px; cursor: default" :style="{ color: effectiveDeadline ? dlHex(effectiveDeadline) : '#333' }">
+                    <div
+                      style="font-size: 13px; display: flex; align-items: center; gap: 4px"
+                      :style="{ color: effectiveDeadline ? dlHex(effectiveDeadline) : '#333', cursor: isProjectOverdue && deadlineDeviations.length ? 'pointer' : 'default' }"
+                      @click="isProjectOverdue && deadlineDeviations.length ? (showDeadlineStatsDialog = true) : undefined"
+                    >
                       {{ fmtDateShort(effectiveDeadline) || '-' }}
-                      <q-tooltip v-if="isProjectOverdue && deadlineDeviations.length" style="font-size: 12px; max-width: 260px; white-space: pre-line">
-                        {{ deadlineTooltip }}
-                      </q-tooltip>
+                      <q-icon v-if="isProjectOverdue && deadlineDeviations.length" name="info_outline" size="14px" />
                     </div>
                   </div>
                 </div>
@@ -1811,6 +1813,51 @@
           </q-card-actions>
         </q-card>
       </q-dialog>
+
+      <!-- Диалог просрочек по подэтапам (открывается по клику на дедлайн) -->
+      <q-dialog v-model="showDeadlineStatsDialog">
+        <q-card style="min-width: 320px; max-width: 420px; border-radius: 12px">
+          <q-card-section class="row items-center q-pb-sm">
+            <div>
+              <div class="text-subtitle2 text-weight-bold">
+                Просрочки по проекту
+              </div>
+              <div class="text-caption" style="color: #888">
+                Дедлайн: {{ fmtDateShort(effectiveDeadline) }}
+              </div>
+            </div>
+            <q-space />
+            <q-btn
+              flat
+              round
+              dense
+              icon="close"
+              @click="showDeadlineStatsDialog = false"
+            />
+          </q-card-section>
+          <q-separator />
+          <q-card-section class="q-pt-sm q-pb-md">
+            <div v-for="d in deadlineDeviations" :key="d.name" class="q-mb-sm">
+              <div class="row items-center">
+                <span class="text-caption" style="flex: 1; color: #333">{{ d.name }}</span>
+                <q-chip
+                  dense
+                  color="red-1"
+                  text-color="red-8"
+                  size="xs"
+                  icon="trending_up"
+                >
+                  +{{ d.diff }} дн.
+                </q-chip>
+              </div>
+            </div>
+            <q-separator class="q-my-sm" />
+            <div class="row" style="font-size: 12px; color: #333">
+              Итого задержка: <b style="color: #E53935; margin-left: 4px">{{ deadlineDeviations.reduce((s, d) => s + d.diff, 0) }} дн.</b>
+            </div>
+          </q-card-section>
+        </q-card>
+      </q-dialog>
     </template>
 
     <div v-else class="text-center q-pa-xl" style="color: #999">
@@ -1966,6 +2013,7 @@ const showRejectDialog = ref(false)
 const rejectSubstage = ref('') // 'concept' | '3d' | '' (для не-stage2)
 const showMeasurementDlg = ref(false)
 const showRestoreDialog = ref(false)
+const showDeadlineStatsDialog = ref(false)
 const restoreStage = ref(null)
 const rejectReason = ref('')
 const rejectFile = ref(null)
@@ -2430,6 +2478,30 @@ const deadlineTooltip = computed(() => {
   const total = deadlineDeviations.value.reduce((sum, d) => sum + d.diff, 0)
   return `Просрочки по подэтапам:\n${lines.join('\n')}\nИтого задержка: ${total} дн.`
 })
+
+// Авто-расчёт и сохранение даты START (как в desktop timeline_widget._auto_set_start_date)
+// Вызывается после загрузки timeline и после обновления данных карточки/договора
+async function autoSetStartDate() {
+  const cd = contractData.value
+  const c = card.value
+  if (!cd || !c || !timelineEntries.value.length) return
+  const dates = []
+  if (cd.contract_date) dates.push(cd.contract_date)
+  if (c.survey_date || cd.measurement_date) dates.push(c.survey_date || cd.measurement_date)
+  if (c.tech_task_date || cd.tech_task_date) dates.push(c.tech_task_date || cd.tech_task_date)
+  if (cd.advance_payment_paid_date) dates.push(cd.advance_payment_paid_date)
+  if (!dates.length) return
+  const maxDate = [...dates].sort().at(-1)
+  const startEntry = timelineEntries.value.find(e => e.stage_code === 'START')
+  if (!startEntry) return
+  if (startEntry.actual_date === maxDate) return
+  try {
+    const { api: ax } = await import('src/boot/axios')
+    await ax.put(`/api/v1/timeline/${c.contract_id}/entry/${encodeURIComponent('START')}`, { actual_date: maxDate })
+    startEntry.actual_date = maxDate
+  } catch { /* ignore — не блокируем загрузку */ }
+}
+
 function dlHex(d) { if (!d) return '#888'; const days = Math.ceil((new Date(d)-new Date())/86400000); if (days<0) return '#E74C3C'; if (days<=2) return '#F39C12'; return '#888' }
 function dlBadgeColor(d) { if (!d) return 'grey'; const days = Math.ceil((new Date(d)-new Date())/86400000); if (days<0) return 'negative'; if (days<=2) return 'warning'; return 'positive' }
 function daysLeft(d) { if (!d) return ''; const days = Math.ceil((new Date(d)-new Date())/86400000); if (days<0) return `${Math.abs(days)} дн. просрочено`; if (days===0) return 'сегодня'; return `${days} дн.` }
@@ -3312,6 +3384,9 @@ async function loadAdditionalData(cardId) {
     timelineEntries.value = []
   }
 
+  // Авто-пересчёт даты START (запускаем фоново, не блокируем загрузку)
+  autoSetStartDate()
+
   // Чат — грузим всегда, чтобы данные были готовы при открытии вкладки
   loadChat()
 }
@@ -3475,6 +3550,7 @@ async function onMeasurementSaved() {
     try { const { data } = await contractsApi.getById(card.value.contract_id); contractData.value = data } catch {}
     try { const { data } = await filesApi.getContractFiles(card.value.contract_id); projectFiles.value = data } catch {}
   }
+  autoSetStartDate()
 }
 
 async function syncCrmWithYd() {
