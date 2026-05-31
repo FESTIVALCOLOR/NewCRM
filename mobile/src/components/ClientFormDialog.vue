@@ -273,16 +273,49 @@ async function save() {
   const valid = await formRef.value?.validate()
   if (!valid) return
 
+  // Проверка дубликатов только при создании нового клиента
+  if (!isEdit.value) {
+    try {
+      const duplicates = []
+      if (form.value.phone) {
+        const { data: byPhone } = await clientsApi.getList({ search: form.value.phone, limit: 10 })
+        byPhone.forEach(c => { if (c.phone === form.value.phone) duplicates.push(c) })
+      }
+      if (form.value.full_name) {
+        const { data: byName } = await clientsApi.getList({ search: form.value.full_name, limit: 10 })
+        byName.forEach(c => {
+          if (c.full_name?.toLowerCase() === form.value.full_name.toLowerCase() && !duplicates.find(d => d.id === c.id)) {
+            duplicates.push(c)
+          }
+        })
+      }
+      if (duplicates.length > 0) {
+        const dupList = duplicates.map(c => `${c.full_name} (${c.phone || 'без тел.'})`).join('; ')
+        const confirmed = await new Promise(resolve => {
+          $q.dialog({
+            title: 'Похожий клиент уже существует',
+            message: `Найдено: ${dupList}.\n\nВсё равно создать нового клиента?`,
+            cancel: { label: 'Отмена', flat: true },
+            ok: { label: 'Создать всё равно', color: 'warning' },
+            persistent: true,
+          }).onOk(() => resolve(true)).onCancel(() => resolve(false))
+        })
+        if (!confirmed) return
+      }
+    } catch {}
+  }
+
   saving.value = true
   try {
     if (isEdit.value) {
       await clientsApi.update(props.client.id, form.value)
       $q.notify({ type: 'positive', message: 'Клиент обновлён' })
+      emit('saved')
     } else {
-      await clientsApi.create(form.value)
+      const { data: newClient } = await clientsApi.create(form.value)
       $q.notify({ type: 'positive', message: 'Клиент создан' })
+      emit('saved', newClient)
     }
-    emit('saved')
     close()
   } catch (err) {
     const msg = err.response?.data?.detail || 'Ошибка сохранения'

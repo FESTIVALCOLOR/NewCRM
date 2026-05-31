@@ -31,30 +31,43 @@
       <q-card-section class="q-pa-md" style="max-height: calc(100vh - 50px); overflow-y: auto">
         <q-form ref="formRef" class="q-gutter-md">
           <!-- Клиент -->
-          <q-select
-            v-if="!isEdit"
-            v-model="form.client_id"
-            :options="clientOptions"
-            option-value="id"
-            option-label="label"
-            label="Клиент *"
-            outlined
-            dense
-            emit-value
-            map-options
-            use-input
-            input-debounce="200"
-            :rules="[val => !!val || 'Выберите клиента']"
-            @filter="filterClients"
-          >
-            <template #no-option>
-              <q-item>
-                <q-item-section class="text-grey">
-                  Не найдено
-                </q-item-section>
-              </q-item>
-            </template>
-          </q-select>
+          <div v-if="!isEdit" class="row items-start no-wrap" style="gap: 4px">
+            <q-select
+              v-model="form.client_id"
+              :options="clientOptions"
+              option-value="id"
+              option-label="label"
+              label="Клиент *"
+              outlined
+              dense
+              emit-value
+              map-options
+              use-input
+              input-debounce="200"
+              :rules="[val => !!val || 'Выберите клиента']"
+              style="flex: 1"
+              @filter="filterClients"
+            >
+              <template #no-option>
+                <q-item>
+                  <q-item-section class="text-grey">
+                    Не найдено
+                  </q-item-section>
+                </q-item>
+              </template>
+            </q-select>
+            <q-btn
+              flat
+              round
+              dense
+              icon="person_add"
+              color="primary"
+              class="q-mt-xs"
+              @click="showCreateClient = true"
+            >
+              <q-tooltip>Создать нового клиента</q-tooltip>
+            </q-btn>
+          </div>
 
           <!-- Номер договора -->
           <q-input
@@ -237,6 +250,9 @@
     </q-card>
   </q-dialog>
 
+  <!-- Диалог: создание нового клиента -->
+  <ClientFormDialog v-model="showCreateClient" @saved="onClientCreated" />
+
   <!-- Диалог: таблица сроков -->
   <q-dialog v-model="showTermTable">
     <q-card style="min-width: 300px; max-width: 520px; width: 92vw">
@@ -370,6 +386,7 @@ import { useQuasar } from 'quasar'
 import { contractsApi, clientsApi } from 'src/services/api'
 import { api } from 'src/boot/axios'
 import { useReferencesStore } from 'src/stores/references'
+import ClientFormDialog from 'src/components/ClientFormDialog.vue'
 
 const PROJECT_SUBTYPES = ['Полный (с 3д визуализацией)', 'Эскизный (с коллажами)', 'Планировочный']
 const TEMPLATE_SUBTYPES = ['Стандарт', 'Стандарт с визуализацией', 'Проект ванной комнаты', 'Проект ванной комнаты с визуализацией']
@@ -386,6 +403,7 @@ const isEdit = ref(false)
 const clientOptions = ref([])
 const manualPeriod = ref(false)
 const showTermTable = ref(false)
+const showCreateClient = ref(false)
 
 const today = new Date().toISOString().split('T')[0]
 
@@ -511,6 +529,16 @@ function calcTemplateTerm(subtype, area, floors) {
     else baseDays += 25 + (Math.floor((area - 91) / 50) + 1) * 15
   }
   return Math.round(baseDays)
+}
+
+function onClientCreated(newClient) {
+  if (!newClient?.id) return
+  const option = {
+    id: newClient.id,
+    label: `${newClient.full_name}${newClient.organization_name ? ' (' + newClient.organization_name + ')' : ''}`,
+  }
+  clientOptions.value = [option, ...clientOptions.value]
+  form.value.client_id = newClient.id
 }
 
 async function filterClients(val, update) {
