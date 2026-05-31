@@ -899,7 +899,7 @@ async function exportPDF() {
     if (sba2) body += `<h3>По агентам (таблица)</h3>${listTable([{ key: 'label', label: 'Агент' }, { key: 'val', label: 'Надзоров', r: true }], sba2.labels.map((l, i) => ({ label: l, val: sba2.datasets[0].data[i] })))}`
     const sbc2 = supervisionByCityChart.value
     if (sbc2) {
-      body += `<h3>По городам (таблица)</h3><table><tr><th>Город</th>${sbc2.datasets.map(d => `<th class="num">${d.label}</th>`).join('')}</tr>${sbc2.labels.map((l, i) => `<tr><td>${l}</td>${sbc2.datasets.map(d => `<td class="num">${d.data[i] || 0}</td>`).join('')}</tr>`).join('')}</table>`
+      body += `<h3>Выезды по городам (таблица)</h3><table><tr><th>Город</th>${sbc2.datasets.map(d => `<th class="num">${d.label}</th>`).join('')}</tr>${sbc2.labels.map((l, i) => `<tr><td>${l}</td>${sbc2.datasets.map(d => `<td class="num">${d.data[i] || 0}</td>`).join('')}</tr>`).join('')}</table>`
     }
 
     const cdJson = JSON.stringify(chartData).replace(/<\//g, '<\\/')
@@ -930,6 +930,7 @@ async function exportPDF() {
   <div class="sub">Период: ${period} &nbsp;·&nbsp; Сформирован: ${now}</div>
   ${body}
   <` + 'script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"><' + `/script>
+  <` + 'script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2/dist/chartjs-plugin-datalabels.min.js"><' + `/script>
   <` + `script>
   var __cd = ${cdJson};
   var ROPTS = { animation: false, responsive: false, maintainAspectRatio: false };
@@ -956,8 +957,11 @@ async function exportPDF() {
   }
   function pieChart(id, labels, values) {
     var el = document.getElementById(id); if (!el) return;
-    new Chart(el, { type: 'pie', data: { labels: labels, datasets: [{ data: values, backgroundColor: ['#F39C12','#C62828','#27AE60','#3498DB','#9B59B6','#E74C3C'] }] },
-      options: Object.assign({}, ROPTS, { plugins: { legend: { labels: { font: { size: 9 } } } } }) });
+    new Chart(el, { type: 'pie', plugins: [ChartDataLabels],
+      data: { labels: labels, datasets: [{ data: values, backgroundColor: ['#F39C12','#C62828','#27AE60','#3498DB','#9B59B6','#E74C3C'] }] },
+      options: Object.assign({}, ROPTS, { plugins: { legend: { labels: { font: { size: 9 } } },
+        datalabels: { color: '#fff', font: { size: 10, weight: 'bold' }, textAlign: 'center',
+          formatter: function(v, ctx) { var tot = ctx.dataset.data.reduce(function(a,b){return a+b;},0); return (tot>0&&v>0) ? v+'\n'+Math.round(v/tot*100)+'%' : ''; } } } }) });
   }
   window.addEventListener('load', function() {
     var cd = __cd;
