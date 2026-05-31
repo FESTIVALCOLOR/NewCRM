@@ -8,7 +8,7 @@
           flat
           dense
           icon="arrow_back"
-          style="position: absolute; top: -14px; left: -14px; z-index: 10; width: 32px; height: 32px; min-height: 32px; min-width: 32px; max-width: 32px; max-height: 32px; padding: 0; overflow: hidden; background: white; border: 1.5px solid #E0E0E0; box-shadow: 0 2px 8px rgba(0,0,0,0.13); color: #555"
+          style="position: absolute; top: -14px; left: -14px; z-index: 10; width: 29px; height: 32px; min-height: 32px; min-width: 29px; max-width: 29px; max-height: 32px; padding: 0; overflow: hidden; background: white; border: 1.5px solid #E0E0E0; box-shadow: 0 2px 8px rgba(0,0,0,0.13); color: #555"
           @click="$router.back()"
         >
           <q-tooltip>Назад</q-tooltip>
