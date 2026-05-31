@@ -460,6 +460,27 @@
               </template>
             </q-list>
           </q-card>
+          <!-- ИТОГО -->
+          <q-card class="is-card q-mt-xs">
+            <q-card-section class="q-pa-sm">
+              <div class="row items-center justify-between q-mb-xs">
+                <div class="text-weight-bold" style="font-size: 12px; color: #333">
+                  Итого по договору
+                </div>
+                <div class="text-weight-bold" style="font-size: 14px; color: #333">
+                  {{ ndContractTerm }} дн.
+                </div>
+              </div>
+              <div class="row items-center justify-between">
+                <div class="text-caption" style="color: #777">
+                  Итого с учётом вне объёма
+                </div>
+                <div class="text-caption text-weight-bold" style="color: #777">
+                  {{ ndTotalAll }} дн.
+                </div>
+              </div>
+            </q-card-section>
+          </q-card>
         </template>
         <q-card v-else class="is-card">
           <q-card-section class="text-center" style="color: #999">
@@ -1032,6 +1053,17 @@ const ndPreviewMap = computed(() => {
   const m = {}
   ndPreview.value.forEach(e => { if (e.stage_code) m[e.stage_code] = e.norm_days })
   return m
+})
+
+const ndTotalAll = computed(() => {
+  if (ndPreview.value.length > 0) {
+    return ndPreview.value
+      .filter(e => e.executor_role !== 'header')
+      .reduce((sum, e) => sum + (e.norm_days || 0), 0)
+  }
+  return normDays.value
+    .filter(nd => nd.executor_role !== 'header')
+    .reduce((sum, nd) => sum + (nd.base_norm_days || 0), 0)
 })
 
 async function previewNormDays() {
