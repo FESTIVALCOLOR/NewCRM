@@ -1190,8 +1190,8 @@ onMounted(async () => {
 .sal-act-red { border-color: #C10015; color: #C10015; }
 .sal-act-red:hover { background: #fff0f0; }
 .sal-export-btn {
-  height: 26px; padding: 0 10px; border: 1px solid #2196f3; border-radius: 4px;
-  background: white; color: #2196f3; font-size: 11px; font-family: inherit;
+  height: 40px; padding: 0 12px; border: 1px solid #2196f3; border-radius: 4px;
+  background: white; color: #2196f3; font-size: 12px; font-family: inherit;
   cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
   gap: 4px; outline: none; white-space: nowrap; flex-shrink: 0;
 }
