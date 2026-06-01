@@ -66,13 +66,12 @@
           flat
           dense
           size="xs"
-          icon="forward_to_inbox"
+          icon="manage_accounts"
           color="green-7"
-          :loading="sendingInvite"
           style="flex: 0 0 auto; margin-left: 2px"
-          @click="sendEmailInvite"
+          @click="showClientAccess = true"
         >
-          <q-tooltip>Отправить приглашение клиенту на email</q-tooltip>
+          <q-tooltip>Доступ клиента</q-tooltip>
         </q-btn>
       </div>
       <!-- Блок надзора: ссылка для клиента -->
@@ -1412,6 +1411,100 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
+
+    <!-- Диалог: Доступ клиента -->
+    <q-dialog v-model="showClientAccess">
+      <q-card style="min-width: 320px; max-width: 440px; width: 100%">
+        <q-card-section class="row items-center q-pb-none">
+          <div class="text-h6">
+            Доступ клиента
+          </div>
+          <q-space />
+          <q-btn
+            v-close-popup
+            flat
+            round
+            dense
+            icon="close"
+          />
+        </q-card-section>
+
+        <q-card-section>
+          <div class="text-subtitle2 q-mb-xs">
+            <q-icon name="email" size="16px" class="q-mr-xs" />Пригласить клиента
+          </div>
+          <div class="text-caption text-grey-7 q-mb-sm">
+            Клиент получит письмо с инструкцией и ссылкой на чат
+          </div>
+          <q-btn
+            v-if="props.cardId"
+            color="primary"
+            icon="send"
+            label="Отправить приглашение на email"
+            :loading="sendingInvite"
+            unelevated
+            class="full-width"
+            @click="sendEmailInvite"
+          />
+        </q-card-section>
+
+        <q-separator />
+
+        <q-card-section v-if="clientLink">
+          <div class="text-subtitle2 q-mb-xs">
+            <q-icon name="link" size="16px" class="q-mr-xs" />Основная ссылка
+          </div>
+          <div class="text-caption text-grey-7 q-mb-sm">
+            Та же, что и в email-приглашении
+          </div>
+          <q-input :model-value="clientLink" readonly outlined dense>
+            <template #append>
+              <q-btn flat dense icon="content_copy" @click="copyClientLink">
+                <q-tooltip>Скопировать</q-tooltip>
+              </q-btn>
+            </template>
+          </q-input>
+        </q-card-section>
+
+        <q-separator />
+
+        <q-card-section>
+          <div class="text-subtitle2 q-mb-xs">
+            <q-icon name="group_add" size="16px" class="q-mr-xs" />Ссылки для представителей
+          </div>
+          <div class="text-caption text-grey-7 q-mb-sm">
+            Для жены, прораба или других участников проекта
+          </div>
+          <q-input
+            v-if="clientAccessInviteLink"
+            :model-value="clientAccessInviteLink"
+            readonly
+            outlined
+            dense
+            class="q-mb-sm"
+          >
+            <template #append>
+              <q-btn flat dense icon="content_copy" @click="copyClientAccessInviteLink">
+                <q-tooltip>Скопировать</q-tooltip>
+              </q-btn>
+            </template>
+          </q-input>
+          <q-btn
+            outline
+            color="primary"
+            icon="add_link"
+            label="Создать новую ссылку"
+            :loading="creatingClientLink"
+            class="full-width"
+            @click="createClientInviteLink"
+          />
+        </q-card-section>
+
+        <q-card-actions align="right">
+          <q-btn v-close-popup flat label="Закрыть" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </div>
 </template>
 
@@ -2666,7 +2759,13 @@ async function createChat() {
     }
     const { data } = await api.post('/api/v1/chats/', payload)
     await openChat(data.id)
-    $q.notify({ type: 'positive', message: 'Чат создан' })
+    if (chat.value) {
+      $q.notify({ type: 'positive', message: 'Чат создан' })
+    } else {
+      // openChat может упасть с 403 если пользователь ещё не добавлен в участники
+      await loadChat()
+      $q.notify({ type: 'positive', message: 'Чат создан' })
+    }
   } catch (e) {
     const msg = e.response?.data?.detail || 'Ошибка создания чата'
     $q.notify({ type: 'negative', message: msg })
@@ -2973,7 +3072,10 @@ function copyClientLink() {
   }).catch(() => {})
 }
 
+const showClientAccess = ref(false)
 const sendingInvite = ref(false)
+const clientAccessInviteLink = ref('')
+const creatingClientLink = ref(false)
 
 async function sendEmailInvite() {
   if (!props.cardId) return
@@ -2987,6 +3089,26 @@ async function sendEmailInvite() {
   } finally {
     sendingInvite.value = false
   }
+}
+
+async function createClientInviteLink() {
+  if (!chat.value?.id) return
+  creatingClientLink.value = true
+  try {
+    const { data } = await api.post(`/api/v1/chats/${chat.value.id}/invite-links`)
+    clientAccessInviteLink.value = `${window.location.origin}/c/${data.access_token}`
+  } catch (e) {
+    $q.notify({ type: 'negative', message: 'Ошибка создания ссылки' })
+  } finally {
+    creatingClientLink.value = false
+  }
+}
+
+function copyClientAccessInviteLink() {
+  if (!clientAccessInviteLink.value) return
+  navigator.clipboard.writeText(clientAccessInviteLink.value).then(() => {
+    $q.notify({ type: 'positive', message: 'Ссылка скопирована' })
+  }).catch(() => {})
 }
 
 onMounted(() => {

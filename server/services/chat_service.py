@@ -367,6 +367,11 @@ def create_client_chat(db: Session, crm_card_id: int, created_by_id: int, superv
         .first()
     )
     if existing:
+        # Добавить текущего пользователя как участника если ещё не является им
+        creator = db.query(Employee).filter(Employee.id == created_by_id).first()
+        if creator:
+            _add_employee_member(db, existing, creator)
+            db.commit()
         return existing
 
     title = None
