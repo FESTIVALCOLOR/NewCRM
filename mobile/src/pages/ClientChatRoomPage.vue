@@ -35,16 +35,16 @@
         </div>
       </div>
 
-      <!-- Кнопка: ссылка клиенту (только при наличии прав) -->
+      <!-- Кнопка: доступ клиента -->
       <q-btn
-        v-if="canManage && clientToken"
+        v-if="canManage"
         flat
         round
         dense
-        icon="link"
-        @click="showInviteMenu = true"
+        icon="manage_accounts"
+        @click="showInviteMenu = true; extraInviteLink = ''"
       >
-        <q-tooltip>Ссылка для клиента</q-tooltip>
+        <q-tooltip>Доступ клиента</q-tooltip>
       </q-btn>
 
       <!-- Кнопка: отправить скрипт -->
@@ -957,10 +957,10 @@
       </q-card>
     </q-dialog>
 
-    <!-- Меню ссылок -->
+    <!-- Диалог: Доступ клиента -->
     <q-dialog v-model="showInviteMenu">
-      <q-card style="min-width: 340px">
-        <q-card-section class="row items-center">
+      <q-card style="min-width: 340px; max-width: 460px; width: 100%">
+        <q-card-section class="row items-center q-pb-none">
           <div class="text-h6">
             Доступ клиента
           </div>
@@ -973,20 +973,89 @@
             icon="close"
           />
         </q-card-section>
-        <q-separator />
+
+        <!-- Секция: Отправить приглашение на email -->
         <q-card-section>
-          <div class="text-body2 q-mb-md">
-            Основная ссылка:
+          <div class="text-subtitle2 q-mb-xs">
+            <q-icon name="email" size="16px" class="q-mr-xs" />
+            Пригласить клиента
+          </div>
+          <div class="text-caption text-grey-7 q-mb-sm">
+            Клиент получит письмо с инструкцией и ссылкой на чат проекта
+          </div>
+          <q-btn
+            v-if="chatCrmCardId"
+            color="primary"
+            icon="send"
+            label="Отправить приглашение на email"
+            :loading="sendingInvite"
+            unelevated
+            class="full-width"
+            @click="sendEmailInvite"
+          />
+          <div v-else class="text-caption text-orange-8 q-pa-sm bg-orange-1 rounded-borders">
+            <q-icon name="warning" size="14px" class="q-mr-xs" />
+            Чат не привязан к CRM-карточке — отправка невозможна
+          </div>
+        </q-card-section>
+
+        <q-separator />
+
+        <!-- Секция: Основная ссылка -->
+        <q-card-section v-if="clientLink">
+          <div class="text-subtitle2 q-mb-xs">
+            <q-icon name="link" size="16px" class="q-mr-xs" />
+            Основная ссылка
+          </div>
+          <div class="text-caption text-grey-7 q-mb-sm">
+            Та же ссылка, что и в email-приглашении
           </div>
           <q-input :model-value="clientLink" readonly outlined dense>
             <template #append>
-              <q-btn flat dense icon="content_copy" @click="copyText(clientLink)" />
+              <q-btn flat dense icon="content_copy" @click="copyText(clientLink)">
+                <q-tooltip>Скопировать</q-tooltip>
+              </q-btn>
             </template>
           </q-input>
         </q-card-section>
+
+        <q-separator />
+
+        <!-- Секция: Ссылки для представителей -->
+        <q-card-section>
+          <div class="text-subtitle2 q-mb-xs">
+            <q-icon name="group_add" size="16px" class="q-mr-xs" />
+            Ссылки для представителей
+          </div>
+          <div class="text-caption text-grey-7 q-mb-sm">
+            Для жены, прораба или других участников проекта
+          </div>
+          <q-input
+            v-if="extraInviteLink"
+            :model-value="extraInviteLink"
+            readonly
+            outlined
+            dense
+            class="q-mb-sm"
+          >
+            <template #append>
+              <q-btn flat dense icon="content_copy" @click="copyText(extraInviteLink)">
+                <q-tooltip>Скопировать</q-tooltip>
+              </q-btn>
+            </template>
+          </q-input>
+          <q-btn
+            outline
+            color="primary"
+            icon="add_link"
+            label="Создать новую ссылку"
+            class="full-width"
+            @click="createExtraLink"
+          />
+        </q-card-section>
+
         <q-card-actions align="right">
           <q-btn v-close-popup flat label="Закрыть" />
-          <q-btn color="primary" label="Создать доп. ссылку" @click="createExtraLink" />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -1399,6 +1468,7 @@
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute, onBeforeRouteUpdate } from 'vue-router'
 import { api } from 'src/boot/axios'
+import { crmApi } from 'src/services/api'
 import { useChatWebSocket } from 'src/composables/useChatWebSocket'
 import { getPdfThumbnail } from 'src/composables/usePdfThumbnail'
 import { usePermission } from 'src/composables/usePermission'
@@ -1455,6 +1525,8 @@ const fileInput = ref(null)
 const clientToken = ref('')
 const showScriptDialog = ref(false)
 const showInviteMenu = ref(false)
+const sendingInvite = ref(false)
+const extraInviteLink = ref('')
 const showMembers = ref(false)
 const showSearch = ref(false)
 const searchQuery = ref('')
@@ -2732,12 +2804,24 @@ async function sendScript() {
 async function createExtraLink() {
   try {
     const { data } = await api.post(`/api/v1/chats/${chatId}/invite-links`)
-    const token = data.access_token
-    const link = `${window.location.origin}/c/${token}`
-    copyText(link)
-    $q.notify({ type: 'positive', message: 'Новая ссылка скопирована' })
+    extraInviteLink.value = `${window.location.origin}/c/${data.access_token}`
+    $q.notify({ type: 'positive', message: 'Ссылка создана' })
   } catch (e) {
     $q.notify({ type: 'negative', message: 'Ошибка создания ссылки' })
+  }
+}
+
+async function sendEmailInvite() {
+  if (!chatCrmCardId.value) return
+  sendingInvite.value = true
+  try {
+    const { data } = await crmApi.inviteClientToChat(chatCrmCardId.value)
+    $q.notify({ type: 'positive', message: data.message || 'Приглашение отправлено' })
+  } catch (e) {
+    const msg = e.response?.data?.detail || 'Ошибка отправки приглашения'
+    $q.notify({ type: 'negative', message: msg })
+  } finally {
+    sendingInvite.value = false
   }
 }
 
