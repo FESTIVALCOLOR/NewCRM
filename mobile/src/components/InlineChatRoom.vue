@@ -32,51 +32,9 @@
       class="q-px-md q-py-xs bg-white"
       style="border-bottom: 1px solid #E0E0E0; flex-shrink: 0; min-height: 36px; display: flex; flex-wrap: nowrap; align-items: center; overflow: hidden; width: 100%; box-sizing: border-box"
     >
-      <!-- Блок ссылки: flex: 1 1 0% + overflow:hidden гарантирует обрезку -->
-      <div
-        v-if="chatType === 'client' && clientLink"
-        style="flex: 1 1 0%; min-width: 0; display: flex; flex-wrap: nowrap; align-items: center; overflow: hidden"
-      >
-        <q-icon
-          name="link"
-          size="14px"
-          color="green-7"
-          class="q-mr-xs"
-          style="flex: 0 0 auto"
-        />
-        <span
-          class="text-caption text-green-8"
-          style="flex: 1 1 0%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap"
-        >
-          {{ clientLink }}
-        </span>
-        <q-btn
-          flat
-          dense
-          size="xs"
-          icon="content_copy"
-          color="green-7"
-          style="flex: 0 0 auto; margin-left: 4px"
-          @click="copyClientLink"
-        >
-          <q-tooltip>Копировать ссылку</q-tooltip>
-        </q-btn>
-        <q-btn
-          v-if="props.cardId"
-          flat
-          dense
-          size="xs"
-          icon="manage_accounts"
-          color="green-7"
-          style="flex: 0 0 auto; margin-left: 2px"
-          @click="showClientAccess = true"
-        >
-          <q-tooltip>Доступ клиента</q-tooltip>
-        </q-btn>
-      </div>
       <!-- Блок надзора: ссылка для клиента -->
       <div
-        v-else-if="chatType === 'supervision'"
+        v-if="chatType === 'supervision'"
         style="flex: 1 1 0%; min-width: 0; display: flex; flex-wrap: nowrap; align-items: center; overflow: hidden"
       >
         <template v-if="supervisionLink">
@@ -124,6 +82,19 @@
       <span v-else class="text-caption text-grey-6" style="flex: 1 1 0%; min-width: 0">
         {{ chatType === 'client' ? 'Чат с клиентом' : 'Чат сотрудников' }}
       </span>
+      <!-- Кнопка доступа клиента (только для клиентского чата из карточки) -->
+      <q-btn
+        v-if="chatType === 'client' && props.cardId"
+        flat
+        dense
+        size="xs"
+        icon="manage_accounts"
+        color="green-7"
+        style="flex: 0 0 auto; margin-left: 2px"
+        @click="showClientAccess = true"
+      >
+        <q-tooltip>Доступ клиента</q-tooltip>
+      </q-btn>
       <!-- Кнопка участников: всегда справа, никогда не сжимается -->
       <q-btn
         flat
