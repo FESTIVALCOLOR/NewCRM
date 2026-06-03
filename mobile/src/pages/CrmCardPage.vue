@@ -187,11 +187,11 @@
                     </div>
                     <div
                       style="font-size: 13px; display: flex; align-items: center; gap: 4px"
-                      :style="{ color: effectiveDeadline ? dlHex(effectiveDeadline) : '#333', cursor: isProjectOverdue && deadlineDeviations.length ? 'pointer' : 'default' }"
-                      @click="isProjectOverdue && deadlineDeviations.length ? (showDeadlineStatsDialog = true) : undefined"
+                      :style="{ color: effectiveDeadline ? dlHex(effectiveDeadline) : '#333', cursor: (deadlineDeviations.length || aheadDeviations.length) ? 'pointer' : 'default' }"
+                      @click="(deadlineDeviations.length || aheadDeviations.length) ? (showDeadlineStatsDialog = true) : undefined"
                     >
                       {{ fmtDateShort(effectiveDeadline) || '-' }}
-                      <q-icon v-if="isProjectOverdue && deadlineDeviations.length" name="info_outline" size="14px" />
+                      <q-icon v-if="deadlineDeviations.length || aheadDeviations.length" name="info_outline" size="14px" />
                     </div>
                   </div>
                 </div>
@@ -515,6 +515,14 @@
                 <span class="text-caption" style="color: #555">
                   Норма: {{ timelineTotals.normTotal }} дн.
                   <span v-if="timelineTotals.actualTotal > 0"> | Факт: {{ timelineTotals.actualTotal }} дн.</span>
+                </span>
+              </div>
+              <div v-if="timelineTotals.overdueTotal > 0 || timelineTotals.aheadTotal > 0" class="row items-center justify-end q-mt-xs" style="gap: 8px">
+                <span v-if="timelineTotals.overdueTotal > 0" class="text-caption text-weight-bold" style="color: #E53935">
+                  Просрочка: +{{ timelineTotals.overdueTotal }} дн.
+                </span>
+                <span v-if="timelineTotals.aheadTotal > 0" class="text-caption text-weight-bold" style="color: #27AE60">
+                  Раньше срока: -{{ timelineTotals.aheadTotal }} дн.
                 </span>
               </div>
               <div v-if="hasCustomNormDays" style="color: #E53935; font-size: 11px; margin-top: 4px">
@@ -1848,24 +1856,51 @@
           </q-card-section>
           <q-separator />
           <q-card-section class="q-pt-sm q-pb-md">
-            <div v-for="d in deadlineDeviations" :key="d.name" class="q-mb-sm">
-              <div class="row items-center">
-                <span class="text-caption" style="flex: 1; color: #333">{{ d.name }}</span>
-                <q-chip
-                  dense
-                  color="red-1"
-                  text-color="red-8"
-                  size="xs"
-                  icon="trending_up"
-                >
-                  +{{ d.diff }} дн.
-                </q-chip>
+            <template v-if="deadlineDeviations.length">
+              <div class="text-caption text-weight-bold q-mb-xs" style="color: #E53935">
+                Просрочка по подэтапам
               </div>
-            </div>
-            <q-separator class="q-my-sm" />
-            <div class="row" style="font-size: 12px; color: #333">
-              Итого задержка: <b style="color: #E53935; margin-left: 4px">{{ deadlineDeviations.reduce((s, d) => s + d.diff, 0) }} дн.</b>
-            </div>
+              <div v-for="d in deadlineDeviations" :key="'o'+d.name" class="q-mb-xs">
+                <div class="row items-center">
+                  <span class="text-caption" style="flex: 1; color: #333">{{ d.name }}</span>
+                  <q-chip
+                    dense
+                    color="red-1"
+                    text-color="red-8"
+                    size="xs"
+                    icon="trending_up"
+                  >
+                    +{{ d.diff }} дн.
+                  </q-chip>
+                </div>
+              </div>
+              <div class="row q-mt-xs q-mb-sm" style="font-size: 12px; color: #333">
+                Итого задержка: <b style="color: #E53935; margin-left: 4px">{{ deadlineDeviations.reduce((s, d) => s + d.diff, 0) }} дн.</b>
+              </div>
+            </template>
+            <q-separator v-if="deadlineDeviations.length && aheadDeviations.length" class="q-my-sm" />
+            <template v-if="aheadDeviations.length">
+              <div class="text-caption text-weight-bold q-mb-xs" style="color: #27AE60">
+                Раньше срока
+              </div>
+              <div v-for="d in aheadDeviations" :key="'a'+d.name" class="q-mb-xs">
+                <div class="row items-center">
+                  <span class="text-caption" style="flex: 1; color: #333">{{ d.name }}</span>
+                  <q-chip
+                    dense
+                    color="green-1"
+                    text-color="green-8"
+                    size="xs"
+                    icon="trending_down"
+                  >
+                    -{{ d.diff }} дн.
+                  </q-chip>
+                </div>
+              </div>
+              <div class="row q-mt-xs" style="font-size: 12px; color: #333">
+                Итого раньше: <b style="color: #27AE60; margin-left: 4px">{{ aheadDeviations.reduce((s, d) => s + d.diff, 0) }} дн.</b>
+              </div>
+            </template>
           </q-card-section>
         </q-card>
       </q-dialog>
@@ -2006,18 +2041,26 @@ const hasCustomNormDays = computed(() =>
   ),
 )
 const timelineTotals = computed(() => {
-  let normTotal = 0, actualTotal = 0
+  let normTotal = 0, actualTotal = 0, overdueTotal = 0, aheadTotal = 0
   const contractPeriod = contractData.value?.contract_period || 0
   for (const e of timelineEntries.value) {
     if (e.executor_role === 'header') continue
     if (e.is_in_contract_scope !== false) {
       normTotal += (e.norm_days || 0)
     }
-    actualTotal += (e.actual_days || 0)
+    const ad = e.actual_days || 0
+    actualTotal += ad
+    if (ad > 0) {
+      const norm = e.custom_norm_days || e.norm_days || 0
+      if (norm > 0) {
+        const diff = ad - norm
+        if (diff > 0) overdueTotal += diff
+        else if (diff < 0) aheadTotal += -diff
+      }
+    }
   }
-  // contract_period перекрывает сумму (как в десктопе: self._contract_term or sum(...))
   if (contractPeriod > 0) normTotal = contractPeriod
-  return { normTotal, actualTotal }
+  return { normTotal, actualTotal, overdueTotal, aheadTotal }
 })
 const workflowStates = ref([])
 const showRejectDialog = ref(false)
@@ -2475,6 +2518,19 @@ const deadlineDeviations = computed(() => {
     const effectiveNorm = e.custom_norm_days || e.norm_days || 0
     if (effectiveNorm <= 0) continue
     const diff = ad - effectiveNorm
+    if (diff > 0) result.push({ name: e.stage_name, diff })
+  }
+  return result
+})
+const aheadDeviations = computed(() => {
+  const result = []
+  for (const e of timelineEntries.value) {
+    if (e.executor_role === 'header') continue
+    const ad = e.actual_days || 0
+    if (ad <= 0) continue
+    const effectiveNorm = e.custom_norm_days || e.norm_days || 0
+    if (effectiveNorm <= 0) continue
+    const diff = effectiveNorm - ad
     if (diff > 0) result.push({ name: e.stage_name, diff })
   }
   return result
@@ -3185,7 +3241,7 @@ function openCreatePaymentDialog() {
           final_amount: parseFloat(amount),
           report_month: null,
         }
-        const created = await paymentsApi.create(data)
+        const { data: created } = await paymentsApi.create(data)
         if (created) cardPayments.value.push(created)
         $q.notify({ type: 'positive', message: 'Платёж создан' })
       } catch (err) {

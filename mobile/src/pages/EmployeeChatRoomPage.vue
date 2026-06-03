@@ -517,11 +517,11 @@
                           fit="cover"
                           spinner-size="12px"
                         />
-                        <div style="min-width: 0">
-                          <div class="text-caption text-weight-bold" style="color: #1565C0; font-size: 11px">
+                        <div style="min-width: 0; overflow: hidden">
+                          <div class="text-caption text-weight-bold" style="color: #1565C0; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">
                             {{ msg.reply_preview.sender_display_name }}
                           </div>
-                          <div class="text-caption text-grey-7 ellipsis" style="font-size: 11px">
+                          <div class="text-caption text-grey-7" style="font-size: 11px; word-break: break-word; overflow-wrap: anywhere; white-space: pre-wrap">
                             {{ msg.reply_preview.message_type === 'image' ? '[Изображение]' : msg.reply_preview.message_type === 'file' ? '[Файл]' : msg.reply_preview.content }}
                           </div>
                         </div>
@@ -762,7 +762,7 @@
 
     <!-- Панель ввода -->
     <div class="q-pa-sm bg-white" style="border-top: 1px solid #E0E0E0; flex-shrink: 0">
-      <div class="row items-center q-gutter-xs">
+      <div class="row no-wrap items-end q-gutter-xs">
         <!-- Прикрепить файл -->
         <q-btn
           round

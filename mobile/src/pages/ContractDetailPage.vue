@@ -1267,9 +1267,9 @@ function clientTelegramLink(account) {
   if (!clean) return '#'
   if (/^\+?\d+$/.test(clean.replace(/\s/g, ''))) {
     const phone = clean.replace(/[^\d+]/g, '')
-    return `tg://msg?to=${phone.startsWith('+') ? phone : '+' + phone}`
+    return `https://t.me/${phone.startsWith('+') ? phone : '+' + phone}`
   }
-  return `tg://resolve?domain=${clean}`
+  return `https://t.me/${clean}`
 }
 
 function uploadFor(stage) { uploadStage.value = stage; fileInput.value?.click() }
