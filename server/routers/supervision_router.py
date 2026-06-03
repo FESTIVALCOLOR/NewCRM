@@ -12,7 +12,12 @@ from auth import get_current_user
 from constants import (
     DAN_ROLES,
     POSITION_DAN,
+    POSITION_DAN_FULL,
+    POSITION_MANAGER,
     POSITION_SENIOR_MANAGER,
+    POSITION_STUDIO_DIRECTOR,
+    ROLE_ADMIN,
+    ROLE_DIRECTOR,
     STATUS_COMPLETED,
     STATUS_SUPERVISION,
     STATUS_TERMINATED,
@@ -40,6 +45,7 @@ from database import (
     ActivityLog,
     Client,
     Contract,
+    CRMCard,
     Employee,
     MessengerChat,
     Payment,
@@ -213,6 +219,28 @@ async def get_supervision_cards(
             base_query = base_query.filter(Contract.status == STATUS_SUPERVISION)
         else:
             base_query = base_query.filter(Contract.status.in_([STATUS_COMPLETED, STATUS_TERMINATED]))
+
+        # Фильтр доступа по роли пользователя
+        _position = current_user.position or ""
+        _role = current_user.role or ""
+        _is_superuser = _position == POSITION_STUDIO_DIRECTOR or _role in (ROLE_ADMIN, ROLE_DIRECTOR)
+        if not _is_superuser:
+            if _position == POSITION_SENIOR_MANAGER:
+                base_query = base_query.filter(SupervisionCard.senior_manager_id == current_user.id)
+            elif _position in (POSITION_DAN, POSITION_DAN_FULL):
+                base_query = base_query.filter(SupervisionCard.dan_id == current_user.id)
+            elif _position == POSITION_MANAGER:
+                # Менеджер видит надзорные карточки тех договоров, где он назначен в CRM
+                _manager_contract_ids = db.query(CRMCard.contract_id).filter(CRMCard.manager_id == current_user.id)
+                base_query = base_query.filter(SupervisionCard.contract_id.in_(_manager_contract_ids))
+            else:
+                # СДП, ГАП, прочие — только карточки где они назначены
+                base_query = base_query.filter(
+                    or_(
+                        SupervisionCard.senior_manager_id == current_user.id,
+                        SupervisionCard.dan_id == current_user.id,
+                    )
+                )
 
         # Серверная фильтрация
         if address:
