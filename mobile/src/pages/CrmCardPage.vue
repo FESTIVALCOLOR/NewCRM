@@ -1856,6 +1856,25 @@
           </q-card-section>
           <q-separator />
           <q-card-section class="q-pt-sm q-pb-md">
+            <!-- Нетто итог (общий результат) -->
+            <div
+              class="q-mb-sm q-pa-sm rounded-borders text-body2 text-weight-bold"
+              :style="{ background: netDeadlineDiff > 0 ? '#FFEBEE' : netDeadlineDiff < 0 ? '#E8F5E9' : '#F5F5F5', color: netDeadlineDiff > 0 ? '#E53935' : netDeadlineDiff < 0 ? '#27AE60' : '#555' }"
+            >
+              <template v-if="netDeadlineDiff > 0">
+                Итого просрочка: +{{ netDeadlineDiff }} дн.
+              </template>
+              <template v-else-if="netDeadlineDiff < 0">
+                Итого раньше срока: {{ -netDeadlineDiff }} дн.
+              </template>
+              <template v-else>
+                В срок
+              </template>
+            </div>
+            <div v-if="card.total_pause_days > 0" class="text-caption q-mb-sm" style="color: #888">
+              <q-icon name="pause_circle" size="12px" class="q-mr-xs" />Дни ожидания (добавлены к дедлайну): {{ card.total_pause_days }} дн.
+            </div>
+            <q-separator v-if="deadlineDeviations.length || aheadDeviations.length" class="q-mb-sm" />
             <template v-if="deadlineDeviations.length">
               <div class="text-caption text-weight-bold q-mb-xs" style="color: #E53935">
                 Просрочка по подэтапам
@@ -2534,6 +2553,11 @@ const aheadDeviations = computed(() => {
     if (diff > 0) result.push({ name: e.stage_name, diff })
   }
   return result
+})
+const netDeadlineDiff = computed(() => {
+  const overdue = deadlineDeviations.value.reduce((s, d) => s + d.diff, 0)
+  const ahead = aheadDeviations.value.reduce((s, d) => s + d.diff, 0)
+  return overdue - ahead
 })
 const isProjectOverdue = computed(() => {
   if (!effectiveDeadline.value) return false

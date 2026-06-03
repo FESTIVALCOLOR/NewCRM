@@ -781,9 +781,9 @@
           class="hidden"
           @change="onFileSelected"
         >
-        <!-- Файлы из карточки CRM -->
+        <!-- Файлы из карточки CRM (не для замерщика и когда есть доступные группы) -->
         <q-btn
-          v-if="chatCrmCardId"
+          v-if="chatCrmCardId && COPY_DESTINATIONS.length > 0"
           round
           dense
           icon="folder_open"
@@ -1936,7 +1936,7 @@ const loadingVariations = ref(false)
 // Правки не нуждаются в вариации (файл идёт прямо в папку правки)
 const STAGE_KEYS = new Set(['stage_1', 'stage_2', 'stage_3'])
 
-const COPY_DESTINATIONS = [
+const _ALL_COPY_DESTINATIONS = [
   { group: 'Договор', items: [
     { label: 'Договор', value: 'contract_file_yandex_path' },
     { label: 'Доп. соглашение', value: 'additional_agreement_yandex_path' },
@@ -1971,6 +1971,16 @@ const COPY_DESTINATIONS = [
     { label: 'Стадия 3: Правки', value: 'stage_3_revisions' },
   ] },
 ]
+const _EXECUTOR_ONLY_GROUPS = ['Общие данные', 'Стадии']
+const COPY_DESTINATIONS = computed(() => {
+  const pos = authStore.user?.position || ''
+  const secPos = authStore.user?.secondary_position || ''
+  const isMeasurer = pos === 'Замерщик' || secPos === 'Замерщик'
+  const isExecutorOnly = ['Дизайнер', 'Чертёжник'].some(p => pos === p || secPos === p)
+  if (isMeasurer) return []
+  if (isExecutorOnly) return _ALL_COPY_DESTINATIONS.filter(g => _EXECUTOR_ONLY_GROUPS.includes(g.group))
+  return _ALL_COPY_DESTINATIONS
+})
 
 function recalcChatH() {
   const vh = window.visualViewport?.height ?? window.innerHeight
