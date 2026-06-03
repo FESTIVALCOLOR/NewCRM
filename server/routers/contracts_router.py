@@ -80,13 +80,17 @@ async def get_contracts_count(
     return {"count": count}
 
 
-@router.get("/{contract_id}", response_model=ContractResponse)
+@router.get("/{contract_id}")
 async def get_contract(contract_id: int, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Получить договор по ID"""
     contract = db.query(Contract).filter(Contract.id == contract_id).first()
     if not contract:
         raise HTTPException(status_code=404, detail="Договор не найден")
-    return contract
+    # Обогащаем ответ данными CRM карточки (total_pause_days)
+    crm_card = db.query(CRMCard).filter(CRMCard.contract_id == contract_id).order_by(CRMCard.id.desc()).first()
+    data = ContractResponse.model_validate(contract).model_dump()
+    data["crm_card_total_pause_days"] = crm_card.total_pause_days if crm_card else 0
+    return data
 
 
 @router.post("/", response_model=ContractResponse)

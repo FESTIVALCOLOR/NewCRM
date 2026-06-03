@@ -805,12 +805,44 @@
                   {{ timelineTotalInScope }} дн.
                 </div>
               </div>
-              <div class="row items-center justify-between">
+              <div class="row items-center justify-between q-mb-xs">
                 <div class="text-caption" style="color: #777">
                   Итого с учётом вне объёма
                 </div>
                 <div class="text-caption text-weight-bold" style="color: #777">
                   {{ timelineTotalAll }} дн.
+                </div>
+              </div>
+              <div v-if="timelineActualTotal > 0" class="row items-center justify-between q-mb-xs">
+                <div class="text-caption" style="color: #555">
+                  Факт
+                </div>
+                <div class="text-caption text-weight-bold" style="color: #555">
+                  {{ timelineActualTotal }} дн.
+                </div>
+              </div>
+              <div v-if="timelineOverdueTotal > 0" class="row items-center justify-between q-mb-xs">
+                <div class="text-caption" style="color: #E53935">
+                  Просрочка
+                </div>
+                <div class="text-caption text-weight-bold" style="color: #E53935">
+                  +{{ timelineOverdueTotal }} дн.
+                </div>
+              </div>
+              <div v-if="timelineAheadTotal > 0" class="row items-center justify-between q-mb-xs">
+                <div class="text-caption" style="color: #27AE60">
+                  Раньше срока
+                </div>
+                <div class="text-caption text-weight-bold" style="color: #27AE60">
+                  -{{ timelineAheadTotal }} дн.
+                </div>
+              </div>
+              <div v-if="contractPauseDays > 0" class="row items-center justify-between">
+                <div class="text-caption" style="color: #888">
+                  <q-icon name="pause_circle_outline" size="12px" class="q-mr-xs" />Дни ожидания (учтены в дедлайне)
+                </div>
+                <div class="text-caption text-weight-bold" style="color: #888">
+                  +{{ contractPauseDays }} дн.
                 </div>
               </div>
             </q-card-section>
@@ -1064,6 +1096,34 @@ const timelineTotalAll = computed(() =>
   timeline.value.filter(isTimelineEntry)
     .reduce((s, e) => s + (e.custom_norm_days || e.norm_days || 0), 0),
 )
+
+const timelineActualTotal = computed(() =>
+  timeline.value.filter(isTimelineEntry).reduce((s, e) => s + (e.actual_days || 0), 0),
+)
+
+const timelineOverdueTotal = computed(() => {
+  let total = 0
+  for (const e of timeline.value) {
+    if (!isTimelineEntry(e)) continue
+    const ad = e.actual_days || 0
+    const norm = e.custom_norm_days || e.norm_days || 0
+    if (ad > 0 && norm > 0 && ad > norm) total += ad - norm
+  }
+  return total
+})
+
+const timelineAheadTotal = computed(() => {
+  let total = 0
+  for (const e of timeline.value) {
+    if (!isTimelineEntry(e)) continue
+    const ad = e.actual_days || 0
+    const norm = e.custom_norm_days || e.norm_days || 0
+    if (ad > 0 && norm > 0 && ad < norm) total += norm - ad
+  }
+  return total
+})
+
+const contractPauseDays = computed(() => contract.value?.crm_card_total_pause_days || 0)
 
 async function exportTimelineExcel() {
   const { utils, writeFile } = await import('xlsx')

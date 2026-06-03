@@ -525,6 +525,12 @@
                   Раньше срока: -{{ timelineTotals.aheadTotal }} дн.
                 </span>
               </div>
+              <div v-if="card.total_pause_days > 0" class="row items-center justify-between q-mt-xs">
+                <span class="text-caption" style="color: #888">
+                  <q-icon name="pause_circle_outline" size="12px" class="q-mr-xs" />Дни ожидания (учтены в дедлайне)
+                </span>
+                <span class="text-caption text-weight-bold" style="color: #888">+{{ card.total_pause_days }} дн.</span>
+              </div>
               <div v-if="hasCustomNormDays" style="color: #E53935; font-size: 11px; margin-top: 4px">
                 ⚠ Норма-дни изменены. Требуется учёт в расчёте последующих стадий.
               </div>
