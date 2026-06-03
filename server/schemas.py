@@ -584,19 +584,6 @@ class StageExecutorCreate(BaseModel):
     executor_id: int
     deadline: Optional[str] = None
 
-    @field_validator("deadline", mode="before")
-    @classmethod
-    def validate_deadline_not_in_past(cls, v):
-        if v is not None and v != "":
-            try:
-                deadline_date = datetime.strptime(str(v), "%Y-%m-%d").date()
-                if deadline_date < date.today():
-                    raise ValueError("Дедлайн не может быть в прошлом")
-            except ValueError as e:
-                if "Дедлайн" in str(e):
-                    raise
-        return v
-
 
 class StageExecutorUpdate(BaseModel):
     executor_id: Optional[int] = None
