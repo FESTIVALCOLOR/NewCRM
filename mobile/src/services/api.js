@@ -573,6 +573,8 @@ export const adminApi = {
   triggerBackup: () => api.post('/api/v1/admin/backup/postgres'),
   getBackupStatus: () => api.get('/api/v1/admin/backup/status'),
   listBackups: () => api.get('/api/v1/admin/backup/list'),
+  restoreBackup: (filename) => api.post('/api/v1/admin/backup/restore', null, { params: { filename } }),
+  getRestoreStatus: () => api.get('/api/v1/admin/backup/restore/status'),
 }
 
 // Push-уведомления для гостей клиентского чата (без JWT)

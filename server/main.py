@@ -342,6 +342,15 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"Telegram avatar sync: {e}")
 
+    # N8: Ежедневный автоматический бекап PostgreSQL в 03:00 UTC
+    try:
+        from routers.admin_router import scheduled_backup_loop
+
+        asyncio.create_task(scheduled_backup_loop())
+        logger.info("Scheduled backup: задача запущена (ежедневно 03:00 UTC)")
+    except Exception as e:
+        logger.warning(f"Scheduled backup: {e}")
+
     # Запуск Telegram Bot polling для обработки /start (привязка аккаунтов)
     # Используем file-lock чтобы только ОДИН воркер Uvicorn запускал polling
     # (иначе TelegramConflictError при --workers > 1)

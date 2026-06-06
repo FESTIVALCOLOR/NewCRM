@@ -1115,11 +1115,75 @@
                   {{ formatBackupSize(b.size) }} · {{ formatBackupDate(b.modified) }}
                 </q-item-label>
               </q-item-section>
+              <q-item-section side>
+                <q-btn
+                  flat
+                  round
+                  icon="restore"
+                  color="orange-7"
+                  size="sm"
+                  :disable="restoreInProgress || backupInProgress"
+                  :loading="restoreInProgress && restoreTarget === b.name"
+                  @click="confirmRestore(b.name)"
+                >
+                  <q-tooltip>Восстановить из этого бекапа</q-tooltip>
+                </q-btn>
+              </q-item-section>
             </q-item>
           </q-list>
         </q-card>
+
+        <!-- Статус восстановления -->
+        <div v-if="restoreInProgress" class="q-mt-sm q-pa-sm" style="background: #fff3e0; border-radius: 8px; border: 1px solid #ffcc80">
+          <div class="row items-center no-wrap q-gutter-xs">
+            <q-spinner size="16px" color="orange-7" />
+            <span style="font-size: 13px; color: #e65100">Восстановление БД... не закрывайте страницу</span>
+          </div>
+        </div>
+        <div v-if="lastRestore" class="q-mt-sm q-pa-sm" style="border-radius: 8px; border: 1px solid" :style="lastRestore.status === 'success' ? 'background:#e8f5e9;border-color:#a5d6a7' : 'background:#ffebee;border-color:#ef9a9a'">
+          <div v-if="lastRestore.status === 'success'" style="font-size: 13px; color: #2e7d32">
+            ✓ Восстановление завершено: {{ lastRestore.filename }}
+          </div>
+          <div v-else style="font-size: 13px; color: #c62828">
+            ✗ Ошибка восстановления: {{ lastRestore.error }}
+          </div>
+        </div>
       </q-tab-panel>
     </q-tab-panels>
+
+    <!-- Диалог подтверждения восстановления -->
+    <q-dialog v-model="showRestoreDialog" persistent>
+      <q-card style="min-width: 320px; max-width: 480px; border-radius: 12px">
+        <q-card-section class="row items-center q-pb-none">
+          <q-icon name="warning" color="orange-8" size="28px" class="q-mr-sm" />
+          <span style="font-size: 16px; font-weight: 600; color: #bf360c">Восстановление БД</span>
+        </q-card-section>
+        <q-card-section style="font-size: 14px; color: #333">
+          <p class="q-mb-sm">
+            Вы собираетесь восстановить базу данных из бекапа:
+          </p>
+          <div class="q-pa-sm" style="background: #f5f5f5; border-radius: 6px; font-size: 12px; color: #555; word-break: break-all">
+            {{ restoreTarget }}
+          </div>
+          <p class="q-mt-md" style="color: #b71c1c; font-weight: 500">
+            ⚠ ВНИМАНИЕ: Все текущие данные будут удалены и заменены данными из бекапа. Это действие необратимо!
+          </p>
+          <p style="color: #666; font-size: 13px">
+            После восстановления рекомендуется перезагрузить приложение.
+          </p>
+        </q-card-section>
+        <q-card-actions align="right" class="q-pb-md q-px-md">
+          <q-btn v-close-popup flat label="Отмена" color="grey-7" />
+          <q-btn
+            label="Восстановить"
+            color="orange-8"
+            icon="restore"
+            :loading="restoreInProgress"
+            @click="doRestore"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
 
     <!-- Диалог прав роли — ПО БЛОКАМ -->
     <q-dialog v-model="showRoleDialog" maximized transition-show="slide-up" transition-hide="slide-down">
@@ -2230,11 +2294,68 @@ function formatBackupDate(iso) {
   } catch { return iso }
 }
 
+// === ВОССТАНОВЛЕНИЕ ===
+const restoreInProgress = ref(false)
+const lastRestore = ref(null)
+const restoreTarget = ref(null)
+const showRestoreDialog = ref(false)
+
+let _restorePollTimer = null
+
+function confirmRestore(filename) {
+  restoreTarget.value = filename
+  showRestoreDialog.value = true
+}
+
+async function doRestore() {
+  showRestoreDialog.value = false
+  restoreInProgress.value = true
+  lastRestore.value = null
+  try {
+    await adminApi.restoreBackup(restoreTarget.value)
+    _pollRestoreStatus()
+    $q.notify({ type: 'warning', message: 'Восстановление БД запущено — не закрывайте страницу', timeout: 10000 })
+  } catch (err) {
+    restoreInProgress.value = false
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка запуска восстановления' })
+  }
+}
+
+function _pollRestoreStatus() {
+  if (_restorePollTimer) clearTimeout(_restorePollTimer)
+  _restorePollTimer = setTimeout(async () => {
+    try {
+      const { data } = await adminApi.getRestoreStatus()
+      restoreInProgress.value = data.in_progress
+      if (data.last) lastRestore.value = data.last
+      if (data.in_progress) {
+        _pollRestoreStatus()
+      } else if (data.last?.status === 'success') {
+        $q.notify({ type: 'positive', message: 'Восстановление завершено успешно!', timeout: 8000 })
+      }
+    } catch {
+      _pollRestoreStatus()
+    }
+  }, 3000)
+}
+
 watch(tab, (val) => {
   if (val === 'trash') loadTrash()
   if (val === 'normdays') loadNormDays()
   if (val === 'telegram') loadMessengerSettings()
-  if (val === 'backup') { loadBackupList(); adminApi.getBackupStatus().then(r => { lastBackup.value = r.data.last; backupInProgress.value = r.data.in_progress; if (r.data.in_progress) _pollBackupStatus() }).catch(() => {}) }
+  if (val === 'backup') {
+    loadBackupList()
+    adminApi.getBackupStatus().then(r => {
+      lastBackup.value = r.data.last
+      backupInProgress.value = r.data.in_progress
+      if (r.data.in_progress) _pollBackupStatus()
+    }).catch(() => {})
+    adminApi.getRestoreStatus().then(r => {
+      lastRestore.value = r.data.last
+      restoreInProgress.value = r.data.in_progress
+      if (r.data.in_progress) _pollRestoreStatus()
+    }).catch(() => {})
+  }
 })
 
 onMounted(async () => {
