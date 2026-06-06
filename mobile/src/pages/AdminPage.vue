@@ -17,6 +17,7 @@
       <q-tab name="normdays" label="Нормодни" />
       <q-tab name="telegram" label="Telegram/Email" />
       <q-tab name="trash" label="Корзина" />
+      <q-tab name="backup" label="Бекап" />
     </q-tabs>
 
     <q-tab-panels v-model="tab" animated class="bg-transparent">
@@ -1020,6 +1021,104 @@
           </q-card>
         </template>
       </q-tab-panel>
+
+      <!-- БЕКАП -->
+      <q-tab-panel name="backup" class="q-pa-none">
+        <div class="text-subtitle2 text-weight-bold q-mb-sm" style="color: #333">
+          Резервное копирование БД
+        </div>
+
+        <!-- Статус / кнопка запуска -->
+        <q-card class="is-card q-mb-md">
+          <q-card-section class="q-pa-sm">
+            <div class="row items-center justify-between q-mb-sm">
+              <div>
+                <div style="font-size: 13px; font-weight: 600; color: #333">
+                  PostgreSQL → Яндекс.Диск
+                </div>
+                <div class="text-caption" style="color: #888">
+                  disk:/CRM/Бэкапы/PostgreSQL/
+                </div>
+              </div>
+              <q-btn
+                unelevated
+                no-caps
+                icon="backup"
+                label="Создать бекап"
+                color="primary"
+                size="sm"
+                :loading="backupInProgress"
+                :disable="backupInProgress"
+                @click="startBackup"
+              />
+            </div>
+
+            <!-- Результат последнего бекапа -->
+            <div v-if="lastBackup" class="q-mt-xs">
+              <div
+                v-if="lastBackup.status === 'success'"
+                class="rounded-borders q-pa-xs"
+                style="background: #E8F5E9; color: #2E7D32; font-size: 12px"
+              >
+                <q-icon name="check_circle" size="14px" class="q-mr-xs" />
+                {{ lastBackup.filename }} · {{ lastBackup.size_mb }} МБ
+              </div>
+              <div
+                v-else-if="lastBackup.status === 'error'"
+                class="rounded-borders q-pa-xs"
+                style="background: #FFEBEE; color: #C62828; font-size: 12px"
+              >
+                <q-icon name="error" size="14px" class="q-mr-xs" />
+                Ошибка: {{ lastBackup.error }}
+              </div>
+              <div v-if="backupInProgress" class="text-caption q-mt-xs" style="color: #888">
+                <q-spinner size="12px" class="q-mr-xs" />Бекап выполняется...
+              </div>
+            </div>
+          </q-card-section>
+        </q-card>
+
+        <!-- Список существующих бекапов -->
+        <div class="row items-center justify-between q-mb-xs">
+          <div class="text-caption text-weight-bold" style="color: #888; text-transform: uppercase">
+            Бекапы на Яндекс.Диске
+          </div>
+          <q-btn
+            flat
+            dense
+            no-caps
+            size="xs"
+            icon="refresh"
+            color="grey-7"
+            :loading="backupsLoading"
+            @click="loadBackupList"
+          />
+        </div>
+
+        <div v-if="backupsLoading" class="text-center q-pa-md">
+          <q-spinner size="24px" color="grey-5" />
+        </div>
+        <div v-else-if="backupList.length === 0" class="text-center q-pa-md" style="color: #aaa; font-size: 13px">
+          Бекапов нет
+        </div>
+        <q-card v-else class="is-card">
+          <q-list dense separator>
+            <q-item v-for="b in backupList" :key="b.name">
+              <q-item-section avatar>
+                <q-icon name="storage" color="blue-7" size="20px" />
+              </q-item-section>
+              <q-item-section>
+                <q-item-label style="font-size: 12px; color: #333">
+                  {{ b.name }}
+                </q-item-label>
+                <q-item-label caption>
+                  {{ formatBackupSize(b.size) }} · {{ formatBackupDate(b.modified) }}
+                </q-item-label>
+              </q-item-section>
+            </q-item>
+          </q-list>
+        </q-card>
+      </q-tab-panel>
     </q-tab-panels>
 
     <!-- Диалог прав роли — ПО БЛОКАМ -->
@@ -1348,7 +1447,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useQuasar } from 'quasar'
 import { api } from 'src/boot/axios'
 import { useReferencesStore } from 'src/stores/references'
-import { deletedContractsApi, messengerApi } from 'src/services/api'
+import { deletedContractsApi, messengerApi, adminApi } from 'src/services/api'
 
 const $q = useQuasar()
 const refs = useReferencesStore()
@@ -2070,10 +2169,72 @@ function permanentDeleteContract(item) {
   })
 }
 
+// === БЕКАП ===
+const backupInProgress = ref(false)
+const lastBackup = ref(null)
+const backupList = ref([])
+const backupsLoading = ref(false)
+
+let _backupPollTimer = null
+
+async function startBackup() {
+  try {
+    await adminApi.triggerBackup()
+    backupInProgress.value = true
+    lastBackup.value = null
+    _pollBackupStatus()
+    $q.notify({ type: 'info', message: 'Бекап запущен — ожидайте...' })
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Не удалось запустить бекап' })
+  }
+}
+
+function _pollBackupStatus() {
+  if (_backupPollTimer) clearTimeout(_backupPollTimer)
+  _backupPollTimer = setTimeout(async () => {
+    try {
+      const { data } = await adminApi.getBackupStatus()
+      backupInProgress.value = data.in_progress
+      if (data.last) lastBackup.value = data.last
+      if (data.in_progress) {
+        _pollBackupStatus()
+      } else if (data.last?.status === 'success') {
+        loadBackupList()
+      }
+    } catch {}
+  }, 3000)
+}
+
+async function loadBackupList() {
+  backupsLoading.value = true
+  try {
+    const { data } = await adminApi.listBackups()
+    backupList.value = data.backups || []
+  } catch {
+    backupList.value = []
+  } finally {
+    backupsLoading.value = false
+  }
+}
+
+function formatBackupSize(bytes) {
+  if (!bytes) return '?'
+  const mb = bytes / 1024 / 1024
+  return mb >= 1 ? `${mb.toFixed(1)} МБ` : `${(bytes / 1024).toFixed(0)} КБ`
+}
+
+function formatBackupDate(iso) {
+  if (!iso) return ''
+  try {
+    return new Date(iso).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+  } catch { return iso }
+}
+
 watch(tab, (val) => {
   if (val === 'trash') loadTrash()
   if (val === 'normdays') loadNormDays()
   if (val === 'telegram') loadMessengerSettings()
+  if (val === 'backup') { loadBackupList(); adminApi.getBackupStatus().then(r => { lastBackup.value = r.data.last; backupInProgress.value = r.data.in_progress; if (r.data.in_progress) _pollBackupStatus() }).catch(() => {}) }
 })
 
 onMounted(async () => {

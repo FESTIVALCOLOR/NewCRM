@@ -1624,8 +1624,6 @@ onMounted(async () => {
         if (cl?.full_name && !contract.value.client_name) clientName.value = cl.full_name
       } catch {}
     }
-    // Фоновая синхронизация файлов с ЯД
-    syncFilesWithYd()
     // Загрузка опросов
     loadSurveys()
   } finally { loading.value = false }

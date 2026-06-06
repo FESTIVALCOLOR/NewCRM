@@ -295,8 +295,17 @@ function openCurrentInBrowser() {
   if (url) window.open(url, '_blank')
 }
 
+function normalizeDiskPath(path) {
+  // Яндекс.Диск возвращает пути с префиксом "disk:" — убираем его
+  // чтобы breadcrumbs корректно строили /path без /disk:/path
+  if (typeof path === 'string' && path.startsWith('disk:')) {
+    return path.slice(5) // 'disk:' = 5 символов
+  }
+  return path
+}
+
 async function navigateTo(path) {
-  currentPath.value = path
+  currentPath.value = normalizeDiskPath(path)
   imageUrls.value = {}
   await loadFolder()
 }

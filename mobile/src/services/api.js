@@ -569,6 +569,12 @@ export const deletedContractsApi = {
   permanentDelete: (id) => api.delete(`/api/v1/admin/deleted-contracts/${id}`),
 }
 
+export const adminApi = {
+  triggerBackup: () => api.post('/api/v1/admin/backup/postgres'),
+  getBackupStatus: () => api.get('/api/v1/admin/backup/status'),
+  listBackups: () => api.get('/api/v1/admin/backup/list'),
+}
+
 // Push-уведомления для гостей клиентского чата (без JWT)
 export const clientPushApi = {
   getVapidKey: (token) => api.get(`/api/v1/client-chat/${token}/push/vapid-key`),

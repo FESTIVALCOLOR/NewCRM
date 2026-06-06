@@ -669,6 +669,10 @@ app.include_router(chat_router, prefix="/api/v1/chats")
 app.include_router(client_chat_router, prefix="/api/v1")
 app.include_router(deleted_contracts_router, prefix="/api/v1/admin/deleted-contracts")
 
+from routers.admin_router import router as admin_router
+
+app.include_router(admin_router, prefix="/api/v1/admin")
+
 
 # =========================
 # СИНХРОНИЗАЦИЯ
