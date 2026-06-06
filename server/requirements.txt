@@ -25,3 +25,5 @@ pymorphy3==2.0.2
 # Web Push уведомления
 pywebpush==2.0.1
 py-vapid==1.9.2
+# Рендеринг PDF в превью (чистый Python, без системных зависимостей)
+pypdfium2==4.30.0

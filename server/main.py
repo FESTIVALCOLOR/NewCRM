@@ -351,6 +351,48 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"Scheduled backup: {e}")
 
+    # N9: Кэш превью — создать директорию и запустить ежедневную очистку в 04:30 UTC
+    try:
+        from services.preview_service import CACHE_DIR, cleanup_stale_all
+
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        logger.info(f"Preview cache dir: {CACHE_DIR}")
+
+        async def _preview_cleanup_loop():
+            logger.info("Preview cleanup loop: запущен (ежедневно 04:30 UTC)")
+            while True:
+                try:
+                    now = datetime.utcnow()
+                    next_run = now.replace(hour=4, minute=30, second=0, microsecond=0)
+                    if now >= next_run:
+                        # вычислить следующие сутки в 04:30
+                        import calendar
+
+                        _, days_in_month = calendar.monthrange(now.year, now.month)
+                        if now.day < days_in_month:
+                            next_run = next_run.replace(day=now.day + 1)
+                        elif now.month == 12:
+                            next_run = next_run.replace(year=now.year + 1, month=1, day=1)
+                        else:
+                            next_run = next_run.replace(month=now.month + 1, day=1)
+                    sleep_secs = (next_run - now).total_seconds()
+                    logger.info(f"Preview cleanup: следующий запуск через {sleep_secs / 3600:.1f}ч")
+                    await asyncio.sleep(sleep_secs)
+                    db = SessionLocal()
+                    try:
+                        n = cleanup_stale_all(db)
+                        logger.info(f"Preview cleanup: удалено {n} протухших записей")
+                    finally:
+                        db.close()
+                except Exception as exc:
+                    logger.error(f"Preview cleanup loop error: {exc}")
+                    await asyncio.sleep(3600)
+
+        asyncio.create_task(_preview_cleanup_loop())
+        logger.info("Preview cleanup: задача запущена (ежедневно 04:30 UTC)")
+    except Exception as e:
+        logger.warning(f"Preview cleanup: {e}")
+
     # Запуск Telegram Bot polling для обработки /start (привязка аккаунтов)
     # Используем file-lock чтобы только ОДИН воркер Uvicorn запускал polling
     # (иначе TelegramConflictError при --workers > 1)
@@ -679,8 +721,10 @@ app.include_router(client_chat_router, prefix="/api/v1")
 app.include_router(deleted_contracts_router, prefix="/api/v1/admin/deleted-contracts")
 
 from routers.admin_router import router as admin_router
+from routers.preview_router import router as preview_router
 
 app.include_router(admin_router, prefix="/api/v1/admin")
+app.include_router(preview_router, prefix="/api/v1/files")
 
 
 # =========================

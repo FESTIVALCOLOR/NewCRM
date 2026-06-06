@@ -1258,6 +1258,19 @@ class DeletedContract(Base):
     deleted_at = Column(DateTime, default=datetime.utcnow, index=True)
 
 
+class FilePreviewCache(Base):
+    """Кэш превью файлов из Яндекс.Диска (изображения + PDF → WebP)"""
+
+    __tablename__ = "file_preview_cache"
+
+    path_hash = Column(String(32), primary_key=True)
+    yandex_path = Column(Text, nullable=False)
+    preview_filename = Column(String(100), nullable=False)
+    file_size_bytes = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_accessed_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
 def _auto_migrate_columns():
     """Автоматически добавляет недостающие столбцы в существующие таблицы.
 

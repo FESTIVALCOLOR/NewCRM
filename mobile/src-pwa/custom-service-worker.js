@@ -69,10 +69,36 @@ const imagesCachePlugin = [
   }),
 ]
 
-// /api/v1/files/stream — для сотрудников
+// /api/v1/files/stream — для сотрудников (полный файл)
 registerRoute(
   ({ url }) => url.pathname === '/api/v1/files/stream',
   new CacheFirst({ cacheName: 'chat-images-v1', plugins: imagesCachePlugin }),
+)
+
+// /api/v1/files/preview — WebP-превью (серверный кэш, браузерный 7 дней)
+// Ключ кеша = только yandex_path, без JWT-токена
+const previewsCachePlugins = [
+  {
+    cacheKeyWillBeUsed: async ({ request }) => {
+      const url = new URL(request.url)
+      const path = url.searchParams.get('yandex_path') || ''
+      return `${url.origin}/preview-cache?yandex_path=${encodeURIComponent(path)}`
+    },
+  },
+  {
+    cacheWillUpdate: async ({ response }) => {
+      if (response && response.status === 200) return response
+      return null
+    },
+  },
+  new ExpirationPlugin({
+    maxEntries: 500,
+    maxAgeSeconds: 7 * 24 * 60 * 60,
+  }),
+]
+registerRoute(
+  ({ url }) => url.pathname === '/api/v1/files/preview',
+  new CacheFirst({ cacheName: 'chat-previews-v1', plugins: previewsCachePlugins }),
 )
 
 // /api/v1/client-chat/{token}/stream — для клиентского чата (без JWT, только yandex_path)
