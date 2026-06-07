@@ -201,6 +201,17 @@ async def startup_event():
         if "duplicate" not in str(e).lower() and "already" not in str(e).lower():
             logger.debug(f"visits migration note: {e}")
 
+    # Миграция: tag_color в crm_cards
+    try:
+        from sqlalchemy import text as _text_tag_color
+
+        with engine.begin() as conn:
+            conn.execute(_text_tag_color("ALTER TABLE crm_cards ADD COLUMN IF NOT EXISTS tag_color VARCHAR"))
+            logger.info("Migrated crm_cards: added tag_color column")
+    except Exception as e:
+        if "duplicate" not in str(e).lower() and "already" not in str(e).lower():
+            logger.debug(f"tag_color migration note: {e}")
+
     # Seed дефолтных прав и admin-пользователя
     from auth import get_password_hash
 

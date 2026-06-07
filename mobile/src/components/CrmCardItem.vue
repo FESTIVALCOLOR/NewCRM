@@ -54,7 +54,7 @@
       </div>
 
       <!-- 8. Теги -->
-      <div v-if="card.tags" class="q-mb-xs" style="background: #FF6B6B; border-radius: 4px; padding: 3px 8px">
+      <div v-if="card.tags" class="q-mb-xs" :style="{ background: card.tag_color || '#FF6B6B', borderRadius: '4px', padding: '3px 8px' }">
         <span style="color: white; font-size: 10px">{{ card.tags }}</span>
       </div>
 

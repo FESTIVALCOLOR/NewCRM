@@ -390,6 +390,7 @@ async def get_crm_cards(project_type: Optional[str] = None, archived: bool = Fal
                 "column_name": card.column_name,
                 "deadline": str(card.deadline) if card.deadline else None,
                 "tags": card.tags,
+                "tag_color": card.tag_color,
                 "is_approved": card.is_approved,
                 "approval_deadline": str(card.approval_deadline) if card.approval_deadline else None,
                 "approval_stages": json.loads(card.approval_stages) if card.approval_stages else None,

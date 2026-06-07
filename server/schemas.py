@@ -499,6 +499,7 @@ class CRMCardBase(BaseModel):
     paused_at: Optional[datetime] = None
     total_pause_days: int = 0
     tags: Optional[str] = None
+    tag_color: Optional[str] = None
     is_approved: bool = False
     approval_deadline: Optional[str] = None
     approval_stages: Optional[str] = None
@@ -538,6 +539,7 @@ class CRMCardUpdate(BaseModel):
     paused_at: Optional[datetime] = None
     total_pause_days: Optional[int] = None
     tags: Optional[str] = None
+    tag_color: Optional[str] = None
     is_approved: Optional[bool] = None
     approval_deadline: Optional[str] = None
     approval_stages: Optional[str] = None

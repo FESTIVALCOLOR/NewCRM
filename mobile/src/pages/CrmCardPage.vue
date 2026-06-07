@@ -70,6 +70,9 @@
             </q-chip>
             <q-badge v-if="card.revision_count > 0" color="negative" :label="`Правки: ${card.revision_count}`" style="height: 22px; border-radius: 12px; font-size: 11px; padding: 0 8px; display: inline-flex; align-items: center; margin: 0" />
           </div>
+          <div v-if="card.tags" class="q-mt-xs">
+            <span :style="{ display: 'inline-block', background: card.tag_color || '#FF6B6B', color: 'white', borderRadius: '4px', padding: '2px 10px', fontSize: '11px', fontWeight: '600' }">{{ card.tags }}</span>
+          </div>
         </q-card-section>
       </q-card>
 
@@ -1782,6 +1785,14 @@
             @click="openContractEdit"
           />
           <q-fab-action
+            icon="label"
+            style="background: #ffd93c; color: #333"
+            label="Теги"
+            external-label
+            label-position="left"
+            @click="openTagDialog"
+          />
+          <q-fab-action
             v-if="can('access.contracts')"
             icon="description"
             style="background: #5DADE2; color: white"
@@ -1792,6 +1803,85 @@
           />
         </q-fab>
       </q-page-sticky>
+
+      <!-- Диалог тегов -->
+      <q-dialog v-model="showTagDialog" persistent>
+        <q-card style="min-width: 320px; max-width: 400px; width: 90vw; border-radius: 10px">
+          <q-toolbar style="background: #ffd93c; color: #333; border-radius: 10px 10px 0 0">
+            <q-icon name="label" class="q-mr-sm" />
+            <q-toolbar-title style="font-size: 15px; font-weight: 600">
+              Тег карточки
+            </q-toolbar-title>
+            <q-btn
+              flat
+              round
+              dense
+              icon="close"
+              @click="showTagDialog = false"
+            />
+          </q-toolbar>
+          <q-card-section class="q-pt-md">
+            <q-input
+              v-model="tagForm.text"
+              label="Название тега"
+              placeholder="Срочный, VIP, Проблемный..."
+              dense
+              outlined
+              class="q-mb-md"
+              clearable
+            />
+            <div class="text-caption q-mb-sm" style="color: #666; font-weight: 600">
+              Цвет тега
+            </div>
+            <div class="row q-gutter-xs q-mb-sm">
+              <div
+                v-for="c in tagPresetColors"
+                :key="c"
+                :style="{ width: '28px', height: '28px', borderRadius: '4px', background: c, cursor: 'pointer', border: tagForm.color === c ? '2px solid #333' : '2px solid transparent', boxSizing: 'border-box' }"
+                @click="tagForm.color = c"
+              />
+            </div>
+            <div class="row items-center q-gutter-sm q-mt-xs">
+              <div
+                :style="{ width: '28px', height: '28px', borderRadius: '4px', background: tagForm.color, border: '1px solid #ccc', flexShrink: 0 }"
+              />
+              <div style="flex: 1">
+                <input
+                  type="color"
+                  :value="tagForm.color"
+                  style="width: 100%; height: 32px; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; padding: 2px"
+                  @input="tagForm.color = $event.target.value"
+                >
+              </div>
+            </div>
+            <div class="q-mt-sm">
+              <span class="text-caption" style="color: #666">Предпросмотр: </span>
+              <span v-if="tagForm.text" :style="{ display: 'inline-block', background: tagForm.color, color: 'white', borderRadius: '4px', padding: '2px 10px', fontSize: '12px', fontWeight: '600' }">{{ tagForm.text }}</span>
+              <span v-else class="text-caption" style="color: #999">введите название тега</span>
+            </div>
+          </q-card-section>
+          <q-card-actions align="between" class="q-px-md q-pb-md">
+            <q-btn
+              flat
+              label="Очистить тег"
+              color="negative"
+              :loading="tagLoading"
+              @click="clearTag"
+            />
+            <div class="row q-gutter-xs">
+              <q-btn flat label="Отмена" @click="showTagDialog = false" />
+              <q-btn
+                unelevated
+                label="Сохранить"
+                style="background: #ffd93c; color: #333"
+                :loading="tagLoading"
+                :disable="!tagForm.text.trim()"
+                @click="saveTag"
+              />
+            </div>
+          </q-card-actions>
+        </q-card>
+      </q-dialog>
 
       <!-- Диалог возврата в активные -->
       <q-dialog v-model="showRestoreDialog">
@@ -2128,6 +2218,11 @@ const crmUploadStage = ref('')
 const crmSyncing = ref(false)
 const crmUploadVariation = ref(1)
 const historyFilter = ref('all')
+
+const showTagDialog = ref(false)
+const tagLoading = ref(false)
+const tagForm = ref({ text: '', color: '#FF6B6B' })
+const tagPresetColors = ['#FF6B6B', '#FF9F43', '#F9CA24', '#6AB04C', '#22A6B3', '#4834D4', '#BE2EDD', '#E84393', '#576574', '#2C3E50']
 
 const isChatTab = computed(() => ['chat', 'notes'].includes(activeTab.value))
 
@@ -3331,7 +3426,7 @@ async function handleCrmFileUpload(event) {
         await ax.post('/api/v1/files/folder', null, { params: { folder_path: path } })
         await contractsApi.update(contractId, { yandex_folder_path: path })
         contractData.value = { ...contractData.value, yandex_folder_path: path }
-      } catch (e) { $q.notify({ type: 'warning', message: 'Не удалось создать папку на ЯД' }) }
+      } catch { $q.notify({ type: 'warning', message: 'Не удалось создать папку на ЯД' }) }
     }
 
     // Маппинг stage → подпапка на ЯД (как в десктопе contract_dialogs.py + yandex_disk.py)
@@ -3436,14 +3531,14 @@ async function loadAdditionalData(cardId) {
       // Фильтр: только этой карточки, исключая оклады
       cardPayments.value = (data || []).filter(p => Number(p.crm_card_id) === cid && p.source !== 'Оклад')
     }
-  } catch (e) { cardPayments.value = [] }
+  } catch { cardPayments.value = [] }
 
   // История действий
   try {
     const { api: ax } = await import('src/boot/axios')
     const resp = await ax.get(`/api/v1/crm/cards/${cardId}/action-history?_t=${Date.now()}`)
     actionHistory.value = resp.data || []
-  } catch (e) {
+  } catch {
     actionHistory.value = []
   }
 
@@ -3453,7 +3548,7 @@ async function loadAdditionalData(cardId) {
     const all = (data || []).filter(e => e.status === 'активный')
     allEmployeesList.value = all
     employeeOptions.value = all.map(e => ({ id: e.id, label: `${e.full_name} (${e.position})` }))
-  } catch (e) { /* ignore */ }
+  } catch { /* ignore */ }
 
   // Данные контракта + файлы + timeline
   const cid = card.value?.contract_id
@@ -3462,9 +3557,9 @@ async function loadAdditionalData(cardId) {
     return
   }
 
-  try { const { data } = await contractsApi.getById(cid); contractData.value = data } catch (e) { /* ignore */ }
+  try { const { data } = await contractsApi.getById(cid); contractData.value = data } catch { /* ignore */ }
   try { const { data } = await crmApi.getWorkflowState(card.value.id); workflowStates.value = Array.isArray(data) ? data : data ? [data] : [] } catch { workflowStates.value = [] }
-  try { const { data } = await filesApi.getContractFiles(cid); projectFiles.value = data || [] } catch (e) { projectFiles.value = [] }
+  try { const { data } = await filesApi.getContractFiles(cid); projectFiles.value = data || [] } catch { projectFiles.value = [] }
   // Фоновый скан ЯД — восстанавливает записи в БД для файлов которые там есть но не в БД
   import('src/boot/axios').then(({ api: ax }) => {
     ax.post(`/api/v1/files/scan/${cid}`).then(async (resp) => {
@@ -3477,7 +3572,7 @@ async function loadAdditionalData(cardId) {
     const { api: ax } = await import('src/boot/axios')
     const resp = await ax.get(`/api/v1/timeline/${cid}?_t=${Date.now()}`)
     timelineEntries.value = Array.isArray(resp.data) ? resp.data : []
-  } catch (e) {
+  } catch {
     timelineEntries.value = []
   }
 
@@ -3616,6 +3711,36 @@ async function doResetDraftsman() {
   finally { actionLoading.value = false }
 }
 
+function openTagDialog() {
+  tagForm.value = {
+    text: card.value?.tags || '',
+    color: card.value?.tag_color || '#FF6B6B',
+  }
+  showTagDialog.value = true
+}
+
+async function saveTag() {
+  tagLoading.value = true
+  try {
+    await crmApi.updateCard(card.value.id, { tags: tagForm.value.text.trim(), tag_color: tagForm.value.color })
+    $q.notify({ type: 'positive', message: 'Тег сохранён' })
+    showTagDialog.value = false
+    await reloadCard()
+  } catch (err) { $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка сохранения тега' }) }
+  finally { tagLoading.value = false }
+}
+
+async function clearTag() {
+  tagLoading.value = true
+  try {
+    await crmApi.updateCard(card.value.id, { tags: null, tag_color: null })
+    $q.notify({ type: 'positive', message: 'Тег удалён' })
+    showTagDialog.value = false
+    await reloadCard()
+  } catch (err) { $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' }) }
+  finally { tagLoading.value = false }
+}
+
 function openRevisionFolder(stageCode) {
   const path = revisionPathForStage(stageCode)
   if (!path) return
@@ -3710,7 +3835,7 @@ async function syncCrmFilesWithYd() {
 
 // === Telegram-чат — загрузка и действия ===
 
-function tgDeepLink(link) {
+function _tgDeepLink(link) {
   if (!link) return '#'
   // t.me/joinchat/HASH или t.me/+HASH → tg://join?invite=HASH
   const m = link.match(/t\.me\/(?:joinchat\/|\+)([A-Za-z0-9_-]+)/)
@@ -3735,7 +3860,7 @@ async function loadChat() {
   chatLoading.value = false
 }
 
-function openCreateChatDlg() {
+function _openCreateChatDlg() {
   const prefix = card.value?.project_type === 'Шаблонный' ? 'ШП' : 'ИН'
   const city = (card.value?.city || '').replace(/_/g, '-')
   const address = (card.value?.address || '').replace(/_/g, '-')
@@ -3800,7 +3925,7 @@ async function doAddChatMember() {
   addMemberLoading.value = false
 }
 
-async function confirmDeleteChat() {
+async function _confirmDeleteChat() {
   if (!chatData.value?.id) return
   $q.dialog({ title: 'Удалить чат?', message: 'Telegram-группа будет удалена', cancel: true, persistent: false })
     .onOk(async () => {
