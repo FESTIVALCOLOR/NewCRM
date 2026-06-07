@@ -6,7 +6,7 @@ JWT принимается как query-параметр ?token= (img src не �
 
 import logging
 
-from auth import verify_token
+from auth import decode_token
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 from services.preview_service import CACHE_DIR, _is_image, _is_pdf, get_or_create_preview
@@ -22,10 +22,7 @@ def _get_employee_from_token(token: str | None = Query(default=None)):
     """Проверить JWT из query-параметра ?token=."""
     if not token:
         raise HTTPException(status_code=401, detail="Токен не передан")
-    payload = verify_token(token)
-    if not payload:
-        raise HTTPException(status_code=401, detail="Недействительный токен")
-    return payload
+    return decode_token(token)  # бросает HTTPException при невалидном токене
 
 
 @router.get("/preview")
