@@ -17,7 +17,7 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-@router.get("/preview")
+@router.get("")
 async def get_file_preview(
     yandex_path: str,
     token: str = None,

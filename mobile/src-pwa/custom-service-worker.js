@@ -75,7 +75,7 @@ registerRoute(
   new CacheFirst({ cacheName: 'chat-images-v1', plugins: imagesCachePlugin }),
 )
 
-// /api/v1/files/preview — WebP-превью (серверный кэш, браузерный 7 дней)
+// /api/v1/preview — WebP-превью (серверный кэш, браузерный 7 дней)
 // Ключ кеша = только yandex_path, без JWT-токена
 const previewsCachePlugins = [
   {
@@ -97,7 +97,7 @@ const previewsCachePlugins = [
   }),
 ]
 registerRoute(
-  ({ url }) => url.pathname === '/api/v1/files/preview',
+  ({ url }) => url.pathname === '/api/v1/preview',
   new CacheFirst({ cacheName: 'chat-previews-v1', plugins: previewsCachePlugins }),
 )
 

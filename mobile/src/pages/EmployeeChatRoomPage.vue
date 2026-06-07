@@ -2045,7 +2045,7 @@ function imgStreamUrl(msg) {
   if (!msg.yandex_path) return ''
   const path = msg.yandex_path.replace(/^disk:/, '')
   const token = localStorage.getItem('access_token') || ''
-  return `/api/v1/files/preview?yandex_path=${encodeURIComponent(path)}&token=${encodeURIComponent(token)}`
+  return `/api/v1/preview?yandex_path=${encodeURIComponent(path)}&token=${encodeURIComponent(token)}`
 }
 
 function isPdf(msg) {
@@ -2057,7 +2057,7 @@ function loadPdfThumbnail(msg) {
   if (!isPdf(msg) || !msg.yandex_path) return
   const path = msg.yandex_path.replace(/^disk:/, '')
   const token = localStorage.getItem('access_token') || ''
-  pdfThumbnails.value[msg.id] = `/api/v1/files/preview?yandex_path=${encodeURIComponent(path)}&token=${encodeURIComponent(token)}`
+  pdfThumbnails.value[msg.id] = `/api/v1/preview?yandex_path=${encodeURIComponent(path)}&token=${encodeURIComponent(token)}`
 }
 
 function formatTime(dt) {
