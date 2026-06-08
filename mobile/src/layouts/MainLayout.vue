@@ -285,8 +285,24 @@
           />
         </q-card-section>
         <q-card-section>
+          <!-- Mac Safari (macOS Sonoma+) -->
+          <template v-if="isMacSafari">
+            <div class="text-subtitle2 q-mb-xs" style="color: #1a1a1a">
+              <q-icon name="laptop_mac" size="16px" class="q-mr-xs" />Mac (Safari)
+            </div>
+            <div style="font-size: 13px; color: #444; line-height: 1.8">
+              1. Убедитесь, что используете <b>Safari</b> (macOS Sonoma 14+)<br>
+              2. В меню <b>«Файл»</b> выберите <b>«Добавить в Dock»</b><br>
+              <span style="font-size: 12px">— или нажмите «Поделиться» → «Добавить в Dock»</span><br>
+              3. Нажмите <b>«Добавить»</b> — иконка появится в Dock
+            </div>
+            <div class="q-mt-sm" style="font-size: 11px; color: #e53935">
+              ⚠ На macOS Ventura и старше установка не поддерживается
+            </div>
+          </template>
+
           <!-- Яндекс Браузер (Android) -->
-          <template v-if="isYandex && isMobile">
+          <template v-else-if="isYandex && isMobile">
             <div class="text-subtitle2 q-mb-xs" style="color: #FF6600">
               <q-icon name="phone_android" size="16px" class="q-mr-xs" />Яндекс Браузер (Android)
             </div>
@@ -316,6 +332,18 @@
             </div>
             <div class="q-mt-sm" style="font-size: 11px; color: #888">
               В Chrome/Edge появится иконка установки <b>⊕</b> в адресной строке — нажмите её.
+            </div>
+          </template>
+
+          <!-- iOS Safari (не iPad mini/Air в десктоп-режиме) -->
+          <template v-else-if="isIos">
+            <div class="text-subtitle2 q-mb-xs" style="color: #1976D2">
+              <q-icon name="phone_iphone" size="16px" class="q-mr-xs" />iPhone / iPad (Safari)
+            </div>
+            <div style="font-size: 13px; color: #444; line-height: 1.8">
+              1. Нажмите <q-icon name="ios_share" color="primary" size="16px" /> <b>«Поделиться»</b> внизу браузера<br>
+              2. Прокрутите и выберите <b>«На экран "Домой"»</b><br>
+              3. Нажмите <b>«Добавить»</b>
             </div>
           </template>
 
@@ -646,7 +674,7 @@ const drawerOpen = ref(!$q.screen.lt.md)
 const unreadCount = computed(() => notificationsStore.unreadCount)
 
 // PWA установка
-const { canInstall, isIos, isInstalled, isYandex, isMobile, install: installPwa } = usePwaInstall()
+const { canInstall, isIos, isInstalled, isYandex, isMobile, isMacSafari, install: installPwa } = usePwaInstall()
 const showIosInstallDialog = ref(false)
 const showManualInstallDialog = ref(false)
 
