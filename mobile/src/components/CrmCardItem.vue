@@ -54,8 +54,12 @@
       </div>
 
       <!-- 8. Теги -->
-      <div v-if="card.tags" class="q-mb-xs" :style="{ background: card.tag_color || '#FF6B6B', borderRadius: '4px', padding: '3px 8px' }">
-        <span style="color: white; font-size: 10px">{{ card.tags }}</span>
+      <div v-if="card.tags" class="row q-gutter-xs q-mb-xs">
+        <span
+          v-for="(tag, tidx) in parseCrmTags(card.tags)"
+          :key="tidx"
+          :style="{ display: 'inline-block', background: tag.color, color: 'white', borderRadius: '4px', padding: '2px 8px', fontSize: '10px', fontWeight: '600' }"
+        >{{ tag.text }}</span>
       </div>
 
       <!-- 9. Дедлайны (скрыты в архиве) -->
@@ -248,6 +252,15 @@ import { addWorkingDays, countWorkingDaysUntil } from 'src/composables/useDeadli
 
 const props = defineProps({ card: { type: Object, required: true } })
 const emit = defineEmits(['click', 'longpress', 'submit-work', 'reject', 'client-send', 'client-approved', 'sign-act', 'send-act', 'add-measurement', 'add-tech-task', 'advance-round', 'close-stage', 'add-extra-round'])
+
+function parseCrmTags(tagsStr) {
+  if (!tagsStr) return []
+  try {
+    const parsed = JSON.parse(tagsStr)
+    if (Array.isArray(parsed)) return parsed.map(t => ({ text: String(t.text || ''), color: String(t.color || '#FF6B6B') }))
+    return [{ text: String(tagsStr), color: '#FF6B6B' }]
+  } catch { return [{ text: String(tagsStr), color: '#FF6B6B' }] }
+}
 
 const showTeam = ref(false)
 const refs = useReferencesStore()

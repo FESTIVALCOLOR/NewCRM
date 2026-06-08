@@ -268,12 +268,12 @@
       </q-card>
     </q-dialog>
 
-    <!-- Диалог: ручная установка (Android/Desktop, когда нет prompt) -->
+    <!-- Диалог: ручная установка (когда нет prompt) -->
     <q-dialog v-model="showManualInstallDialog">
       <q-card style="min-width: 300px; max-width: 400px; width: 90vw">
         <q-card-section class="row items-center q-pb-none">
           <div class="text-h6">
-            Добавить ярлык
+            Добавить на рабочий стол
           </div>
           <q-space />
           <q-btn
@@ -285,23 +285,63 @@
           />
         </q-card-section>
         <q-card-section>
-          <div class="text-subtitle2 q-mb-xs" style="color: #1976D2">
-            <q-icon name="phone_android" size="16px" class="q-mr-xs" />Android (Chrome)
-          </div>
-          <div class="q-mb-md" style="font-size: 13px; color: #444; line-height: 1.7">
-            1. Три точки <q-icon name="more_vert" size="14px" /> → <b>«Добавить на главный экран»</b><br>
-            2. Нажмите <b>«Добавить»</b> — иконка появится на рабочем столе<br>
-            <span style="color: #e53935; font-size: 12px">⚠ «Открыть приложение» не создаёт иконку</span>
-          </div>
-          <div class="text-subtitle2 q-mb-xs" style="color: #1976D2">
-            <q-icon name="laptop_windows" size="16px" class="q-mr-xs" />Windows (Chrome/Edge)
-          </div>
-          <div style="font-size: 13px; color: #444; line-height: 1.7">
-            1. Нажмите иконку <b>⊕</b> в адресной строке (справа)<br>
-            — или три точки → <b>«Сохранить и поделиться»</b><br>
-            2. Выберите <b>«Установить Interior Studio»</b><br>
-            3. Подтвердите — иконка появится на рабочем столе
-          </div>
+          <!-- Яндекс Браузер (Android) -->
+          <template v-if="isYandex && isMobile">
+            <div class="text-subtitle2 q-mb-xs" style="color: #FF6600">
+              <q-icon name="phone_android" size="16px" class="q-mr-xs" />Яндекс Браузер (Android)
+            </div>
+            <div style="font-size: 13px; color: #444; line-height: 1.8">
+              1. Три точки <q-icon name="more_vert" size="14px" /> в адресной строке<br>
+              2. Выберите <b>«Добавить ярлык на рабочий стол»</b><br>
+              3. Нажмите <b>«Добавить»</b> — иконка появится на экране
+            </div>
+          </template>
+
+          <!-- Яндекс Браузер (Desktop) — не поддерживает PWA install -->
+          <template v-else-if="isYandex && !isMobile">
+            <div class="text-subtitle2 q-mb-xs" style="color: #FF6600">
+              <q-icon name="laptop_windows" size="16px" class="q-mr-xs" />Яндекс Браузер
+            </div>
+            <div style="font-size: 13px; color: #555; line-height: 1.8">
+              Яндекс Браузер не поддерживает установку PWA-приложений на рабочий стол.<br><br>
+              Для автоматической установки откройте этот сайт в:
+            </div>
+            <div class="q-mt-sm q-gutter-sm">
+              <div style="font-size: 13px; color: #1A73E8">
+                <q-icon name="language" size="15px" class="q-mr-xs" /><b>Google Chrome</b> — crm.festivalcolor.ru
+              </div>
+              <div style="font-size: 13px; color: #0F78D4">
+                <q-icon name="language" size="15px" class="q-mr-xs" /><b>Microsoft Edge</b> — crm.festivalcolor.ru
+              </div>
+            </div>
+            <div class="q-mt-sm" style="font-size: 11px; color: #888">
+              В Chrome/Edge появится иконка установки <b>⊕</b> в адресной строке — нажмите её.
+            </div>
+          </template>
+
+          <!-- Android Chrome -->
+          <template v-else-if="isMobile">
+            <div class="text-subtitle2 q-mb-xs" style="color: #1976D2">
+              <q-icon name="phone_android" size="16px" class="q-mr-xs" />Android (Chrome)
+            </div>
+            <div style="font-size: 13px; color: #444; line-height: 1.8">
+              1. Три точки <q-icon name="more_vert" size="14px" /> → <b>«Добавить на главный экран»</b><br>
+              2. Нажмите <b>«Добавить»</b> — иконка появится на рабочем столе<br>
+              <span style="color: #e53935; font-size: 12px">⚠ «Открыть приложение» не создаёт иконку</span>
+            </div>
+          </template>
+
+          <!-- Desktop Chrome/Edge -->
+          <template v-else>
+            <div class="text-subtitle2 q-mb-xs" style="color: #1976D2">
+              <q-icon name="laptop_windows" size="16px" class="q-mr-xs" />Windows (Chrome/Edge)
+            </div>
+            <div style="font-size: 13px; color: #444; line-height: 1.8">
+              1. Нажмите иконку <b>⊕</b> в адресной строке (справа)<br>
+              2. Нажмите <b>«Установить Interior Studio»</b><br>
+              3. Подтвердите — иконка появится на рабочем столе
+            </div>
+          </template>
         </q-card-section>
         <q-card-actions align="right">
           <q-btn v-close-popup flat label="Понятно" color="primary" />
@@ -606,7 +646,7 @@ const drawerOpen = ref(!$q.screen.lt.md)
 const unreadCount = computed(() => notificationsStore.unreadCount)
 
 // PWA установка
-const { canInstall, isIos, isInstalled, install: installPwa } = usePwaInstall()
+const { canInstall, isIos, isInstalled, isYandex, isMobile, install: installPwa } = usePwaInstall()
 const showIosInstallDialog = ref(false)
 const showManualInstallDialog = ref(false)
 

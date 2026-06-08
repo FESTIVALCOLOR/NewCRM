@@ -27,6 +27,8 @@ export function usePwaInstall() {
   const isIos = ref(false)
   const isInstalled = ref(false)
   const dismissed = ref(false)
+  const isYandex = ref(false)
+  const isMobile = ref(false)
 
   function _isInstalled() {
     return (
@@ -39,6 +41,14 @@ export function usePwaInstall() {
     const ua = navigator.userAgent
     const isIpad = /iPad/i.test(ua) || (/Macintosh/i.test(ua) && navigator.maxTouchPoints > 1)
     return (isIpad || /iPhone|iPod/i.test(ua)) && !window.navigator.standalone
+  }
+
+  function _isYandex() {
+    return /YaBrowser/i.test(navigator.userAgent)
+  }
+
+  function _isMobile() {
+    return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
   }
 
   function dismiss() {
@@ -62,6 +72,8 @@ export function usePwaInstall() {
   onMounted(() => {
     isInstalled.value = _isInstalled()
     isIos.value = _isIos()
+    isYandex.value = _isYandex()
+    isMobile.value = _isMobile()
     const ts = localStorage.getItem('pwa_install_dismissed')
     dismissed.value = !!ts && Date.now() - parseInt(ts) < 14 * 24 * 60 * 60 * 1000
     canInstall.value = !!_deferredPrompt
@@ -73,5 +85,5 @@ export function usePwaInstall() {
     if (idx !== -1) _updateCallbacks.splice(idx, 1)
   })
 
-  return { canInstall, isIos, isInstalled, dismissed, install, dismiss }
+  return { canInstall, isIos, isInstalled, dismissed, isYandex, isMobile, install, dismiss }
 }
