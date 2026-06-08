@@ -270,10 +270,10 @@
 
     <!-- Диалог: ручная установка (Android/Desktop, когда нет prompt) -->
     <q-dialog v-model="showManualInstallDialog">
-      <q-card style="min-width: 300px; max-width: 380px; width: 90vw">
+      <q-card style="min-width: 300px; max-width: 400px; width: 90vw">
         <q-card-section class="row items-center q-pb-none">
           <div class="text-h6">
-            Добавить на рабочий стол
+            Добавить ярлык
           </div>
           <q-space />
           <q-btn
@@ -285,34 +285,22 @@
           />
         </q-card-section>
         <q-card-section>
-          <p class="text-body2 q-mb-md" style="color: #555">
-            Для установки ярлыка приложения на рабочий стол:
-          </p>
-          <div class="q-gutter-sm">
-            <div class="row items-start q-gutter-sm">
-              <q-avatar size="28px" color="blue" text-color="white" style="font-size: 13px; font-weight: 700; flex-shrink: 0">
-                1
-              </q-avatar>
-              <div class="text-body2" style="flex: 1; padding-top: 4px">
-                Нажмите <b>«Меню»</b> браузера (три точки <q-icon name="more_vert" size="16px" /> вверху справа)
-              </div>
-            </div>
-            <div class="row items-start q-gutter-sm">
-              <q-avatar size="28px" color="blue" text-color="white" style="font-size: 13px; font-weight: 700; flex-shrink: 0">
-                2
-              </q-avatar>
-              <div class="text-body2" style="flex: 1; padding-top: 4px">
-                Выберите <b>«Установить приложение»</b> или <b>«Добавить на главный экран»</b>
-              </div>
-            </div>
-            <div class="row items-start q-gutter-sm">
-              <q-avatar size="28px" color="blue" text-color="white" style="font-size: 13px; font-weight: 700; flex-shrink: 0">
-                3
-              </q-avatar>
-              <div class="text-body2" style="flex: 1; padding-top: 4px">
-                Подтвердите установку — иконка появится на рабочем столе
-              </div>
-            </div>
+          <div class="text-subtitle2 q-mb-xs" style="color: #1976D2">
+            <q-icon name="phone_android" size="16px" class="q-mr-xs" />Android (Chrome)
+          </div>
+          <div class="q-mb-md" style="font-size: 13px; color: #444; line-height: 1.7">
+            1. Три точки <q-icon name="more_vert" size="14px" /> → <b>«Добавить на главный экран»</b><br>
+            2. Нажмите <b>«Добавить»</b> — иконка появится на рабочем столе<br>
+            <span style="color: #e53935; font-size: 12px">⚠ «Открыть приложение» не создаёт иконку</span>
+          </div>
+          <div class="text-subtitle2 q-mb-xs" style="color: #1976D2">
+            <q-icon name="laptop_windows" size="16px" class="q-mr-xs" />Windows (Chrome/Edge)
+          </div>
+          <div style="font-size: 13px; color: #444; line-height: 1.7">
+            1. Нажмите иконку <b>⊕</b> в адресной строке (справа)<br>
+            — или три точки → <b>«Сохранить и поделиться»</b><br>
+            2. Выберите <b>«Установить Interior Studio»</b><br>
+            3. Подтвердите — иконка появится на рабочем столе
           </div>
         </q-card-section>
         <q-card-actions align="right">

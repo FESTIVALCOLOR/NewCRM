@@ -108,8 +108,12 @@
                         </div>
                         <span v-if="card.agent_type" :style="{ background: agentColorFor(card.agent_type), color: 'white', fontSize: '10px', fontWeight: 'bold', padding: '3px 8px', borderRadius: '4px' }">{{ card.agent_type }}</span>
                       </div>
-                      <div v-if="card.tags" class="q-mb-xs">
-                        <span :style="{ display: 'inline-block', background: card.tag_color || '#FF6B6B', color: 'white', borderRadius: '4px', padding: '2px 8px', fontSize: '10px', fontWeight: '600' }">{{ card.tags }}</span>
+                      <div v-if="card.tags" class="row q-gutter-xs q-mb-xs">
+                        <span
+                          v-for="(tag, tidx) in parseSvTags(card.tags)"
+                          :key="tidx"
+                          :style="{ display: 'inline-block', background: tag.color, color: 'white', borderRadius: '4px', padding: '2px 8px', fontSize: '10px', fontWeight: '600' }"
+                        >{{ tag.text }}</span>
                       </div>
                       <div style="border-top: 1px solid #E0E0E0; padding-top: 6px">
                         <q-btn
@@ -203,8 +207,12 @@
                       </div>
                       <span v-if="card.agent_type" :style="{ background: agentColorFor(card.agent_type), color: 'white', fontSize: '10px', fontWeight: 'bold', padding: '3px 8px', borderRadius: '4px' }">{{ card.agent_type }}</span>
                     </div>
-                    <div v-if="card.tags" class="q-mb-xs">
-                      <span :style="{ display: 'inline-block', background: card.tag_color || '#FF6B6B', color: 'white', borderRadius: '4px', padding: '2px 8px', fontSize: '10px', fontWeight: '600' }">{{ card.tags }}</span>
+                    <div v-if="card.tags" class="row q-gutter-xs q-mb-xs">
+                      <span
+                        v-for="(tag, tidx) in parseSvTags(card.tags)"
+                        :key="tidx"
+                        :style="{ display: 'inline-block', background: tag.color, color: 'white', borderRadius: '4px', padding: '2px 8px', fontSize: '10px', fontWeight: '600' }"
+                      >{{ tag.text }}</span>
                     </div>
                     <!-- 4. Дедлайн -->
                     <div v-if="card.deadline" class="q-mb-xs row items-center" style="background: #FFF3CD; border-radius: 4px; padding: 3px 8px; width: 100%">
@@ -385,6 +393,14 @@ watch(currentSlide, (v) => { sessionStorage.setItem('sv_slide', String(v)) })
 function sColor(card) { const s = card.column_name || ''; if (s.includes('Стадия')) return 'orange'; if (s.includes('Выполненный')) return 'positive'; return 'blue' }
 function dlColor(d) { const days = Math.ceil((new Date(d) - new Date()) / 86400000); if (days < 0) return '#8B0000'; if (days <= 2) return '#F39C12'; return '#888' }
 function openCard(card) { router.push(`/supervision/${card.id}`) }
+function parseSvTags(tagsStr) {
+  if (!tagsStr) return []
+  try {
+    const parsed = JSON.parse(tagsStr)
+    if (Array.isArray(parsed)) return parsed.map(t => ({ text: String(t.text || ''), color: String(t.color || '#FF6B6B') }))
+    return [{ text: String(tagsStr), color: '#FF6B6B' }]
+  } catch { return [{ text: String(tagsStr), color: '#FF6B6B' }] }
+}
 
 async function quickPause(card) {
   $q.dialog({ title: 'Приостановить', message: 'Причина приостановки', prompt: { model: '', type: 'text' }, cancel: true }).onOk(async (reason) => {
