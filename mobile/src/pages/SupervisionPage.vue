@@ -108,6 +108,9 @@
                         </div>
                         <span v-if="card.agent_type" :style="{ background: agentColorFor(card.agent_type), color: 'white', fontSize: '10px', fontWeight: 'bold', padding: '3px 8px', borderRadius: '4px' }">{{ card.agent_type }}</span>
                       </div>
+                      <div v-if="card.tags" class="q-mb-xs">
+                        <span :style="{ display: 'inline-block', background: card.tag_color || '#FF6B6B', color: 'white', borderRadius: '4px', padding: '2px 8px', fontSize: '10px', fontWeight: '600' }">{{ card.tags }}</span>
+                      </div>
                       <div style="border-top: 1px solid #E0E0E0; padding-top: 6px">
                         <q-btn
                           flat
@@ -199,6 +202,9 @@
                         <span v-if="card.dan_name"> | ДАН: {{ card.dan_name }}</span>
                       </div>
                       <span v-if="card.agent_type" :style="{ background: agentColorFor(card.agent_type), color: 'white', fontSize: '10px', fontWeight: 'bold', padding: '3px 8px', borderRadius: '4px' }">{{ card.agent_type }}</span>
+                    </div>
+                    <div v-if="card.tags" class="q-mb-xs">
+                      <span :style="{ display: 'inline-block', background: card.tag_color || '#FF6B6B', color: 'white', borderRadius: '4px', padding: '2px 8px', fontSize: '10px', fontWeight: '600' }">{{ card.tags }}</span>
                     </div>
                     <!-- 4. Дедлайн -->
                     <div v-if="card.deadline" class="q-mb-xs row items-center" style="background: #FFF3CD; border-radius: 4px; padding: 3px 8px; width: 100%">
