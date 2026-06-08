@@ -66,6 +66,20 @@ function getRedirectUrl (url, router) {
   return url
 }
 
+function getUrlPath(ssrContext) {
+  <% /* In case the `req.url` is not available or different due to a custom webserver, also check for `ssrContext.url` */ %>
+  const url = ssrContext.url || ssrContext.req.url
+
+  try {
+    <% /* Fetch API's Request.url, used by more modern web servers and runtime environments. Contains the full URL */ %>
+    const parsedUrl = new URL(url)
+    return parsedUrl.pathname + parsedUrl.search + parsedUrl.hash
+  } catch {
+    <% /* Node IncomingMessage.url, used by Express and similar. It doesn't contain the protocol and host, only the path, so new URL(url) above would fail */ %>
+    return url
+  }
+}
+
 const { components, directives, ...qUserOptions } = quasarUserOptions
 
 <%
@@ -119,7 +133,7 @@ export default ssrContext => {
           <%= metaConf.hasStore ? 'store,' : '' %>
           ssrContext,
           redirect,
-          urlPath: ssrContext.req.url,
+          urlPath: getUrlPath(ssrContext),
           publicPath
         })
       }
@@ -134,15 +148,15 @@ export default ssrContext => {
 
     app.use(router)
 
-    const url = ssrContext.req.url<% if (build.publicPath !== '/') { %>.replace(publicPath, '/')<% } %>
-    const { fullPath } = router.resolve(url)
+    const urlPath = getUrlPath(ssrContext)<% if (build.publicPath !== '/') { %>.replace(publicPath, '/')<% } %>
+    const { fullPath } = router.resolve(urlPath)
 
-    if (fullPath !== url) {
+    if (fullPath !== urlPath) {
       return reject({ url: <%= build.publicPath === '/' ? 'fullPath' : 'addPublicPath(fullPath)' %> })
     }
 
     // set router's location
-    router.push(url).catch(() => {})
+    router.push(urlPath).catch(() => {})
 
     // wait until router has resolved possible async hooks
     router.isReady().then(() => {
@@ -186,7 +200,7 @@ export default ssrContext => {
           ssrContext,
           currentRoute: router.currentRoute.value,
           redirect,
-          urlPath: ssrContext.req.url,
+          urlPath: getUrlPath(ssrContext),
           publicPath
         })),
         Promise.resolve()

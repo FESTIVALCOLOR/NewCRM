@@ -269,6 +269,7 @@ async def get_supervision_cards(
                 "column_name": card.column_name,
                 "deadline": str(card.deadline) if card.deadline else None,
                 "tags": card.tags,
+                "tag_color": card.tag_color,
                 "senior_manager_id": card.senior_manager_id,
                 "dan_id": card.dan_id,
                 "studio_director_id": card.studio_director_id,

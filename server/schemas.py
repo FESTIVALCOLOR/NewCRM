@@ -623,6 +623,7 @@ class SupervisionCardBase(BaseModel):
     start_date: Optional[str] = None
     deadline: Optional[str] = None
     tags: Optional[str] = None
+    tag_color: Optional[str] = None
     senior_manager_id: Optional[int] = None
     dan_id: Optional[int] = None
     studio_director_id: Optional[int] = None
@@ -652,6 +653,7 @@ class SupervisionCardUpdate(BaseModel):
     start_date: Optional[str] = None
     deadline: Optional[str] = None
     tags: Optional[str] = None
+    tag_color: Optional[str] = None
     senior_manager_id: Optional[int] = None
     dan_id: Optional[int] = None
     studio_director_id: Optional[int] = None

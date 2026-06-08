@@ -597,6 +597,7 @@ class SupervisionCard(Base):
     start_date = Column(String)  # Дата начала надзора
     deadline = Column(String)
     tags = Column(String)
+    tag_color = Column(String)
 
     senior_manager_id = Column(Integer, ForeignKey("employees.id"))
     dan_id = Column(Integer, ForeignKey("employees.id"))  # Дежурный по авторскому надзору

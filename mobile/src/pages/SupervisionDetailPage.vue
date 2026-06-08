@@ -48,6 +48,9 @@
             <span v-if="card.start_date"><q-icon name="play_arrow" size="14px" /> Начало: {{ formatDate(card.start_date) }}</span>
             <span v-if="card.deadline"><q-icon name="flag" size="14px" :style="{ color: dlColor(card.deadline) }" /> Дедлайн: {{ formatDate(card.deadline) }}</span>
           </div>
+          <div v-if="card.tags" class="q-mt-xs">
+            <span :style="{ display: 'inline-block', background: card.tag_color || '#FF6B6B', color: 'white', borderRadius: '4px', padding: '2px 10px', fontSize: '11px', fontWeight: '600' }">{{ card.tags }}</span>
+          </div>
           <!-- Статус ДАН убран — функционал завершения через кнопку "Завершить стадию" -->
         </q-card-section>
         <!-- Прогресс закупок -->
@@ -1695,6 +1698,108 @@
       style="display:none"
       @change="handleNadzorFileUpload"
     >
+
+    <!-- FAB меню -->
+    <q-page-sticky position="bottom-right" :offset="[18, 18]">
+      <q-fab
+        v-model="fabOpen"
+        direction="up"
+        style="background: #ffd93c; color: #333"
+        icon="more_horiz"
+        active-icon="close"
+      >
+        <q-fab-action
+          icon="label"
+          style="background: #ffd93c; color: #333"
+          label="Теги"
+          external-label
+          label-position="left"
+          @click="openTagDialog"
+        />
+      </q-fab>
+    </q-page-sticky>
+
+    <!-- Диалог тегов -->
+    <q-dialog v-model="showTagDialog" persistent>
+      <q-card style="min-width: 320px; max-width: 400px; width: 90vw">
+        <q-card-section class="row items-center q-pb-none">
+          <div class="text-h6">
+            Тег карточки
+          </div>
+          <q-space />
+          <q-btn
+            v-close-popup
+            icon="close"
+            flat
+            round
+            dense
+          />
+        </q-card-section>
+        <q-card-section class="q-pt-md">
+          <q-input
+            v-model="tagForm.text"
+            label="Текст тега"
+            outlined
+            dense
+            maxlength="30"
+            class="q-mb-md"
+            placeholder="Например: Срочно"
+          />
+          <div class="text-caption text-grey q-mb-xs">
+            Цвет тега
+          </div>
+          <div class="row q-gutter-xs q-mb-sm">
+            <div
+              v-for="c in tagPresetColors"
+              :key="c"
+              :style="{ width: '28px', height: '28px', borderRadius: '6px', background: c, cursor: 'pointer', border: tagForm.color === c ? '3px solid #333' : '2px solid transparent', boxSizing: 'border-box' }"
+              @click="tagForm.color = c"
+            />
+          </div>
+          <div class="row items-center q-gutter-sm q-mt-xs">
+            <div class="text-caption text-grey">
+              Свой цвет:
+            </div>
+            <input
+              type="color"
+              :value="tagForm.color"
+              style="width: 36px; height: 28px; border: none; padding: 0; cursor: pointer; border-radius: 4px"
+              @input="tagForm.color = $event.target.value"
+            >
+          </div>
+          <div v-if="tagForm.text" class="q-mt-md">
+            <div class="text-caption text-grey q-mb-xs">
+              Предпросмотр:
+            </div>
+            <span :style="{ display: 'inline-block', background: tagForm.color, color: 'white', borderRadius: '4px', padding: '3px 10px', fontSize: '12px', fontWeight: '600' }">{{ tagForm.text }}</span>
+          </div>
+        </q-card-section>
+        <q-card-actions align="right" class="q-pt-none">
+          <q-btn
+            flat
+            label="Очистить тег"
+            color="grey"
+            :loading="tagLoading"
+            @click="clearTag"
+          />
+          <q-btn
+            v-close-popup
+            flat
+            label="Отмена"
+            color="grey"
+            :disable="tagLoading"
+          />
+          <q-btn
+            flat
+            label="Сохранить"
+            color="primary"
+            :loading="tagLoading"
+            :disable="!tagForm.text.trim()"
+            @click="saveTag"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
@@ -1781,6 +1886,45 @@ const historyNote = ref('')
 const noteText = ref('')
 
 const historyFilter = ref('all')
+
+// === Теги ===
+const fabOpen = ref(false)
+const showTagDialog = ref(false)
+const tagLoading = ref(false)
+const tagForm = ref({ text: '', color: '#FF6B6B' })
+const tagPresetColors = ['#FF6B6B', '#FF9F43', '#F9CA24', '#6AB04C', '#22A6B3', '#4834D4', '#BE2EDD', '#E84393', '#576574', '#2C3E50']
+
+function openTagDialog() {
+  tagForm.value = { text: card.value?.tags || '', color: card.value?.tag_color || '#FF6B6B' }
+  showTagDialog.value = true
+}
+async function saveTag() {
+  tagLoading.value = true
+  try {
+    await supervisionApi.updateCard(card.value.id, { tags: tagForm.value.text.trim(), tag_color: tagForm.value.color })
+    $q.notify({ type: 'positive', message: 'Тег сохранён' })
+    showTagDialog.value = false
+    await reloadData()
+  } catch {
+    $q.notify({ type: 'negative', message: 'Ошибка сохранения тега' })
+  } finally {
+    tagLoading.value = false
+  }
+}
+async function clearTag() {
+  tagLoading.value = true
+  try {
+    await supervisionApi.updateCard(card.value.id, { tags: null, tag_color: null })
+    $q.notify({ type: 'positive', message: 'Тег удалён' })
+    showTagDialog.value = false
+    await reloadData()
+  } catch {
+    $q.notify({ type: 'negative', message: 'Ошибка удаления тега' })
+  } finally {
+    tagLoading.value = false
+  }
+}
+
 const filteredSvHistory = computed(() => {
   if (historyFilter.value === 'all') return svHistory.value
   if (historyFilter.value === 'site_visit') return svHistory.value.filter(h => h.entry_type === 'site_visit' || h.entry_type === 'site_visit_deleted')

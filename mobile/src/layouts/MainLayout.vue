@@ -107,6 +107,19 @@
             {{ unreadCount > 99 ? '99+' : unreadCount }}
           </q-badge>
         </q-btn>
+        <!-- Установить приложение -->
+        <q-btn
+          v-if="!isInstalled && (canInstall || isIos)"
+          flat
+          dense
+          round
+          icon="add_to_home_screen"
+          size="sm"
+          color="grey-7"
+          @click="handleInstallClick"
+        >
+          <q-tooltip>Добавить на рабочий стол</q-tooltip>
+        </q-btn>
         <!-- Выход -->
         <q-btn
           flat
@@ -202,6 +215,59 @@
     </q-drawer>
 
     <PwaInstallBanner inline />
+
+    <!-- iOS инструкция по установке -->
+    <q-dialog v-model="showIosInstallDialog">
+      <q-card style="min-width: 300px; max-width: 380px; width: 90vw">
+        <q-card-section class="row items-center q-pb-none">
+          <div class="text-h6">
+            Добавить на рабочий стол
+          </div>
+          <q-space />
+          <q-btn
+            v-close-popup
+            icon="close"
+            flat
+            round
+            dense
+          />
+        </q-card-section>
+        <q-card-section>
+          <p class="text-body2 q-mb-md" style="color: #555">
+            Чтобы установить приложение на iOS:
+          </p>
+          <div class="q-gutter-sm">
+            <div class="row items-start q-gutter-sm">
+              <q-avatar size="28px" color="blue" text-color="white" style="font-size: 13px; font-weight: 700; flex-shrink: 0">
+                1
+              </q-avatar>
+              <div class="text-body2" style="flex: 1; padding-top: 4px">
+                Нажмите кнопку <b>«Поделиться»</b> <q-icon name="ios_share" color="blue" size="18px" /> в панели браузера
+              </div>
+            </div>
+            <div class="row items-start q-gutter-sm">
+              <q-avatar size="28px" color="blue" text-color="white" style="font-size: 13px; font-weight: 700; flex-shrink: 0">
+                2
+              </q-avatar>
+              <div class="text-body2" style="flex: 1; padding-top: 4px">
+                Прокрутите вниз и выберите <b>«На экран «Домой»»</b>
+              </div>
+            </div>
+            <div class="row items-start q-gutter-sm">
+              <q-avatar size="28px" color="blue" text-color="white" style="font-size: 13px; font-weight: 700; flex-shrink: 0">
+                3
+              </q-avatar>
+              <div class="text-body2" style="flex: 1; padding-top: 4px">
+                Нажмите <b>«Добавить»</b> в правом верхнем углу
+              </div>
+            </div>
+          </div>
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn v-close-popup flat label="Понятно" color="primary" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
 
     <q-page-container>
       <router-view />
@@ -484,6 +550,7 @@ import { usePermissionsStore } from 'src/stores/permissions'
 import { useWebSocket } from 'src/composables/useWebSocket'
 import { pendingCount as getOfflinePendingCount, getPending, syncAll as syncOfflineAll, clearAll as clearOfflineAll } from 'src/services/offlineQueue'
 import PwaInstallBanner from 'src/components/PwaInstallBanner.vue'
+import { usePwaInstall } from 'src/composables/usePwaInstall'
 
 const $q = useQuasar()
 const route = useRoute()
@@ -497,6 +564,18 @@ const { connect: wsConnect, disconnect: wsDisconnect, isConnected: wsConnected }
 const chatUnreadStore = useChatUnreadStore()
 const drawerOpen = ref(!$q.screen.lt.md)
 const unreadCount = computed(() => notificationsStore.unreadCount)
+
+// PWA установка
+const { canInstall, isIos, isInstalled, install: installPwa } = usePwaInstall()
+const showIosInstallDialog = ref(false)
+
+function handleInstallClick() {
+  if (isIos.value) {
+    showIosInstallDialog.value = true
+  } else {
+    installPwa()
+  }
+}
 
 // Бейдж непрочитанных чатов для пункта меню по пути
 function chatBadge(to) {
