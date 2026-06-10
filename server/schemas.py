@@ -1554,11 +1554,15 @@ class InternalChatResponse(BaseModel):
     created_by: Optional[int] = None
     created_at: datetime
     is_active: bool
+    # Административный чат
+    is_admin_chat: bool = False
+    admin_chat_type: Optional[str] = None  # 'ip' | 'shp' | 'an'
     # Вычисляемые поля
     last_message: Optional[str] = None
     last_message_at: Optional[datetime] = None
     unread_count: int = 0
     member_count: int = 0
+    is_pinned_by_user: bool = False
 
     class Config:
         from_attributes = True

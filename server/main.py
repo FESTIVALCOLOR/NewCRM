@@ -223,6 +223,26 @@ async def startup_event():
         if "duplicate" not in str(e).lower() and "already" not in str(e).lower():
             logger.debug(f"supervision_cards tag_color migration note: {e}")
 
+    # Миграция: is_admin_chat, admin_chat_type в internal_chats + таблица user_chat_pins
+    try:
+        from sqlalchemy import text as _text_admin_chat
+
+        with engine.begin() as conn:
+            conn.execute(_text_admin_chat("ALTER TABLE internal_chats ADD COLUMN IF NOT EXISTS is_admin_chat BOOLEAN DEFAULT FALSE"))
+            conn.execute(_text_admin_chat("ALTER TABLE internal_chats ADD COLUMN IF NOT EXISTS admin_chat_type VARCHAR(10)"))
+        logger.info("Migrated internal_chats: added is_admin_chat, admin_chat_type")
+    except Exception as e:
+        if "duplicate" not in str(e).lower() and "already" not in str(e).lower():
+            logger.debug(f"internal_chats admin chat migration: {e}")
+
+    try:
+        from database import UserChatPin
+
+        UserChatPin.__table__.create(bind=engine, checkfirst=True)
+        logger.info("user_chat_pins table ensured")
+    except Exception as e:
+        logger.debug(f"user_chat_pins table: {e}")
+
     # Seed дефолтных прав и admin-пользователя
     from auth import get_password_hash
 
@@ -294,6 +314,16 @@ async def startup_event():
             seed_default_messenger_scripts(db)
         except Exception as e:
             logger.warning(f"Messenger scripts seed: {e}")
+
+        # Создать/синхронизировать административные чаты
+        try:
+            from services.chat_service import ensure_admin_chats
+
+            ensure_admin_chats(db)
+            logger.info("Admin chats ensured")
+        except Exception as e:
+            db.rollback()
+            logger.warning(f"Admin chats seed: {e}")
     finally:
         db.close()
 

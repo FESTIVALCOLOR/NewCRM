@@ -83,6 +83,7 @@ from services.chat_service import (
     get_messages,
     get_supervision_chat_for_employee,
     get_unread_count,
+    get_user_pinned_chat_ids,
     mark_read,
     pin_message,
     register_guest,
@@ -99,6 +100,7 @@ from database import (
     InternalChat,
     InternalChatMember,
     InternalChatMessage,
+    UserChatPin,
     get_db,
 )
 
@@ -216,8 +218,24 @@ def list_chats(
     last_msgs = get_batch_last_messages(db, chat_ids)
     member_counts = get_batch_member_counts(db, chat_ids)
     unread_counts = get_batch_unread_counts(db, chat_ids, current_user.id)
+    pinned_ids = get_user_pinned_chat_ids(db, current_user.id)
 
-    return [_chat_to_response(db, c, current_user.id, last_msgs, member_counts, unread_counts) for c in chats]
+    responses = [_chat_to_response(db, c, current_user.id, last_msgs, member_counts, unread_counts, pinned_ids) for c in chats]
+
+    # Сортировка: 1) адм.чаты (ip→shp→an), 2) закреплённые (по времени), 3) остальные (по времени)
+    _ADMIN_ORDER = {"ip": 0, "shp": 1, "an": 2}
+
+    def _sort_key(r: InternalChatResponse):
+        if r.is_admin_chat:
+            return (0, _ADMIN_ORDER.get(r.admin_chat_type or "", 9), 0)
+        ts = r.last_message_at or r.created_at
+        ts_neg = -int(ts.timestamp()) if ts else 0
+        if r.is_pinned_by_user:
+            return (1, 0, ts_neg)
+        return (2, 0, ts_neg)
+
+    responses.sort(key=_sort_key)
+    return responses
 
 
 @router.get("/{chat_id}", response_model=InternalChatDetailResponse)
@@ -245,6 +263,46 @@ def remove_chat(
         _require_perm(current_user, "chat.client.manage", db)
     delete_chat(db, chat_id, delete_yd_folder=True)
     return {"status": "ok"}
+
+
+@router.post("/{chat_id}/pin")
+def pin_chat(
+    chat_id: int,
+    current_user: Employee = Depends(require_permission("chat.employee.view")),
+    db: Session = Depends(get_db),
+):
+    """Закрепить чат в верхней части списка."""
+    chat = _get_chat_or_404(db, chat_id)
+    if chat.is_admin_chat:
+        raise HTTPException(400, "Административные чаты всегда закреплены и не требуют отдельного закрепления")
+    _check_member(db, chat_id, current_user.id)
+    existing = (
+        db.query(UserChatPin)
+        .filter(
+            UserChatPin.employee_id == current_user.id,
+            UserChatPin.chat_id == chat_id,
+        )
+        .first()
+    )
+    if not existing:
+        db.add(UserChatPin(employee_id=current_user.id, chat_id=chat_id))
+        db.commit()
+    return {"pinned": True}
+
+
+@router.delete("/{chat_id}/pin")
+def unpin_chat(
+    chat_id: int,
+    current_user: Employee = Depends(require_permission("chat.employee.view")),
+    db: Session = Depends(get_db),
+):
+    """Открепить чат."""
+    db.query(UserChatPin).filter(
+        UserChatPin.employee_id == current_user.id,
+        UserChatPin.chat_id == chat_id,
+    ).delete()
+    db.commit()
+    return {"pinned": False}
 
 
 # ==============================================================
@@ -1298,6 +1356,7 @@ def _chat_to_response(
     last_msgs: Optional[dict] = None,
     member_counts: Optional[dict] = None,
     unread_counts: Optional[dict] = None,
+    pinned_ids: Optional[set] = None,
 ) -> InternalChatResponse:
     # Используем preloaded данные если переданы, иначе lazy-запрос (для единичных вызовов)
     if last_msgs is not None:
@@ -1328,6 +1387,19 @@ def _chat_to_response(
     else:
         unread = get_unread_count(db, chat.id, employee_id)
 
+    if pinned_ids is not None:
+        is_pinned = chat.id in pinned_ids
+    else:
+        is_pinned = (
+            db.query(UserChatPin)
+            .filter(
+                UserChatPin.employee_id == employee_id,
+                UserChatPin.chat_id == chat.id,
+            )
+            .first()
+            is not None
+        )
+
     return InternalChatResponse(
         id=chat.id,
         chat_type=chat.chat_type,
@@ -1340,10 +1412,13 @@ def _chat_to_response(
         created_by=chat.created_by,
         created_at=chat.created_at,
         is_active=chat.is_active,
+        is_admin_chat=bool(getattr(chat, "is_admin_chat", False)),
+        admin_chat_type=getattr(chat, "admin_chat_type", None),
         last_message=last_msg.content if last_msg and last_msg.message_type == "text" else (f"[{last_msg.message_type}]" if last_msg else None),
         last_message_at=last_msg.created_at if last_msg else None,
         unread_count=unread,
         member_count=member_count,
+        is_pinned_by_user=is_pinned,
     )
 
 

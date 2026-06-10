@@ -265,3 +265,21 @@ class ChatMixin:
         base = self.base_url.replace("http://", "ws://").replace("https://", "wss://")
         token = getattr(self, "token", "") or ""
         return f"{base}/api/v1/ws/chat/{chat_id}?token={token}"
+
+    def pin_chat(self, chat_id: int) -> bool:
+        """Закрепить чат в верхней части списка."""
+        try:
+            r = self._request("POST", f"{self.base_url}/api/v1/chats/{chat_id}/pin")
+            self._handle_response(r)
+            return True
+        except Exception:
+            return False
+
+    def unpin_chat(self, chat_id: int) -> bool:
+        """Открепить чат."""
+        try:
+            r = self._request("DELETE", f"{self.base_url}/api/v1/chats/{chat_id}/pin")
+            self._handle_response(r)
+            return True
+        except Exception:
+            return False

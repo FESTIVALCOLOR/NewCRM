@@ -89,7 +89,7 @@ class EmployeeChatsTab(QWidget):
         sr.setSpacing(0)
 
         self._search = QLineEdit()
-        self._search.setPlaceholderText("Поиск по адресу объекта…")
+        self._search.setPlaceholderText("Поиск по названию чата…")
         self._search.setFixedHeight(28)
         self._search.setStyleSheet("""
             QLineEdit {
@@ -167,48 +167,114 @@ class EmployeeChatsTab(QWidget):
         self._filter_list(self._search.text())
 
     def _filter_list(self, text: str):
+        from PyQt5.QtCore import QSize
+        from PyQt5.QtGui import QColor
+
         self._list.clear()
         q = text.lower()
+
+        visible = []
         for chat in self._chats:
             title = chat.get("title") or f"Чат #{chat['id']}"
             if q and q not in title.lower():
                 continue
+            visible.append((chat, title))
+
+        admin = [(c, t) for c, t in visible if c.get("is_admin_chat")]
+        pinned = [(c, t) for c, t in visible if not c.get("is_admin_chat") and c.get("is_pinned_by_user")]
+        regular = [(c, t) for c, t in visible if not c.get("is_admin_chat") and not c.get("is_pinned_by_user")]
+
+        def add_section_header(label: str):
+            sep = QListWidgetItem(label)
+            sep.setFlags(Qt.NoItemFlags)
+            sep.setBackground(QColor("#F0F0F0"))
+            sep.setForeground(QColor("#888888"))
+            sep.setSizeHint(QSize(0, 22))
+            font = sep.font()
+            font.setPointSize(8)
+            font.setBold(True)
+            sep.setFont(font)
+            self._list.addItem(sep)
+
+        def add_chat_row(chat, title):
             item = QListWidgetItem()
             item.setData(Qt.UserRole, chat)
             widget = self._make_chat_item(chat, title)
-            from PyQt5.QtCore import QSize
-
             lines = max(1, (len(title) + 39) // 40)
             row_h = max(56, 32 + lines * 18)
             item.setSizeHint(QSize(0, row_h))
             self._list.addItem(item)
             self._list.setItemWidget(item, widget)
 
+        if admin:
+            add_section_header("  АДМИНИСТРАТИВНЫЕ")
+            for chat, title in admin:
+                add_chat_row(chat, title)
+
+        if pinned:
+            add_section_header("  ЗАКРЕПЛЁННЫЕ")
+            for chat, title in pinned:
+                add_chat_row(chat, title)
+
+        if regular:
+            if admin or pinned:
+                add_section_header("  ВСЕ ЧАТЫ")
+            for chat, title in regular:
+                add_chat_row(chat, title)
+
     def _make_chat_item(self, chat: dict, title: str) -> QWidget:
+        is_admin = bool(chat.get("is_admin_chat"))
+        is_pinned = bool(chat.get("is_pinned_by_user"))
+
+        if is_admin:
+            bg = "#E3F2FD"
+            border = "border-left: 3px solid #1565C0;"
+            avatar_bg = "#BBDEFB"
+            avatar_color = "#0D47A1"
+            avatar_char = "А"
+            title_color = "#0D47A1"
+        elif is_pinned:
+            bg = "#FFFDE7"
+            border = "border-left: 3px solid #F9A825;"
+            avatar_bg = "#FFF9C4"
+            avatar_color = "#F57F17"
+            avatar_char = "С"
+            title_color = "#212121"
+        else:
+            bg = "transparent"
+            border = ""
+            avatar_bg = "#FFF8DC"
+            avatar_color = "#a0880c"
+            avatar_char = "С"
+            title_color = "#212121"
+
         w = QWidget()
+        w.setStyleSheet(f"QWidget {{ background: {bg}; {border} }}")
         h = QHBoxLayout(w)
         h.setContentsMargins(10, 6, 10, 6)
         h.setSpacing(10)
 
-        # Аватар — круглый с иконкой чата
-        avatar = QLabel("С")
+        # Аватар
+        avatar = QLabel(avatar_char)
         avatar.setFixedSize(40, 40)
         avatar.setAlignment(Qt.AlignCenter)
-        avatar.setStyleSheet("""
-            QLabel {
-                background: #FFF8DC;
-                color: #a0880c;
+        avatar.setStyleSheet(f"""
+            QLabel {{
+                background: {avatar_bg};
+                color: {avatar_color};
                 border-radius: 20px;
                 font-size: 16px;
                 font-weight: bold;
-            }
+            }}
         """)
         h.addWidget(avatar)
 
         v = QVBoxLayout()
         v.setSpacing(2)
-        title_lbl = QLabel(title)
-        title_lbl.setStyleSheet("font-weight: bold; font-size: 12px; color: #212121;")
+
+        title_prefix = "📌 " if is_pinned else ""
+        title_lbl = QLabel(title_prefix + title)
+        title_lbl.setStyleSheet(f"font-weight: bold; font-size: 12px; color: {title_color};")
         title_lbl.setWordWrap(True)
         title_lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         v.addWidget(title_lbl)
@@ -233,6 +299,26 @@ class EmployeeChatsTab(QWidget):
                 border-radius: 12px; font-size: 9px; font-weight: bold;
             """)
             h.addWidget(badge)
+
+        # Кнопка закрепить / открепить (только для не-административных чатов)
+        if not is_admin:
+            pin_btn = QPushButton("📌")
+            pin_btn.setFixedSize(26, 26)
+            pin_btn.setToolTip("Открепить" if is_pinned else "Закрепить сверху")
+            pin_btn.setStyleSheet("""
+                QPushButton {
+                    background: transparent; border: none;
+                    font-size: 14px; padding: 0;
+                    opacity: 0.6;
+                }
+                QPushButton:hover { background: rgba(0,0,0,0.06); border-radius: 4px; }
+            """)
+            chat_id = chat["id"]
+            if is_pinned:
+                pin_btn.clicked.connect(lambda _, cid=chat_id: self._unpin_chat(cid))
+            else:
+                pin_btn.clicked.connect(lambda _, cid=chat_id: self._pin_chat(cid))
+            h.addWidget(pin_btn)
 
         return w
 
@@ -272,6 +358,34 @@ class EmployeeChatsTab(QWidget):
                 self._chats[i] = dict(chat, unread_count=unread_count)
                 break
         self._filter_list(self._search.text())
+
+    # ===========================================================
+    # Pin / Unpin
+    # ===========================================================
+
+    def _pin_chat(self, chat_id: int):
+        def _worker():
+            ok = self._api.pin_chat(chat_id)
+            if ok:
+                for i, c in enumerate(self._chats):
+                    if c.get("id") == chat_id:
+                        self._chats[i] = dict(c, is_pinned_by_user=True)
+                        break
+                self._sig_chats.emit(self._chats)
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _unpin_chat(self, chat_id: int):
+        def _worker():
+            ok = self._api.unpin_chat(chat_id)
+            if ok:
+                for i, c in enumerate(self._chats):
+                    if c.get("id") == chat_id:
+                        self._chats[i] = dict(c, is_pinned_by_user=False)
+                        break
+                self._sig_chats.emit(self._chats)
+
+        threading.Thread(target=_worker, daemon=True).start()
 
     # ===========================================================
     # Публичные

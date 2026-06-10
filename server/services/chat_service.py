@@ -29,6 +29,7 @@ from database import (
     InternalChatMessageReaction,
     StageExecutor,
     SupervisionCard,
+    UserChatPin,
 )
 
 logger = logging.getLogger(__name__)
@@ -823,8 +824,8 @@ def get_employee_chats(db: Session, employee_id: int, chat_type: Optional[str] =
 
 
 def get_all_accessible_chats(db: Session, employee_id: int, chat_type: Optional[str] = None) -> list:
-    """Все чаты, доступные сотруднику: явный участник + назначен на карточку."""
-    # Чаты где сотрудник явно участник
+    """Все чаты, доступные сотруднику: явный участник + назначен на карточку + адм.чаты по позиции."""
+    # Чаты где сотрудник явно участник (включает адм.чаты — они туда добавляются при ensure)
     q_member_ids = (
         db.query(InternalChat.id)
         .join(InternalChatMember, InternalChatMember.chat_id == InternalChat.id)
@@ -1187,3 +1188,135 @@ def create_supervision_employee_chat(db: Session, supervision_card_id: int, crea
     db.commit()
     db.refresh(chat)
     return chat
+
+
+# =========================
+# Административные чаты
+# =========================
+
+_ADMIN_CHAT_CONFIGS = [
+    {
+        "admin_chat_type": "ip",
+        "title": "Административный чат ИП",
+        "positions": None,  # заполняется ниже после импорта констант
+    },
+    {
+        "admin_chat_type": "shp",
+        "title": "Административный чат ШП",
+        "positions": None,
+    },
+    {
+        "admin_chat_type": "an",
+        "title": "Административный чат АН",
+        "positions": None,
+    },
+]
+
+
+def _get_admin_chat_positions(admin_chat_type: str) -> list[str]:
+    from constants import ADMIN_POSITIONS, DAN_ROLES
+
+    if admin_chat_type == "an":
+        return list(ADMIN_POSITIONS) + list(DAN_ROLES)
+    return list(ADMIN_POSITIONS)
+
+
+def ensure_admin_chats(db: Session) -> None:
+    """Создать три административных чата если не существуют и синхронизировать участников."""
+    for cfg in _ADMIN_CHAT_CONFIGS:
+        atype = cfg["admin_chat_type"]
+        chat = (
+            db.query(InternalChat)
+            .filter(
+                InternalChat.is_admin_chat == True,  # noqa: E712
+                InternalChat.admin_chat_type == atype,
+            )
+            .first()
+        )
+
+        if not chat:
+            chat = InternalChat(
+                chat_type="employee",
+                title=cfg["title"],
+                is_admin_chat=True,
+                admin_chat_type=atype,
+                is_active=True,
+            )
+            db.add(chat)
+            db.flush()
+
+        # Синхронизировать участников
+        positions = _get_admin_chat_positions(atype)
+        eligible = db.query(Employee).filter(Employee.position.in_(positions), Employee.status == "активный").all()
+        existing_ids = {
+            m.employee_id
+            for m in db.query(InternalChatMember)
+            .filter(
+                InternalChatMember.chat_id == chat.id,
+                InternalChatMember.is_active == True,  # noqa: E712
+            )
+            .all()
+        }
+        for emp in eligible:
+            if emp.id not in existing_ids:
+                db.add(
+                    InternalChatMember(
+                        chat_id=chat.id,
+                        member_type="employee",
+                        employee_id=emp.id,
+                        is_active=True,
+                    )
+                )
+
+    db.commit()
+
+
+def add_employee_to_admin_chats(db: Session, employee_id: int, position: str) -> None:
+    """Добавить сотрудника в административные чаты при изменении позиции."""
+    from constants import ADMIN_POSITIONS, DAN_ROLES
+
+    for atype in ("ip", "shp", "an"):
+        positions = _get_admin_chat_positions(atype)
+        if position not in positions:
+            continue
+        chat = (
+            db.query(InternalChat)
+            .filter(
+                InternalChat.is_admin_chat == True,  # noqa: E712
+                InternalChat.admin_chat_type == atype,
+            )
+            .first()
+        )
+        if not chat:
+            continue
+        already = (
+            db.query(InternalChatMember)
+            .filter(
+                InternalChatMember.chat_id == chat.id,
+                InternalChatMember.employee_id == employee_id,
+            )
+            .first()
+        )
+        if already:
+            already.is_active = True
+        else:
+            db.add(
+                InternalChatMember(
+                    chat_id=chat.id,
+                    member_type="employee",
+                    employee_id=employee_id,
+                    is_active=True,
+                )
+            )
+    db.commit()
+
+
+# =========================
+# Закреплённые чаты
+# =========================
+
+
+def get_user_pinned_chat_ids(db: Session, employee_id: int) -> set[int]:
+    """Множество ID чатов, закреплённых пользователем."""
+    rows = db.query(UserChatPin.chat_id).filter(UserChatPin.employee_id == employee_id).all()
+    return {r[0] for r in rows}

@@ -1130,6 +1130,10 @@ class InternalChat(Base):
     # employee — чат сотрудников по заказу, client — чат с клиентом
     chat_type = Column(String(20), nullable=False)  # 'employee' / 'client'
 
+    # Административные общие чаты (не привязаны к заказу)
+    is_admin_chat = Column(Boolean, default=False, nullable=False, server_default="false")
+    admin_chat_type = Column(String(10), nullable=True)  # 'ip' | 'shp' | 'an'
+
     crm_card_id = Column(Integer, ForeignKey("crm_cards.id", ondelete="CASCADE"), nullable=True, index=True)
     supervision_card_id = Column(Integer, nullable=True)
     contract_id = Column(Integer, ForeignKey("contracts.id", ondelete="CASCADE"), nullable=True, index=True)
@@ -1240,6 +1244,21 @@ class InternalChatMessageReaction(Base):
     guest_token = Column(String(36), nullable=True)
     emoji = Column(String(10), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class UserChatPin(Base):
+    """Закреплённые чаты пользователя (персональный порядок)"""
+
+    __tablename__ = "user_chat_pins"
+
+    id = Column(Integer, primary_key=True, index=True)
+    employee_id = Column(Integer, ForeignKey("employees.id", ondelete="CASCADE"), nullable=False, index=True)
+    chat_id = Column(Integer, ForeignKey("internal_chats.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    from sqlalchemy import UniqueConstraint
+
+    __table_args__ = (UniqueConstraint("employee_id", "chat_id", name="uq_user_chat_pin"),)
 
 
 class DeletedContract(Base):
