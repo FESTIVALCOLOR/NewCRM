@@ -230,7 +230,8 @@ async def startup_event():
         with engine.begin() as conn:
             conn.execute(_text_admin_chat("ALTER TABLE internal_chats ADD COLUMN IF NOT EXISTS is_admin_chat BOOLEAN DEFAULT FALSE"))
             conn.execute(_text_admin_chat("ALTER TABLE internal_chats ADD COLUMN IF NOT EXISTS admin_chat_type VARCHAR(10)"))
-        logger.info("Migrated internal_chats: added is_admin_chat, admin_chat_type")
+            conn.execute(_text_admin_chat("CREATE UNIQUE INDEX IF NOT EXISTS uq_admin_chat_type ON internal_chats (admin_chat_type) WHERE is_admin_chat = TRUE"))
+        logger.info("Migrated internal_chats: added is_admin_chat, admin_chat_type, unique index")
     except Exception as e:
         if "duplicate" not in str(e).lower() and "already" not in str(e).lower():
             logger.debug(f"internal_chats admin chat migration: {e}")

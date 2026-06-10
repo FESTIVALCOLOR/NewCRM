@@ -252,54 +252,99 @@ class ClientChatsTab(QWidget):
         self._filter_list(self._search.text())
 
     def _filter_list(self, text: str):
+        from PyQt5.QtCore import QSize
+        from PyQt5.QtGui import QColor
+
         self._list.clear()
         q = text.lower()
+
+        visible = []
         for chat in self._chats:
             title = chat.get("title") or f"Чат #{chat['id']}"
             if q and q not in title.lower():
                 continue
+            visible.append((chat, title))
+
+        pinned = [(c, t) for c, t in visible if c.get("is_pinned_by_user")]
+        regular = [(c, t) for c, t in visible if not c.get("is_pinned_by_user")]
+
+        def add_section_header(label: str):
+            sep = QListWidgetItem(label)
+            sep.setFlags(Qt.NoItemFlags)
+            sep.setBackground(QColor("#F0F0F0"))
+            sep.setForeground(QColor("#888888"))
+            sep.setSizeHint(QSize(0, 22))
+            font = sep.font()
+            font.setPointSize(8)
+            font.setBold(True)
+            sep.setFont(font)
+            self._list.addItem(sep)
+
+        def add_chat_row(chat, title):
             item = QListWidgetItem()
             item.setData(Qt.UserRole, chat)
             widget = self._make_chat_item(chat, title)
-            # Динамическая высота: минимум 56px, увеличивается при переносе названия
-            from PyQt5.QtCore import QSize
-
-            lines = max(1, (len(title) + 39) // 40)  # приблизительный подсчёт строк
+            lines = max(1, (len(title) + 39) // 40)
             row_h = max(56, 32 + lines * 18)
             item.setSizeHint(QSize(0, row_h))
             self._list.addItem(item)
             self._list.setItemWidget(item, widget)
 
+        if pinned:
+            add_section_header("  ЗАКРЕПЛЁННЫЕ")
+            for chat, title in pinned:
+                add_chat_row(chat, title)
+
+        if regular:
+            if pinned:
+                add_section_header("  ВСЕ ЧАТЫ")
+            for chat, title in regular:
+                add_chat_row(chat, title)
+
     def _make_chat_item(self, chat: dict, title: str) -> QWidget:
+        is_pinned = bool(chat.get("is_pinned_by_user"))
+
+        if is_pinned:
+            bg = "#F1F8E9"
+            border = "border-left: 3px solid #558B2F;"
+            avatar_bg = "#DCEDC8"
+            avatar_color = "#33691E"
+        else:
+            bg = "transparent"
+            border = ""
+            avatar_bg = "#E8F5E9"
+            avatar_color = "#2E7D32"
+
         w = QWidget()
+        w.setStyleSheet(f"QWidget {{ background: {bg}; {border} }}")
         h = QHBoxLayout(w)
         h.setContentsMargins(10, 6, 10, 6)
         h.setSpacing(10)
 
-        # Аватар — круглый зелёный для клиентских чатов
         avatar = QLabel("К")
         avatar.setFixedSize(40, 40)
         avatar.setAlignment(Qt.AlignCenter)
-        avatar.setStyleSheet("""
-            QLabel {
-                background: #E8F5E9;
-                color: #2E7D32;
+        avatar.setStyleSheet(f"""
+            QLabel {{
+                background: {avatar_bg};
+                color: {avatar_color};
                 border-radius: 20px;
                 font-size: 16px;
                 font-weight: bold;
-            }
+            }}
         """)
         h.addWidget(avatar)
 
         v = QVBoxLayout()
         v.setSpacing(2)
-        title_lbl = QLabel(title)
+
+        title_prefix = "📌 " if is_pinned else ""
+        title_lbl = QLabel(title_prefix + title)
         title_lbl.setStyleSheet("font-weight: bold; font-size: 12px; color: #212121;")
         title_lbl.setWordWrap(True)
         title_lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         v.addWidget(title_lbl)
 
-        # Показываем последнее сообщение или количество участников
         last = chat.get("last_message", "")
         if last:
             sub_lbl = QLabel(last[:50] + ("…" if len(last) > 50 else ""))
@@ -327,6 +372,23 @@ class ClientChatsTab(QWidget):
                 border-radius: 12px; font-size: 9px; font-weight: bold;
             """)
             h.addWidget(badge)
+
+        pin_btn = QPushButton("📌")
+        pin_btn.setFixedSize(26, 26)
+        pin_btn.setToolTip("Открепить" if is_pinned else "Закрепить сверху")
+        pin_btn.setStyleSheet("""
+            QPushButton {
+                background: transparent; border: none;
+                font-size: 14px; padding: 0;
+            }
+            QPushButton:hover { background: rgba(0,0,0,0.06); border-radius: 4px; }
+        """)
+        chat_id = chat["id"]
+        if is_pinned:
+            pin_btn.clicked.connect(lambda _, cid=chat_id: self._unpin_chat(cid))
+        else:
+            pin_btn.clicked.connect(lambda _, cid=chat_id: self._pin_chat(cid))
+        h.addWidget(pin_btn)
 
         return w
 
@@ -417,6 +479,38 @@ class ClientChatsTab(QWidget):
                 InviteLinkDialog(link=link, parent=self).exec_()
         except Exception as e:
             print(f"[ClientChatsTab] Ошибка создания ссылки-приглашения: {e}")
+
+    # ===========================================================
+    # Pin / Unpin
+    # ===========================================================
+
+    def _pin_chat(self, chat_id: int):
+        import threading
+
+        def _worker():
+            ok = self._api.pin_chat(chat_id)
+            if ok:
+                for i, c in enumerate(self._chats):
+                    if c.get("id") == chat_id:
+                        self._chats[i] = dict(c, is_pinned_by_user=True)
+                        break
+                self._sig_chats.emit(self._chats)
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _unpin_chat(self, chat_id: int):
+        import threading
+
+        def _worker():
+            ok = self._api.unpin_chat(chat_id)
+            if ok:
+                for i, c in enumerate(self._chats):
+                    if c.get("id") == chat_id:
+                        self._chats[i] = dict(c, is_pinned_by_user=False)
+                        break
+                self._sig_chats.emit(self._chats)
+
+        threading.Thread(target=_worker, daemon=True).start()
 
     # ===========================================================
     # Публичные

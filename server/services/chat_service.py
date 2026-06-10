@@ -1214,11 +1214,12 @@ _ADMIN_CHAT_CONFIGS = [
 
 
 def _get_admin_chat_positions(admin_chat_type: str) -> list[str]:
-    from constants import ADMIN_POSITIONS, DAN_ROLES
+    from constants import ADMIN_POSITIONS, DAN_ROLES, POSITION_MANAGER
 
+    base = list(ADMIN_POSITIONS) + [POSITION_MANAGER]
     if admin_chat_type == "an":
-        return list(ADMIN_POSITIONS) + list(DAN_ROLES)
-    return list(ADMIN_POSITIONS)
+        return base + list(DAN_ROLES)
+    return base
 
 
 def ensure_admin_chats(db: Session) -> None:
