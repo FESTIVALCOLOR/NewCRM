@@ -1246,20 +1246,12 @@ def ensure_admin_chats(db: Session) -> None:
             db.add(chat)
             db.flush()
 
-        # Синхронизировать участников
+        # Синхронизировать участников (проверяем по employee_id без учёта is_active)
         positions = _get_admin_chat_positions(atype)
         eligible = db.query(Employee).filter(Employee.position.in_(positions), Employee.status == "активный").all()
-        existing_ids = {
-            m.employee_id
-            for m in db.query(InternalChatMember)
-            .filter(
-                InternalChatMember.chat_id == chat.id,
-                InternalChatMember.is_active == True,  # noqa: E712
-            )
-            .all()
-        }
+        existing = {m.employee_id: m for m in db.query(InternalChatMember).filter(InternalChatMember.chat_id == chat.id).all()}
         for emp in eligible:
-            if emp.id not in existing_ids:
+            if emp.id not in existing:
                 db.add(
                     InternalChatMember(
                         chat_id=chat.id,
@@ -1268,6 +1260,8 @@ def ensure_admin_chats(db: Session) -> None:
                         is_active=True,
                     )
                 )
+            elif not existing[emp.id].is_active:
+                existing[emp.id].is_active = True
 
     db.commit()
 

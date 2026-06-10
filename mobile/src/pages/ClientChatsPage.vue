@@ -31,7 +31,7 @@
             v-for="chat in pinnedChats"
             :key="chat.id"
             right-color="warning"
-            @right="(evt) => onUnpin(chat, evt)"
+            @right="(evt) => swipeUnpin(chat, evt)"
           >
             <template #right>
               <q-icon name="push_pin" />
@@ -63,13 +63,25 @@
                 </q-item-label>
               </q-item-section>
 
-              <q-item-section side>
+              <q-item-section side class="items-center row no-wrap q-gutter-xs">
                 <q-badge
                   v-if="chat.unread_count"
                   color="negative"
                   :label="chat.unread_count"
                   rounded
                 />
+                <q-btn
+                  flat
+                  dense
+                  round
+                  icon="push_pin"
+                  color="amber-8"
+                  size="sm"
+                  :loading="pinLoading[chat.id]"
+                  @click.stop="unpinChat(chat)"
+                >
+                  <q-tooltip>Открепить</q-tooltip>
+                </q-btn>
               </q-item-section>
             </q-item>
           </q-slide-item>
@@ -86,7 +98,7 @@
             v-for="chat in regularChats"
             :key="chat.id"
             right-color="primary"
-            @right="(evt) => onPin(chat, evt)"
+            @right="(evt) => swipePin(chat, evt)"
           >
             <template #right>
               <q-icon name="push_pin" />
@@ -116,13 +128,25 @@
                 </q-item-label>
               </q-item-section>
 
-              <q-item-section side>
+              <q-item-section side class="items-center row no-wrap q-gutter-xs">
                 <q-badge
                   v-if="chat.unread_count"
                   color="negative"
                   :label="chat.unread_count"
                   rounded
                 />
+                <q-btn
+                  flat
+                  dense
+                  round
+                  icon="push_pin"
+                  color="grey-5"
+                  size="sm"
+                  :loading="pinLoading[chat.id]"
+                  @click.stop="pinChat(chat)"
+                >
+                  <q-tooltip>Закрепить</q-tooltip>
+                </q-btn>
               </q-item-section>
             </q-item>
           </q-slide-item>
@@ -154,6 +178,7 @@ const $q = useQuasar()
 const loading = ref(false)
 const chats = ref([])
 const searchText = ref('')
+const pinLoading = ref({})
 
 function fuzzyScore(str, query) {
   if (!query) return 3
@@ -187,9 +212,7 @@ const regularChats = computed(() => filteredChats.value.filter(c => !c.is_pinned
 async function loadChats() {
   loading.value = true
   try {
-    const { data } = await api.get('/api/v1/chats', {
-      params: { chat_type: 'client' },
-    })
+    const { data } = await api.get('/api/v1/chats', { params: { chat_type: 'client' } })
     chats.value = Array.isArray(data) ? data : (data.items || [])
   } catch (e) {
     console.error('[ClientChatsPage] Ошибка:', e)
@@ -202,7 +225,33 @@ function openChat(chat) {
   router.push({ name: 'client-chat-room', params: { chatId: chat.id } })
 }
 
-async function onPin(chat, { reset }) {
+async function pinChat(chat) {
+  pinLoading.value[chat.id] = true
+  try {
+    await api.post(`/api/v1/chats/${chat.id}/pin`)
+    chat.is_pinned_by_user = true
+    $q.notify({ type: 'positive', message: 'Чат закреплён', timeout: 1500 })
+  } catch {
+    $q.notify({ type: 'negative', message: 'Не удалось закрепить чат' })
+  } finally {
+    pinLoading.value[chat.id] = false
+  }
+}
+
+async function unpinChat(chat) {
+  pinLoading.value[chat.id] = true
+  try {
+    await api.delete(`/api/v1/chats/${chat.id}/pin`)
+    chat.is_pinned_by_user = false
+    $q.notify({ type: 'info', message: 'Чат откреплён', timeout: 1500 })
+  } catch {
+    $q.notify({ type: 'negative', message: 'Не удалось открепить чат' })
+  } finally {
+    pinLoading.value[chat.id] = false
+  }
+}
+
+async function swipePin(chat, { reset }) {
   try {
     await api.post(`/api/v1/chats/${chat.id}/pin`)
     chat.is_pinned_by_user = true
@@ -213,7 +262,7 @@ async function onPin(chat, { reset }) {
   }
 }
 
-async function onUnpin(chat, { reset }) {
+async function swipeUnpin(chat, { reset }) {
   try {
     await api.delete(`/api/v1/chats/${chat.id}/pin`)
     chat.is_pinned_by_user = false
