@@ -2145,8 +2145,8 @@ const defaultStages = [
   { code: 'STAGE_2_PLUMBING', name: 'Закупка сантехники' },
   { code: 'STAGE_3_EQUIPMENT', name: 'Закупка оборудования' },
   { code: 'STAGE_4_DOORS', name: 'Закупка дверей и окон' },
-  { code: 'STAGE_5_WALLS', name: 'Закупка настенных материалов' },
-  { code: 'STAGE_6_FLOORS', name: 'Закупка напольных материалов' },
+  { code: 'STAGE_5_WALL', name: 'Закупка настенных материалов' },
+  { code: 'STAGE_6_FLOOR', name: 'Закупка напольных материалов' },
   { code: 'STAGE_7_STUCCO', name: 'Лепной декор' },
   { code: 'STAGE_8_LIGHTING', name: 'Освещение' },
   { code: 'STAGE_9_APPLIANCES', name: 'Бытовая техника' },
@@ -2488,6 +2488,11 @@ async function saveTimelineEntry() {
       await ax.post(`/api/v1/supervision-timeline/${card.value.id}/init`)
       const { data } = await supervisionApi.getTimeline(card.value.id)
       timeline.value = data?.entries || data || []
+      // Берём реальный stage_code из БД (defaultStages может не совпадать)
+      const dbEntry = timeline.value.find(
+        (e) => e.stage_code === editEntry.value.stage_code || e.stage_name === editEntry.value.stage_name,
+      )
+      if (dbEntry) editEntry.value.stage_code = dbEntry.stage_code
     }
     await supervisionApi.updateTimelineEntry(card.value.id, editEntry.value.stage_code, {
       plan_date: editEntry.value.plan_date,
