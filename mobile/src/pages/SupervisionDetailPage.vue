@@ -2634,6 +2634,19 @@ async function reloadData() {
   if (visitsRes.status === 'fulfilled') visits.value = visitsRes.value.data || []
   console.log('[Supervision] Visits loaded:', visits.value.length, visits.value.map(v => v.visit_type))
 
+  // Авто-миграция: если таймлайн есть, но STAGE_CEILING отсутствует — запускаем init (добавит стадию)
+  const hasCeiling = timeline.value.some((e) => e.stage_code === 'STAGE_CEILING')
+  if (timeline.value.length > 0 && !hasCeiling) {
+    try {
+      const { api: ax } = await import('src/boot/axios')
+      await ax.post(`/api/v1/supervision-timeline/${cardId}/init`)
+      const { data: tl } = await supervisionApi.getTimeline(cardId)
+      timeline.value = tl?.entries || tl || []
+      const { data: s } = await supervisionApi.getTimelineSummary(cardId)
+      summary.value = s
+    } catch { /* ok */ }
+  }
+
   // Оплаты надзора
   try {
     const { api: ax } = await import('src/boot/axios')
