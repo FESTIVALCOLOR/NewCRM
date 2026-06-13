@@ -3635,11 +3635,10 @@ async function transferToSupervision() {
     actionLoading.value = true
     try {
       const { api: ax } = await import('src/boot/axios')
-      // 1. Обновляем статус → АВТОРСКИЙ НАДЗОР
+      // 1. Обновляем статус договора → АВТОРСКИЙ НАДЗОР
       if (card.value.contract_id) {
         await contractsApi.update(card.value.contract_id, { status: 'АВТОРСКИЙ НАДЗОР' })
       }
-      await crmApi.moveCard(card.value.id, 'АВТОРСКИЙ НАДЗОР')
       // 2. Создаём карточку надзора (если нет)
       try {
         await ax.post('/api/v1/supervision/cards', {

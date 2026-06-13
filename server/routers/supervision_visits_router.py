@@ -373,7 +373,14 @@ async def create_visit(
 
     # Запись в историю надзора (отдельная транзакция)
     try:
-        visit_date_display = data.visit_date.strftime("%d.%m.%Y") if data.visit_date else ""
+        visit_date_display = ""
+        if data.visit_date:
+            try:
+                from datetime import datetime as _dt_parse
+
+                visit_date_display = _dt_parse.strptime(str(data.visit_date), "%Y-%m-%d").strftime("%d.%m.%Y")
+            except Exception:
+                visit_date_display = str(data.visit_date)
         stage_display = data.stage_name or ""
         visit_type_display = data.visit_type or "На объект"
         history_msg = f"Добавлен выезд ({visit_type_display}): {stage_display}, дата: {visit_date_display}"

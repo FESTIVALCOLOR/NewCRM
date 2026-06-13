@@ -407,7 +407,17 @@
                 @click="editTimelineEntry(entry)"
               >
                 <q-item-section avatar>
-                  <q-icon :name="stageIcon(entry.status)" :color="stageColor(entry.status)" size="20px" />
+                  <q-btn
+                    flat
+                    dense
+                    round
+                    size="sm"
+                    :icon="entry.status === 'Выполнено' ? 'check_circle' : 'radio_button_unchecked'"
+                    :color="entry.status === 'Выполнено' ? 'positive' : 'grey-4'"
+                    @click.stop="toggleStageComplete(entry)"
+                  >
+                    <q-tooltip>{{ entry.status === 'Выполнено' ? 'Снять отметку' : 'Отметить выполненным' }}</q-tooltip>
+                  </q-btn>
                 </q-item-section>
                 <q-item-section>
                   <q-item-label class="text-weight-medium">
@@ -2157,12 +2167,13 @@ function initAndEditStage(s) {
 
 const supervisionColumns = [
   { label: 'Новый заказ', value: 'Новый заказ' },
+  { label: 'В ожидании', value: 'В ожидании' },
   { label: 'Стадия 1: Закупка керамогранита', value: 'Стадия 1: Закупка керамогранита' },
   { label: 'Стадия 2: Закупка сантехники', value: 'Стадия 2: Закупка сантехники' },
   { label: 'Стадия 3: Закупка оборудования', value: 'Стадия 3: Закупка оборудования' },
-  { label: 'Стадия 4: Двери и окна', value: 'Стадия 4: Двери и окна' },
-  { label: 'Стадия 5: Настенные материалы', value: 'Стадия 5: Настенные материалы' },
-  { label: 'Стадия 6: Напольные материалы', value: 'Стадия 6: Напольные материалы' },
+  { label: 'Стадия 4: Закупка дверей и окон', value: 'Стадия 4: Закупка дверей и окон' },
+  { label: 'Стадия 5: Закупка настенных материалов', value: 'Стадия 5: Закупка настенных материалов' },
+  { label: 'Стадия 6: Закупка напольных материалов', value: 'Стадия 6: Закупка напольных материалов' },
   { label: 'Стадия 7: Лепной декор', value: 'Стадия 7: Лепной декор' },
   { label: 'Стадия 8: Освещение', value: 'Стадия 8: Освещение' },
   { label: 'Стадия 9: Бытовая техника', value: 'Стадия 9: Бытовая техника' },
@@ -2453,9 +2464,31 @@ function editTimelineEntry(entry) {
   showEditEntry.value = true
 }
 
+async function toggleStageComplete(entry) {
+  const newStatus = entry.status === 'Выполнено' ? 'Не начато' : 'Выполнено'
+  try {
+    await supervisionApi.updateTimelineEntry(card.value.id, entry.stage_code, {
+      status: newStatus,
+      actual_date: newStatus === 'Выполнено' ? (entry.actual_date || new Date().toISOString().slice(0, 10)) : null,
+    })
+    entry.status = newStatus
+    $q.notify({ type: 'positive', message: newStatus === 'Выполнено' ? 'Стадия отмечена выполненной' : 'Отметка снята', timeout: 1500 })
+    await reloadData()
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
+  }
+}
+
 async function saveTimelineEntry() {
   if (!editEntry.value || !card.value) return
   try {
+    // Если таймлайн ещё не инициализирован — инициализируем
+    if (timeline.value.length === 0) {
+      const { api: ax } = await import('src/boot/axios')
+      await ax.post(`/api/v1/supervision-timeline/${card.value.id}/init`)
+      const { data } = await supervisionApi.getTimeline(card.value.id)
+      timeline.value = data?.entries || data || []
+    }
     await supervisionApi.updateTimelineEntry(card.value.id, editEntry.value.stage_code, {
       plan_date: editEntry.value.plan_date,
       actual_date: editEntry.value.actual_date,
