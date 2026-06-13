@@ -511,7 +511,7 @@
           <q-card v-if="summary && summary.total_budget_planned > 0" class="is-card q-mb-md">
             <q-card-section>
               <div class="text-subtitle2 text-weight-bold q-mb-sm" style="color: #333">
-                Бюджет
+                Бюджет (итого)
               </div>
               <div class="row q-col-gutter-sm">
                 <div class="col-6" style="text-align: center">
@@ -546,6 +546,118 @@
                     {{ formatMoney(totalCommission) }}
                   </div>
                 </div>
+              </div>
+            </q-card-section>
+          </q-card>
+
+          <!-- Строительные работы -->
+          <q-card class="is-card q-mb-md">
+            <q-card-section>
+              <div class="row items-center justify-between q-mb-sm">
+                <div class="text-subtitle2 text-weight-bold" style="color: #333">
+                  Строительные работы
+                </div>
+                <q-btn
+                  v-if="!isArchived"
+                  flat
+                  dense
+                  round
+                  icon="edit"
+                  size="sm"
+                  color="grey-6"
+                  @click="openConstructionDialog"
+                />
+              </div>
+              <template v-if="budgetExtra.construction_planned || budgetExtra.construction_contractor || budgetExtra.construction_payments?.length">
+                <div class="row q-col-gutter-sm q-mb-xs">
+                  <div class="col-6" style="text-align: center">
+                    <div class="text-caption text-grey-7">
+                      Стоимость план
+                    </div>
+                    <div class="text-weight-bold">
+                      {{ formatMoney(budgetExtra.construction_planned || 0) }}
+                    </div>
+                  </div>
+                  <div class="col-6" style="text-align: center">
+                    <div class="text-caption text-grey-7">
+                      Фактические оплаты
+                    </div>
+                    <div class="text-weight-bold">
+                      {{ formatMoney(constructionActualTotal) }}
+                    </div>
+                  </div>
+                </div>
+                <div v-if="budgetExtra.construction_contractor" class="text-caption q-mb-xs">
+                  Подрядчик: <span style="color: #333; font-weight: 500">{{ budgetExtra.construction_contractor }}</span>
+                </div>
+                <div v-if="budgetExtra.construction_payments?.length" class="q-mt-xs">
+                  <div class="text-caption text-grey-7 q-mb-xs">
+                    Оплаты:
+                  </div>
+                  <div v-for="(p, idx) in budgetExtra.construction_payments" :key="idx" class="text-caption q-mb-xs" style="color: #555">
+                    {{ p.date }} — {{ formatMoney(p.amount) }}<span v-if="p.commission > 0" style="color: #2e7d32"> (ком. {{ formatMoney(p.commission) }})</span>
+                  </div>
+                </div>
+              </template>
+              <div v-else class="text-caption text-grey-5">
+                Нет данных.
+                <span v-if="!isArchived" class="text-primary cursor-pointer" @click="openConstructionDialog">Добавить</span>
+              </div>
+            </q-card-section>
+          </q-card>
+
+          <!-- Черновые материалы -->
+          <q-card class="is-card q-mb-md">
+            <q-card-section>
+              <div class="row items-center justify-between q-mb-sm">
+                <div class="text-subtitle2 text-weight-bold" style="color: #333">
+                  Черновые материалы
+                </div>
+                <q-btn
+                  v-if="!isArchived"
+                  flat
+                  dense
+                  round
+                  icon="edit"
+                  size="sm"
+                  color="grey-6"
+                  @click="openMaterialsDialog"
+                />
+              </div>
+              <template v-if="budgetExtra.materials_planned || budgetExtra.materials_supplier || budgetExtra.materials_payments?.length">
+                <div class="row q-col-gutter-sm q-mb-xs">
+                  <div class="col-6" style="text-align: center">
+                    <div class="text-caption text-grey-7">
+                      Стоимость план
+                    </div>
+                    <div class="text-weight-bold">
+                      {{ formatMoney(budgetExtra.materials_planned || 0) }}
+                    </div>
+                  </div>
+                  <div class="col-6" style="text-align: center">
+                    <div class="text-caption text-grey-7">
+                      Фактические заказы
+                    </div>
+                    <div class="text-weight-bold">
+                      {{ formatMoney(materialsActualTotal) }}
+                    </div>
+                  </div>
+                </div>
+                <div v-if="budgetExtra.materials_supplier" class="text-caption q-mb-xs">
+                  Поставщик: <span style="color: #333; font-weight: 500">{{ budgetExtra.materials_supplier }}</span>
+                </div>
+                <div v-if="budgetExtra.materials_payments?.length" class="q-mt-xs">
+                  <div class="text-caption text-grey-7 q-mb-xs">
+                    Заказы:
+                  </div>
+                  <div v-for="(p, idx) in budgetExtra.materials_payments" :key="idx" class="text-caption q-mb-xs" style="color: #555">
+                    {{ p.date }} — {{ formatMoney(p.amount) }}<span v-if="p.supplier" style="color: #888"> ({{ p.supplier }})</span><span v-if="p.commission > 0" style="color: #2e7d32"> ком. {{ formatMoney(p.commission) }}</span>
+                  </div>
+                </div>
+              </template>
+              <div v-else class="text-caption text-grey-5">
+                Нет данных.
+                <span v-if="!isArchived" class="text-primary cursor-pointer" @click="openMaterialsDialog">Добавить</span>
               </div>
             </q-card-section>
           </q-card>
@@ -1838,6 +1950,201 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
+
+    <!-- Диалог: Строительные работы -->
+    <q-dialog v-model="showConstructionDialog" persistent>
+      <q-card style="min-width: 320px; max-width: 480px; border-radius: 10px">
+        <q-card-section style="background: #F8F9FA; border-radius: 10px 10px 0 0">
+          <div class="text-subtitle1 text-weight-bold">
+            Строительные работы
+          </div>
+        </q-card-section>
+        <q-card-section>
+          <q-input
+            v-model.number="constructionForm.planned"
+            label="Итого стоимость план (₽)"
+            outlined
+            dense
+            type="number"
+            prefix="₽"
+            class="q-mb-sm"
+          />
+          <q-input
+            v-model="constructionForm.contractor"
+            label="Подрядчик"
+            outlined
+            dense
+            class="q-mb-sm"
+          />
+          <q-separator class="q-my-sm" />
+          <div class="text-caption text-weight-bold q-mb-xs" style="color: #333">
+            Фактические оплаты
+          </div>
+          <div v-for="(p, idx) in constructionForm.payments" :key="idx" class="row items-center q-mb-xs">
+            <div class="col text-caption" style="color: #555">
+              {{ p.date }} — {{ formatMoney(p.amount) }}<span v-if="p.commission > 0"> (ком. {{ formatMoney(p.commission) }})</span>
+            </div>
+            <q-btn
+              flat
+              dense
+              round
+              icon="delete"
+              size="xs"
+              color="negative"
+              @click="constructionForm.payments.splice(idx, 1)"
+            />
+          </div>
+          <div class="row q-col-gutter-xs q-mb-xs">
+            <div class="col-4">
+              <q-input
+                v-model="newConstructionPayment.date"
+                label="Дата"
+                outlined
+                dense
+                type="date"
+              />
+            </div>
+            <div class="col-4">
+              <q-input
+                v-model.number="newConstructionPayment.amount"
+                label="Сумма"
+                outlined
+                dense
+                type="number"
+                prefix="₽"
+              />
+            </div>
+            <div class="col-4">
+              <q-input
+                v-model.number="newConstructionPayment.commission"
+                label="Комиссия"
+                outlined
+                dense
+                type="number"
+                prefix="₽"
+              />
+            </div>
+          </div>
+          <q-btn
+            unelevated
+            dense
+            no-caps
+            label="+ Добавить оплату"
+            style="background: #ffd93c; color: #333; font-size: 11px"
+            @click="addConstructionPayment"
+          />
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat no-caps label="Отмена" @click="showConstructionDialog = false" />
+          <q-btn
+            unelevated
+            no-caps
+            label="Сохранить"
+            color="primary"
+            @click="saveConstructionBudget"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- Диалог: Черновые материалы -->
+    <q-dialog v-model="showMaterialsDialog" persistent>
+      <q-card style="min-width: 320px; max-width: 480px; border-radius: 10px">
+        <q-card-section style="background: #F8F9FA; border-radius: 10px 10px 0 0">
+          <div class="text-subtitle1 text-weight-bold">
+            Черновые материалы
+          </div>
+        </q-card-section>
+        <q-card-section>
+          <q-input
+            v-model.number="materialsForm.planned"
+            label="Итого план черновых материалов (₽)"
+            outlined
+            dense
+            type="number"
+            prefix="₽"
+            class="q-mb-sm"
+          />
+          <q-input
+            v-model="materialsForm.supplier"
+            label="Поставщик"
+            outlined
+            dense
+            class="q-mb-sm"
+          />
+          <q-separator class="q-my-sm" />
+          <div class="text-caption text-weight-bold q-mb-xs" style="color: #333">
+            Фактические заказы
+          </div>
+          <div v-for="(p, idx) in materialsForm.payments" :key="idx" class="row items-center q-mb-xs">
+            <div class="col text-caption" style="color: #555">
+              {{ p.date }} — {{ formatMoney(p.amount) }}<span v-if="p.supplier" style="color: #888"> ({{ p.supplier }})</span><span v-if="p.commission > 0"> ком. {{ formatMoney(p.commission) }}</span>
+            </div>
+            <q-btn
+              flat
+              dense
+              round
+              icon="delete"
+              size="xs"
+              color="negative"
+              @click="materialsForm.payments.splice(idx, 1)"
+            />
+          </div>
+          <div class="row q-col-gutter-xs q-mb-xs">
+            <div class="col-3">
+              <q-input
+                v-model="newMaterialsPayment.date"
+                label="Дата"
+                outlined
+                dense
+                type="date"
+              />
+            </div>
+            <div class="col-3">
+              <q-input
+                v-model.number="newMaterialsPayment.amount"
+                label="Сумма"
+                outlined
+                dense
+                type="number"
+                prefix="₽"
+              />
+            </div>
+            <div class="col-3">
+              <q-input v-model="newMaterialsPayment.supplier" label="Поставщик" outlined dense />
+            </div>
+            <div class="col-3">
+              <q-input
+                v-model.number="newMaterialsPayment.commission"
+                label="Комиссия"
+                outlined
+                dense
+                type="number"
+                prefix="₽"
+              />
+            </div>
+          </div>
+          <q-btn
+            unelevated
+            dense
+            no-caps
+            label="+ Добавить заказ"
+            style="background: #ffd93c; color: #333; font-size: 11px"
+            @click="addMaterialsPayment"
+          />
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat no-caps label="Отмена" @click="showMaterialsDialog = false" />
+          <q-btn
+            unelevated
+            no-caps
+            label="Сохранить"
+            color="primary"
+            @click="saveMaterialsBudget"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
@@ -1845,7 +2152,7 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
-import { supervisionApi, filesApi, employeesApi, paymentsApi, locksApi, messengerApi } from 'src/services/api'
+import { supervisionApi, supervisionBudgetApi, filesApi, employeesApi, paymentsApi, locksApi, messengerApi } from 'src/services/api'
 import VoiceRecorder from 'src/components/VoiceRecorder.vue'
 import InlineChatRoom from 'src/components/InlineChatRoom.vue'
 import { addToCalendar } from 'src/composables/useCalendar'
@@ -1869,12 +2176,30 @@ const card = ref(null)
 const timeline = ref([])
 const summary = ref(null)
 const visits = ref([])
-// Комиссия считается из timeline entries (серверный summary может не содержать)
+const budgetExtra = ref({
+  construction_planned: null, construction_contractor: null, construction_notes: null, construction_payments: [],
+  materials_planned: null, materials_supplier: null, materials_notes: null, materials_payments: [],
+})
+
+// Диалоги строительных работ и черновых материалов
+const showConstructionDialog = ref(false)
+const showMaterialsDialog = ref(false)
+const constructionForm = ref({ planned: null, contractor: '', notes: '', payments: [] })
+const materialsForm = ref({ planned: null, supplier: '', notes: '', payments: [] })
+const newConstructionPayment = ref({ date: '', amount: null, commission: null })
+const newMaterialsPayment = ref({ date: '', amount: null, supplier: '', commission: null })
+
+const constructionActualTotal = computed(() =>
+  (budgetExtra.value.construction_payments || []).reduce((s, p) => s + (Number(p.amount) || 0), 0),
+)
+const materialsActualTotal = computed(() =>
+  (budgetExtra.value.materials_payments || []).reduce((s, p) => s + (Number(p.amount) || 0), 0),
+)
+
 const totalCommission = computed(() => {
   const fromSummary = summary.value?.total_commission
   if (fromSummary && fromSummary > 0) return fromSummary
-  // Fallback: сумма commission из timeline
-  return timeline.value.reduce((sum, e) => sum + (parseFloat(e.commission) || 0), 0)
+  return timeline.value.reduce((s, e) => s + (parseFloat(e.commission) || 0), 0)
 })
 const activeTab = ref('executors')
 const svChatTabVisited = ref(false)
@@ -2149,6 +2474,7 @@ const defaultStages = [
   { code: 'STAGE_6_FLOOR', name: 'Закупка напольных материалов' },
   { code: 'STAGE_7_STUCCO', name: 'Лепной декор' },
   { code: 'STAGE_8_LIGHTING', name: 'Освещение' },
+  { code: 'STAGE_CEILING', name: 'Закупка потолочных материалов' },
   { code: 'STAGE_9_APPLIANCES', name: 'Бытовая техника' },
   { code: 'STAGE_10_CUSTOM_FURNITURE', name: 'Закупка заказной мебели' },
   { code: 'STAGE_11_FACTORY_FURNITURE', name: 'Закупка фабричной мебели' },
@@ -2176,10 +2502,11 @@ const supervisionColumns = [
   { label: 'Стадия 6: Закупка напольных материалов', value: 'Стадия 6: Закупка напольных материалов' },
   { label: 'Стадия 7: Лепной декор', value: 'Стадия 7: Лепной декор' },
   { label: 'Стадия 8: Освещение', value: 'Стадия 8: Освещение' },
-  { label: 'Стадия 9: Бытовая техника', value: 'Стадия 9: Бытовая техника' },
-  { label: 'Стадия 10: Закупка заказной мебели', value: 'Стадия 10: Закупка заказной мебели' },
-  { label: 'Стадия 11: Закупка фабричной мебели', value: 'Стадия 11: Закупка фабричной мебели' },
-  { label: 'Стадия 12: Закупка декора', value: 'Стадия 12: Закупка декора' },
+  { label: 'Стадия 9: Закупка потолочных материалов', value: 'Стадия 9: Закупка потолочных материалов' },
+  { label: 'Стадия 10: Бытовая техника', value: 'Стадия 10: Бытовая техника' },
+  { label: 'Стадия 11: Закупка заказной мебели', value: 'Стадия 11: Закупка заказной мебели' },
+  { label: 'Стадия 12: Закупка фабричной мебели', value: 'Стадия 12: Закупка фабричной мебели' },
+  { label: 'Стадия 13: Закупка декора', value: 'Стадия 13: Закупка декора' },
   { label: 'Выполненный проект', value: 'Выполненный проект' },
 ]
 
@@ -2188,14 +2515,15 @@ const stageCodesForVisit = [
   { label: 'Ст. 2: Закупка сантехники', value: 'STAGE_2_PLUMBING' },
   { label: 'Ст. 3: Закупка оборудования', value: 'STAGE_3_EQUIPMENT' },
   { label: 'Ст. 4: Двери и окна', value: 'STAGE_4_DOORS' },
-  { label: 'Ст. 5: Настенные материалы', value: 'STAGE_5_WALLS' },
-  { label: 'Ст. 6: Напольные материалы', value: 'STAGE_6_FLOORS' },
+  { label: 'Ст. 5: Настенные материалы', value: 'STAGE_5_WALL' },
+  { label: 'Ст. 6: Напольные материалы', value: 'STAGE_6_FLOOR' },
   { label: 'Ст. 7: Лепной декор', value: 'STAGE_7_STUCCO' },
   { label: 'Ст. 8: Освещение', value: 'STAGE_8_LIGHTING' },
-  { label: 'Ст. 9: Бытовая техника', value: 'STAGE_9_APPLIANCES' },
-  { label: 'Ст. 10: Заказная мебель', value: 'STAGE_10_CUSTOM_FURNITURE' },
-  { label: 'Ст. 11: Фабричная мебель', value: 'STAGE_11_FACTORY_FURNITURE' },
-  { label: 'Ст. 12: Декор', value: 'STAGE_12_DECOR' },
+  { label: 'Ст. 9: Потолочные материалы', value: 'STAGE_CEILING' },
+  { label: 'Ст. 10: Бытовая техника', value: 'STAGE_9_APPLIANCES' },
+  { label: 'Ст. 11: Заказная мебель', value: 'STAGE_10_CUSTOM_FURNITURE' },
+  { label: 'Ст. 12: Фабричная мебель', value: 'STAGE_11_FACTORY_FURNITURE' },
+  { label: 'Ст. 13: Декор', value: 'STAGE_12_DECOR' },
 ]
 
 function stageIcon(status) {
@@ -2312,6 +2640,9 @@ async function reloadData() {
     const { data } = await ax.get(`/api/v1/payments/by-supervision-card/${cardId}`)
     svPayments.value = data || []
   } catch { svPayments.value = [] }
+
+  // Бюджет (строительные работы + черновые материалы)
+  try { const { data } = await supervisionBudgetApi.get(cardId); budgetExtra.value = data } catch { /* ok */ }
 
   // История надзора
   try { const { data } = await supervisionApi.getHistory(cardId); svHistory.value = data || [] } catch { svHistory.value = [] }
@@ -2479,6 +2810,80 @@ async function toggleStageComplete(entry) {
   }
 }
 
+function openConstructionDialog() {
+  constructionForm.value = {
+    planned: budgetExtra.value.construction_planned,
+    contractor: budgetExtra.value.construction_contractor || '',
+    notes: budgetExtra.value.construction_notes || '',
+    payments: JSON.parse(JSON.stringify(budgetExtra.value.construction_payments || [])),
+  }
+  newConstructionPayment.value = { date: '', amount: null, commission: null }
+  showConstructionDialog.value = true
+}
+
+function openMaterialsDialog() {
+  materialsForm.value = {
+    planned: budgetExtra.value.materials_planned,
+    supplier: budgetExtra.value.materials_supplier || '',
+    notes: budgetExtra.value.materials_notes || '',
+    payments: JSON.parse(JSON.stringify(budgetExtra.value.materials_payments || [])),
+  }
+  newMaterialsPayment.value = { date: '', amount: null, supplier: '', commission: null }
+  showMaterialsDialog.value = true
+}
+
+function addConstructionPayment() {
+  const p = newConstructionPayment.value
+  if (!p.date || !p.amount) { $q.notify({ type: 'warning', message: 'Укажите дату и сумму' }); return }
+  constructionForm.value.payments.push({ date: p.date, amount: Number(p.amount), commission: Number(p.commission) || 0 })
+  newConstructionPayment.value = { date: '', amount: null, commission: null }
+}
+
+function addMaterialsPayment() {
+  const p = newMaterialsPayment.value
+  if (!p.date || !p.amount) { $q.notify({ type: 'warning', message: 'Укажите дату и сумму' }); return }
+  materialsForm.value.payments.push({ date: p.date, amount: Number(p.amount), supplier: p.supplier || '', commission: Number(p.commission) || 0 })
+  newMaterialsPayment.value = { date: '', amount: null, supplier: '', commission: null }
+}
+
+async function saveConstructionBudget() {
+  const toNum = (v) => (v !== '' && v !== null && v !== undefined ? Number(v) : null)
+  try {
+    const { data } = await supervisionBudgetApi.update(card.value.id, {
+      construction_planned: toNum(constructionForm.value.planned),
+      construction_contractor: constructionForm.value.contractor || null,
+      construction_notes: constructionForm.value.notes || null,
+      construction_payments: constructionForm.value.payments,
+    })
+    budgetExtra.value = data
+    showConstructionDialog.value = false
+    const { data: s } = await supervisionApi.getTimelineSummary(card.value.id)
+    summary.value = s
+    $q.notify({ type: 'positive', message: 'Строительные работы сохранены' })
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка сохранения' })
+  }
+}
+
+async function saveMaterialsBudget() {
+  const toNum = (v) => (v !== '' && v !== null && v !== undefined ? Number(v) : null)
+  try {
+    const { data } = await supervisionBudgetApi.update(card.value.id, {
+      materials_planned: toNum(materialsForm.value.planned),
+      materials_supplier: materialsForm.value.supplier || null,
+      materials_notes: materialsForm.value.notes || null,
+      materials_payments: materialsForm.value.payments,
+    })
+    budgetExtra.value = data
+    showMaterialsDialog.value = false
+    const { data: s } = await supervisionApi.getTimelineSummary(card.value.id)
+    summary.value = s
+    $q.notify({ type: 'positive', message: 'Черновые материалы сохранены' })
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка сохранения' })
+  }
+}
+
 async function saveTimelineEntry() {
   if (!editEntry.value || !card.value) return
   try {
@@ -2494,13 +2899,14 @@ async function saveTimelineEntry() {
       )
       if (dbEntry) editEntry.value.stage_code = dbEntry.stage_code
     }
+    const toNum = (v) => (v !== '' && v !== null && v !== undefined ? Number(v) : null)
     await supervisionApi.updateTimelineEntry(card.value.id, editEntry.value.stage_code, {
-      plan_date: editEntry.value.plan_date,
-      actual_date: editEntry.value.actual_date,
-      budget_planned: editEntry.value.budget_planned,
-      budget_actual: editEntry.value.budget_actual,
+      plan_date: editEntry.value.plan_date || null,
+      actual_date: editEntry.value.actual_date || null,
+      budget_planned: toNum(editEntry.value.budget_planned),
+      budget_actual: toNum(editEntry.value.budget_actual),
       supplier: editEntry.value.supplier,
-      commission: editEntry.value.commission || null,
+      commission: toNum(editEntry.value.commission),
       status: editEntry.value.status,
       notes: editEntry.value.notes,
       executor: editEntry.value.executor,
@@ -2509,7 +2915,11 @@ async function saveTimelineEntry() {
     showEditEntry.value = false
     await reloadData()
   } catch (err) {
-    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
+    const detail = err.response?.data?.detail
+    const msg = Array.isArray(detail)
+      ? detail.map((d) => d.msg || d.message || JSON.stringify(d)).join('; ')
+      : detail || 'Ошибка'
+    $q.notify({ type: 'negative', message: msg })
   }
 }
 

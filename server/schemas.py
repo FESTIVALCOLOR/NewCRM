@@ -1636,3 +1636,22 @@ class FileUploadToDataRequest(BaseModel):
     stage_code: str
     variation_type: Optional[str] = None  # None = основной, 'variation_1' и т.д.
     is_revision: bool = False  # True = папка "Исправления"
+
+
+# =========================
+# БЮДЖЕТ НАДЗОРА (строительные работы + черновые материалы)
+# =========================
+
+
+class BudgetExtraUpdate(BaseModel):
+    """Обновление данных строительных работ / черновых материалов"""
+
+    construction_planned: Optional[float] = None
+    construction_contractor: Optional[str] = None
+    construction_notes: Optional[str] = None
+    construction_payments: Optional[list[dict]] = None
+
+    materials_planned: Optional[float] = None
+    materials_supplier: Optional[str] = None
+    materials_notes: Optional[str] = None
+    materials_payments: Optional[list[dict]] = None

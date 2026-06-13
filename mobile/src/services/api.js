@@ -432,6 +432,16 @@ export const supervisionApi = {
     api.delete(`/api/v1/supervision/cards/${cardId}/monthly-assignments/${assignmentId}`),
 }
 
+// === Supervision Budget Extra (строительные работы + черновые материалы) ===
+
+export const supervisionBudgetApi = {
+  get: (cardId) =>
+    api.get(`/api/v1/supervision-budget/${cardId}`),
+
+  update: (cardId, data) =>
+    api.put(`/api/v1/supervision-budget/${cardId}`, data),
+}
+
 // === Timeline ===
 
 export const timelineApi = {

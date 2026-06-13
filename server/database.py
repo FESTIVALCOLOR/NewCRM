@@ -699,6 +699,30 @@ class SupervisionTimelineEntry(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class SupervisionBudgetExtra(Base):
+    """Строительные работы и черновые материалы надзора"""
+
+    __tablename__ = "supervision_budget_extra"
+
+    id = Column(Integer, primary_key=True, index=True)
+    supervision_card_id = Column(Integer, ForeignKey("supervision_cards.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+
+    construction_planned = Column(Float, nullable=True)
+    construction_contractor = Column(String(500), nullable=True)
+    construction_notes = Column(Text, nullable=True)
+    construction_payments = Column(Text, nullable=True)  # JSON: [{date, amount, commission}]
+
+    materials_planned = Column(Float, nullable=True)
+    materials_supplier = Column(String(500), nullable=True)
+    materials_notes = Column(Text, nullable=True)
+    materials_payments = Column(Text, nullable=True)  # JSON: [{date, amount, supplier, commission}]
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    supervision_card = relationship("SupervisionCard", backref="budget_extra")
+
+
 class SupervisionVisit(Base):
     """Записи выездов на объект авторского надзора"""
 
