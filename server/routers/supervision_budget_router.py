@@ -79,23 +79,23 @@ async def update_budget_extra(
         record = SupervisionBudgetExtra(supervision_card_id=card_id)
         db.add(record)
 
-    if data.construction_planned is not None:
+    sent = data.model_dump(exclude_unset=True)
+    if "construction_planned" in sent:
         record.construction_planned = data.construction_planned
-    if data.construction_contractor is not None:
+    if "construction_contractor" in sent:
         record.construction_contractor = data.construction_contractor
-    if data.construction_notes is not None:
+    if "construction_notes" in sent:
         record.construction_notes = data.construction_notes
-    if data.construction_payments is not None:
-        record.construction_payments = json.dumps(data.construction_payments, ensure_ascii=False)
-
-    if data.materials_planned is not None:
+    if "construction_payments" in sent:
+        record.construction_payments = json.dumps(data.construction_payments or [], ensure_ascii=False)
+    if "materials_planned" in sent:
         record.materials_planned = data.materials_planned
-    if data.materials_supplier is not None:
+    if "materials_supplier" in sent:
         record.materials_supplier = data.materials_supplier
-    if data.materials_notes is not None:
+    if "materials_notes" in sent:
         record.materials_notes = data.materials_notes
-    if data.materials_payments is not None:
-        record.materials_payments = json.dumps(data.materials_payments, ensure_ascii=False)
+    if "materials_payments" in sent:
+        record.materials_payments = json.dumps(data.materials_payments or [], ensure_ascii=False)
 
     db.commit()
     db.refresh(record)
