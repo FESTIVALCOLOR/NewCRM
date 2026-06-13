@@ -1436,6 +1436,9 @@ def _chat_to_detail_response(db: Session, chat: InternalChat, employee_id: int, 
 
     member_responses = []
     for m in members:
+        # Незарегистрированные клиентские ссылки не показываем в участниках
+        if m.member_type == "client_guest" and not m.guest_name:
+            continue
         display = m.guest_name or ""
         role_in_project = None
         is_online = None

@@ -69,10 +69,11 @@ _SUPERVISION_COLUMN_TO_STAGE = {
     "Стадия 6: Закупка напольных материалов": "STAGE_6_FLOOR",
     "Стадия 7: Лепной декор": "STAGE_7_STUCCO",
     "Стадия 8: Освещение": "STAGE_8_LIGHTING",
-    "Стадия 9: Бытовая техника": "STAGE_9_APPLIANCES",
-    "Стадия 10: Закупка заказной мебели": "STAGE_10_CUSTOM_FURNITURE",
-    "Стадия 11: Закупка фабричной мебели": "STAGE_11_FACTORY_FURNITURE",
-    "Стадия 12: Закупка декора": "STAGE_12_DECOR",
+    "Стадия 9: Закупка потолочных материалов": "STAGE_CEILING",
+    "Стадия 10: Бытовая техника": "STAGE_9_APPLIANCES",
+    "Стадия 11: Закупка заказной мебели": "STAGE_10_CUSTOM_FURNITURE",
+    "Стадия 12: Закупка фабричной мебели": "STAGE_11_FACTORY_FURNITURE",
+    "Стадия 13: Закупка декора": "STAGE_12_DECOR",
 }
 
 logger = logging.getLogger(__name__)
@@ -104,6 +105,19 @@ def _auto_create_supervision_payments(db: "Session", card: "SupervisionCard", st
 
     for emp_id, role in [(card.dan_id, POSITION_DAN), (card.senior_manager_id, POSITION_SENIOR_MANAGER)]:
         if not emp_id:
+            continue
+        # Если для этой роли есть активная ежемесячная ставка — поэтапная оплата не начисляется
+        has_monthly = (
+            db.query(SupervisionMonthlyAssignment)
+            .filter(
+                SupervisionMonthlyAssignment.supervision_card_id == card.id,
+                SupervisionMonthlyAssignment.role == role,
+                SupervisionMonthlyAssignment.is_active == True,
+            )
+            .first()
+        )
+        if has_monthly:
+            logger.info(f"Пропуск авто-оплаты стадии: card={card.id}, role={role} — активна ежемесячная ставка {has_monthly.monthly_amount}")
             continue
         amount = _calc_supervision_payment_amount(db, card.contract_id, role, stage_name)
         if amount <= 0:
@@ -520,10 +534,11 @@ async def move_supervision_card_to_column(
             "Стадия 6: Закупка напольных материалов",
             "Стадия 7: Лепной декор",
             "Стадия 8: Освещение",
-            "Стадия 9: Бытовая техника",
-            "Стадия 10: Закупка заказной мебели",
-            "Стадия 11: Закупка фабричной мебели",
-            "Стадия 12: Закупка декора",
+            "Стадия 9: Закупка потолочных материалов",
+            "Стадия 10: Бытовая техника",
+            "Стадия 11: Закупка заказной мебели",
+            "Стадия 12: Закупка фабричной мебели",
+            "Стадия 13: Закупка декора",
             "Выполненный проект",
         ]
         if move_request.column_name not in VALID_SUPERVISION_COLUMNS:
