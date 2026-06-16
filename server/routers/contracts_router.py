@@ -27,6 +27,7 @@ from database import (
     FileStorage,
     InternalChat,
     MessengerChat,
+    Notification,
     Payment,
     ProjectFile,
     ProjectTimelineEntry,
@@ -507,6 +508,8 @@ async def delete_contract(contract_id: int, current_user: Employee = Depends(req
         # Удаляем связанные CRM карточки
         crm_cards = db.query(CRMCard).filter(CRMCard.contract_id == contract_id).all()
         for card in crm_cards:
+            # Удаляем уведомления привязанные к карточке
+            db.query(Notification).filter(Notification.related_entity_type == "crm_card", Notification.related_entity_id == card.id).delete()
             # Удаляем чаты мессенджера
             db.query(MessengerChat).filter(MessengerChat.crm_card_id == card.id).delete()
             # Удаляем workflow state
@@ -523,6 +526,8 @@ async def delete_contract(contract_id: int, current_user: Employee = Depends(req
         # Удаляем связанные SupervisionCard
         supervision_cards = db.query(SupervisionCard).filter(SupervisionCard.contract_id == contract_id).all()
         for card in supervision_cards:
+            # Удаляем уведомления привязанные к карточке надзора
+            db.query(Notification).filter(Notification.related_entity_type == "supervision_card", Notification.related_entity_id == card.id).delete()
             # Удаляем timeline записи надзора
             db.query(SupervisionTimelineEntry).filter(SupervisionTimelineEntry.supervision_card_id == card.id).delete()
             # Удаляем выезды надзора

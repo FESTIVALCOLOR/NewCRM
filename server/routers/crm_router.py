@@ -59,6 +59,7 @@ from database import (
     Employee,
     InternalChat,
     MessengerChat,
+    Notification,
     Payment,
     ProjectFile,
     ProjectTimelineEntry,
@@ -1332,6 +1333,9 @@ async def delete_crm_card(card_id: int, current_user: Employee = Depends(require
         card = db.query(CRMCard).filter(CRMCard.id == card_id).first()
         if not card:
             raise HTTPException(status_code=404, detail="CRM карточка не найдена")
+
+        # Удаляем уведомления привязанные к карточке
+        db.query(Notification).filter(Notification.related_entity_type == "crm_card", Notification.related_entity_id == card_id).delete()
 
         # Удаляем связанные stage_executors
         db.query(StageExecutor).filter(StageExecutor.crm_card_id == card_id).delete()

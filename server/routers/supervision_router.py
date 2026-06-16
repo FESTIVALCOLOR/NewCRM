@@ -48,6 +48,7 @@ from database import (
     CRMCard,
     Employee,
     MessengerChat,
+    Notification,
     Payment,
     ProjectFile,
     Rate,
@@ -888,6 +889,9 @@ async def delete_supervision_order(supervision_card_id: int, contract_id: int, c
         # Удаляем файлы проекта, привязанные к стадиям надзора (не CRM-файлы)
         if card.contract_id:
             db.query(ProjectFile).filter(ProjectFile.contract_id == card.contract_id, ProjectFile.stage.like("Стадия%")).delete(synchronize_session=False)
+
+        # Удаляем уведомления привязанные к карточке
+        db.query(Notification).filter(Notification.related_entity_type == "supervision_card", Notification.related_entity_id == supervision_card_id).delete()
 
         # Удаляем историю
         db.query(SupervisionProjectHistory).filter(SupervisionProjectHistory.supervision_card_id == supervision_card_id).delete()

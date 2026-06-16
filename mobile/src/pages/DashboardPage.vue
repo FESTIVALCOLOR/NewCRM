@@ -55,10 +55,10 @@
         <q-list dense separator>
           <q-item
             v-for="task in myTasks"
-            :key="task.id"
+            :key="`${task._card_type || 'crm'}-${task.id}`"
             v-ripple
             clickable
-            @click="$router.push(`/crm/${task.id}`)"
+            @click="$router.push(task._card_type === 'supervision' ? `/supervision/${task.id}` : `/crm/${task.id}`)"
           >
             <q-item-section avatar>
               <q-icon name="assignment" :color="taskColor(task)" size="20px" />
@@ -142,7 +142,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from 'src/stores/auth'
 import { ref } from 'vue'
 import { useDashboardStore } from 'src/stores/dashboard'
-import { crmApi } from 'src/services/api'
+import { crmApi, supervisionApi } from 'src/services/api'
 import { useNotificationsStore } from 'src/stores/notifications'
 import { usePermissionsStore } from 'src/stores/permissions'
 import InstallBanner from 'src/components/InstallBanner.vue'
@@ -215,34 +215,67 @@ function fmtDeadline(d) {
 }
 function notificationIcon(t) { return { assigned: 'assignment_ind', deadline: 'schedule', payment: 'payments', crm_stage: 'swap_horiz', supervision: 'engineering' }[t] || 'notifications' }
 function handleNotificationClick(n) { if (!n.is_read) notificationsStore.markRead(n.id); if (n.related_entity_type === 'crm_card') router.push(`/crm/${n.related_entity_id}`) }
+const STUDIO_DIRECTOR_POSITION = 'Руководитель студии'
+
+function _isAssignedCrm(c, userId) {
+  return (
+    c.manager_id === userId ||
+    c.senior_manager_id === userId ||
+    c.sdp_id === userId ||
+    c.gap_id === userId ||
+    c.surveyor_id === userId ||
+    c.stage_plan_executor_id === userId ||
+    c.designer_executor_id === userId ||
+    c.draftsman_executor_id === userId ||
+    c.current_stage_executor_id === userId
+  )
+}
+
+function _isAssignedSupervision(c, userId) {
+  return c.senior_manager_id === userId || c.dan_id === userId || c.studio_director_id === userId
+}
+
 async function loadMyTasks() {
   try {
     const userId = authStore.user?.id
-    const [{ data: ind }, { data: tmpl }] = await Promise.all([
+    if (!userId) return
+    const isDirector =
+      authStore.user?.position === STUDIO_DIRECTOR_POSITION ||
+      ['admin', 'director'].includes(authStore.user?.role)
+
+    const [{ data: ind }, { data: tmpl }, svResp] = await Promise.all([
       crmApi.getCards('Индивидуальный', false),
       crmApi.getCards('Шаблонный', false),
+      supervisionApi.getCards({ status: 'active' }).catch(() => ({ data: [] })),
     ])
-    const all = [...(ind || []), ...(tmpl || [])]
-    myTasks.value = all
-      .filter(c => {
-        if (!userId) return false
-        // Показывать только карточки где текущий пользователь назначен
-        return (
-          c.manager_id === userId ||
-          c.senior_manager_id === userId ||
-          c.sdp_id === userId ||
-          c.gap_id === userId ||
-          c.surveyor_id === userId ||
-          c.stage_plan_executor_id === userId ||
-          c.designer_executor_id === userId ||
-          c.draftsman_executor_id === userId ||
-          c.current_stage_executor_id === userId
-        )
+    const svData = svResp?.data || []
+
+    // CRM карточки (уже не архивные — archived=false передан в getCards)
+    const crmFiltered = [...(ind || []), ...(tmpl || [])].filter(c =>
+      isDirector ? true : _isAssignedCrm(c, userId),
+    )
+
+    // Карточки надзора (только активные, т.е. status=active)
+    const svFiltered = svData
+      .filter(c => !c.is_paused)  // паузированные не показываем
+      .filter(c => (isDirector ? true : _isAssignedSupervision(c, userId)))
+      .map(c => ({ ...c, _card_type: 'supervision' }))
+
+    // Объединяем и сортируем по дедлайну (null — в конец)
+    const combined = [...crmFiltered, ...svFiltered]
+    myTasks.value = combined
+      .sort((a, b) => {
+        const da = a.deadline || a.current_stage_deadline
+        const db2 = b.deadline || b.current_stage_deadline
+        if (!da && !db2) return 0
+        if (!da) return 1
+        if (!db2) return -1
+        return new Date(da) - new Date(db2)
       })
-      .filter(c => c.deadline || c.current_stage_deadline)
-      .sort((a, b) => new Date(a.deadline || a.current_stage_deadline) - new Date(b.deadline || b.current_stage_deadline))
-      .slice(0, 5)
-  } catch {}
+      .slice(0, 10)
+  } catch (e) {
+    console.error('loadMyTasks error', e)
+  }
 }
 
 async function markAllNotificationsRead() {
