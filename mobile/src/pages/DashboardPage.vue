@@ -58,10 +58,11 @@
             :key="`${task._card_type || 'crm'}-${task.id}`"
             v-ripple
             clickable
+            :style="taskBg(task)"
             @click="$router.push(task._card_type === 'supervision' ? `/supervision/${task.id}` : `/crm/${task.id}`)"
           >
             <q-item-section avatar>
-              <q-icon name="assignment" :color="taskColor(task)" size="20px" />
+              <q-icon :name="task._card_type === 'supervision' ? 'engineering' : 'assignment'" :color="taskColor(task)" size="20px" />
             </q-item-section>
             <q-item-section>
               <q-item-label style="font-size: 12px; color: #333">
@@ -71,8 +72,11 @@
                 {{ task.column_name }}
               </q-item-label>
             </q-item-section>
-            <q-item-section v-if="task.deadline || task.current_stage_deadline" side>
-              <div class="text-caption text-weight-bold" :style="{ color: dlColor(task.deadline || task.current_stage_deadline) }">
+            <q-item-section side>
+              <div v-if="task.is_paused" class="text-caption text-weight-bold" style="color: #B8860B">
+                Пауза
+              </div>
+              <div v-else-if="task.deadline || task.current_stage_deadline" class="text-caption text-weight-bold" :style="{ color: dlColor(task.deadline || task.current_stage_deadline) }">
                 {{ fmtDeadline(task.deadline || task.current_stage_deadline) }}
               </div>
             </q-item-section>
@@ -190,7 +194,15 @@ const myTasks = ref([])
 
 const recentNotifications = computed(() => notificationsStore.items.slice(0, 5))
 
+function taskBg(task) {
+  if (task.is_paused) return { background: '#FFFDE7' }
+  if (task._card_type === 'supervision') return { background: '#E3F2FD' }
+  return {}
+}
+
 function taskColor(task) {
+  if (task.is_paused) return 'amber-7'
+  if (task._card_type === 'supervision') return 'blue-5'
   const d = task.deadline || task.current_stage_deadline
   if (!d) return 'grey-5'
   const days = Math.ceil((new Date(d) - new Date()) / 86400000)
@@ -255,9 +267,8 @@ async function loadMyTasks() {
       isDirector ? true : _isAssignedCrm(c, userId),
     )
 
-    // Карточки надзора (только активные, т.е. status=active)
+    // Карточки надзора (status=active, включая паузированные — они выделяются цветом)
     const svFiltered = svData
-      .filter(c => !c.is_paused)  // паузированные не показываем
       .filter(c => (isDirector ? true : _isAssignedSupervision(c, userId)))
       .map(c => ({ ...c, _card_type: 'supervision' }))
 
