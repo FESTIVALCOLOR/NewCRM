@@ -53,34 +53,39 @@
           </div>
         </q-card-section>
         <q-list dense separator>
-          <q-item
-            v-for="task in myTasks"
-            :key="`${task._card_type || 'crm'}-${task.id}`"
-            v-ripple
-            clickable
-            :style="taskBg(task)"
-            @click="$router.push(task._card_type === 'supervision' ? `/supervision/${task.id}` : `/crm/${task.id}`)"
-          >
-            <q-item-section avatar>
-              <q-icon :name="task._card_type === 'supervision' ? 'engineering' : 'assignment'" :color="taskColor(task)" size="20px" />
-            </q-item-section>
-            <q-item-section>
-              <q-item-label style="font-size: 12px; color: #333">
-                {{ task.address || task.contract_number }}
-              </q-item-label>
-              <q-item-label caption style="color: #888">
-                {{ task.column_name }}
-              </q-item-label>
-            </q-item-section>
-            <q-item-section side>
-              <div v-if="task.is_paused" class="text-caption text-weight-bold" style="color: #B8860B">
-                Пауза
-              </div>
-              <div v-else-if="task.deadline || task.current_stage_deadline" class="text-caption text-weight-bold" :style="{ color: dlColor(task.deadline || task.current_stage_deadline) }">
-                {{ fmtDeadline(task.deadline || task.current_stage_deadline) }}
-              </div>
-            </q-item-section>
-          </q-item>
+          <template v-for="(task, idx) in myTasks" :key="`${task._card_type || 'crm'}-${task.id}`">
+            <!-- Разделитель между CRM и надзором -->
+            <div
+              v-if="task._card_type === 'supervision' && (idx === 0 || myTasks[idx - 1]._card_type !== 'supervision')"
+              style="height: 3px; background: #1565C0; margin: 2px 0"
+            />
+            <q-item
+              v-ripple
+              clickable
+              :style="taskBg(task)"
+              @click="$router.push(task._card_type === 'supervision' ? `/supervision/${task.id}` : `/crm/${task.id}`)"
+            >
+              <q-item-section avatar>
+                <q-icon :name="task._card_type === 'supervision' ? 'engineering' : 'assignment'" :color="taskColor(task)" size="20px" />
+              </q-item-section>
+              <q-item-section>
+                <q-item-label style="font-size: 12px; color: #333">
+                  {{ task.address || task.contract_number }}
+                </q-item-label>
+                <q-item-label caption style="color: #888">
+                  {{ task.column_name }}
+                </q-item-label>
+              </q-item-section>
+              <q-item-section side>
+                <div v-if="task.is_paused" class="text-caption text-weight-bold" style="color: #B8860B">
+                  Пауза
+                </div>
+                <div v-else-if="task.deadline || task.current_stage_deadline" class="text-caption text-weight-bold" :style="{ color: dlColor(task.deadline || task.current_stage_deadline) }">
+                  {{ fmtDeadline(task.deadline || task.current_stage_deadline) }}
+                </div>
+              </q-item-section>
+            </q-item>
+          </template>
         </q-list>
       </q-card>
 
@@ -272,18 +277,20 @@ async function loadMyTasks() {
       .filter(c => (isDirector ? true : _isAssignedSupervision(c, userId)))
       .map(c => ({ ...c, _card_type: 'supervision' }))
 
-    // Объединяем и сортируем по дедлайну (null — в конец)
-    const combined = [...crmFiltered, ...svFiltered]
-    myTasks.value = combined
-      .sort((a, b) => {
-        const da = a.deadline || a.current_stage_deadline
-        const db2 = b.deadline || b.current_stage_deadline
-        if (!da && !db2) return 0
-        if (!da) return 1
-        if (!db2) return -1
-        return new Date(da) - new Date(db2)
-      })
-      .slice(0, 10)
+    const byDeadline = (a, b) => {
+      const da = a.deadline || a.current_stage_deadline
+      const db2 = b.deadline || b.current_stage_deadline
+      if (!da && !db2) return 0
+      if (!da) return 1
+      if (!db2) return -1
+      return new Date(da) - new Date(db2)
+    }
+
+    // CRM сначала (отсортированные по дедлайну), потом надзор (отсортированный по дедлайну)
+    myTasks.value = [
+      ...crmFiltered.sort(byDeadline).slice(0, 7),
+      ...svFiltered.sort(byDeadline).slice(0, 7),
+    ].slice(0, 10)
   } catch (e) {
     console.error('loadMyTasks error', e)
   }
