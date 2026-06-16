@@ -62,6 +62,9 @@ async def dispatch_notification(
     """
     Создать уведомление в БД и отправить через активные каналы.
 
+    Запись Notification создаётся ТОЛЬКО после прохождения всех проверок настроек,
+    чтобы сотрудник не видел в панели уведомлений записи, которые он не должен получать.
+
     Args:
         db: SQLAlchemy сессия
         employee_id: ID сотрудника-получателя
@@ -86,26 +89,10 @@ async def dispatch_notification(
             logger.info(f"dispatch_notification: сотрудник id={employee_id} имеет статус '{employee_check.status}', пропуск")
             return
 
-        # 1. Создать запись Notification в БД
-        notification = Notification(
-            employee_id=employee_id,
-            notification_type=event_type,
-            title=title,
-            message=message,
-            related_entity_type=related_entity_type,
-            related_entity_id=related_entity_id,
-            is_read=False,
-            created_at=datetime.utcnow(),
-        )
-        db.add(notification)
-        db.flush()
-
-        # 2. Загрузить настройки уведомлений сотрудника
+        # 1. Загрузить настройки уведомлений сотрудника (создать если нет)
         settings = db.query(NotificationSettings).filter_by(employee_id=employee_id).first()
 
         if not settings:
-            # Роли, работающие с надзором, получают notify_supervision=True по умолчанию
-            employee_obj = db.query(Employee).filter_by(id=employee_id).first()
             supervision_roles = {
                 POSITION_DAN,
                 POSITION_SENIOR_MANAGER,
@@ -113,8 +100,8 @@ async def dispatch_notification(
                 ROLE_ADMIN,
                 ROLE_DIRECTOR,
             }
-            is_senior_manager = bool(employee_obj and employee_obj.position == POSITION_SENIOR_MANAGER)
-            default_supervision = bool(employee_obj and employee_obj.role in supervision_roles)
+            is_senior_manager = bool(employee_check.position == POSITION_SENIOR_MANAGER)
+            default_supervision = bool(employee_check.position in supervision_roles or employee_check.role in supervision_roles)
             try:
                 settings = NotificationSettings(
                     employee_id=employee_id,
@@ -135,25 +122,12 @@ async def dispatch_notification(
             except Exception:
                 # Race condition: другой воркер уже создал запись
                 db.rollback()
-                # Перечитать notification + settings
-                notification = Notification(
-                    employee_id=employee_id,
-                    notification_type=event_type,
-                    title=title,
-                    message=message,
-                    related_entity_type=related_entity_type,
-                    related_entity_id=related_entity_id,
-                    is_read=False,
-                    created_at=datetime.utcnow(),
-                )
-                db.add(notification)
-                db.flush()
                 settings = db.query(NotificationSettings).filter_by(employee_id=employee_id).first()
                 if not settings:
-                    db.commit()
+                    logger.warning(f"dispatch_notification: не удалось создать настройки для employee_id={employee_id}")
                     return
 
-        # 3. Проверить флаг типа события
+        # 2. Проверить флаг типа события
         event_flag_map = {
             "assigned": settings.notify_assigned,
             "crm_stage_change": settings.notify_crm_stage,
@@ -162,10 +136,9 @@ async def dispatch_notification(
             "supervision": settings.notify_supervision,
         }
         if not event_flag_map.get(event_type, False):
-            db.commit()
             return
 
-        # 3.1 Проверить фильтр по типу проекта
+        # 2.1 Проверить фильтр по типу проекта
         if project_type:
             project_type_flag_map = {
                 "individual": settings.notify_individual,
@@ -173,37 +146,41 @@ async def dispatch_notification(
                 "supervision": settings.notify_supervision,
             }
             if not project_type_flag_map.get(project_type, True):
-                db.commit()
                 return
 
-        # 3.2 Для дублированных уведомлений — проверить дубль-флаги
+        # 2.2 Для дублированных уведомлений — проверить дубль-флаги
         if is_duplicate:
             if not settings.notify_duplicate_info:
-                db.commit()
                 return
 
-        # N5: Для уведомлений о возврате на исправление — проверить notify_revision_info
+        # 2.3 Для уведомлений о возврате на исправление — проверить notify_revision_info
         if is_revision_info:
             if not getattr(settings, "notify_revision_info", True):
-                db.commit()
                 return
 
-        # 3.3 Для уведомлений об оплатах — проверить право доступа
+        # 2.4 Для уведомлений об оплатах — проверить право доступа
         if event_type == "payment":
             from permissions import check_permission
 
-            employee_obj = db.query(Employee).filter_by(id=employee_id).first()
-            if not employee_obj:
-                db.commit()
-                return
-            has_payment_access = check_permission(employee_obj, "payments.create", db) or check_permission(employee_obj, "payments.update", db)
+            has_payment_access = check_permission(employee_check, "payments.create", db) or check_permission(employee_check, "payments.update", db)
             if not has_payment_access:
-                db.commit()
                 return
 
+        # Все проверки пройдены — создать запись Notification в БД
+        notification = Notification(
+            employee_id=employee_id,
+            notification_type=event_type,
+            title=title,
+            message=message,
+            related_entity_type=related_entity_type,
+            related_entity_id=related_entity_id,
+            is_read=False,
+            created_at=datetime.utcnow(),
+        )
+        db.add(notification)
         db.commit()
 
-        # 4. Отправить через каналы в зависимости от настроек
+        # 3. Отправить через каналы в зависимости от настроек
         channel = getattr(settings, "notification_channel", "telegram") or "telegram"
         employee = db.query(Employee).filter_by(id=employee_id).first()
 
@@ -218,7 +195,7 @@ async def dispatch_notification(
             if push_sub:
                 await _send_web_push(push_sub, title, message, related_entity_type, related_entity_id)
 
-        # 5. Применить правила дублирования (только для основных уведомлений)
+        # 4. Применить правила дублирования (только для основных уведомлений)
         if not is_duplicate and card_id:
             await _apply_duplication_rules(db, employee_id, event_type, title, message, related_entity_type, related_entity_id, project_type, card_id)
 
