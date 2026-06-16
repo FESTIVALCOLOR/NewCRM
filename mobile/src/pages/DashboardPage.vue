@@ -71,9 +71,9 @@
                 {{ task.column_name }}
               </q-item-label>
             </q-item-section>
-            <q-item-section v-if="task.deadline" side>
-              <div class="text-caption text-weight-bold" :style="{ color: dlColor(task.deadline) }">
-                {{ fmtDeadline(task.deadline) }}
+            <q-item-section v-if="task.deadline || task.current_stage_deadline" side>
+              <div class="text-caption text-weight-bold" :style="{ color: dlColor(task.deadline || task.current_stage_deadline) }">
+                {{ fmtDeadline(task.deadline || task.current_stage_deadline) }}
               </div>
             </q-item-section>
           </q-item>
@@ -191,8 +191,9 @@ const myTasks = ref([])
 const recentNotifications = computed(() => notificationsStore.items.slice(0, 5))
 
 function taskColor(task) {
-  if (!task.deadline) return 'grey-5'
-  const days = Math.ceil((new Date(task.deadline) - new Date()) / 86400000)
+  const d = task.deadline || task.current_stage_deadline
+  if (!d) return 'grey-5'
+  const days = Math.ceil((new Date(d) - new Date()) / 86400000)
   if (days < 0) return 'negative'
   if (days <= 2) return 'warning'
   return 'grey-7'
@@ -216,11 +217,30 @@ function notificationIcon(t) { return { assigned: 'assignment_ind', deadline: 's
 function handleNotificationClick(n) { if (!n.is_read) notificationsStore.markRead(n.id); if (n.related_entity_type === 'crm_card') router.push(`/crm/${n.related_entity_id}`) }
 async function loadMyTasks() {
   try {
-    const { data } = await crmApi.getCards('Индивидуальный', false)
-    // Сортируем по дедлайну — ближайшие первыми
-    myTasks.value = (data || [])
-      .filter(c => c.deadline)
-      .sort((a, b) => new Date(a.deadline) - new Date(b.deadline))
+    const userId = authStore.user?.id
+    const [{ data: ind }, { data: tmpl }] = await Promise.all([
+      crmApi.getCards('Индивидуальный', false),
+      crmApi.getCards('Шаблонный', false),
+    ])
+    const all = [...(ind || []), ...(tmpl || [])]
+    myTasks.value = all
+      .filter(c => {
+        if (!userId) return false
+        // Показывать только карточки где текущий пользователь назначен
+        return (
+          c.manager_id === userId ||
+          c.senior_manager_id === userId ||
+          c.sdp_id === userId ||
+          c.gap_id === userId ||
+          c.surveyor_id === userId ||
+          c.stage_plan_executor_id === userId ||
+          c.designer_executor_id === userId ||
+          c.draftsman_executor_id === userId ||
+          c.current_stage_executor_id === userId
+        )
+      })
+      .filter(c => c.deadline || c.current_stage_deadline)
+      .sort((a, b) => new Date(a.deadline || a.current_stage_deadline) - new Date(b.deadline || b.current_stage_deadline))
       .slice(0, 5)
   } catch {}
 }
