@@ -508,12 +508,16 @@ async def notify_client_chat_guests(
 
 async def _send_telegram(telegram_user_id: int, title: str, message: str) -> None:
     """Отправить уведомление через Telegram Bot"""
+    import asyncio
+
     try:
         from telegram_service import get_telegram_service
 
         tg = get_telegram_service()
         if tg.bot_available:
             text = f"<b>{title}</b>\n{message}"
-            await tg.send_message(telegram_user_id, text)
+            await asyncio.wait_for(tg.send_message(telegram_user_id, text), timeout=15.0)
+    except asyncio.TimeoutError:
+        logger.warning(f"Telegram таймаут (15с) для user_id={telegram_user_id}")
     except Exception as e:
         logger.warning(f"Не удалось отправить Telegram уведомление: {e}")

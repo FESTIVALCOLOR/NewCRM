@@ -2090,7 +2090,9 @@ class SupervisionFileUploadDialog(QDialog):
 
     def browse_file(self):
         """Открыть диалог выбора файла"""
-        file_path, _ = QFileDialog.getOpenFileName(self, "Выберите файл", "", "Все файлы (*.*);;Изображения (*.png *.jpg *.jpeg);;PDF (*.pdf);;Документы (*.doc *.docx)")
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Выберите файл", "", "Все файлы (*.*);;Изображения (*.png *.jpg *.jpeg);;Видео (*.mp4 *.mov *.avi *.mkv);;PDF (*.pdf);;Документы (*.doc *.docx)"
+        )
         if file_path:
             self.selected_file_path = file_path
             # Показываем только имя файла

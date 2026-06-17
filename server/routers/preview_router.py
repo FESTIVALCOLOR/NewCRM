@@ -41,7 +41,9 @@ async def get_file_preview(
     if not yandex_path:
         raise HTTPException(status_code=400, detail="yandex_path обязателен")
 
-    if ".." in yandex_path:
+    # Проверка path traversal: ".." только как отдельный компонент пути, не как часть имени файла
+    path_parts = yandex_path.replace("\\", "/").split("/")
+    if ".." in path_parts:
         raise HTTPException(status_code=400, detail="Недопустимый путь")
 
     if not yandex_path.startswith("disk:"):

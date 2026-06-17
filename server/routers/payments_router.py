@@ -312,6 +312,10 @@ async def calculate_payment_amount(
 
         # ========== ШАБЛОННЫЙ ==========
         if project_type == "Шаблонный":
+            # Чертёжник: стадия 1 (планировочные решения) = 0 руб.
+            if role == "Чертёжник" and stage_name and "планировочн" in stage_name.lower():
+                return {"amount": 0, "fixed_price": 0}
+
             rate = (
                 db.query(Rate)
                 .filter(Rate.project_type == "Шаблонный", Rate.role == role, Rate.area_from <= area, or_(Rate.area_to >= area, Rate.area_to.is_(None)))
@@ -320,7 +324,9 @@ async def calculate_payment_amount(
             )
 
             if rate and rate.fixed_price:
-                return {"amount": float(rate.fixed_price), "fixed_price": float(rate.fixed_price)}
+                floors = int(contract.floors or 1) if contract.floors else 1
+                amount = float(rate.fixed_price) * floors
+                return {"amount": amount, "fixed_price": float(rate.fixed_price), "floors": floors}
             return {"amount": 0}
 
         # ========== АВТОРСКИЙ НАДЗОР (по типу проекта) ==========
@@ -394,7 +400,8 @@ def auto_create_employee_payment(db: Session, contract_id: int, crm_card_id: int
                 .first()
             )
             if rate and rate.fixed_price:
-                amount = float(rate.fixed_price)
+                floors = int(contract.floors or 1) if contract.floors else 1
+                amount = float(rate.fixed_price) * floors
 
     # СДП — аванс + доплата
     if role == "СДП":
@@ -792,6 +799,9 @@ def _recalculate_payments_for_contract(db: Session, contract_id: int) -> int:  #
             if rate and rate.rate_per_m2:
                 amt = area * float(rate.rate_per_m2)
         elif project_type == "Шаблонный":
+            # Чертёжник: стадия 1 (планировочные решения) = 0 руб.
+            if payment.role == "Чертёжник" and payment.stage_name and "планировочн" in payment.stage_name.lower():
+                return 0.0
             rate = (
                 db.query(Rate)
                 .filter(
@@ -804,7 +814,8 @@ def _recalculate_payments_for_contract(db: Session, contract_id: int) -> int:  #
                 .first()
             )
             if rate and rate.fixed_price:
-                amt = float(rate.fixed_price)
+                floors = int(contract.floors or 1) if contract.floors else 1
+                amt = float(rate.fixed_price) * floors
         elif project_type == "Авторский надзор" or payment.supervision_card_id:
             q = db.query(Rate).filter(Rate.project_type == "Авторский надзор", Rate.role == payment.role)
             rate = q.filter(Rate.stage_name == payment.stage_name).first() if payment.stage_name else None
@@ -935,19 +946,23 @@ async def recalculate_payments(contract_id: Optional[int] = None, role: Optional
                         if rate and rate.rate_per_m2:
                             new_amount = area * float(rate.rate_per_m2)
                     elif project_type == "Шаблонный":
-                        rate = (
-                            db.query(Rate)
-                            .filter(
-                                Rate.project_type == "Шаблонный",
-                                Rate.role == payment.role,
-                                Rate.area_from <= area,
-                                or_(Rate.area_to >= area, Rate.area_to.is_(None)),
+                        if payment.role == "Чертёжник" and payment.stage_name and "планировочн" in payment.stage_name.lower():
+                            new_amount = 0.0
+                        else:
+                            rate = (
+                                db.query(Rate)
+                                .filter(
+                                    Rate.project_type == "Шаблонный",
+                                    Rate.role == payment.role,
+                                    Rate.area_from <= area,
+                                    or_(Rate.area_to >= area, Rate.area_to.is_(None)),
+                                )
+                                .order_by(Rate.area_from.asc())
+                                .first()
                             )
-                            .order_by(Rate.area_from.asc())
-                            .first()
-                        )
-                        if rate and rate.fixed_price:
-                            new_amount = float(rate.fixed_price)
+                            if rate and rate.fixed_price:
+                                floors = int(contract.floors or 1) if contract.floors else 1
+                                new_amount = float(rate.fixed_price) * floors
                     elif project_type == "Авторский надзор" or payment.supervision_card_id:
                         q = db.query(Rate).filter(Rate.project_type == "Авторский надзор", Rate.role == payment.role)
                         rate = (q.filter(Rate.stage_name == payment.stage_name).first() if payment.stage_name else None) or q.filter(Rate.stage_name.is_(None)).first() or q.first()
