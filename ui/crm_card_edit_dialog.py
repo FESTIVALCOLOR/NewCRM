@@ -2418,7 +2418,9 @@ class CardEditDialog(QDialog):
         from PyQt5.QtCore import Qt
         from PyQt5.QtWidgets import QFileDialog
 
-        file_path, _ = QFileDialog.getOpenFileName(self, "Выберите файл тех.задания", "", "Документы и изображения (*.pdf *.jpg *.jpeg *.png);;PDF (*.pdf);;Все файлы (*.*)")
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Выберите файл тех.задания", "", "Документы, изображения и видео (*.pdf *.jpg *.jpeg *.png *.mp4 *.mov *.avi *.mkv);;PDF (*.pdf);;Видео (*.mp4 *.mov *.avi *.mkv);;Все файлы (*.*)"
+        )
 
         if not file_path:
             return
@@ -2545,7 +2547,9 @@ class CardEditDialog(QDialog):
         from PyQt5.QtCore import Qt
         from PyQt5.QtWidgets import QFileDialog
 
-        file_paths, _ = QFileDialog.getOpenFileNames(self, "Выберите файлы референсов", "", "Images and PDF (*.png *.jpg *.jpeg *.pdf);;All Files (*.*)")
+        file_paths, _ = QFileDialog.getOpenFileNames(
+            self, "Выберите файлы референсов", "", "Изображения, видео и PDF (*.png *.jpg *.jpeg *.pdf *.mp4 *.mov *.avi *.mkv);;Видео (*.mp4 *.mov *.avi *.mkv);;Все файлы (*.*)"
+        )
 
         if not file_paths:
             return
