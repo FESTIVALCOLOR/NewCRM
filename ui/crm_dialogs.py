@@ -3727,7 +3727,9 @@ class TechTaskDialog(QDialog):
         """Загрузка файла ТЗ на Яндекс.Диск"""
         from PyQt5.QtWidgets import QFileDialog
 
-        file_path, _ = QFileDialog.getOpenFileName(self, "Выберите PDF файл тех.задания", "", "Документы и изображения (*.pdf *.jpg *.jpeg *.png);;PDF (*.pdf);;Все файлы (*.*)")
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Выберите файл тех.задания", "", "Документы, изображения и видео (*.pdf *.jpg *.jpeg *.png *.mp4 *.mov *.avi *.mkv);;Видео (*.mp4 *.mov *.avi *.mkv);;PDF (*.pdf);;Все файлы (*.*)"
+        )
 
         if not file_path:
             return
@@ -4355,7 +4357,9 @@ class MeasurementDialog(QDialog):
         from PyQt5.QtCore import Qt, QThread, pyqtSignal
         from PyQt5.QtWidgets import QFileDialog, QProgressDialog
 
-        file_path, _ = QFileDialog.getOpenFileName(self, "Выберите изображение замера", "", "Image Files (*.png *.jpg *.jpeg *.gif *.bmp)")
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Выберите файл замера", "", "Изображения и видео (*.png *.jpg *.jpeg *.gif *.bmp *.mp4 *.mov *.avi *.mkv);;Видео (*.mp4 *.mov *.avi *.mkv);;Все файлы (*.*)"
+        )
 
         if not file_path:
             return
