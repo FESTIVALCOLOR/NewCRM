@@ -16,6 +16,7 @@ openpyxl==3.1.5
 reportlab==4.2.5
 # Telegram мессенджер-чаты
 aiogram==3.25.0
+aiohttp-socks==0.9.1
 pyrogram==2.0.106
 tgcrypto==1.2.5
 # Email для invite-ссылок
