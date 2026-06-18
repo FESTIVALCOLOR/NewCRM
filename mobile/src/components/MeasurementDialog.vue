@@ -50,7 +50,7 @@
           <input
             ref="fileInput"
             type="file"
-            accept="image/png,image/jpg,image/jpeg,image/gif,image/bmp,video/mp4,video/quicktime,video/x-msvideo,video/x-matroska"
+            accept="image/png,image/jpg,image/jpeg,image/gif,image/bmp,image/heic,image/heif,video/mp4,video/quicktime,video/x-msvideo,video/x-matroska"
             style="display: none"
             @change="onFileSelected"
           >

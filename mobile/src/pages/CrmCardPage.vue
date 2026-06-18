@@ -1521,7 +1521,7 @@
               <input
                 ref="rejectFileInput"
                 type="file"
-                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.mp4,.mov,.avi,.mkv"
+                accept=".pdf,.jpg,.jpeg,.png,.heic,.doc,.docx,.mp4,.mov,.avi,.mkv"
                 style="display: none"
                 @change="e => { rejectFile = e.target.files[0] || null }"
               >
