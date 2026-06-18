@@ -426,7 +426,7 @@
             <input
               ref="boardRejectFileInput"
               type="file"
-              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.mp4,.mov,.avi,.mkv"
               style="display: none"
               @change="e => { boardRejectFile = e.target.files[0] || null }"
             >

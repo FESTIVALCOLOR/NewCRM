@@ -1041,7 +1041,7 @@
             type="file"
             style="position: absolute; left: -9999px; opacity: 0"
             multiple
-            accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.bmp,.doc,.docx,.xls,.xlsx,.dwg"
+            accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.bmp,.doc,.docx,.xls,.xlsx,.dwg,.mp4,.mov,.avi,.mkv"
             @change="handleCrmFileUpload"
           >
         </q-tab-panel>
@@ -1521,7 +1521,7 @@
               <input
                 ref="rejectFileInput"
                 type="file"
-                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.mp4,.mov,.avi,.mkv"
                 style="display: none"
                 @change="e => { rejectFile = e.target.files[0] || null }"
               >
