@@ -290,6 +290,115 @@ async def create_file_record(file_data: ProjectFileCreate, current_user: Employe
     return file_record
 
 
+@router.get("/upload-url")
+async def get_yandex_upload_url(
+    yandex_path: str,
+    current_user: Employee = Depends(get_current_user),
+):
+    """Получить временный URL для прямой загрузки файла на ЯД из браузера (без проксирования через сервер)"""
+    if not yandex_disk_available:
+        raise HTTPException(status_code=503, detail="Yandex Disk service not available")
+
+    if "/../" in yandex_path or yandex_path.endswith("/..") or yandex_path.startswith("../"):
+        raise HTTPException(status_code=400, detail="Недопустимый путь файла")
+
+    ext = os.path.splitext(yandex_path)[1].lower()
+    ALLOWED_EXTENSIONS_LOCAL = {
+        ".pdf",
+        ".doc",
+        ".docx",
+        ".xls",
+        ".xlsx",
+        ".ppt",
+        ".pptx",
+        ".txt",
+        ".csv",
+        ".rtf",
+        ".odt",
+        ".ods",
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".gif",
+        ".bmp",
+        ".svg",
+        ".webp",
+        ".heic",
+        ".heif",
+        ".tif",
+        ".tiff",
+        ".raw",
+        ".cr2",
+        ".nef",
+        ".arw",
+        ".dwg",
+        ".dxf",
+        ".skp",
+        ".3ds",
+        ".max",
+        ".blend",
+        ".ifc",
+        ".obj",
+        ".fbx",
+        ".zip",
+        ".rar",
+        ".7z",
+        ".mp4",
+        ".mov",
+        ".avi",
+        ".mkv",
+        ".webm",
+        ".mp3",
+        ".wav",
+        ".ogg",
+        ".m4a",
+        ".aac",
+    }
+    if ext and ext not in ALLOWED_EXTENSIONS_LOCAL:
+        raise HTTPException(status_code=400, detail=f"Тип файла '{ext}' не разрешён")
+
+    try:
+        import requests as _requests
+
+        yd_service = get_yandex_disk_service()
+        if not yd_service.token:
+            raise HTTPException(status_code=503, detail="Yandex Disk token not configured")
+
+        # Автопереименование при конфликте имён
+        actual_path = yandex_path
+        try:
+            if yd_service.file_exists(actual_path):
+                base, ext_part = os.path.splitext(actual_path)
+                counter = 1
+                while counter <= 99 and yd_service.file_exists(f"{base} ({counter}){ext_part}"):
+                    counter += 1
+                actual_path = f"{base} ({counter}){ext_part}"
+        except Exception:
+            pass
+
+        r = _requests.get(
+            f"{yd_service.base_url}/resources/upload",
+            headers=yd_service.headers,
+            params={"path": actual_path, "overwrite": "true"},
+            timeout=30,
+        )
+        if r.status_code != 200:
+            raise HTTPException(status_code=502, detail="Ошибка получения URL загрузки от Яндекс.Диска")
+
+        upload_url = r.json().get("href")
+        return {
+            "upload_url": upload_url,
+            "yandex_path": actual_path,
+            "file_name": os.path.basename(actual_path),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Ошибка при получении upload URL: {e}")
+        raise HTTPException(status_code=500, detail="Внутренняя ошибка сервера")
+
+
 @router.post("/upload")
 async def upload_file_to_yandex(
     file: UploadFile = File(...),

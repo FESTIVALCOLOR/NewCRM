@@ -3479,18 +3479,37 @@ async function handleCrmFileUpload(event) {
       // Путь без disk: для upload API И для записи в БД (как десктоп)
       const ypClean = yp.replace(/^disk:/, '')
 
-      // Шаг 1: загрузка на ЯД (сервер автоматически переименует при конфликте)
+      // Шаг 1: получить upload URL от сервера и загрузить файл напрямую на ЯД из браузера
+      // (сервер→ЯД медленный ~120 KB/s, браузер→ЯД использует скорость домашнего интернета)
       let publicLink = ''
       let actualYpClean = ypClean
       let actualFileName = file.name
       try {
-        const uploadRes = await filesApi.upload(file, ypClean)
-        publicLink = uploadRes.data?.public_link || ''
-        // Используем реальный путь/имя, которые вернул сервер (мог переименовать)
-        if (uploadRes.data?.yandex_path) actualYpClean = uploadRes.data.yandex_path
-        if (uploadRes.data?.file_name) actualFileName = uploadRes.data.file_name
+        const urlRes = await filesApi.getUploadUrl(ypClean)
+        const uploadUrl = urlRes.data?.upload_url
+        if (urlRes.data?.yandex_path) actualYpClean = urlRes.data.yandex_path
+        if (urlRes.data?.file_name) actualFileName = urlRes.data.file_name
+
+        if (!uploadUrl) throw new Error('Нет URL загрузки')
+
+        // PUT напрямую на ЯД из браузера — без ограничений по скорости сервера
+        const putRes = await fetch(uploadUrl, {
+          method: 'PUT',
+          body: file,
+          headers: { 'Content-Type': file.type || 'application/octet-stream' },
+        })
+        if (!putRes.ok && putRes.status !== 201) {
+          throw new Error(`ЯД PUT: ${putRes.status}`)
+        }
+
+        // Получить публичную ссылку после загрузки
+        try {
+          const linkRes = await filesApi.getPublicLink(actualYpClean)
+          publicLink = linkRes.data?.public_link || ''
+        } catch { /* ссылку получим при сканировании */ }
       } catch (uploadErr) {
-        $q.notify({ type: 'warning', message: `ЯД: ${uploadErr.response?.status || 'ошибка'}` })
+        const msg = uploadErr.message || (uploadErr.response?.status ? `HTTP ${uploadErr.response.status}` : 'ошибка')
+        $q.notify({ type: 'warning', message: `ЯД: ${msg}` })
       }
 
       // Шаг 2: создание записи в БД

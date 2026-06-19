@@ -558,6 +558,10 @@ export const filesApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
   },
+
+  // Получить временный URL для прямой загрузки файла с браузера на ЯД (без проксирования через сервер)
+  getUploadUrl: (yandexPath) =>
+    api.get('/api/v1/files/upload-url', { params: { yandex_path: yandexPath } }),
 }
 
 // === Surveys (опросы клиентов) ===
