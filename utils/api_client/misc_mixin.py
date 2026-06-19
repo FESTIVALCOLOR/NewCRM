@@ -1,17 +1,31 @@
-from typing import Optional, List, Dict, Any
 from datetime import datetime
+from typing import Any, Dict, List, Optional
 
 
 class MiscMixin:
+    def get_server_disk_status(self) -> Optional[dict[str, Any]]:
+        """Состояние диска и RAM сервера (только для администраторов). Возвращает None при ошибке или 403."""
+        try:
+            response = self._request(
+                "GET",
+                f"{self.base_url}/api/v1/admin/disk-status",
+                timeout=5,
+                retry=False,
+            )
+            if response.status_code == 200:
+                return response.json()
+        except Exception:
+            pass
+        return None
 
     def health_check(self) -> bool:
         """Проверка доступности сервера"""
         try:
             response = self._request(
-                'GET',
+                "GET",
                 f"{self.base_url}/health",
                 timeout=5,
-                retry=False  # Быстрая проверка без повторов
+                retry=False,  # Быстрая проверка без повторов
             )
             self._is_online = response.status_code == 200
             return self._is_online
@@ -19,33 +33,22 @@ class MiscMixin:
             self._is_online = False
             return False
 
-    def get_notifications(self, unread_only: bool = False) -> List[Dict[str, Any]]:
+    def get_notifications(self, unread_only: bool = False) -> list[dict[str, Any]]:
         """Получить уведомления"""
-        response = self._request(
-            'GET',
-            f"{self.base_url}/api/v1/notifications",
-            params={"unread_only": unread_only}
-        )
+        response = self._request("GET", f"{self.base_url}/api/v1/notifications", params={"unread_only": unread_only})
         return self._handle_response(response)
 
     def mark_notification_read(self, notification_id: int) -> bool:
         """Отметить уведомление как прочитанное"""
-        response = self._request(
-            'PUT',
-            f"{self.base_url}/api/v1/notifications/{notification_id}/read"
-        )
+        response = self._request("PUT", f"{self.base_url}/api/v1/notifications/{notification_id}/read")
         return response.status_code == 200
 
     def mark_all_notifications_read(self) -> bool:
         """Отметить все уведомления как прочитанные"""
-        response = self._request(
-            'POST',
-            f"{self.base_url}/api/v1/notifications/mark-all-read"
-        )
+        response = self._request("POST", f"{self.base_url}/api/v1/notifications/mark-all-read")
         return response.status_code == 200
 
-    def sync(self, last_sync_timestamp: datetime, entity_types: List[str],
-             retry: bool = True, timeout: int = None, mark_offline: bool = False) -> Dict[str, Any]:
+    def sync(self, last_sync_timestamp: datetime, entity_types: list[str], retry: bool = True, timeout: int = None, mark_offline: bool = False) -> dict[str, Any]:
         """
         Получить обновления с сервера (фоновая синхронизация)
 
@@ -61,94 +64,60 @@ class MiscMixin:
             dict с обновленными данными
         """
         response = self._request(
-            'POST',
-            f"{self.base_url}/api/v1/sync",
-            json={
-                "last_sync_timestamp": last_sync_timestamp.isoformat(),
-                "entity_types": entity_types
-            },
-            retry=retry,
-            timeout=timeout,
-            mark_offline=mark_offline
+            "POST", f"{self.base_url}/api/v1/sync", json={"last_sync_timestamp": last_sync_timestamp.isoformat(), "entity_types": entity_types}, retry=retry, timeout=timeout, mark_offline=mark_offline
         )
         return self._handle_response(response)
 
-    def get_all_stage_executors(self) -> List[Dict[str, Any]]:
+    def get_all_stage_executors(self) -> list[dict[str, Any]]:
         """Получить всех исполнителей стадий для синхронизации"""
         try:
-            response = self._request(
-                'GET',
-                f"{self.base_url}/api/v1/sync/stage-executors"
-            )
+            response = self._request("GET", f"{self.base_url}/api/v1/sync/stage-executors")
             return self._handle_response(response)
         except Exception as e:
             print(f"[API] Ошибка получения исполнителей стадий: {e}")
             return []
 
-    def get_all_approval_deadlines(self) -> List[Dict[str, Any]]:
+    def get_all_approval_deadlines(self) -> list[dict[str, Any]]:
         """Получить все дедлайны согласования для синхронизации"""
         try:
-            response = self._request(
-                'GET',
-                f"{self.base_url}/api/v1/sync/approval-deadlines"
-            )
+            response = self._request("GET", f"{self.base_url}/api/v1/sync/approval-deadlines")
             return self._handle_response(response)
         except Exception as e:
             print(f"[API] Ошибка получения дедлайнов согласования: {e}")
             return []
 
-    def get_all_action_history(self) -> List[Dict[str, Any]]:
+    def get_all_action_history(self) -> list[dict[str, Any]]:
         """Получить всю историю действий для синхронизации"""
         try:
-            response = self._request(
-                'GET',
-                f"{self.base_url}/api/v1/sync/action-history"
-            )
+            response = self._request("GET", f"{self.base_url}/api/v1/sync/action-history")
             return self._handle_response(response)
         except Exception as e:
             print(f"[API] Ошибка получения истории действий: {e}")
             return []
 
-    def get_all_supervision_history(self) -> List[Dict[str, Any]]:
+    def get_all_supervision_history(self) -> list[dict[str, Any]]:
         """Получить всю историю проектов надзора для синхронизации"""
         try:
-            response = self._request(
-                'GET',
-                f"{self.base_url}/api/v1/sync/supervision-history"
-            )
+            response = self._request("GET", f"{self.base_url}/api/v1/sync/supervision-history")
             return self._handle_response(response)
         except Exception as e:
             print(f"[API] Ошибка получения истории надзора: {e}")
             return []
 
-    def get_action_history(self, entity_type: str, entity_id: int) -> List[Dict[str, Any]]:
+    def get_action_history(self, entity_type: str, entity_id: int) -> list[dict[str, Any]]:
         """Получить историю действий для сущности"""
-        response = self._request(
-            'GET',
-            f"{self.base_url}/api/v1/action-history/{entity_type}/{entity_id}"
-        )
+        response = self._request("GET", f"{self.base_url}/api/v1/action-history/{entity_type}/{entity_id}")
         return self._handle_response(response)
 
-    def create_action_history(self, history_data: Dict[str, Any]) -> Dict[str, Any]:
+    def create_action_history(self, history_data: dict[str, Any]) -> dict[str, Any]:
         """Создать запись истории действий"""
-        response = self._request(
-            'POST',
-            f"{self.base_url}/api/v1/action-history",
-            json=history_data
-        )
+        response = self._request("POST", f"{self.base_url}/api/v1/action-history", json=history_data)
         return self._handle_response(response)
 
-    def add_action_history(self, user_id: int, action_type: str, entity_type: str,
-                           entity_id: int, description: str) -> bool:
+    def add_action_history(self, user_id: int, action_type: str, entity_type: str, entity_id: int, description: str) -> bool:
         """Добавить запись в историю действий"""
         try:
-            history_data = {
-                'user_id': user_id,
-                'action_type': action_type,
-                'entity_type': entity_type,
-                'entity_id': entity_id,
-                'description': description
-            }
+            history_data = {"user_id": user_id, "action_type": action_type, "entity_type": entity_type, "entity_id": entity_id, "description": description}
             self.create_action_history(history_data)
             return True
         except Exception as e:
@@ -158,59 +127,42 @@ class MiscMixin:
     def add_project_template(self, contract_id: int, template_url: str) -> Optional[int]:
         """Добавить ссылку на шаблон проекта"""
         try:
-            response = self._request(
-                'POST',
-                f"{self.base_url}/api/v1/project-templates",
-                json={'contract_id': contract_id, 'template_url': template_url}
-            )
+            response = self._request("POST", f"{self.base_url}/api/v1/project-templates", json={"contract_id": contract_id, "template_url": template_url})
             result = self._handle_response(response)
-            return result.get('id')
+            return result.get("id")
         except Exception as e:
             print(f"[API] Ошибка добавления шаблона: {e}")
             return None
 
-    def get_project_templates(self, contract_id: int) -> List[Dict[str, Any]]:
+    def get_project_templates(self, contract_id: int) -> list[dict[str, Any]]:
         """Получить все шаблоны для договора"""
-        response = self._request(
-            'GET',
-            f"{self.base_url}/api/v1/project-templates/{contract_id}"
-        )
+        response = self._request("GET", f"{self.base_url}/api/v1/project-templates/{contract_id}")
         return self._handle_response(response)
 
     def delete_project_template(self, template_id: int) -> bool:
         """Удалить шаблон проекта"""
         try:
-            response = self._request(
-                'DELETE',
-                f"{self.base_url}/api/v1/project-templates/{template_id}"
-            )
+            response = self._request("DELETE", f"{self.base_url}/api/v1/project-templates/{template_id}")
             self._handle_response(response)
             return True
         except Exception as e:
             print(f"[API] Ошибка удаления шаблона: {e}")
             return False
 
-    def get_all_agents(self) -> List[Dict[str, Any]]:
+    def get_all_agents(self) -> list[dict[str, Any]]:
         """Получить список всех агентов"""
         try:
-            response = self._request(
-                'GET',
-                f"{self.base_url}/api/v1/agents"
-            )
+            response = self._request("GET", f"{self.base_url}/api/v1/agents")
             return self._handle_response(response)
         except Exception:
             # Fallback: получаем через сотрудников с фильтром по должности
             employees = self.get_employees(limit=500)
-            return [emp for emp in employees if emp.get('position') == 'Агент' or emp.get('secondary_position') == 'Агент']
+            return [emp for emp in employees if emp.get("position") == "Агент" or emp.get("secondary_position") == "Агент"]
 
     def add_agent(self, name: str, color: str) -> bool:
         """Добавить нового агента"""
         try:
-            response = self._request(
-                'POST',
-                f"{self.base_url}/api/v1/agents",
-                json={'name': name, 'color': color}
-            )
+            response = self._request("POST", f"{self.base_url}/api/v1/agents", json={"name": name, "color": color})
             self._handle_response(response)
             return True
         except Exception as e:
@@ -220,10 +172,7 @@ class MiscMixin:
     def delete_agent(self, agent_id: int) -> bool:
         """Удалить агента (мягкое удаление)"""
         try:
-            response = self._request(
-                'DELETE',
-                f"{self.base_url}/api/v1/agents/{agent_id}"
-            )
+            response = self._request("DELETE", f"{self.base_url}/api/v1/agents/{agent_id}")
             self._handle_response(response)
             return True
         except Exception as e:
@@ -233,11 +182,7 @@ class MiscMixin:
     def update_agent_color(self, name: str, color: str) -> bool:
         """Обновить цвет агента"""
         try:
-            response = self._request(
-                'PATCH',
-                f"{self.base_url}/api/v1/agents/{name}/color",
-                json={'color': color}
-            )
+            response = self._request("PATCH", f"{self.base_url}/api/v1/agents/{name}/color", json={"color": color})
             self._handle_response(response)
             return True
         except Exception as e:
@@ -249,38 +194,29 @@ class MiscMixin:
         try:
             agents = self.get_all_agents()
             for agent in agents:
-                if agent.get('name') == name:
-                    return agent.get('color')
+                if agent.get("name") == name:
+                    return agent.get("color")
             return None
         except Exception as e:
             print(f"[API] Ошибка получения цвета агента: {e}")
             return None
 
-    def get_agents(self) -> List[Dict[str, Any]]:
+    def get_agents(self) -> list[dict[str, Any]]:
         """Получить список агентов"""
-        response = self._request(
-            'GET',
-            f"{self.base_url}/api/v1/agents"
-        )
+        response = self._request("GET", f"{self.base_url}/api/v1/agents")
         return self._handle_response(response)
 
-    def get_agent(self, agent_id: int) -> Dict[str, Any]:
+    def get_agent(self, agent_id: int) -> dict[str, Any]:
         """Получить агента по ID"""
-        response = self._request(
-            'GET',
-            f"{self.base_url}/api/v1/agents/{agent_id}"
-        )
+        response = self._request("GET", f"{self.base_url}/api/v1/agents/{agent_id}")
         return self._handle_response(response)
 
     # ==================== ГОРОДА ====================
 
-    def get_all_cities(self) -> List[Dict[str, Any]]:
+    def get_all_cities(self) -> list[dict[str, Any]]:
         """Получить список всех городов"""
         try:
-            response = self._request(
-                'GET',
-                f"{self.base_url}/api/v1/cities"
-            )
+            response = self._request("GET", f"{self.base_url}/api/v1/cities")
             return self._handle_response(response)
         except Exception:
             return []
@@ -288,11 +224,7 @@ class MiscMixin:
     def add_city(self, name: str) -> bool:
         """Добавить новый город"""
         try:
-            response = self._request(
-                'POST',
-                f"{self.base_url}/api/v1/cities",
-                json={"name": name}
-            )
+            response = self._request("POST", f"{self.base_url}/api/v1/cities", json={"name": name})
             self._handle_response(response)
             return True
         except Exception as e:
@@ -302,60 +234,48 @@ class MiscMixin:
     def delete_city(self, city_id: int) -> bool:
         """Удалить город (мягкое удаление)"""
         try:
-            response = self._request(
-                'DELETE',
-                f"{self.base_url}/api/v1/cities/{city_id}"
-            )
+            response = self._request("DELETE", f"{self.base_url}/api/v1/cities/{city_id}")
             self._handle_response(response)
             return True
         except Exception as e:
             print(f"[API] Ошибка удаления города: {e}")
             return False
 
-    def search(self, query: str, limit: int = 50, entity_types: str = None) -> Dict[str, Any]:
+    def search(self, query: str, limit: int = 50, entity_types: str = None) -> dict[str, Any]:
         """Полнотекстовый поиск по клиентам, договорам, CRM карточкам"""
         params = {"q": query, "limit": limit}
         if entity_types:
             params["entity_types"] = entity_types
+        response = self._request("GET", f"{self.base_url}/api/v1/search", params=params)
+        return self._handle_response(response)
+
+    def get_norm_days_template(self, project_type: str, project_subtype: str, agent_type: str = "Все агенты") -> dict[str, Any]:
+        """Получить шаблон нормо-дней для типа/подтипа/агента"""
+        params = {"project_type": project_type, "project_subtype": project_subtype, "agent_type": agent_type}
+        response = self._request("GET", f"{self.base_url}/api/v1/norm-days/templates", params=params)
+        return self._handle_response(response)
+
+    def save_norm_days_template(self, data: dict[str, Any]) -> dict[str, Any]:
+        """Сохранить кастомный шаблон нормо-дней"""
+        response = self._request("PUT", f"{self.base_url}/api/v1/norm-days/templates", json=data)
+        return self._handle_response(response)
+
+    def preview_norm_days_template(self, project_type: str, project_subtype: str, area: float, agent_type: str = "Все агенты") -> dict[str, Any]:
+        """Предпросмотр расчёта нормо-дней для указанной площади"""
         response = self._request(
-            'GET',
-            f"{self.base_url}/api/v1/search",
-            params=params
+            "POST", f"{self.base_url}/api/v1/norm-days/templates/preview", json={"project_type": project_type, "project_subtype": project_subtype, "area": area, "agent_type": agent_type}
         )
         return self._handle_response(response)
 
-    def get_norm_days_template(self, project_type: str, project_subtype: str, agent_type: str = 'Все агенты') -> Dict[str, Any]:
-        """Получить шаблон нормо-дней для типа/подтипа/агента"""
-        params = {"project_type": project_type, "project_subtype": project_subtype, "agent_type": agent_type}
-        response = self._request('GET', f"{self.base_url}/api/v1/norm-days/templates", params=params)
-        return self._handle_response(response)
-
-    def save_norm_days_template(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Сохранить кастомный шаблон нормо-дней"""
-        response = self._request('PUT', f"{self.base_url}/api/v1/norm-days/templates", json=data)
-        return self._handle_response(response)
-
-    def preview_norm_days_template(self, project_type: str, project_subtype: str, area: float, agent_type: str = 'Все агенты') -> Dict[str, Any]:
-        """Предпросмотр расчёта нормо-дней для указанной площади"""
-        response = self._request('POST', f"{self.base_url}/api/v1/norm-days/templates/preview",
-                                 json={"project_type": project_type, "project_subtype": project_subtype,
-                                        "area": area, "agent_type": agent_type})
-        return self._handle_response(response)
-
-    def reset_norm_days_template(self, project_type: str, project_subtype: str, agent_type: str = 'Все агенты') -> Dict[str, Any]:
+    def reset_norm_days_template(self, project_type: str, project_subtype: str, agent_type: str = "Все агенты") -> dict[str, Any]:
         """Сбросить кастомный шаблон нормо-дней (возврат к формулам)"""
-        response = self._request('POST', f"{self.base_url}/api/v1/norm-days/templates/reset",
-                                 json={"project_type": project_type, "project_subtype": project_subtype,
-                                        "agent_type": agent_type})
+        response = self._request("POST", f"{self.base_url}/api/v1/norm-days/templates/reset", json={"project_type": project_type, "project_subtype": project_subtype, "agent_type": agent_type})
         return self._handle_response(response)
 
     def get_notification_settings(self, employee_id: int):
         """Получить настройки уведомлений сотрудника"""
         try:
-            response = self._request(
-                'GET',
-                f"{self.base_url}/api/v1/notifications/settings/{employee_id}"
-            )
+            response = self._request("GET", f"{self.base_url}/api/v1/notifications/settings/{employee_id}")
             return self._handle_response(response)
         except Exception as e:
             print(f"[API] Ошибка получения настроек уведомлений: {e}")
@@ -364,11 +284,7 @@ class MiscMixin:
     def update_notification_settings(self, employee_id: int, data):
         """Обновить настройки уведомлений сотрудника"""
         try:
-            response = self._request(
-                'PUT',
-                f"{self.base_url}/api/v1/notifications/settings/{employee_id}",
-                json=data
-            )
+            response = self._request("PUT", f"{self.base_url}/api/v1/notifications/settings/{employee_id}", json=data)
             return self._handle_response(response)
         except Exception as e:
             print(f"[API] Ошибка обновления настроек уведомлений: {e}")
@@ -378,28 +294,23 @@ class MiscMixin:
         """Отправить приглашение сотруднику (welcome email + Telegram deep link).
         Возвращает True при успехе, строку с ошибкой при неудаче, False при сетевой ошибке."""
         try:
-            response = self._request(
-                'POST',
-                f"{self.base_url}/api/v1/employees/{employee_id}/send-invite"
-            )
+            response = self._request("POST", f"{self.base_url}/api/v1/employees/{employee_id}/send-invite")
             if response.status_code == 200:
                 return True
             # Извлекаем detail из ответа сервера для показа пользователю
             try:
-                detail = response.json().get('detail', '')
+                detail = response.json().get("detail", "")
             except Exception:
-                detail = ''
+                detail = ""
             return detail or f"HTTP {response.status_code}"
         except Exception as e:
             print(f"[API] Ошибка отправки приглашения сотруднику: {e}")
             return False
+
     def invite_client_to_chat(self, card_id: int) -> dict:
         """Отправить клиенту email-приглашение в проектный Telegram-чат"""
         try:
-            response = self._request(
-                'POST',
-                f"{self.base_url}/api/v1/crm/cards/{card_id}/invite-client"
-            )
+            response = self._request("POST", f"{self.base_url}/api/v1/crm/cards/{card_id}/invite-client")
             return self._handle_response(response)
         except Exception as e:
             print(f"[API] Ошибка отправки приглашения клиенту: {e}")

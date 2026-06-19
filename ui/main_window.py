@@ -475,6 +475,29 @@ class MainWindow(QMainWindow):
         self.version_label.setStyleSheet("color: #555; font-size: 11px; border: none;")
         status_bar_layout.addWidget(self.version_label)
 
+        # Индикатор состояния сервера (только для администраторов)
+        self._server_status_data = None
+        self._admin_positions = ["Руководитель студии", "Старший менеджер проектов", "СДП", "ГАП"]
+        _pos = self.employee.get("position", "")
+        _role = self.employee.get("role", "")
+        self._is_admin_user = _pos in self._admin_positions or _role in {"admin", "director"}
+
+        self.server_status_label = QLabel()
+        self.server_status_label.setStyleSheet("color: #999; font-size: 11px; border: none; padding-right: 6px;")
+        self.server_status_label.setCursor(Qt.PointingHandCursor)
+        self.server_status_label.setToolTip("Состояние сервера (нажмите для подробностей)")
+        self.server_status_label.mousePressEvent = self._show_server_status_popup
+
+        if self._is_admin_user:
+            self.server_status_label.setText("Диск: ...")
+            status_bar_layout.addWidget(self.server_status_label)
+
+            # Первая проверка через 5 секунд после открытия, затем каждые 5 минут
+            self._disk_timer = QTimer(self)
+            self._disk_timer.timeout.connect(self._refresh_server_status)
+            self._disk_timer.start(5 * 60 * 1000)
+            QTimer.singleShot(5000, self._refresh_server_status)
+
         # Кнопка "Обновить" (доступна для всех ролей)
         from utils.resource_path import resource_path
 
@@ -2056,6 +2079,120 @@ class MainWindow(QMainWindow):
         popup.move(pos.x(), pos.y() - popup.height() - 4)
         popup.show()
         self._online_popup = popup
+
+    def _refresh_server_status(self):
+        """Обновить данные о состоянии диска/RAM в фоне (только для администраторов)."""
+        if not self.api_client or not self._is_admin_user:
+            return
+
+        import threading
+
+        def _fetch():
+            try:
+                data = self.api_client.get_server_disk_status()
+                QTimer.singleShot(0, lambda: self._apply_server_status(data))
+            except Exception:
+                pass
+
+        threading.Thread(target=_fetch, daemon=True).start()
+
+    def _apply_server_status(self, data):
+        """Применить данные о состоянии сервера к метке в статус-баре."""
+        if not data:
+            self.server_status_label.setText("Сервер: ?")
+            self.server_status_label.setStyleSheet("color: #aaa; font-size: 11px; border: none; padding-right: 6px;")
+            return
+
+        self._server_status_data = data
+        disk = data.get("disk_percent", 0)
+        ram = data.get("ram_percent", 0)
+
+        if data.get("disk_critical") or disk >= 95:
+            color = "#c0392b"
+            text = f"Диск: {disk}%!"
+        elif data.get("disk_warning") or disk >= 80:
+            color = "#e67e22"
+            text = f"Диск: {disk}%"
+        else:
+            color = "#27ae60"
+            text = f"Диск: {disk}%"
+
+        self.server_status_label.setText(text)
+        self.server_status_label.setStyleSheet(f"color: {color}; font-size: 11px; border: none; padding-right: 6px;")
+        self.server_status_label.setToolTip(
+            f"Сервер — нажмите для подробностей\n"
+            f"Диск: {data.get('disk_used_gb', 0)} / {data.get('disk_total_gb', 0)} ГБ ({disk}%)\n"
+            f"RAM:  {data.get('ram_used_gb', 0)} / {data.get('ram_total_gb', 0)} ГБ ({ram}%)"
+        )
+
+        # Показываем всплывающее предупреждение один раз за сессию при критичности
+        if data.get("disk_warning") and not getattr(self, "_disk_warn_shown", False):
+            self._disk_warn_shown = True
+            level = "critical" if data.get("disk_critical") else "warning"
+            free = data.get("disk_free_gb", 0)
+            total = data.get("disk_total_gb", 0)
+            CustomMessageBox(
+                self,
+                "Внимание: диск сервера заполнен",
+                f"Диск заполнен на {disk}%.\nСвободно: {free} ГБ из {total} ГБ.\n\nОчистите логи или Docker-кэш на сервере,\nиначе сервер прекратит работу.",
+                level,
+            ).exec_()
+
+    def _show_server_status_popup(self, event=None):
+        """Показать popup с подробным состоянием сервера."""
+        data = self._server_status_data
+        if not data:
+            self._refresh_server_status()
+            return
+
+        from PyQt5.QtWidgets import QFrame
+
+        if getattr(self, "_server_popup", None):
+            try:
+                self._server_popup.close()
+            except Exception:
+                pass
+
+        popup = QFrame(self, Qt.Popup | Qt.FramelessWindowHint)
+        popup.setStyleSheet("""
+            QFrame {
+                background-color: #FFFFFF;
+                border: 1px solid #E0E0E0;
+                border-radius: 6px;
+            }
+            QLabel { border: none; }
+        """)
+        layout = QVBoxLayout(popup)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(4)
+
+        title = QLabel("Состояние сервера")
+        title.setStyleSheet("font-weight: bold; font-size: 12px; color: #333; padding-bottom: 4px;")
+        layout.addWidget(title)
+
+        disk = data.get("disk_percent", 0)
+        disk_color = "#c0392b" if disk >= 95 else "#e67e22" if disk >= 80 else "#27ae60"
+        layout.addWidget(QLabel(f"Диск:  {data.get('disk_used_gb', 0)} / {data.get('disk_total_gb', 0)} ГБ"))
+        disk_pct_lbl = QLabel(f"         {disk}%  (свободно {data.get('disk_free_gb', 0)} ГБ)")
+        disk_pct_lbl.setStyleSheet(f"color: {disk_color}; font-size: 11px;")
+        layout.addWidget(disk_pct_lbl)
+
+        ram = data.get("ram_percent", 0)
+        ram_color = "#c0392b" if ram >= 90 else "#e67e22" if ram >= 75 else "#27ae60"
+        layout.addWidget(QLabel(f"RAM:   {data.get('ram_used_gb', 0)} / {data.get('ram_total_gb', 0)} ГБ"))
+        ram_pct_lbl = QLabel(f"         {ram}%")
+        ram_pct_lbl.setStyleSheet(f"color: {ram_color}; font-size: 11px;")
+        layout.addWidget(ram_pct_lbl)
+
+        for lbl in popup.findChildren(QLabel):
+            if not lbl.styleSheet():
+                lbl.setStyleSheet("font-size: 11px; color: #555;")
+
+        popup.adjustSize()
+        pos = self.server_status_label.mapToGlobal(self.server_status_label.rect().topLeft())
+        popup.move(pos.x(), pos.y() - popup.height() - 4)
+        popup.show()
+        self._server_popup = popup
 
     def _on_online_users_updated(self, users: list):
         """Обработчик обновления списка онлайн пользователей"""
