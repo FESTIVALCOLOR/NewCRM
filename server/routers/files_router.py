@@ -302,6 +302,7 @@ async def upload_file_to_yandex(
 
     # Whitelist разрешённых типов файлов
     ALLOWED_EXTENSIONS = {
+        # Документы
         ".pdf",
         ".doc",
         ".docx",
@@ -309,6 +310,12 @@ async def upload_file_to_yandex(
         ".xlsx",
         ".ppt",
         ".pptx",
+        ".txt",
+        ".csv",
+        ".rtf",
+        ".odt",
+        ".ods",
+        # Изображения (включая форматы iPhone/камер)
         ".jpg",
         ".jpeg",
         ".png",
@@ -316,28 +323,45 @@ async def upload_file_to_yandex(
         ".bmp",
         ".svg",
         ".webp",
+        ".heic",
+        ".heif",  # iPhone/iPad фото
+        ".tif",
+        ".tiff",  # сканы, чертежи высокого разрешения
+        ".raw",
+        ".cr2",
+        ".nef",
+        ".arw",  # RAW камер
+        # CAD / 3D
         ".dwg",
         ".dxf",
         ".skp",
         ".3ds",
         ".max",
         ".blend",
+        ".ifc",
+        ".obj",
+        ".fbx",
+        # Архивы
         ".zip",
         ".rar",
         ".7z",
-        ".txt",
-        ".csv",
-        ".rtf",
+        # Видео (обходы объекта, фотофиксация)
+        ".mp4",
+        ".mov",
+        ".avi",
+        ".mkv",
         ".webm",
-        ".ogg",
+        # Аудио (голосовые заметки)
         ".mp3",
         ".wav",
-        ".m4a",  # аудио (голосовые заметки)
+        ".ogg",
+        ".m4a",
+        ".aac",
     }
     if file.filename:
         ext = os.path.splitext(file.filename)[1].lower()
         if ext and ext not in ALLOWED_EXTENSIONS:
-            raise HTTPException(status_code=400, detail=f"Тип файла '{ext}' не разрешён для загрузки")
+            raise HTTPException(status_code=400, detail=f"Тип файла '{ext}' не разрешён для загрузки. Разрешены: фото, PDF, Word, Excel, CAD, архивы, видео")
 
     try:
         yd_service = get_yandex_disk_service()
@@ -345,18 +369,18 @@ async def upload_file_to_yandex(
             raise HTTPException(status_code=503, detail="Yandex Disk token not configured")
         file_bytes = await file.read()
 
-        # Проверка размера файла
-        max_size = int(os.environ.get("MAX_FILE_SIZE_MB", 50)) * 1024 * 1024
+        # Проверка размера файла (по умолчанию 200 МБ — рендеры и видео обходов бывают большими)
+        max_size = int(os.environ.get("MAX_FILE_SIZE_MB", 200)) * 1024 * 1024
         if len(file_bytes) > max_size:
-            raise HTTPException(status_code=413, detail=f"Размер файла превышает максимально допустимый ({os.environ.get('MAX_FILE_SIZE_MB', 50)} МБ)")
+            raise HTTPException(status_code=413, detail=f"Размер файла превышает максимально допустимый ({os.environ.get('MAX_FILE_SIZE_MB', 200)} МБ)")
 
         if not yandex_path:
             # Защита от path traversal в имени файла
             safe_filename = os.path.basename(file.filename or "unnamed")
             yandex_path = f"/CRM/Временные файлы/{safe_filename}"
         else:
-            # Защита от path traversal: запрещаем ".." в пути
-            if ".." in yandex_path:
+            # Защита от path traversal: запрещаем "../" и "/.." (не просто ".." — иначе блокируются файлы типа "дизайн..2.pdf")
+            if "/../" in yandex_path or yandex_path.endswith("/..") or yandex_path.startswith("../"):
                 raise HTTPException(status_code=400, detail="Недопустимый путь файла")
 
         # Автопереименование при конфликте имён: file.pdf → file (1).pdf
