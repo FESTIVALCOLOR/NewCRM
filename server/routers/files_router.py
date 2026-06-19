@@ -376,6 +376,14 @@ async def get_yandex_upload_url(
         except Exception:
             pass
 
+        # Создаём родительскую папку, если не существует (иначе YD вернёт 409)
+        parent_dir = "/".join(actual_path.split("/")[:-1])
+        if parent_dir and parent_dir != "/":
+            try:
+                yd_service.create_folder(parent_dir)
+            except Exception:
+                pass
+
         r = _requests.get(
             f"{yd_service.base_url}/resources/upload",
             headers=yd_service.headers,
