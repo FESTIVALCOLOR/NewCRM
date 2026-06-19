@@ -376,13 +376,41 @@ async def get_yandex_upload_url(
         except Exception:
             pass
 
-        # Создаём родительскую папку, если не существует (иначе YD вернёт 409)
+        import time as _time
+
+        # Создаём родительскую папку при необходимости
+        folder_just_created = False
         parent_dir = "/".join(actual_path.split("/")[:-1])
         if parent_dir and parent_dir != "/":
-            try:
-                yd_service.create_folder(parent_dir)
-            except Exception:
-                pass
+            # Сначала проверяем существует ли папка (дешевле чем сразу создавать)
+            check_r = _requests.get(
+                f"{yd_service.base_url}/resources",
+                headers=yd_service.headers,
+                params={"path": parent_dir},
+                timeout=10,
+            )
+            if check_r.status_code != 200:
+                # Папка не существует — создаём рекурсивно
+                try:
+                    yd_service.create_folder(parent_dir)
+                    folder_just_created = True
+                except Exception as folder_err:
+                    logger.warning(f"Не удалось создать папку {parent_dir}: {folder_err}")
+
+                if folder_just_created:
+                    # Ждём пока папка станет реально доступна на YD (до 3 сек)
+                    for _ in range(6):
+                        _time.sleep(0.5)
+                        verify_r = _requests.get(
+                            f"{yd_service.base_url}/resources",
+                            headers=yd_service.headers,
+                            params={"path": parent_dir},
+                            timeout=5,
+                        )
+                        if verify_r.status_code == 200:
+                            break
+                    else:
+                        logger.warning(f"Папка {parent_dir} создана но не стала доступна за 3 сек")
 
         r = _requests.get(
             f"{yd_service.base_url}/resources/upload",
@@ -398,6 +426,7 @@ async def get_yandex_upload_url(
             "upload_url": upload_url,
             "yandex_path": actual_path,
             "file_name": os.path.basename(actual_path),
+            "folder_created": folder_just_created,
         }
 
     except HTTPException:

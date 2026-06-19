@@ -1,1 +1,0 @@
-import{nn as e}from"./index-Dt7B4PeI.js";function t(){if(window.getSelection!==void 0){let t=window.getSelection();t.empty===void 0?t.removeAllRanges!==void 0&&(t.removeAllRanges(),e.is.mobile!==!0&&t.addRange(document.createRange())):t.empty()}else document.selection!==void 0&&document.selection.empty()}export{t};

@@ -165,14 +165,22 @@ class YandexDiskService:
                 err_code = ""
 
             if "DiskPathDoesntExistsError" in err_code or "DoesntExist" in err_code:
-                # Родительская папка не существует — создаём рекурсивно
+                # Родительская папка не существует — создаём рекурсивно, проверяем каждый шаг
                 parts = yandex_path.replace("disk:/", "").split("/")
                 current = "disk:"
                 for part in parts:
                     if not part:
                         continue
                     current = current + "/" + part
-                    requests.put(f"{self.base_url}/resources", headers=self.headers, params={"path": current})
+                    r = requests.put(
+                        f"{self.base_url}/resources",
+                        headers=self.headers,
+                        params={"path": current},
+                        timeout=15,
+                    )
+                    # 201 = создана, 409 = уже существует — оба OK
+                    if r.status_code not in [200, 201, 409]:
+                        raise Exception(f"Не удалось создать папку {current}: {r.status_code} {r.text}")
                 try:
                     return self.get_file_info(yandex_path)
                 except Exception:
