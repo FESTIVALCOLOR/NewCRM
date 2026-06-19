@@ -369,10 +369,10 @@ async def upload_file_to_yandex(
             raise HTTPException(status_code=503, detail="Yandex Disk token not configured")
         file_bytes = await file.read()
 
-        # Проверка размера файла (по умолчанию 200 МБ — рендеры и видео обходов бывают большими)
-        max_size = int(os.environ.get("MAX_FILE_SIZE_MB", 200)) * 1024 * 1024
+        # Проверка размера файла (по умолчанию 600 МБ — рендеры и видео обходов бывают большими)
+        max_size = int(os.environ.get("MAX_FILE_SIZE_MB", 600)) * 1024 * 1024
         if len(file_bytes) > max_size:
-            raise HTTPException(status_code=413, detail=f"Размер файла превышает максимально допустимый ({os.environ.get('MAX_FILE_SIZE_MB', 200)} МБ)")
+            raise HTTPException(status_code=413, detail=f"Размер файла превышает максимально допустимый ({os.environ.get('MAX_FILE_SIZE_MB', 600)} МБ)")
 
         if not yandex_path:
             # Защита от path traversal в имени файла
