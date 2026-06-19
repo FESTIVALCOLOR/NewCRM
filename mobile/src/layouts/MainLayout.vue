@@ -25,6 +25,29 @@
           CRM FESTIVAL COLOR
         </div>
         <q-space />
+        <!-- Состояние диска сервера (только для администраторов) -->
+        <q-chip
+          v-if="isAdminUser && diskStatus"
+          dense
+          square
+          :color="diskStatus.disk_critical ? 'red-2' : diskStatus.disk_warning ? 'orange-2' : 'green-2'"
+          :text-color="diskStatus.disk_critical ? 'red-10' : diskStatus.disk_warning ? 'orange-10' : 'green-10'"
+          style="font-size: 10px; height: 22px; padding: 0 6px; cursor: pointer; border-radius: 4px"
+          class="q-mr-xs"
+          clickable
+          @click="showDiskPopup = true"
+        >
+          <q-icon
+            :name="diskStatus.disk_critical ? 'error' : diskStatus.disk_warning ? 'warning' : 'storage'"
+            size="12px"
+            class="q-mr-xs"
+          />
+          {{ diskStatus.disk_percent }}%
+          <q-tooltip>
+            Нажмите для подробностей
+          </q-tooltip>
+        </q-chip>
+
         <!-- Глобальный поиск -->
         <q-btn
           flat
@@ -133,6 +156,100 @@
         </q-btn>
       </q-toolbar>
     </q-header>
+
+    <!-- Диалог: подробности состояния сервера -->
+    <q-dialog v-model="showDiskPopup" position="top">
+      <q-card style="min-width: 260px; border-radius: 10px; margin-top: 52px">
+        <q-toolbar style="background: #f5f5f5; border-bottom: 1px solid #E0E0E0; min-height: 40px">
+          <q-toolbar-title style="font-size: 13px; font-weight: 600">
+            Состояние сервера
+          </q-toolbar-title>
+          <q-btn
+            v-close-popup
+            flat
+            dense
+            round
+            icon="close"
+            size="sm"
+          />
+        </q-toolbar>
+        <q-card-section v-if="diskStatus" class="q-pa-md">
+          <div class="q-mb-sm">
+            <div class="text-caption text-grey-6">
+              Диск
+            </div>
+            <div class="row items-center q-gutter-xs">
+              <div
+                style="font-size: 22px; font-weight: 700"
+                :style="{ color: diskStatus.disk_critical ? '#c62828' : diskStatus.disk_warning ? '#e65100' : '#2e7d32' }"
+              >
+                {{ diskStatus.disk_percent }}%
+              </div>
+              <div class="text-caption text-grey-7">
+                {{ diskStatus.disk_used_gb }} / {{ diskStatus.disk_total_gb }} ГБ
+              </div>
+            </div>
+            <q-linear-progress
+              :value="diskStatus.disk_percent / 100"
+              rounded
+              size="6px"
+              :color="diskStatus.disk_critical ? 'red-7' : diskStatus.disk_warning ? 'orange-7' : 'green-6'"
+              track-color="grey-3"
+              class="q-mt-xs"
+            />
+            <div class="text-caption text-grey-6 q-mt-xs">
+              Свободно: {{ diskStatus.disk_free_gb }} ГБ
+            </div>
+          </div>
+          <q-separator class="q-my-sm" />
+          <div>
+            <div class="text-caption text-grey-6">
+              Оперативная память
+            </div>
+            <div class="row items-center q-gutter-xs">
+              <div
+                style="font-size: 22px; font-weight: 700"
+                :style="{ color: diskStatus.ram_percent >= 90 ? '#c62828' : diskStatus.ram_percent >= 75 ? '#e65100' : '#2e7d32' }"
+              >
+                {{ diskStatus.ram_percent }}%
+              </div>
+              <div class="text-caption text-grey-7">
+                {{ diskStatus.ram_used_gb }} / {{ diskStatus.ram_total_gb }} ГБ
+              </div>
+            </div>
+            <q-linear-progress
+              :value="diskStatus.ram_percent / 100"
+              rounded
+              size="6px"
+              :color="diskStatus.ram_percent >= 90 ? 'red-7' : diskStatus.ram_percent >= 75 ? 'orange-7' : 'green-6'"
+              track-color="grey-3"
+              class="q-mt-xs"
+            />
+          </div>
+          <div class="text-caption text-grey-5 q-mt-md text-right">
+            Обновлено: {{ diskLastUpdated }}
+          </div>
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn
+            flat
+            no-caps
+            label="Обновить"
+            icon="refresh"
+            size="sm"
+            color="primary"
+            @click="loadDiskStatus"
+          />
+          <q-btn
+            v-close-popup
+            flat
+            no-caps
+            label="Закрыть"
+            size="sm"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
 
     <!-- Drawer — порядок как в десктопе -->
     <q-drawer
@@ -678,6 +795,30 @@ const { canInstall, isIos, isInstalled, isYandex, isMobile, isMacSafari, install
 const showIosInstallDialog = ref(false)
 const showManualInstallDialog = ref(false)
 
+// ── Мониторинг диска сервера (только для администраторов) ──
+const _ADMIN_DISK_POSITIONS = ['Руководитель студии', 'Старший менеджер проектов', 'СДП', 'ГАП']
+const isAdminUser = computed(() => {
+  const u = authStore.user
+  if (!u) return false
+  return _ADMIN_DISK_POSITIONS.includes(u.position) || ['admin', 'director'].includes(u.role)
+})
+const diskStatus = ref(null)
+const diskLastUpdated = ref('')
+const showDiskPopup = ref(false)
+let _diskTimer = null
+
+async function loadDiskStatus() {
+  if (!isAdminUser.value) return
+  try {
+    const { api } = await import('src/boot/axios')
+    const { data } = await api.get('/api/v1/admin/disk-status')
+    diskStatus.value = data
+    diskLastUpdated.value = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+  } catch {
+    // 403 или недоступен — молча игнорируем
+  }
+}
+
 function handleInstallClick() {
   if (isInstalled.value) {
     $q.notify({ type: 'positive', message: 'Приложение уже установлено на рабочем столе', icon: 'check_circle' })
@@ -890,6 +1031,10 @@ onMounted(() => {
 
   // WebSocket для real-time обновлений (дополняет polling, не заменяет)
   _connectWebSocket()
+
+  // Диск сервера: первая проверка через 3 сек, затем каждые 5 мин
+  setTimeout(() => loadDiskStatus(), 3000)
+  _diskTimer = setInterval(() => loadDiskStatus(), 5 * 60 * 1000)
 })
 
 // Фильтр меню по правам
@@ -1217,6 +1362,7 @@ onUnmounted(() => {
   if (heartbeatTimer) clearInterval(heartbeatTimer)
   if (offlinePendingTimer) clearInterval(offlinePendingTimer)
   if (_chatUnreadTimer) clearInterval(_chatUnreadTimer)
+  if (_diskTimer) clearInterval(_diskTimer)
   document.removeEventListener('visibilitychange', handleVisibilityChange)
   wsDisconnect()
 })

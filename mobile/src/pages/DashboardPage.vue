@@ -3,34 +3,6 @@
     <q-pull-to-refresh @refresh="onRefresh">
       <install-banner />
 
-      <!-- Предупреждение о заполненности диска сервера (только для администраторов) -->
-      <q-banner
-        v-if="diskWarning"
-        :class="diskWarning.critical ? 'bg-red-1 text-red-9' : 'bg-orange-1 text-orange-9'"
-        rounded
-        dense
-        class="q-mb-md"
-        style="border: 1px solid currentColor; border-radius: 8px; font-size: 13px"
-      >
-        <template #avatar>
-          <q-icon :name="diskWarning.critical ? 'error' : 'warning'" size="20px" />
-        </template>
-        <div>
-          <strong>Диск сервера заполнен на {{ diskWarning.percent }}%</strong><br>
-          Свободно: {{ diskWarning.free_gb }} ГБ из {{ diskWarning.total_gb }} ГБ.
-          Очистите логи или Docker-кэш.
-        </div>
-        <template #action>
-          <q-btn
-            flat
-            dense
-            no-caps
-            label="Закрыть"
-            @click="diskWarning = null"
-          />
-        </template>
-      </q-banner>
-
       <!-- Приветствие -->
       <div class="q-mb-md">
         <div class="text-h6 text-weight-bold" style="color: #333">
@@ -337,30 +309,5 @@ async function markAllNotificationsRead() {
 
 function onRefresh(done) { Promise.all([dashboard.loadAll(), notificationsStore.load(), loadMyTasks()]).finally(done) }
 
-// ── Диск сервера (только для администраторов) ──
-const ADMIN_POSITIONS = ['Руководитель студии', 'Старший менеджер проектов', 'СДП', 'ГАП']
-const diskWarning = ref(null)
-
-async function checkDiskStatus() {
-  const user = authStore.user
-  if (!user) return
-  const isAdmin = ADMIN_POSITIONS.includes(user.position) || ['admin', 'director'].includes(user.role)
-  if (!isAdmin) return
-  try {
-    const { api } = await import('src/boot/axios')
-    const { data } = await api.get('/api/v1/admin/disk-status')
-    if (data.disk_warning) {
-      diskWarning.value = {
-        percent: data.disk_percent,
-        free_gb: data.disk_free_gb,
-        total_gb: data.disk_total_gb,
-        critical: data.disk_critical,
-      }
-    }
-  } catch {
-    // 403 или недоступен — молча игнорируем
-  }
-}
-
-onMounted(() => { dashboard.loadAll(); loadMyTasks(); checkDiskStatus() })
+onMounted(() => { dashboard.loadAll(); loadMyTasks() })
 </script>
