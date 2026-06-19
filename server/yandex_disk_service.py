@@ -67,15 +67,20 @@ class YandexDiskService:
             self.create_folder(parent_dir)
 
         # Получаем ссылку для загрузки
-        upload_url_response = requests.get(f"{self.base_url}/resources/upload", headers=self.headers, params={"path": yandex_path, "overwrite": "true"})
+        upload_url_response = requests.get(
+            f"{self.base_url}/resources/upload",
+            headers=self.headers,
+            params={"path": yandex_path, "overwrite": "true"},
+            timeout=30,
+        )
 
         if upload_url_response.status_code != 200:
             raise Exception(f"Ошибка получения ссылки: {upload_url_response.json()}")
 
         upload_url = upload_url_response.json().get("href")
 
-        # Загружаем файл
-        upload_response = requests.put(upload_url, data=file_bytes)
+        # Загружаем файл (таймаут 600с — файлы до 600 МБ на медленном канале)
+        upload_response = requests.put(upload_url, data=file_bytes, timeout=600)
 
         if upload_response.status_code not in [200, 201]:
             raise Exception(f"Ошибка загрузки файла: {upload_response.text}")
