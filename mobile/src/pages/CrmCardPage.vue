@@ -3492,17 +3492,36 @@ async function handleCrmFileUpload(event) {
 
         if (!uploadUrl) throw new Error('Нет URL загрузки')
 
-        // PUT напрямую на ЯД из браузера — без ограничений по скорости сервера
-        const putRes = await fetch(uploadUrl, {
-          method: 'PUT',
-          body: file,
-          headers: { 'Content-Type': file.type || 'application/octet-stream' },
+        // PUT напрямую на ЯД из браузера через XHR (поддерживает прогресс upload)
+        const sizeMB = (file.size / 1024 / 1024).toFixed(1)
+        await new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest()
+          xhr.open('PUT', uploadUrl)
+          xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream')
+
+          xhr.upload.addEventListener('progress', (e) => {
+            if (e.lengthComputable) {
+              const pct = Math.round((e.loaded / e.total) * 100)
+              const loadedMB = (e.loaded / 1024 / 1024).toFixed(1)
+              $q.loading.show({
+                message: `${actualFileName}<br><b>${loadedMB} / ${sizeMB} МБ</b> (${pct}%)`,
+                html: true,
+                spinnerSize: 50,
+              })
+            }
+          })
+
+          xhr.addEventListener('load', () => {
+            if (xhr.status === 200 || xhr.status === 201) resolve()
+            else reject(new Error(`ЯД PUT: ${xhr.status}`))
+          })
+          xhr.addEventListener('error', () => reject(new Error('Сетевая ошибка')))
+          xhr.addEventListener('abort', () => reject(new Error('Загрузка отменена')))
+          xhr.send(file)
         })
-        if (!putRes.ok && putRes.status !== 201) {
-          throw new Error(`ЯД PUT: ${putRes.status}`)
-        }
 
         // Получить публичную ссылку после загрузки
+        $q.loading.show({ message: 'Получение ссылки...' })
         try {
           const linkRes = await filesApi.getPublicLink(actualYpClean)
           publicLink = linkRes.data?.public_link || ''
