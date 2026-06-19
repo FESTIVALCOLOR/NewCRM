@@ -189,6 +189,7 @@
 import { ref, computed, watch } from 'vue'
 import { useQuasar } from 'quasar'
 import { employeesApi, filesApi, contractsApi, crmApi, paymentsApi } from 'src/services/api'
+import { useYdUpload } from 'src/composables/useYdUpload'
 
 const props = defineProps({
   modelValue: Boolean,
@@ -200,6 +201,7 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue', 'saved'])
 
 const $q = useQuasar()
+const { uploadToYd } = useYdUpload()
 const show = ref(false)
 const saving = ref(false)
 const fetching = ref(false)
@@ -363,7 +365,7 @@ async function save() {
       if (contractFolder) {
         const measFolder = `${contractFolder}/Замер`
         const ydPath = `${measFolder}/${selectedFile.value.name}`
-        await filesApi.upload(selectedFile.value, ydPath)
+        const { yandex_path: actualYdPath } = await uploadToYd(selectedFile.value, ydPath)
 
         // Получаем публичную ссылку на ПАПКУ (не на файл) — как десктоп
         let folderLink = ''
@@ -377,7 +379,7 @@ async function save() {
           await contractsApi.update(props.contractId, {
             measurement_image_link: folderLink,
             measurement_folder_public_link: folderLink,
-            measurement_yandex_path: ydPath,
+            measurement_yandex_path: actualYdPath,
             measurement_file_name: selectedFile.value.name,
           })
           // Создаём запись в project_files + scan для синхронизации
@@ -385,7 +387,7 @@ async function save() {
             await ax.post('/api/v1/files/', {
               contract_id: props.contractId, stage: 'measurement',
               file_type: selectedFile.value.type?.includes('image') ? 'image' : 'pdf',
-              public_link: folderLink, yandex_path: ydPath, file_name: selectedFile.value.name,
+              public_link: folderLink, yandex_path: actualYdPath, file_name: selectedFile.value.name,
               file_order: 0, variation: 1,
             })
           } catch {}

@@ -186,8 +186,10 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useQuasar } from 'quasar'
 import { filesApi } from 'src/services/api'
+import { useYdUpload } from 'src/composables/useYdUpload'
 
 const $q = useQuasar()
+const { uploadToYd } = useYdUpload()
 const currentPath = ref('/CRM')
 const items = ref([])
 const loading = ref(false)
@@ -355,7 +357,7 @@ async function handleUpload(event) {
   const yandexPath = `${currentPath.value}/${file.name}`
   try {
     $q.loading.show({ message: 'Загрузка...' })
-    await filesApi.upload(file, yandexPath)
+    await uploadToYd(file, yandexPath)
     $q.notify({ type: 'positive', message: 'Файл загружен' })
     await loadFolder()
   } catch {

@@ -960,9 +960,11 @@ import { contractsApi, filesApi, crmApi, clientsApi, timelineApi, surveyApi } fr
 import { useReferencesStore } from 'src/stores/references'
 import { useAuthStore } from 'src/stores/auth'
 import { usePermission } from 'src/composables/usePermission'
+import { useYdUpload } from 'src/composables/useYdUpload'
 import ContractFormDialog from 'src/components/ContractFormDialog.vue'
 
 const { can, isSuperuser } = usePermission()
+const { uploadToYd } = useYdUpload()
 const authStore = useAuthStore()
 
 // Удаление файлов видно только руководителю и старшему менеджеру
@@ -1466,13 +1468,12 @@ async function handleFileUpload(event) {
     const stageFolder = STAGE_FOLDERS[uploadStage.value] || uploadStage.value
     if (!contractFolder) { $q.notify({ type: 'negative', message: 'Папка проекта на ЯД не создана' }); return }
     const ydPath = `${contractFolder}/${stageFolder}/${file.name}`
-    const uploadRes = await filesApi.upload(file, ydPath)
-    const publicLink = uploadRes.data?.public_link || ''
+    const { public_link: publicLink, yandex_path: actualYdPath } = await uploadToYd(file, ydPath)
     const { api: apiInst } = await import('src/boot/axios')
     await apiInst.post('/api/v1/files/', {
       contract_id: contract.value.id, stage: uploadStage.value,
       file_type: file.type?.includes('image') ? 'image' : file.name.endsWith('.pdf') ? 'pdf' : 'other',
-      public_link: publicLink, yandex_path: ydPath, file_name: file.name,
+      public_link: publicLink, yandex_path: actualYdPath, file_name: file.name,
       file_order: files.value.length + 1, variation: 1,
     })
     // Обновляем поля contracts для совместимости с десктопом (все 19 типов файлов)
@@ -1492,7 +1493,7 @@ async function handleFileUpload(event) {
     if (fieldMap) {
       const update = {}
       update[fieldMap.link] = publicLink
-      update[fieldMap.path] = ydPath
+      update[fieldMap.path] = actualYdPath
       update[fieldMap.name] = file.name
       try { await contractsApi.update(contract.value.id, update) } catch {}
     }
@@ -1509,7 +1510,7 @@ async function handleReceiptUpload(event) {
   try {
     $q.loading.show({ message: 'Загрузка чека...' })
     const yandexPath = `/CRM/Чеки/${contract.value.contract_number}/${receiptType.value}_${file.name}`
-    await filesApi.upload(file, yandexPath)
+    await uploadToYd(file, yandexPath)
     $q.notify({ type: 'positive', message: 'Чек загружен' })
   } catch { $q.notify({ type: 'negative', message: 'Ошибка загрузки' }) }
   finally { $q.loading.hide(); event.target.value = '' }

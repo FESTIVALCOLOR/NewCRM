@@ -75,6 +75,7 @@
 import { ref, watch } from 'vue'
 import { useQuasar } from 'quasar'
 import { filesApi, contractsApi, crmApi } from 'src/services/api'
+import { useYdUpload } from 'src/composables/useYdUpload'
 
 const props = defineProps({
   modelValue: Boolean,
@@ -85,6 +86,7 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue', 'saved'])
 
 const $q = useQuasar()
+const { uploadToYd } = useYdUpload()
 const show = ref(false)
 const saving = ref(false)
 const selectedFile = ref(null)
@@ -108,7 +110,7 @@ async function save() {
       // Загружаем файл в папку Анкета (как десктоп)
       const ankFolder = `${contractFolder}/Анкета`
       const ydPath = `${ankFolder}/${selectedFile.value.name}`
-      await filesApi.upload(selectedFile.value, ydPath)
+      const { yandex_path: actualYdPath } = await uploadToYd(selectedFile.value, ydPath)
 
       // Получаем публичную ссылку на папку
       let folderLink = ''
@@ -129,7 +131,7 @@ async function save() {
           await ax.post('/api/v1/files/', {
             contract_id: props.contractId, stage: 'tech_task',
             file_type: selectedFile.value.type?.includes('image') ? 'image' : 'pdf',
-            public_link: folderLink, yandex_path: ydPath, file_name: selectedFile.value.name,
+            public_link: folderLink, yandex_path: actualYdPath, file_name: selectedFile.value.name,
             file_order: 0, variation: 1,
           })
         } catch {}

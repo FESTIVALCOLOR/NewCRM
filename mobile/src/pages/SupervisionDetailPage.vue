@@ -2158,6 +2158,7 @@ import InlineChatRoom from 'src/components/InlineChatRoom.vue'
 import { addToCalendar } from 'src/composables/useCalendar'
 import { usePermission } from 'src/composables/usePermission'
 import { useEmployeeAvatars } from 'src/composables/useEmployeeAvatars'
+import { useYdUpload } from 'src/composables/useYdUpload'
 import { useAuthStore } from 'src/stores/auth'
 import { useReferencesStore } from 'src/stores/references'
 
@@ -2165,6 +2166,7 @@ const { can } = usePermission()
 const refs = useReferencesStore()
 const authStore = useAuthStore()
 const { ensureLoaded: loadAvatars, getAvatarByName } = useEmployeeAvatars()
+const { uploadToYd } = useYdUpload()
 const agentColor = computed(() => refs.agentByName(card.value?.agent_type)?.color || '#95A5A6')
 const isArchived = computed(() => card.value?.column_name === 'Выполненный проект')
 
@@ -2725,17 +2727,7 @@ async function doUploadStageFiles() {
 
     for (const file of stageUploadFiles.value) {
       const yp = `${folder}/${file.name}`
-      const uploadRes = await filesApi.upload(file, yp)
-      let publicLink = uploadRes.data?.public_link || ''
-
-      // Получаем публичную ссылку если нет
-      if (!publicLink) {
-        try {
-          const { data: linkData } = await filesApi.getPublicLink(yp)
-          publicLink = linkData.public_link || ''
-        } catch {}
-      }
-
+      const { public_link: publicLink, yandex_path: actualYp } = await uploadToYd(file, yp)
       if (cid) {
         await ax.post('/api/v1/files/', {
           contract_id: cid,
@@ -2743,7 +2735,7 @@ async function doUploadStageFiles() {
           stage_code: uploadStageCode.value,
           file_type: file.type?.includes('image') ? 'image' : 'pdf',
           public_link: publicLink,
-          yandex_path: yp,
+          yandex_path: actualYp,
           file_name: file.name,
           file_order: 0,
           variation: 1,
@@ -3157,13 +3149,12 @@ async function uploadFile(file) {
     }
     const supervisionFolder = contractFolder ? `${contractFolder}/Авторский надзор` : `/CRM/Надзор/${card.value.contract_number || card.value.id}`
     const yandexPath = `${supervisionFolder}/${file.name}`
-    const uploadRes = await filesApi.upload(file, yandexPath)
-    const publicLink = uploadRes.data?.public_link || ''
+    const { public_link: publicLink, yandex_path: actualYandexPath } = await uploadToYd(file, yandexPath)
     if (cid) {
       await ax.post('/api/v1/files/', {
         contract_id: cid, stage: 'supervision',
         file_type: file.type?.includes('image') ? 'image' : 'pdf',
-        public_link: publicLink, yandex_path: yandexPath,
+        public_link: publicLink, yandex_path: actualYandexPath,
         file_name: file.name, file_order: 0, variation: 1,
       })
       try {
@@ -3224,10 +3215,9 @@ async function uploadFileWithStage(file, stage) {
     const subFolder = stage === 'supervision_reports' ? 'Авторский надзор/Отчёты' : 'Авторский надзор'
     const folder = contractFolder ? `${contractFolder}/${subFolder}` : `/CRM/Надзор/${card.value.contract_number || card.value.id}`
     const yp = `${folder}/${file.name}`
-    const uploadRes = await filesApi.upload(file, yp)
-    const publicLink = uploadRes.data?.public_link || ''
+    const { public_link: publicLink, yandex_path: actualYp } = await uploadToYd(file, yp)
     if (cid) {
-      await ax.post('/api/v1/files/', { contract_id: cid, stage, file_type: file.type?.includes('image') ? 'image' : 'pdf', public_link: publicLink, yandex_path: yp, file_name: file.name, file_order: 0, variation: 1 })
+      await ax.post('/api/v1/files/', { contract_id: cid, stage, file_type: file.type?.includes('image') ? 'image' : 'pdf', public_link: publicLink, yandex_path: actualYp, file_name: file.name, file_order: 0, variation: 1 })
       try { await ax.post(`/api/v1/files/scan/${cid}?scope=supervision`) } catch {}
     }
     $q.notify({ type: 'positive', message: 'Файл загружен' })

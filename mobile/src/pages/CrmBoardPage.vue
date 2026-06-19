@@ -458,6 +458,7 @@ import { crmApi, employeesApi, contractsApi, paymentsApi, filesApi } from 'src/s
 import { usePermission } from 'src/composables/usePermission'
 import { useOptimistic } from 'src/composables/useOptimistic'
 import { calcDeadlineFromTimeline } from 'src/composables/useDeadline'
+import { useYdUpload } from 'src/composables/useYdUpload'
 import CrmCardItem from 'src/components/CrmCardItem.vue'
 import PageDashboard from 'src/components/PageDashboard.vue'
 import MeasurementDialog from 'src/components/MeasurementDialog.vue'
@@ -467,6 +468,7 @@ const { can } = usePermission()
 const { optimistic } = useOptimistic()
 
 const $q = useQuasar()
+const { uploadToYd } = useYdUpload()
 const router = useRouter()
 const crmStore = useCrmStore()
 const currentSlide = ref(parseInt(sessionStorage.getItem('crm_slide') || '0'))
@@ -752,7 +754,7 @@ async function submitBoardReject() {
             }
           }
         }
-        await filesApi.upload(boardRejectFile.value, `${folder}/${boardRejectFile.value.name}`)
+        await uploadToYd(boardRejectFile.value, `${folder}/${boardRejectFile.value.name}`)
         filePath = folder
       } catch (e) { console.warn('Ошибка загрузки файла правок:', e) }
     }

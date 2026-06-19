@@ -58,6 +58,7 @@
 import { ref, computed, onBeforeUnmount } from 'vue'
 import { useQuasar } from 'quasar'
 import { filesApi } from 'src/services/api'
+import { useYdUpload } from 'src/composables/useYdUpload'
 
 const props = defineProps({
   /** Путь к папке на Яндекс.Диске (без disk: префикса) для загрузки заметок */
@@ -70,6 +71,7 @@ const props = defineProps({
 const emit = defineEmits(['recorded'])
 
 const $q = useQuasar()
+const { uploadToYd } = useYdUpload()
 
 const isRecording = ref(false)
 const audioBlob = ref(null)
@@ -162,16 +164,15 @@ async function uploadAndSend() {
     const file = new File([audioBlob.value], fileName, { type: audioBlob.value.type })
 
     // Загружаем на Яндекс.Диск
-    const response = await filesApi.upload(file, uploadPath)
-    const uploadedUrl = response.data?.public_url || response.data?.url || uploadPath
+    const { public_link: uploadedUrl, yandex_path: actualPath } = await uploadToYd(file, uploadPath)
 
     const duration = seconds.value
 
     emit('recorded', {
-      url: uploadedUrl,
+      url: uploadedUrl || actualPath,
       duration,
       fileName,
-      path: uploadPath,
+      path: actualPath,
     })
 
     $q.notify({ type: 'positive', message: 'Голосовая заметка загружена' })
