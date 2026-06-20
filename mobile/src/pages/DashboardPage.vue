@@ -16,7 +16,14 @@
       <!-- 6 KPI карточек (2×3) -->
       <div class="row q-col-gutter-sm q-mb-md">
         <div v-for="kpi in kpiCards" :key="kpi.label" class="col-4">
-          <q-card class="is-card" style="min-height: 80px" :style="{ borderLeft: `3px solid ${kpi.border}` }">
+          <q-card
+            v-ripple
+            class="is-card"
+            style="min-height: 80px; cursor: pointer"
+            :style="{ borderLeft: `3px solid ${kpi.border}` }"
+            clickable
+            @click="router.push(kpi.to)"
+          >
             <q-card-section class="q-pa-sm text-center">
               <div class="text-h6 text-weight-bold" style="color: #333">
                 <q-skeleton v-if="dashboard.loading" type="text" width="30px" style="margin: 0 auto" />
@@ -174,12 +181,12 @@ const kpiCards = computed(() => {
   const emp = dashboard.employeesStats || {}
   const totalContracts = (con.individual_orders ?? 0) + (con.template_orders ?? 0)
   return [
-    { label: 'Индивидуальные', value: crm.active_orders ?? '—', border: '#ffd93c' },
-    { label: 'Шаблонные', value: crmT.active_orders ?? '—', border: '#F39C12' },
-    { label: 'Авт. надзор', value: crmN.active_orders ?? '—', border: '#27AE60' },
-    { label: 'Клиентов', value: cli.total_clients ?? '—', border: '#9B59B6' },
-    { label: 'Договоров', value: totalContracts || '—', border: '#E74C3C' },
-    { label: 'Сотрудников', value: emp.active_employees ?? '—', border: '#1ABC9C' },
+    { label: 'Индивидуальные', value: crm.active_orders ?? '—', border: '#ffd93c', to: '/crm' },
+    { label: 'Шаблонные', value: crmT.active_orders ?? '—', border: '#F39C12', to: '/crm' },
+    { label: 'Авт. надзор', value: crmN.active_orders ?? '—', border: '#27AE60', to: '/supervision' },
+    { label: 'Клиентов', value: cli.total_clients ?? '—', border: '#9B59B6', to: '/clients' },
+    { label: 'Договоров', value: totalContracts || '—', border: '#E74C3C', to: '/contracts' },
+    { label: 'Сотрудников', value: emp.active_employees ?? '—', border: '#1ABC9C', to: '/employees' },
   ]
 })
 
