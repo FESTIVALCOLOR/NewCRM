@@ -57,25 +57,40 @@
             </div>
           </q-tooltip>
         </q-btn>
-        <!-- Обновить / Статистика сервера: для админов — открывает диалог статистики (там есть кнопка Обновить), для остальных — перезагрузка страницы -->
+        <!-- Статистика сервера: для админов — цветной блок с %, клик открывает диалог -->
+        <div
+          v-if="isAdminUser && diskStatus"
+          role="button"
+          :style="{
+            cursor: 'pointer',
+            borderRadius: '4px',
+            padding: '2px 7px',
+            fontSize: '10px',
+            fontWeight: '700',
+            height: '22px',
+            display: 'inline-flex',
+            alignItems: 'center',
+            marginRight: '2px',
+            background: diskStatus.disk_critical ? '#ffcdd2' : diskStatus.disk_warning ? '#ffe0b2' : '#c8e6c9',
+            color: diskStatus.disk_critical ? '#c62828' : diskStatus.disk_warning ? '#e65100' : '#2e7d32',
+          }"
+          @click="showDiskPopup = true"
+        >
+          {{ diskStatus.disk_percent }}%
+          <q-tooltip>Статистика сервера</q-tooltip>
+        </div>
+        <!-- Обновить (для не-администраторов) -->
         <q-btn
+          v-if="!isAdminUser"
           flat
           dense
           round
-          :icon="isAdminUser && diskStatus ? (diskStatus.disk_critical ? 'error' : diskStatus.disk_warning ? 'warning' : 'dns') : 'refresh'"
+          icon="refresh"
           size="sm"
-          :color="isAdminUser && diskStatus?.disk_critical ? 'negative' : isAdminUser && diskStatus?.disk_warning ? 'orange-7' : 'grey-7'"
-          @click="isAdminUser ? showDiskPopup = true : refreshData()"
+          color="grey-7"
+          @click="refreshData()"
         >
-          <q-badge
-            v-if="isAdminUser && diskStatus"
-            :color="diskStatus.disk_critical ? 'negative' : diskStatus.disk_warning ? 'orange' : 'green'"
-            floating
-            style="font-size: 8px; padding: 1px 3px"
-          >
-            {{ diskStatus.disk_percent }}%
-          </q-badge>
-          <q-tooltip>{{ isAdminUser ? 'Статистика сервера' : 'Обновить' }}</q-tooltip>
+          <q-tooltip>Обновить</q-tooltip>
         </q-btn>
         <!-- Инструкция (иконка как в десктопе — файл) -->
         <q-btn

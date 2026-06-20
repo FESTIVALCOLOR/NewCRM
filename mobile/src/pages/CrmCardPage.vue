@@ -21,7 +21,7 @@
         </q-btn>
         <q-card-section style="background: #F8F9FA; border-radius: 8px 8px 0 0">
           <div class="row items-start justify-between q-mb-xs">
-            <div style="flex: 1">
+            <div style="flex: 1; padding-left: 36px">
               <div class="text-subtitle1 text-weight-bold" style="color: #333">
                 {{ card.contract_number }}
               </div>
