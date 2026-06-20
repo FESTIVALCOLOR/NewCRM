@@ -25,29 +25,6 @@
           CRM FESTIVAL COLOR
         </div>
         <q-space />
-        <!-- Состояние диска сервера (только для администраторов) -->
-        <q-chip
-          v-if="isAdminUser && diskStatus"
-          dense
-          square
-          :color="diskStatus.disk_critical ? 'red-2' : diskStatus.disk_warning ? 'orange-2' : 'green-2'"
-          :text-color="diskStatus.disk_critical ? 'red-10' : diskStatus.disk_warning ? 'orange-10' : 'green-10'"
-          style="font-size: 10px; height: 22px; padding: 0 6px; cursor: pointer; border-radius: 4px"
-          class="q-mr-xs"
-          clickable
-          @click="showDiskPopup = true"
-        >
-          <q-icon
-            :name="diskStatus.disk_critical ? 'error' : diskStatus.disk_warning ? 'warning' : 'storage'"
-            size="12px"
-            class="q-mr-xs"
-          />
-          {{ diskStatus.disk_percent }}%
-          <q-tooltip>
-            Нажмите для подробностей
-          </q-tooltip>
-        </q-chip>
-
         <!-- Глобальный поиск -->
         <q-btn
           flat
@@ -80,17 +57,25 @@
             </div>
           </q-tooltip>
         </q-btn>
-        <!-- Обновить сервер (первая) -->
+        <!-- Обновить / Статистика сервера: для админов — открывает диалог статистики (там есть кнопка Обновить), для остальных — перезагрузка страницы -->
         <q-btn
           flat
           dense
           round
-          icon="refresh"
+          :icon="isAdminUser && diskStatus ? (diskStatus.disk_critical ? 'error' : diskStatus.disk_warning ? 'warning' : 'dns') : 'refresh'"
           size="sm"
-          color="grey-7"
-          @click="refreshData"
+          :color="isAdminUser && diskStatus?.disk_critical ? 'negative' : isAdminUser && diskStatus?.disk_warning ? 'orange-7' : 'grey-7'"
+          @click="isAdminUser ? showDiskPopup = true : refreshData()"
         >
-          <q-tooltip>Обновить</q-tooltip>
+          <q-badge
+            v-if="isAdminUser && diskStatus"
+            :color="diskStatus.disk_critical ? 'negative' : diskStatus.disk_warning ? 'orange' : 'green'"
+            floating
+            style="font-size: 8px; padding: 1px 3px"
+          >
+            {{ diskStatus.disk_percent }}%
+          </q-badge>
+          <q-tooltip>{{ isAdminUser ? 'Статистика сервера' : 'Обновить' }}</q-tooltip>
         </q-btn>
         <!-- Инструкция (иконка как в десктопе — файл) -->
         <q-btn

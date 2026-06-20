@@ -8,13 +8,13 @@
     <template v-else-if="card">
       <!-- Шапка -->
       <q-card class="is-card q-mb-md" style="position: relative">
-        <!-- Кнопка назад — в углу карточки -->
+        <!-- Кнопка назад — внутри карточки чтобы не уходить за край экрана -->
         <q-btn
           round
           flat
           dense
           icon="arrow_back"
-          style="position: absolute; top: -14px; left: -14px; z-index: 10; width: 27px; height: 32px; min-height: 32px; min-width: 27px; max-width: 27px; max-height: 32px; padding: 0; overflow: hidden; background: white; border: 1.5px solid #E0E0E0; box-shadow: 0 2px 8px rgba(0,0,0,0.13); color: #555"
+          style="position: absolute; top: 6px; left: 6px; z-index: 10; width: 28px; height: 28px; min-height: 28px; min-width: 28px; padding: 0; background: white; border: 1.5px solid #E0E0E0; box-shadow: 0 2px 8px rgba(0,0,0,0.13); color: #555"
           @click="$router.back()"
         >
           <q-tooltip>Назад</q-tooltip>
