@@ -450,7 +450,7 @@
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { useCrmStore } from 'src/stores/crm'
 import { useAuthStore } from 'src/stores/auth'
@@ -470,6 +470,7 @@ const { optimistic } = useOptimistic()
 const $q = useQuasar()
 const { uploadToYd } = useYdUpload()
 const router = useRouter()
+const route = useRoute()
 const crmStore = useCrmStore()
 const currentSlide = ref(parseInt(sessionStorage.getItem('crm_slide') || '0'))
 const moveDialogVisible = ref(false)
@@ -1067,6 +1068,10 @@ async function doCompleteProject() {
 watch(() => crmStore.projectType, () => { if (can('crm_cards.view_archive')) loadArchiveCount() })
 
 onMounted(async () => {
+  const typeParam = route.query.type
+  if (typeParam === 'Индивидуальный' || typeParam === 'Шаблонный') {
+    crmStore.setProjectType(typeParam)
+  }
   crmStore.loadCards()
   if (can('crm_cards.view_archive')) loadArchiveCount()
   try {

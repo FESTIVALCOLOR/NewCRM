@@ -181,8 +181,8 @@ const kpiCards = computed(() => {
   const emp = dashboard.employeesStats || {}
   const totalContracts = (con.individual_orders ?? 0) + (con.template_orders ?? 0)
   return [
-    { label: 'Индивидуальные', value: crm.active_orders ?? '—', border: '#ffd93c', to: '/crm' },
-    { label: 'Шаблонные', value: crmT.active_orders ?? '—', border: '#F39C12', to: '/crm' },
+    { label: 'Индивидуальные', value: crm.active_orders ?? '—', border: '#ffd93c', to: '/crm?type=Индивидуальный' },
+    { label: 'Шаблонные', value: crmT.active_orders ?? '—', border: '#F39C12', to: '/crm?type=Шаблонный' },
     { label: 'Авт. надзор', value: crmN.active_orders ?? '—', border: '#27AE60', to: '/supervision' },
     { label: 'Клиентов', value: cli.total_clients ?? '—', border: '#9B59B6', to: '/clients' },
     { label: 'Договоров', value: totalContracts || '—', border: '#E74C3C', to: '/contracts' },
