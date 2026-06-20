@@ -14,14 +14,14 @@
           flat
           dense
           icon="arrow_back"
-          style="position: absolute; top: 6px; left: 6px; z-index: 10; width: 28px; height: 28px; min-height: 28px; min-width: 28px; padding: 0; background: white; border: 1.5px solid #E0E0E0; box-shadow: 0 2px 8px rgba(0,0,0,0.13); color: #555"
+          style="position: absolute; top: -10px; left: -10px; z-index: 10; width: 28px; height: 28px; min-height: 28px; min-width: 28px; padding: 0; background: white; border: 1.5px solid #E0E0E0; box-shadow: 0 2px 8px rgba(0,0,0,0.13); color: #555"
           @click="$router.back()"
         >
           <q-tooltip>Назад</q-tooltip>
         </q-btn>
         <q-card-section style="background: #F8F9FA; border-radius: 8px 8px 0 0">
           <div class="row items-start justify-between q-mb-xs">
-            <div style="flex: 1; padding-left: 36px">
+            <div style="flex: 1">
               <div class="text-subtitle1 text-weight-bold" style="color: #333">
                 {{ card.contract_number }}
               </div>
