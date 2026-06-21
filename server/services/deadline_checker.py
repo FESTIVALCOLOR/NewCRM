@@ -404,17 +404,31 @@ async def create_monthly_supervision_payments(db_session_factory):
             db.rollback()
 
 
+def _next_workday_run_utc(now: datetime) -> datetime:
+    """Вернуть UTC-время следующего запуска (10:00 МСК = 07:00 UTC) в ближайший рабочий день."""
+    # Ближайший 07:00 UTC сегодня или завтра
+    candidate = now.replace(hour=7, minute=0, second=0, microsecond=0)
+    if now >= candidate:
+        candidate += timedelta(days=1)
+    # Сдвигаем вперёд пока дата кандидата выпадает на выходной или праздник РФ
+    while candidate.weekday() >= 5 or _is_russian_holiday(candidate.date()):
+        candidate += timedelta(days=1)
+    return candidate
+
+
 async def deadline_checker_loop():
-    """Бесконечный цикл проверки дедлайнов, запускается ежедневно в 10:00 МСК (07:00 UTC)."""
-    logger.info("Deadline checker запущен (ежедневно в 10:00 МСК = 07:00 UTC)")
+    """Бесконечный цикл проверки дедлайнов, запускается в 10:00 МСК только в рабочие дни.
+
+    Если дедлайн выпал на выходной/праздник — уведомление придёт в первый рабочий день после.
+    Например: просрочка в пятницу вечером или в субботу → уведомление в понедельник в 10:00.
+    """
+    logger.info("Deadline checker запущен (10:00 МСК = 07:00 UTC, только рабочие дни РФ)")
     while True:
         try:
             now = datetime.utcnow()
-            next_run = now.replace(hour=7, minute=0, second=0, microsecond=0)
-            if now >= next_run:
-                next_run = next_run + timedelta(days=1)
+            next_run = _next_workday_run_utc(now)
             sleep_secs = (next_run - now).total_seconds()
-            logger.info(f"Deadline checker: следующий запуск через {sleep_secs / 3600:.1f}ч (в 10:00 МСК)")
+            logger.info(f"Deadline checker: следующий запуск {next_run.strftime('%Y-%m-%d')} в 10:00 МСК (через {sleep_secs / 3600:.1f}ч)")
             await asyncio.sleep(sleep_secs)
             await check_deadlines_once()
         except Exception as e:
