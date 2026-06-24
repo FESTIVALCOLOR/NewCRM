@@ -83,7 +83,7 @@ const chartData = computed(() => ({
   datasets: props.datasets.map(ds => ({
     label: ds.label,
     data: ds.data,
-    backgroundColor: ds.color || '#ffd93c',
+    backgroundColor: Array.isArray(ds.color) ? ds.color : (ds.color || '#ffd93c'),
     borderRadius: 4,
     barThickness: props.horizontal ? 16 : undefined,
   })),

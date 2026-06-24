@@ -194,6 +194,21 @@
               <bar-chart :labels="amountByAgentChart.labels" :datasets="amountByAgentChart.datasets" horizontal />
             </div>
           </div>
+          <!-- Подтипы договоров (Bug 7) -->
+          <div v-if="subtypesIndChart || subtypesTmplChart" class="row q-col-gutter-md q-mt-sm">
+            <div v-if="subtypesIndChart" class="col-12 col-md-6">
+              <div class="text-caption text-weight-bold q-mb-xs">
+                Подтипы — Индивидуальные
+              </div>
+              <bar-chart :labels="subtypesIndChart.labels" :datasets="subtypesIndChart.datasets" horizontal />
+            </div>
+            <div v-if="subtypesTmplChart" class="col-12 col-md-6">
+              <div class="text-caption text-weight-bold q-mb-xs">
+                Подтипы — Шаблонные
+              </div>
+              <bar-chart :labels="subtypesTmplChart.labels" :datasets="subtypesTmplChart.datasets" horizontal />
+            </div>
+          </div>
         </q-card-section>
       </q-card>
 
@@ -335,6 +350,7 @@ const crmDetailed = ref(null)
 const supervisionDetailed = ref(null)
 const projectTab = ref('individual')
 const pdfLoading = ref(false)
+const subtypesDistribution = ref(null)
 
 const years = Array.from({ length: 7 }, (_, i) => currentYear - i)
 const quarters = [{ label: 'Все', value: null }, { label: 'Q1', value: 1 }, { label: 'Q2', value: 2 }, { label: 'Q3', value: 3 }, { label: 'Q4', value: 4 }]
@@ -435,7 +451,7 @@ const clientsByAgentChart = computed(() => {
   if (ba.length === 0) return null
   return {
     labels: ba.map(a => a.agent_name),
-    datasets: [{ label: 'Клиентов', data: ba.map(a => a.clients || 0), color: '#F39C12' }],
+    datasets: [{ label: 'Клиентов', data: ba.map(a => a.clients || 0), color: ba.map(a => a.agent_color || '#F39C12') }],
   }
 })
 
@@ -499,9 +515,10 @@ const contractsAmountDynamics = computed(() => {
 })
 
 const topCitiesChart = computed(() => {
-  const p = projectStats.value
-  if (p?.by_cities) {
-    const entries = Object.entries(p.by_cities).sort((a, b) => b[1] - a[1]).slice(0, 8)
+  // Bug 4: используем by_cities из summary (period-filtered), а не из CRM analytics одного типа
+  const bc = summary.value?.by_cities
+  if (bc && Object.keys(bc).length > 0) {
+    const entries = Object.entries(bc).sort((a, b) => b[1] - a[1]).slice(0, 8)
     if (entries.length > 0) return {
       labels: entries.map(([k]) => k),
       datasets: [{ label: 'Договоров', data: entries.map(([, v]) => v), color: '#F39C12' }],
@@ -515,7 +532,7 @@ const contractsByAgentChart = computed(() => {
   if (ba.length === 0) return null
   return {
     labels: ba.map(a => a.agent_name),
-    datasets: [{ label: 'Договоров', data: ba.map(a => a.contracts || 0), color: '#3498DB' }],
+    datasets: [{ label: 'Договоров', data: ba.map(a => a.contracts || 0), color: ba.map(a => a.agent_color || '#3498DB') }],
   }
 })
 
@@ -524,7 +541,28 @@ const amountByAgentChart = computed(() => {
   if (ba.length === 0) return null
   return {
     labels: ba.map(a => a.agent_name),
-    datasets: [{ label: 'Стоимость', data: ba.map(a => a.amount || 0), color: '#F39C12' }],
+    datasets: [{ label: 'Стоимость', data: ba.map(a => a.amount || 0), color: ba.map(a => a.agent_color || '#F39C12') }],
+  }
+})
+
+// ========== ПОДТИПЫ ДОГОВОРОВ (Bug 7) ==========
+const subtypesIndChart = computed(() => {
+  const d = contractsDashboard.value?.by_subtypes_individual
+  if (!d || Object.keys(d).length === 0) return null
+  const entries = Object.entries(d).sort((a, b) => b[1] - a[1])
+  return {
+    labels: entries.map(([k]) => k),
+    datasets: [{ label: 'Кол-во', data: entries.map(([, v]) => v), color: '#F39C12' }],
+  }
+})
+
+const subtypesTmplChart = computed(() => {
+  const d = contractsDashboard.value?.by_subtypes_template
+  if (!d || Object.keys(d).length === 0) return null
+  const entries = Object.entries(d).sort((a, b) => b[1] - a[1])
+  return {
+    labels: entries.map(([k]) => k),
+    datasets: [{ label: 'Кол-во', data: entries.map(([, v]) => v), color: '#C62828' }],
   }
 })
 
@@ -680,11 +718,11 @@ async function loadData() {
 
   const [sumR, funnelR, projR, dynR, supR, contR, cbyPR, crmDetR, supDetR] = await Promise.allSettled([
     reportsApi.getSummary(params),
-    reportsApi.getFunnel(params),
+    reportsApi.getFunnel({ ...params, project_type: pt }),  // Bug 5: передаём project_type
     reportsApi.getCrmAnalytics({ ...params, project_type: pt }),
     reportsApi.getClientsDynamics({ year: filters.value.year }),
     statisticsApi.getSupervision(params),
-    dashboardApi.getContracts(params),
+    dashboardApi.getContracts(params),  // Bug 1&3: сервер теперь фильтрует по month/quarter
     statisticsApi.getContractsByPeriod({ year: filters.value.year }),
     reportsApi.getCrmAnalyticsDetailed({ ...params, project_type: pt }),
     reportsApi.getSupervisionAnalytics(params),

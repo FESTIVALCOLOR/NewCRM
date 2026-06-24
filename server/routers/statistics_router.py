@@ -353,20 +353,32 @@ async def get_contracts_by_period(
         contracts = query.all()
 
         if group_by == "month":
-            result = {i: {"count": 0, "amount": 0} for i in range(1, 13)}
+            result = {i: {"count": 0, "amount": 0, "template_count": 0, "template_amount": 0, "individual_count": 0, "individual_amount": 0} for i in range(1, 13)}
             for c in contracts:
                 if c.created_at:
                     m = c.created_at.month
                     result[m]["count"] += 1
                     result[m]["amount"] += c.total_amount or 0
+                    if c.project_type == "Шаблонный":
+                        result[m]["template_count"] += 1
+                        result[m]["template_amount"] += c.total_amount or 0
+                    else:
+                        result[m]["individual_count"] += 1
+                        result[m]["individual_amount"] += c.total_amount or 0
 
         elif group_by == "quarter":
-            result = {i: {"count": 0, "amount": 0} for i in range(1, 5)}
+            result = {i: {"count": 0, "amount": 0, "template_count": 0, "template_amount": 0, "individual_count": 0, "individual_amount": 0} for i in range(1, 5)}
             for c in contracts:
                 if c.created_at:
                     q = (c.created_at.month - 1) // 3 + 1
                     result[q]["count"] += 1
                     result[q]["amount"] += c.total_amount or 0
+                    if c.project_type == "Шаблонный":
+                        result[q]["template_count"] += 1
+                        result[q]["template_amount"] += c.total_amount or 0
+                    else:
+                        result[q]["individual_count"] += 1
+                        result[q]["individual_amount"] += c.total_amount or 0
 
         elif group_by == "status":
             result = {}
@@ -604,20 +616,9 @@ async def get_supervision_statistics(
     try:
         from datetime import date as date_type
 
-        # Базовый запрос
+        # Показываем все активные надзоры без фильтра по периоду
+        # (периодный фильтр не применяется к карточкам, т.к. надзор — длительный процесс)
         query = db.query(SupervisionCard).join(Contract, SupervisionCard.contract_id == Contract.id)
-
-        # Фильтры по дате договора (contract_date хранится как строка YYYY-MM-DD)
-        if year or month or quarter:
-            # Фильтруем только договоры с валидными датами
-            query = query.filter(Contract.contract_date.isnot(None), Contract.contract_date != "")
-
-        if year:
-            query = query.filter(func.extract("year", cast(Contract.contract_date, Date)) == year)
-        if month:
-            query = query.filter(func.extract("month", cast(Contract.contract_date, Date)) == month)
-        if quarter:
-            query = _apply_quarter_filter(query, cast(Contract.contract_date, Date), quarter, year)
         if agent_type and agent_type != "Все":
             query = query.filter(Contract.agent_type == agent_type)
         if city and city != "Все":

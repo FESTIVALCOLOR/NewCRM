@@ -118,32 +118,46 @@ async def get_clients_dashboard(year: Optional[int] = None, agent_type: Optional
 
 
 @router.get("/contracts")
-async def get_contracts_dashboard(year: Optional[int] = None, agent_type: Optional[str] = None, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Получить статистику для дашборда страницы Договора"""
+async def get_contracts_dashboard(
+    year: Optional[int] = None,
+    quarter: Optional[int] = None,
+    month: Optional[int] = None,
+    agent_type: Optional[str] = None,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Получить статистику для дашборда страницы Договора (с фильтром периода)"""
     try:
-        # 1-3. Индивидуальные заказы, площадь, сумма
-        individual_query = db.query(func.count(Contract.id), func.coalesce(func.sum(Contract.area), 0), func.coalesce(func.sum(Contract.total_amount), 0)).filter(
-            Contract.project_type == "Индивидуальный"
-        )
-        individual_orders, individual_area, individual_amount = individual_query.first()
+        query = db.query(Contract).filter(Contract.project_type != "Авторский надзор")
+        if agent_type:
+            query = query.filter(Contract.agent_type == agent_type)
+        all_contracts = query.all()
 
-        # 4-6. Шаблонные заказы, площадь, сумма
-        template_query = db.query(func.count(Contract.id), func.coalesce(func.sum(Contract.area), 0), func.coalesce(func.sum(Contract.total_amount), 0)).filter(Contract.project_type == "Шаблонный")
-        template_orders, template_area, template_amount = template_query.first()
+        # Применяем фильтр по периоду через contract_date (VARCHAR)
+        filtered = _apply_period_filter(all_contracts, year, quarter, month)
 
-        # 5. Заказы агента за год
-        # contract_date хранится как VARCHAR, используем LIKE для поиска года
-        agent_orders_by_year = 0
-        if agent_type and year:
-            year_str = str(year)
-            agent_orders_by_year = db.query(Contract).filter(Contract.agent_type == agent_type, Contract.contract_date.like(f"{year_str}-%")).count()
+        ind_list = [c for c in filtered if c.project_type == "Индивидуальный"]
+        tmpl_list = [c for c in filtered if c.project_type == "Шаблонный"]
 
-        # 6. Площадь агента за год
-        agent_area_by_year = 0
-        if agent_type and year:
-            year_str = str(year)
-            result = db.query(func.coalesce(func.sum(Contract.area), 0)).filter(Contract.agent_type == agent_type, Contract.contract_date.like(f"{year_str}-%")).scalar()
-            agent_area_by_year = float(result) if result else 0
+        individual_orders = len(ind_list)
+        individual_area = sum(c.area or 0 for c in ind_list)
+        individual_amount = sum(c.total_amount or 0 for c in ind_list)
+
+        template_orders = len(tmpl_list)
+        template_area = sum(c.area or 0 for c in tmpl_list)
+        template_amount = sum(c.total_amount or 0 for c in tmpl_list)
+
+        # Разбивка по подтипам
+        by_subtypes_ind: dict = defaultdict(int)
+        by_subtypes_tmpl: dict = defaultdict(int)
+        for c in filtered:
+            sub = c.project_subtype
+            if not sub:
+                continue
+            if c.project_type == "Индивидуальный":
+                by_subtypes_ind[sub] += 1
+            elif c.project_type == "Шаблонный":
+                by_subtypes_tmpl[sub] += 1
 
         return {
             "individual_orders": individual_orders,
@@ -152,8 +166,8 @@ async def get_contracts_dashboard(year: Optional[int] = None, agent_type: Option
             "template_orders": template_orders,
             "template_area": float(template_area),
             "template_amount": float(template_amount),
-            "agent_orders_by_year": agent_orders_by_year,
-            "agent_area_by_year": agent_area_by_year,
+            "by_subtypes_individual": dict(by_subtypes_ind),
+            "by_subtypes_template": dict(by_subtypes_tmpl),
         }
 
     except Exception as e:
@@ -1154,6 +1168,13 @@ async def get_reports_summary(
                 }
             )
 
+        # По городам (из отфильтрованных договоров)
+        cities_counter: dict = defaultdict(int)
+        for c in filtered:
+            if c.city:
+                cities_counter[c.city] += 1
+        by_cities = dict(sorted(cities_counter.items(), key=lambda x: -x[1]))
+
         return {
             "total_clients": total_clients,
             "new_clients": new_clients,
@@ -1169,6 +1190,7 @@ async def get_reports_summary(
             "trend_contracts": trend_contracts,
             "trend_amount": trend_amount,
             "by_agent": by_agent,
+            "by_cities": by_cities,
         }
 
     except Exception as e:
@@ -1678,26 +1700,15 @@ async def get_supervision_analytics(
             for cont in db.query(Contract).filter(Contract.id.in_(contract_ids_for_sup)).all():
                 contracts_map[cont.id] = cont
 
-        # Фильтрация по периоду: через contract_date договора
-        if year or quarter or month:
-            filtered_sc = []
-            for sc in supervision_cards:
-                cont = contracts_map.get(sc.contract_id)
-                if cont is None:
-                    continue
-                check = _apply_period_filter([cont], year, quarter, month)
-                if check:
-                    filtered_sc.append(sc)
-        else:
-            filtered_sc = supervision_cards
-
+        # Не фильтруем надзорные карточки по периоду — показываем все активные
+        # (период используется только для фильтрации визитов по visit_date)
+        archived_stages = {"Выполненный проект", STATUS_COMPLETED, STATUS_TERMINATED}
+        filtered_sc = [sc for sc in supervision_cards if sc.column_name not in archived_stages]
         filtered_sc_ids = {sc.id for sc in filtered_sc}
 
         # --- Итоговые счётчики ---
         total = len(filtered_sc)
-        # Активные: не в архивных стадиях
-        archived_stages = {"Выполненный проект", STATUS_COMPLETED, STATUS_TERMINATED}
-        active = sum(1 for sc in filtered_sc if sc.column_name not in archived_stages)
+        active = total  # все из filtered_sc уже активны
 
         # --- По типу проекта (через договор) ---
         individual_count = 0
@@ -1801,10 +1812,32 @@ async def get_supervision_analytics(
         resolution_pct = round(defects_resolved / defects_found * 100, 1) if defects_found > 0 else 0.0
 
         # --- Реальные визиты из SupervisionVisit ---
+        # Визиты фильтруем по visit_date в выбранном периоде (не по contract_date надзора)
         today_str = datetime.utcnow().strftime("%Y-%m-%d")
         visits_query = []
-        if filtered_sc_ids:
-            visits_query = db.query(SupervisionVisit).filter(SupervisionVisit.supervision_card_id.in_(filtered_sc_ids)).all()
+        if supervision_card_ids_all:
+            all_visits_db = db.query(SupervisionVisit).filter(SupervisionVisit.supervision_card_id.in_(supervision_card_ids_all)).all()
+            if year or quarter or month:
+
+                def _visit_in_period(v) -> bool:
+                    vd = v.visit_date
+                    if not vd:
+                        return False
+                    try:
+                        vdate = datetime.strptime(str(vd)[:10], "%Y-%m-%d")
+                    except (ValueError, TypeError):
+                        return False
+                    if year and vdate.year != year:
+                        return False
+                    if month and vdate.month != month:
+                        return False
+                    if quarter and (vdate.month - 1) // 3 + 1 != quarter:
+                        return False
+                    return True
+
+                visits_query = [v for v in all_visits_db if _visit_in_period(v)]
+            else:
+                visits_query = all_visits_db
 
         visits_total = len(visits_query)
         visits_on_site = sum(1 for v in visits_query if (v.visit_type or "На объект") == "На объект")

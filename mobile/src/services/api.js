@@ -369,6 +369,9 @@ export const reportsApi = {
 
   getSupervisionAnalytics: (params = {}) =>
     api.get('/api/v1/dashboard/reports/supervision-analytics', { params }),
+
+  getDistribution: (params = {}) =>
+    api.get('/api/v1/dashboard/reports/distribution', { params }),
 }
 
 // === Supervision ===
