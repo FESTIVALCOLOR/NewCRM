@@ -1384,7 +1384,6 @@ class SupervisionCard(QFrame):
         address_label = QLabel(f"<b>{address}</b>")
         address_label.setWordWrap(True)
         address_label.setStyleSheet("font-size: 14px; color: #222; font-weight: bold; background-color: transparent;")
-        address_label.setMaximumHeight(50)
         layout.addWidget(address_label, 0)
 
         # Разделитель
