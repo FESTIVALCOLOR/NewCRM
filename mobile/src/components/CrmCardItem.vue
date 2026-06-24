@@ -12,7 +12,7 @@
       </div>
 
       <!-- 2. Адрес -->
-      <div class="text-weight-bold q-mb-xs" style="font-size: 14px; color: #222; word-wrap: break-word; max-height: 50px; overflow: hidden">
+      <div class="text-weight-bold q-mb-xs" style="font-size: 14px; color: #222; word-wrap: break-word">
         {{ card.address || 'Без адреса' }}
       </div>
 
