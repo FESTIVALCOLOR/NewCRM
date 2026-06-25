@@ -20,11 +20,10 @@ from sqlalchemy.orm import Session
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Pyrogram генерирует INFO-спам при каждом reconnect к DC (нестабильное соединение).
-# Оставляем WARNING и выше — ошибки подключения видны, но INFO-цикл не виден.
-logging.getLogger("pyrogram.connection.connection").setLevel(logging.WARNING)
-logging.getLogger("pyrogram.connection.transport.tcp.tcp").setLevel(logging.WARNING)
-logging.getLogger("pyrogram.session.session").setLevel(logging.WARNING)
+# Pyrogram генерирует INFO-спам при каждом reconnect к DC (Timeweb блокирует DC IPs).
+# Устанавливаем WARNING на корневом логгере pyrogram — убирает весь INFO/DEBUG цикл.
+# WARNING-ошибки подключения и ERROR остаются видимыми.
+logging.getLogger("pyrogram").setLevel(logging.WARNING)
 
 from auth import get_current_user
 from constants import POSITION_STUDIO_DIRECTOR
