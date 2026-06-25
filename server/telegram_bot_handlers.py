@@ -101,19 +101,31 @@ async def sync_employee_telegram_avatars():
     """При старте сервера: загружает аватары из Telegram для уже привязанных
     сотрудников у которых нет фото (photo_url IS NULL, telegram_user_id IS NOT NULL).
     Использует MTProto (Pyrogram) — Bot API заблокирован на сервере хостинга.
-    Запускается однократно в фоне.
+    Запускается однократно в фоне. File-lock гарантирует что только один воркер работает.
     """
     import asyncio
+    import fcntl
     import io
     import os
 
     await asyncio.sleep(25)  # Ждём полной инициализации Pyrogram-клиента
+
+    # File-lock: только один Uvicorn-воркер запускает синхронизацию аватаров
+    lock_path = "/tmp/telegram_avatar_sync.lock"
+    try:
+        lock_fd = open(lock_path, "w")
+        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except (IOError, OSError):
+        logger.info("Telegram avatar sync: пропущен (другой воркер уже запустил)")
+        return
 
     from telegram_service import get_telegram_service
 
     tg = get_telegram_service()
     if not tg.mtproto_available:
         logger.info("Telegram avatar sync: MTProto недоступен, пропуск")
+        fcntl.flock(lock_fd, fcntl.LOCK_UN)
+        lock_fd.close()
         return
 
     from database import Employee, SessionLocal
@@ -164,3 +176,9 @@ async def sync_employee_telegram_avatars():
         logger.info("Telegram avatar sync: завершено")
     finally:
         db.close()
+        # Освобождаем file-lock
+        try:
+            fcntl.flock(lock_fd, fcntl.LOCK_UN)
+            lock_fd.close()
+        except Exception:
+            pass

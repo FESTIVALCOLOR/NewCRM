@@ -391,10 +391,17 @@ class TelegramService:
                     # Если за 90с не подключился — DC недоступен, ставим backoff 30 мин.
                     await asyncio.wait_for(self._pyrogram_client.start(), timeout=90.0)
                 except asyncio.TimeoutError:
-                    logger.warning("Pyrogram start() timeout 90с — DC недостижим через прокси. Устанавливаю backoff 30 мин.")
-                    self._force_close_client()
-                    self._cleanup_session_locks()
+                    logger.warning("Pyrogram start() timeout 90с — DC недостижим через прокси. Останавливаю клиент (cancel background tasks) + backoff 30 мин.")
+                    # ВАЖНО: stop() отменяет все asyncio.Task внутри Pyrogram
+                    # (NetworkTask, PingTask, etc.) — простой _force_close_client() этого не делает
+                    client_to_stop = self._pyrogram_client
                     self._pyrogram_client = None
+                    if client_to_stop is not None:
+                        try:
+                            await client_to_stop.stop()
+                        except Exception:
+                            pass
+                    self._cleanup_session_locks()
                     self._mtproto_disabled_until = time.monotonic() + 1800  # 30 мин
                     raise RuntimeError("MTProto DC недоступен (timeout 90с): Telegram DC заблокирован хостингом. Повтор через 30 мин.")
                 except Exception as e:
