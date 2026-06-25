@@ -128,30 +128,34 @@ async def sync_employee_telegram_avatars():
         logger.info(f"Telegram avatar sync: начало, {len(employees)} сотрудников")
         base_url = os.environ.get("BASE_URL", "https://crm.festivalcolor.ru")
 
-        # Bot API (149.154.x) заблокирован на сервере — используем MTProto (91.108.x)
-        async with tg._mtproto_lock:
-            client = await tg._ensure_pyrogram_client()
-            for emp in employees:
-                try:
-                    downloaded = False
-                    async for photo in client.get_chat_photos(emp.telegram_user_id, limit=1):
-                        buf = await client.download_media(photo, in_memory=True)
-                        if buf:
-                            buf.seek(0)
-                            os.makedirs("uploads/avatars", exist_ok=True)
-                            filename = f"employee_{emp.id}.jpg"
-                            with open(os.path.join("uploads", "avatars", filename), "wb") as f:
-                                f.write(buf.read())
-                            emp.photo_url = f"{base_url}/api/v1/avatars/{filename}"
-                            db.commit()
-                            logger.info(f"Telegram avatar sync: сохранён employee_id={emp.id}")
-                            downloaded = True
-                        break
-                    if not downloaded:
-                        logger.info(f"Telegram avatar sync: нет фото у employee {emp.id}")
-                    await asyncio.sleep(0.5)
-                except Exception as e:
-                    logger.warning(f"Telegram avatar sync: ошибка для employee {emp.id}: {e}")
+        # Получение аватаров через MTProto (Pyrogram). DC может быть заблокирован хостингом.
+        try:
+            async with tg._mtproto_lock:
+                client = await tg._ensure_pyrogram_client()
+                for emp in employees:
+                    try:
+                        downloaded = False
+                        async for photo in client.get_chat_photos(emp.telegram_user_id, limit=1):
+                            buf = await client.download_media(photo, in_memory=True)
+                            if buf:
+                                buf.seek(0)
+                                os.makedirs("uploads/avatars", exist_ok=True)
+                                filename = f"employee_{emp.id}.jpg"
+                                with open(os.path.join("uploads", "avatars", filename), "wb") as f:
+                                    f.write(buf.read())
+                                emp.photo_url = f"{base_url}/api/v1/avatars/{filename}"
+                                db.commit()
+                                logger.info(f"Telegram avatar sync: сохранён employee_id={emp.id}")
+                                downloaded = True
+                            break
+                        if not downloaded:
+                            logger.info(f"Telegram avatar sync: нет фото у employee {emp.id}")
+                        await asyncio.sleep(0.5)
+                    except Exception as e:
+                        logger.warning(f"Telegram avatar sync: ошибка для employee {emp.id}: {e}")
+        except RuntimeError as e:
+            logger.warning(f"Telegram avatar sync: MTProto недоступен — {e}")
+            return
 
         logger.info("Telegram avatar sync: завершено")
     finally:

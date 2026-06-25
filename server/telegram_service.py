@@ -10,6 +10,7 @@ import json
 import logging
 import os
 import sqlite3 as _sqlite3
+import time
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -50,6 +51,8 @@ class TelegramService:
         self._phone: Optional[str] = None
         self._initialized = False
         self._mtproto_lock = asyncio.Lock()
+        # Backoff: после неудачного подключения к DC — пауза 30 мин
+        self._mtproto_disabled_until: Optional[float] = None
 
     def configure(self, settings: dict[str, str]):
         """Конфигурация из настроек БД"""
@@ -339,13 +342,45 @@ class TelegramService:
             pass
         self._pyrogram_client = None
 
+    async def _check_dc_reachable(self) -> bool:
+        """Быстрая TCP-проверка доступности Telegram DC (без Pyrogram).
+        Если DC заблокирован на уровне хостинга — возвращает False за ~5 сек.
+        """
+        dc_ip = "149.154.167.51"  # DC2
+        try:
+            _, writer = await asyncio.wait_for(asyncio.open_connection(dc_ip, 443), timeout=5.0)
+            writer.close()
+            await writer.wait_closed()
+            return True
+        except Exception:
+            return False
+
     async def _ensure_pyrogram_client(self) -> Any:
         """Получить или создать Pyrogram клиент.
         ВАЖНО: вызывать только под self._mtproto_lock!
         При ошибке 'database is locked' — подготавливает DB и пересоздаёт клиент.
+        При недоступности DC (Timeweb блокировка) — backoff 30 мин, без retry-спама.
         """
         if not self.mtproto_available:
             raise RuntimeError("MTProto не настроен")
+
+        # Backoff-проверка: если DC недоступен — не пытаться до окончания паузы
+        if self._mtproto_disabled_until is not None:
+            remaining = self._mtproto_disabled_until - time.monotonic()
+            if remaining > 0:
+                raise RuntimeError(f"MTProto временно недоступен (Telegram DC заблокирован хостингом). Повтор через ~{int(remaining / 60)} мин.")
+            # Пауза истекла — сбросить клиент для чистой попытки
+            self._mtproto_disabled_until = None
+            self._force_close_client()
+            self._cleanup_session_locks()
+
+        # Быстрая TCP-проверка DC перед запуском Pyrogram (избегаем бесконечного retry-спама)
+        if not self._pyrogram_client or not self._pyrogram_client.is_connected:
+            dc_ok = await self._check_dc_reachable()
+            if not dc_ok:
+                self._mtproto_disabled_until = time.monotonic() + 1800  # 30 мин
+                logger.warning("Telegram DC 149.154.167.51:443 недоступен (заблокирован хостингом). MTProto отключён на 30 мин.")
+                raise RuntimeError("MTProto DC недоступен: Telegram DC заблокирован хостингом. Повтор через 30 мин.")
 
         max_attempts = 3
         for attempt in range(max_attempts):
