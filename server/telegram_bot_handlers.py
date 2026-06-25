@@ -156,6 +156,10 @@ async def sync_employee_telegram_avatars():
         except RuntimeError as e:
             logger.warning(f"Telegram avatar sync: MTProto недоступен — {e}")
             return
+        finally:
+            # Останавливаем Pyrogram после задачи — иначе internal NetworkTask/PingTask
+            # уходит в бесконечный reconnect-loop при нестабильном DC (Timeweb блокирует)
+            await tg.stop_pyrogram()
 
         logger.info("Telegram avatar sync: завершено")
     finally:

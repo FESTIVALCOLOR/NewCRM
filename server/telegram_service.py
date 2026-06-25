@@ -342,24 +342,13 @@ class TelegramService:
             pass
         self._pyrogram_client = None
 
-    async def _check_dc_reachable(self) -> bool:
-        """Быстрая TCP-проверка доступности Telegram DC (без Pyrogram).
-        Если DC заблокирован на уровне хостинга — возвращает False за ~5 сек.
-        """
-        dc_ip = "149.154.167.51"  # DC2
-        try:
-            _, writer = await asyncio.wait_for(asyncio.open_connection(dc_ip, 443), timeout=5.0)
-            writer.close()
-            await writer.wait_closed()
-            return True
-        except Exception:
-            return False
-
     async def _ensure_pyrogram_client(self) -> Any:
         """Получить или создать Pyrogram клиент.
         ВАЖНО: вызывать только под self._mtproto_lock!
         При ошибке 'database is locked' — подготавливает DB и пересоздаёт клиент.
-        При недоступности DC (Timeweb блокировка) — backoff 30 мин, без retry-спама.
+        При недоступности DC — backoff 30 мин (через wait_for timeout на start()).
+        Вызывающий код должен вызвать stop_pyrogram() после завершения работы,
+        иначе Pyrogram уйдёт в бесконечный reconnect-loop при нестабильном DC.
         """
         if not self.mtproto_available:
             raise RuntimeError("MTProto не настроен")
@@ -368,19 +357,11 @@ class TelegramService:
         if self._mtproto_disabled_until is not None:
             remaining = self._mtproto_disabled_until - time.monotonic()
             if remaining > 0:
-                raise RuntimeError(f"MTProto временно недоступен (Telegram DC заблокирован хостингом). Повтор через ~{int(remaining / 60)} мин.")
+                raise RuntimeError(f"MTProto временно недоступен (DC заблокирован хостингом). Повтор через ~{int(remaining / 60)} мин.")
             # Пауза истекла — сбросить клиент для чистой попытки
             self._mtproto_disabled_until = None
             self._force_close_client()
             self._cleanup_session_locks()
-
-        # Быстрая TCP-проверка DC перед запуском Pyrogram (избегаем бесконечного retry-спама)
-        if not self._pyrogram_client or not self._pyrogram_client.is_connected:
-            dc_ok = await self._check_dc_reachable()
-            if not dc_ok:
-                self._mtproto_disabled_until = time.monotonic() + 1800  # 30 мин
-                logger.warning("Telegram DC 149.154.167.51:443 недоступен (заблокирован хостингом). MTProto отключён на 30 мин.")
-                raise RuntimeError("MTProto DC недоступен: Telegram DC заблокирован хостингом. Повтор через 30 мин.")
 
         max_attempts = 3
         for attempt in range(max_attempts):
@@ -406,7 +387,16 @@ class TelegramService:
 
             if not self._pyrogram_client.is_connected:
                 try:
-                    await self._pyrogram_client.start()
+                    # Timeout 90с: Pyrogram ретриит DC внутри (~15с per attempt × ~5 попыток).
+                    # Если за 90с не подключился — DC недоступен, ставим backoff 30 мин.
+                    await asyncio.wait_for(self._pyrogram_client.start(), timeout=90.0)
+                except asyncio.TimeoutError:
+                    logger.warning("Pyrogram start() timeout 90с — DC недостижим через прокси. Устанавливаю backoff 30 мин.")
+                    self._force_close_client()
+                    self._cleanup_session_locks()
+                    self._pyrogram_client = None
+                    self._mtproto_disabled_until = time.monotonic() + 1800  # 30 мин
+                    raise RuntimeError("MTProto DC недоступен (timeout 90с): Telegram DC заблокирован хостингом. Повтор через 30 мин.")
                 except Exception as e:
                     err_msg = str(e)
                     logger.error(f"Pyrogram start() failed (попытка {attempt + 1}/{max_attempts}): {err_msg}")
@@ -967,6 +957,24 @@ class TelegramService:
         """
         result = await self.join_chat_by_link(invite_link)
         return result["chat_id"] if result else None
+
+    async def stop_pyrogram(self):
+        """Явно остановить Pyrogram клиент после использования.
+        Предотвращает бесконечный reconnect-loop фоновых задач Pyrogram (NetworkTask/PingTask).
+        Следующий вызов _ensure_pyrogram_client() создаст свежее подключение.
+        """
+        async with self._mtproto_lock:
+            if self._pyrogram_client is not None:
+                try:
+                    if self._pyrogram_client.is_connected:
+                        await self._pyrogram_client.stop()
+                    else:
+                        self._force_close_client()
+                except Exception as e:
+                    logger.debug(f"stop_pyrogram: {e}")
+                    self._force_close_client()
+                self._pyrogram_client = None
+                logger.info("Pyrogram клиент остановлен (on-demand stop)")
 
     # ========================================
     # Очистка
