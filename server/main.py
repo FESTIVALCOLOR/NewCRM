@@ -23,8 +23,8 @@ logger = logging.getLogger(__name__)
 
 class _PyrogramFilter(logging.Filter):
     """Фильтр: блокирует INFO/DEBUG из pyrogram.* (reconnect-spam при заблокированном DC).
-    Используем Filter на root handler вместо setLevel на логгере — setLevel сбрасывается
-    при dictConfig (uvicorn startup). Filter на handler'е не сбрасывается.
+    Добавляется на root LOGGER и pyrogram LOGGER (не на handlers) — проверяется ДО dispatch,
+    поэтому не зависит от того, какие handlers uvicorn создаёт/заменяет через dictConfig.
     """
 
     def filter(self, record: logging.LogRecord) -> bool:
@@ -33,8 +33,12 @@ class _PyrogramFilter(logging.Filter):
         return True
 
 
-for _h in logging.root.handlers:
-    _h.addFilter(_PyrogramFilter())
+# Фильтр на root LOGGER (не на handler) — работает ДО dispatch к handlers.
+# logging.Filter на logger.filters проверяется до передачи записи любому handler,
+# поэтому не зависит от того, какие handlers uvicorn создаёт через dictConfig.
+logging.root.addFilter(_PyrogramFilter())
+# Также на pyrogram-logger напрямую (если propagate=False где-то в цепочке)
+logging.getLogger("pyrogram").addFilter(_PyrogramFilter())
 
 from auth import get_current_user
 from constants import POSITION_STUDIO_DIRECTOR
@@ -137,12 +141,14 @@ async def startup_event():
     """Инициализация при запуске"""
     logger.info(f"Запуск {settings.app_name} v{settings.app_version}")
 
-    # Добавляем _PyrogramFilter на ВСЕ handlers (включая uvicorn-овские, которые создаются
-    # позже module-level кода). Без этого uvicorn заменяет handlers, фильтр теряется.
+    # Повторно добавляем фильтр после uvicorn startup — на случай если dictConfig
+    # пересоздал loggers. Фильтр на logger.filters (не handlers) — независим от handler замены.
     _pf = _PyrogramFilter()
-    for _h in logging.root.handlers:
-        if not any(isinstance(f, _PyrogramFilter) for f in _h.filters):
-            _h.addFilter(_pf)
+    if not any(isinstance(f, _PyrogramFilter) for f in logging.root.filters):
+        logging.root.addFilter(_pf)
+    _pyrogram_logger = logging.getLogger("pyrogram")
+    if not any(isinstance(f, _PyrogramFilter) for f in _pyrogram_logger.filters):
+        _pyrogram_logger.addFilter(_pf)
 
     init_db()
     logger.info("База данных инициализирована")
