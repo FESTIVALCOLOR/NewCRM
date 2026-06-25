@@ -304,6 +304,9 @@
                 {{ selected.position }}{{ selected.secondary_position ? ' / ' + selected.secondary_position : '' }}
               </div>
               <q-badge :color="statusColor(selected.status)" :label="selected.status" class="q-mt-xs" />
+              <div v-if="selected.last_login" class="text-caption q-mt-xs" style="color: #999">
+                последний вход: {{ formatLastLogin(selected.last_login) }}
+              </div>
             </div>
 
             <!-- Контакты (ч/б иконки как у клиентов) -->
@@ -703,6 +706,14 @@ function statusColor(status) {
 function formatDate(d) {
   if (!d) return ''
   return new Date(d).toLocaleDateString('ru-RU')
+}
+
+function formatLastLogin(d) {
+  if (!d) return ''
+  const dt = new Date(d)
+  const date = dt.toLocaleDateString('ru-RU')
+  const time = dt.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+  return `${date} в ${time}`
 }
 
 function call(phone) { window.location.href = `tel:${phone.replace(/[^\d+]/g, '')}` }
