@@ -20,10 +20,21 @@ from sqlalchemy.orm import Session
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Pyrogram генерирует INFO-спам при каждом reconnect к DC (Timeweb блокирует DC IPs).
-# Устанавливаем WARNING на корневом логгере pyrogram — убирает весь INFO/DEBUG цикл.
-# WARNING-ошибки подключения и ERROR остаются видимыми.
-logging.getLogger("pyrogram").setLevel(logging.WARNING)
+
+class _PyrogramFilter(logging.Filter):
+    """Фильтр: блокирует INFO/DEBUG из pyrogram.* (reconnect-spam при заблокированном DC).
+    Используем Filter на root handler вместо setLevel на логгере — setLevel сбрасывается
+    при dictConfig (uvicorn startup). Filter на handler'е не сбрасывается.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.name.startswith("pyrogram") and record.levelno < logging.WARNING:
+            return False
+        return True
+
+
+for _h in logging.root.handlers:
+    _h.addFilter(_PyrogramFilter())
 
 from auth import get_current_user
 from constants import POSITION_STUDIO_DIRECTOR
