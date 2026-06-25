@@ -33,12 +33,18 @@ class _PyrogramFilter(logging.Filter):
         return True
 
 
-# Фильтр на root LOGGER (не на handler) — работает ДО dispatch к handlers.
-# logging.Filter на logger.filters проверяется до передачи записи любому handler,
-# поэтому не зависит от того, какие handlers uvicorn создаёт через dictConfig.
-logging.root.addFilter(_PyrogramFilter())
-# Также на pyrogram-logger напрямую (если propagate=False где-то в цепочке)
-logging.getLogger("pyrogram").addFilter(_PyrogramFilter())
+# Добавляем фильтр к pyrogram sub-loggers на уровне модуля.
+# При propagation Python logging вызывает Logger.filter() только для исходного logger'а —
+# поэтому фильтр нужен именно на pyrogram.* loggers, не на root.
+_pf_init = _PyrogramFilter()
+for _pname_init in [
+    "pyrogram",
+    "pyrogram.connection",
+    "pyrogram.connection.connection",
+    "pyrogram.connection.transport.tcp.tcp",
+    "pyrogram.session.session",
+]:
+    logging.getLogger(_pname_init).addFilter(_pf_init)
 
 from auth import get_current_user
 from constants import POSITION_STUDIO_DIRECTOR
@@ -141,14 +147,26 @@ async def startup_event():
     """Инициализация при запуске"""
     logger.info(f"Запуск {settings.app_name} v{settings.app_version}")
 
-    # Повторно добавляем фильтр после uvicorn startup — на случай если dictConfig
-    # пересоздал loggers. Фильтр на logger.filters (не handlers) — независим от handler замены.
+    # Добавляем фильтр к конкретным pyrogram loggers.
+    # ВАЖНО: logging.Filter.filter() проверяется только в Logger.handle() исходного logger-а,
+    # а при propagation через callHandlers() промежуточные Logger.filters НЕ проверяются.
+    # Поэтому фильтр нужно добавлять к logger'у, где запись создаётся (pyrogram subleLoggers),
+    # а НЕ к root logger или обёрточному pyrogram logger.
     _pf = _PyrogramFilter()
-    if not any(isinstance(f, _PyrogramFilter) for f in logging.root.filters):
-        logging.root.addFilter(_pf)
-    _pyrogram_logger = logging.getLogger("pyrogram")
-    if not any(isinstance(f, _PyrogramFilter) for f in _pyrogram_logger.filters):
-        _pyrogram_logger.addFilter(_pf)
+    for _pname in [
+        "pyrogram",
+        "pyrogram.connection",
+        "pyrogram.connection.connection",
+        "pyrogram.connection.transport",
+        "pyrogram.connection.transport.tcp",
+        "pyrogram.connection.transport.tcp.tcp",
+        "pyrogram.session",
+        "pyrogram.session.session",
+        "pyrogram.session.auth",
+    ]:
+        _plog = logging.getLogger(_pname)
+        if not any(isinstance(f, _PyrogramFilter) for f in _plog.filters):
+            _plog.addFilter(_pf)
 
     init_db()
     logger.info("База данных инициализирована")
