@@ -116,6 +116,7 @@
           <span class="emph-pos">Должность</span>
           <span class="emph-dept">Отдел</span>
           <span class="emph-status">Статус</span>
+          <span class="emph-lastlogin">Последний вход</span>
         </div>
         <div
           v-for="emp in filtered"
@@ -135,6 +136,7 @@
           <span class="emph-status">
             <q-badge :color="statusColor(emp.status)" :label="emp.status" dense style="font-size:9px" />
           </span>
+          <span class="emph-lastlogin empv-meta">{{ emp.last_login ? formatLastLogin(emp.last_login) : '—' }}</span>
         </div>
         <div v-if="filtered.length === 0" class="text-center q-pa-xl text-grey-5">
           <q-icon name="badge" size="48px" class="q-mb-sm" />
@@ -864,6 +866,7 @@ onMounted(() => loadEmployees())
 .emph-pos    { width: 180px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
 .emph-dept   { width: 110px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
 .emph-status { width: 60px; flex-shrink: 0; }
+.emph-lastlogin { width: 120px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
 .empv-name { font-size: 12px; font-weight: 500; color: #333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .empv-meta { color: #666; }
 .emp-save-btn {
