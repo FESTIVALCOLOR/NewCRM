@@ -136,6 +136,14 @@ def seed_cities(db):
 async def startup_event():
     """Инициализация при запуске"""
     logger.info(f"Запуск {settings.app_name} v{settings.app_version}")
+
+    # Добавляем _PyrogramFilter на ВСЕ handlers (включая uvicorn-овские, которые создаются
+    # позже module-level кода). Без этого uvicorn заменяет handlers, фильтр теряется.
+    _pf = _PyrogramFilter()
+    for _h in logging.root.handlers:
+        if not any(isinstance(f, _PyrogramFilter) for f in _h.filters):
+            _h.addFilter(_pf)
+
     init_db()
     logger.info("База данных инициализирована")
 
