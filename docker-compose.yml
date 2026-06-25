@@ -106,7 +106,11 @@ services:
       - ./nginx/ssl:/etc/nginx/ssl:ro
       - ./mobile/dist/pwa:/usr/share/nginx/html:ro
       - nginx_logs:/var/log/nginx
-    command: [nginx, '-g', 'daemon off;']
+    # Удаляем симлинки на /dev/stdout — нужны реальные файлы для fail2ban на хосте
+    command: >
+      /bin/sh -c "rm -f /var/log/nginx/access.log /var/log/nginx/error.log &&
+      touch /var/log/nginx/access.log /var/log/nginx/error.log &&
+      exec nginx -g 'daemon off;'"
 
 volumes:
   postgres_data:

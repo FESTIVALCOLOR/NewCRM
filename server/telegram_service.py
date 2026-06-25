@@ -353,11 +353,20 @@ class TelegramService:
                 # Подготовка session DB перед созданием клиента
                 self._prepare_session_db()
                 session_path = self._get_session_path()
+                # Прокси для MTProto — Timeweb блокирует прямые соединения с Telegram DC
+                proxy_url = os.getenv("TELEGRAM_PROXY", "http://172.18.0.1:3128")
+                proxy_dict: dict | None = None
+                if proxy_url:
+                    from urllib.parse import urlparse
+
+                    p = urlparse(proxy_url)
+                    proxy_dict = {"scheme": p.scheme, "hostname": p.hostname, "port": p.port}
                 self._pyrogram_client = PyrogramClient(
                     session_path,
                     api_id=self._api_id,
                     api_hash=self._api_hash,
                     phone_number=self._phone,
+                    proxy=proxy_dict,
                 )
 
             if not self._pyrogram_client.is_connected:
