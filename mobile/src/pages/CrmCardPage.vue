@@ -2482,11 +2482,11 @@ const allTeamMembers = computed(() => {
     const candidates = se.filter(s => s.stage_name === stage.stageName)
     const executor = candidates.length ? candidates.reduce((a, b) => a.id > b.id ? a : b) : null
 
-    // Зелёный — стадия завершена; жёлтый — это текущая стадия и в работе/исправлении
+    // Зелёный — стадия завершена; жёлтый — текущая стадия карточки, не завершена
     let highlight = null
     if (executor?.completed) {
       highlight = 'green'
-    } else if (stage.stageName === curColumn && ['in_progress', 'revision'].includes(wfStatus)) {
+    } else if (stage.stageName === curColumn && executor) {
       highlight = 'yellow'
     }
 
