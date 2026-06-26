@@ -214,9 +214,18 @@
               </div>
             </q-card-section>
             <q-list dense separator>
-              <q-item v-for="m in allTeamMembers" :key="m.roleKey">
+              <q-item
+                v-for="m in allTeamMembers"
+                :key="m.roleKey + (m.stageName || '')"
+                :style="m.highlight === 'yellow' ? 'background: #FFFDE7' : m.highlight === 'green' ? 'background: #F1F8E9' : ''"
+              >
                 <q-item-section avatar>
-                  <q-avatar size="28px" :color="m.name ? 'grey-3' : 'red-1'" :text-color="m.name ? 'grey-8' : 'red-3'" style="overflow:hidden">
+                  <q-avatar
+                    size="28px"
+                    :color="m.highlight === 'yellow' ? 'amber-3' : m.highlight === 'green' ? 'green-3' : (m.name ? 'grey-3' : 'red-1')"
+                    :text-color="m.highlight ? 'grey-9' : (m.name ? 'grey-8' : 'red-3')"
+                    style="overflow:hidden"
+                  >
                     <img v-if="m.name && getAvatarByName(m.name)" :src="getAvatarByName(m.name)" style="width:100%;height:100%;object-fit:cover;border-radius:50%">
                     <template v-else>
                       {{ m.name ? m.name[0] : '?' }}
@@ -224,8 +233,22 @@
                   </q-avatar>
                 </q-item-section>
                 <q-item-section>
-                  <q-item-label style="font-size: 12px" :style="{ color: m.name ? '#333' : '#bbb' }">
+                  <q-item-label style="font-size: 12px" :style="{ color: m.name ? '#333' : '#bbb', fontWeight: m.highlight ? '600' : 'normal' }">
                     {{ m.name || 'Не назначен' }}
+                    <q-icon
+                      v-if="m.highlight === 'yellow'"
+                      name="edit"
+                      size="12px"
+                      color="amber-8"
+                      style="margin-left: 3px; vertical-align: middle"
+                    />
+                    <q-icon
+                      v-if="m.highlight === 'green'"
+                      name="check_circle"
+                      size="12px"
+                      color="green-7"
+                      style="margin-left: 3px; vertical-align: middle"
+                    />
                   </q-item-label>
                   <q-item-label caption>
                     {{ m.role }}
@@ -2414,24 +2437,36 @@ const allTeamMembers = computed(() => {
   const canRemove = can('crm_cards.delete_executor')
   const canManageTeam = canAssign || canRemove
 
+  const wfStatus = card.value.workflow_status
+  const curColumn = card.value.column_name || ''
+  const isTemplate = card.value.project_type === 'Шаблонный'
+  const se = card.value.stage_executors || []
+
+  // Подсветка жёлтым активного участника по текущему статусу workflow
+  function mgmtHighlight(roleKey) {
+    if (!wfStatus) return null
+    if (wfStatus === 'pending_review') {
+      if (!isTemplate && roleKey === 'sdp') return 'yellow'
+      if (isTemplate && roleKey === 'gap') return 'yellow'
+    }
+    if (wfStatus === 'pending_decision' && roleKey === 'gap') return 'yellow'
+    return null
+  }
+
   // Руководство проекта (единые для всего проекта)
   const members = [
-    { roleKey: 'senior_manager', role: 'Ст. менеджер', name: card.value.senior_manager_name, canManage: canManageTeam },
+    { roleKey: 'senior_manager', role: 'Ст. менеджер', name: card.value.senior_manager_name, canManage: canManageTeam, highlight: mgmtHighlight('senior_manager') },
   ]
-  if (card.value.project_type === 'Индивидуальный') {
-    members.push({ roleKey: 'sdp', role: 'СДП', name: card.value.sdp_name, canManage: canManageTeam })
+  if (!isTemplate) {
+    members.push({ roleKey: 'sdp', role: 'СДП', name: card.value.sdp_name, canManage: canManageTeam, highlight: mgmtHighlight('sdp') })
   }
   members.push(
-    { roleKey: 'gap', role: 'ГАП', name: card.value.gap_name, canManage: canManageTeam },
-    { roleKey: 'manager', role: 'Менеджер', name: card.value.manager_name, canManage: canManageTeam },
-    { roleKey: 'surveyor', role: 'Замерщик', name: card.value.surveyor_name, canManage: canManageTeam },
+    { roleKey: 'gap', role: 'ГАП', name: card.value.gap_name, canManage: canManageTeam, highlight: mgmtHighlight('gap') },
+    { roleKey: 'manager', role: 'Менеджер', name: card.value.manager_name, canManage: canManageTeam, highlight: null },
+    { roleKey: 'surveyor', role: 'Замерщик', name: card.value.surveyor_name, canManage: canManageTeam, highlight: null },
   )
 
   // Исполнители ПО СТАДИЯМ — определяем все стадии проекта и показываем назначенных
-  const se = card.value.stage_executors || []
-  const isTemplate = card.value.project_type === 'Шаблонный'
-
-  // Все стадии проекта с ролями (порядок как в десктопе)
   const allStages = isTemplate ? [
     { stageName: 'Стадия 1: планировочные решения', roleKey: 'draftsman', role: 'Чертёжник' },
     { stageName: 'Стадия 2: рабочие чертежи', roleKey: 'draftsman', role: 'Чертёжник' },
@@ -2447,6 +2482,14 @@ const allTeamMembers = computed(() => {
     const candidates = se.filter(s => s.stage_name === stage.stageName)
     const executor = candidates.length ? candidates.reduce((a, b) => a.id > b.id ? a : b) : null
 
+    // Зелёный — стадия завершена; жёлтый — это текущая стадия и в работе/исправлении
+    let highlight = null
+    if (executor?.completed) {
+      highlight = 'green'
+    } else if (stage.stageName === curColumn && ['in_progress', 'revision'].includes(wfStatus)) {
+      highlight = 'yellow'
+    }
+
     members.push({
       roleKey: stage.roleKey,
       role: `${stage.role} — ${stage.stageName}`,
@@ -2456,6 +2499,7 @@ const allTeamMembers = computed(() => {
       stageName: stage.stageName,
       isStageExecutor: true,
       executorId: executor?.id || null,
+      highlight,
     })
   }
 
