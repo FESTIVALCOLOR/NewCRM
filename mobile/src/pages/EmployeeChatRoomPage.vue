@@ -290,12 +290,11 @@
                 </div>
                 <template v-if="item.msgs.length < 4">
                   <div :class="galleryGridClass(item.msgs.length)" :style="galleryGridStyle(item.msgs.length)">
-                    <a
+                    <div
                       v-for="(gm, gi) in item.msgs"
                       :key="gm.id"
-                      :href="gm.file_url"
-                      target="_blank"
-                      style="display: block; text-decoration: none; overflow: hidden"
+                      style="display: block; overflow: hidden; cursor: pointer"
+                      @click="openImgGallery(item.msgs, gi)"
                     >
                       <q-img
                         v-if="imgStreamUrl(gm)"
@@ -305,18 +304,17 @@
                         spinner-color="grey-4"
                         spinner-size="20px"
                       />
-                    </a>
+                    </div>
                   </div>
                 </template>
                 <template v-else>
                   <div style="display: flex; flex-direction: column; gap: 2px;">
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2px;">
-                      <a
+                      <div
                         v-for="(gm, gi) in item.msgs.slice(0, 2)"
                         :key="gm.id"
-                        :href="gm.file_url"
-                        target="_blank"
-                        style="display: block; text-decoration: none; overflow: hidden"
+                        style="display: block; overflow: hidden; cursor: pointer"
+                        @click="openImgGallery(item.msgs, gi)"
                       >
                         <q-img
                           v-if="imgStreamUrl(gm)"
@@ -326,16 +324,15 @@
                           spinner-color="grey-4"
                           spinner-size="20px"
                         />
-                      </a>
+                      </div>
                     </div>
                     <div v-if="item.msgs.length > 2" :style="galleryThumbGridStyle(item.msgs.length)">
-                      <a
+                      <div
                         v-for="(gm, gi) in item.msgs.slice(2)"
                         :key="gm.id"
-                        :href="gm.file_url"
-                        target="_blank"
-                        style="display: block; text-decoration: none; overflow: hidden"
                         :style="galleryItemSpanStyle(item.msgs.length - 2, gi)"
+                        style="display: block; overflow: hidden; cursor: pointer"
+                        @click="openImgGallery(item.msgs, gi + 2)"
                       >
                         <q-img
                           v-if="imgStreamUrl(gm)"
@@ -345,7 +342,7 @@
                           spinner-color="grey-4"
                           spinner-size="20px"
                         />
-                      </a>
+                      </div>
                     </div>
                   </div>
                 </template>
@@ -548,7 +545,7 @@
 
                     <!-- Изображение — Telegram-стиль -->
                     <template v-if="msg.message_type === 'image'">
-                      <a :href="msg.file_url" target="_blank" style="display: block; text-decoration: none; color: inherit">
+                      <div style="display: block; cursor: pointer; color: inherit" @click="openImgGallery([msg], 0)">
                         <q-img
                           v-if="imgStreamUrl(msg)"
                           :src="imgStreamUrl(msg)"
@@ -566,7 +563,7 @@
                         <div v-if="msg.content" class="text-body2" style="padding: 2px 10px 4px; white-space: pre-wrap; word-break: break-word; font-size: 13px">
                           {{ msg.content }}
                         </div>
-                      </a>
+                      </div>
                     </template>
                     <template v-else-if="msg.message_type === 'file'">
                       <div v-if="isPdf(msg) && pdfThumbnails[msg.id]">
@@ -1428,6 +1425,12 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
+
+    <ImageGalleryDialog
+      v-model="galleryVisible"
+      :images="galleryImages"
+      :start-index="galleryStartIndex"
+    />
   </q-page>
 </template>
 
@@ -1441,6 +1444,7 @@ import { useAuthStore } from 'src/stores/auth'
 import { useChatUnreadStore } from 'src/stores/chatUnread'
 import { usePermission } from 'src/composables/usePermission'
 import { useQuasar } from 'quasar'
+import ImageGalleryDialog from 'src/components/ImageGalleryDialog.vue'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -2438,6 +2442,21 @@ async function openInGallery(msg) {
   } catch {
     $q.notify({ type: 'negative', message: 'Ошибка публикации галереи' })
   }
+}
+
+// ── Image gallery viewer ──────────────────────────────────────────────────
+const galleryVisible = ref(false)
+const galleryImages = ref([])
+const galleryStartIndex = ref(0)
+
+function openImgGallery(msgs, clickedIdx) {
+  galleryImages.value = msgs.map(m => ({
+    src: imgStreamUrl(m),
+    filename: m.file_name || 'Изображение',
+    url: m.file_url || null,
+  }))
+  galleryStartIndex.value = clickedIdx
+  galleryVisible.value = true
 }
 
 // ── Copy to card ──────────────────────────────────────────────────────────
