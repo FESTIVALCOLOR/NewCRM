@@ -1263,7 +1263,12 @@
               {{ crmGalleryIdx + 1 }}/{{ crmGalleryFiles.length }}
             </div>
           </div>
-          <div v-touch-swipe.mouse="handleCrmGallerySwipe" class="col flex flex-center" style="position: relative; overflow: hidden">
+          <div
+            v-touch-swipe.mouse="handleCrmGallerySwipe"
+            class="col flex flex-center"
+            style="position: relative; overflow: hidden"
+            @wheel.prevent="handleCrmGalleryWheel"
+          >
             <q-btn
               v-if="crmGalleryIdx > 0"
               flat
@@ -1276,7 +1281,7 @@
             <img
               v-if="crmCurrentGalleryFile"
               :src="imgStreamUrl(crmCurrentGalleryFile)"
-              style="max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 4px; padding: 8px"
+              :style="{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: '4px', padding: '8px', transform: `scale(${crmGalleryScale})`, transformOrigin: 'center center', transition: 'transform 0.2s ease' }"
             >
             <q-btn
               v-if="crmGalleryIdx < crmGalleryFiles.length - 1"
@@ -1288,7 +1293,39 @@
               @click="crmNextImage"
             />
           </div>
-          <div class="row justify-center q-pa-sm">
+          <div class="row items-center justify-between q-pa-sm">
+            <div class="row no-wrap" style="gap: 4px">
+              <q-btn
+                flat
+                round
+                dense
+                icon="remove"
+                color="white"
+                size="sm"
+                :disable="crmGalleryScale <= 0.5"
+                @click="crmZoomOut"
+              />
+              <q-btn
+                flat
+                round
+                dense
+                icon="search"
+                color="white"
+                size="sm"
+                :disable="crmGalleryScale === 1"
+                @click="crmResetZoom"
+              />
+              <q-btn
+                flat
+                round
+                dense
+                icon="add"
+                color="white"
+                size="sm"
+                :disable="crmGalleryScale >= 4"
+                @click="crmZoomIn"
+              />
+            </div>
             <q-btn
               flat
               no-caps
@@ -2943,6 +2980,7 @@ function fileColor(f) { const n = (f.file_name||'').toLowerCase(); if (n.endsWit
 const crmGalleryVisible = ref(false)
 const crmGalleryIdx = ref(0)
 const crmGalleryFiles = ref([])
+const crmGalleryScale = ref(1)
 const crmCurrentGalleryFile = computed(() => crmGalleryFiles.value[crmGalleryIdx.value] || null)
 
 function openFile(f) {
@@ -2953,6 +2991,7 @@ function openFile(f) {
     if (idx >= 0) {
       crmGalleryFiles.value = imgs
       crmGalleryIdx.value = idx
+      crmGalleryScale.value = 1
       crmGalleryVisible.value = true
       return
     }
@@ -2967,18 +3006,24 @@ function openStageFile(f, stageCode) {
     if (idx >= 0) {
       crmGalleryFiles.value = imgs
       crmGalleryIdx.value = idx
+      crmGalleryScale.value = 1
       crmGalleryVisible.value = true
       return
     }
   }
   if (f.public_link) window.open(f.public_link, '_blank')
 }
-function crmPrevImage() { if (crmGalleryIdx.value > 0) crmGalleryIdx.value-- }
-function crmNextImage() { if (crmGalleryIdx.value < crmGalleryFiles.value.length - 1) crmGalleryIdx.value++ }
+function crmPrevImage() { if (crmGalleryIdx.value > 0) { crmGalleryIdx.value--; crmGalleryScale.value = 1 } }
+function crmNextImage() { if (crmGalleryIdx.value < crmGalleryFiles.value.length - 1) { crmGalleryIdx.value++; crmGalleryScale.value = 1 } }
 function handleCrmGallerySwipe({ direction }) {
+  if (crmGalleryScale.value !== 1) return
   if (direction === 'right') crmPrevImage()
   else if (direction === 'left') crmNextImage()
 }
+function crmZoomIn() { crmGalleryScale.value = Math.min(4, +(crmGalleryScale.value + 0.5).toFixed(1)) }
+function crmZoomOut() { crmGalleryScale.value = Math.max(0.5, +(crmGalleryScale.value - 0.5).toFixed(1)) }
+function crmResetZoom() { crmGalleryScale.value = 1 }
+function handleCrmGalleryWheel(e) { if (e.deltaY < 0) crmZoomIn(); else crmZoomOut() }
 function actionIcon(t) { if (!t) return 'history'; const l=t.toLowerCase(); if (l.includes('move')||l.includes('column')) return 'swap_horiz'; if (l.includes('assign')) return 'person_add'; if (l.includes('submit')) return 'send'; if (l.includes('accept')) return 'check_circle'; if (l.includes('reject')) return 'replay'; if (l.includes('payment')) return 'payments'; if (l.includes('deadline')) return 'event'; if (l.includes('file')) return 'attach_file'; return 'history' }
 function actionColor(t) { if (!t) return 'grey-5'; const l=t.toLowerCase(); if (l.includes('accept')||l.includes('complete')) return 'positive'; if (l.includes('reject')) return 'negative'; if (l.includes('submit')) return 'info'; return 'grey-7' }
 
