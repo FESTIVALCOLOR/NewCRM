@@ -719,6 +719,47 @@
       style="flex-shrink: 0"
     />
 
+    <!-- Превью прикреплённых файлов -->
+    <div
+      v-if="pendingFiles.length"
+      class="q-px-sm q-pt-xs q-pb-xs bg-blue-1"
+      style="border-top: 1px solid #BBDEFB; flex-shrink: 0"
+    >
+      <div class="row items-center q-gutter-xs">
+        <div
+          v-for="(f, i) in pendingFiles"
+          :key="i"
+          class="relative-position"
+        >
+          <template v-if="isImageFile(f) && pendingPreviews[i]">
+            <img
+              :src="pendingPreviews[i]"
+              style="width: 52px; height: 52px; object-fit: cover; border-radius: 6px; display: block"
+            >
+            <button
+              type="button"
+              style="position:absolute;top:-5px;right:-5px;width:20px;height:20px;border-radius:50%;background:rgba(0,0,0,0.75);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0"
+              @click.stop="removePendingFile(i)"
+            >
+              <q-icon name="close" size="10px" color="white" />
+            </button>
+          </template>
+          <q-chip
+            v-else
+            dense
+            removable
+            color="blue-2"
+            text-color="blue-9"
+            :icon="isImageFile(f) ? 'image' : 'attach_file'"
+            style="max-width: 160px"
+            @remove="removePendingFile(i)"
+          >
+            <span class="ellipsis" style="font-size: 11px; max-width: 120px">{{ f.name }}</span>
+          </q-chip>
+        </div>
+      </div>
+    </div>
+
     <!-- Reply-бар: ответ на сообщение -->
     <div
       v-if="replyingTo"
@@ -758,7 +799,13 @@
         >
           <q-tooltip>Прикрепить файл</q-tooltip>
         </q-btn>
-        <input ref="fileInput" type="file" class="hidden" @change="onFileSelected">
+        <input
+          ref="fileInput"
+          type="file"
+          multiple
+          class="hidden"
+          @change="onFileSelected"
+        >
         <!-- Файлы из карточки CRM (не для замерщика) -->
         <q-btn
           v-if="chatCrmCardId && COPY_DESTINATIONS.length > 0"
@@ -770,9 +817,9 @@
         >
           <q-tooltip>Файлы из карточки CRM</q-tooltip>
         </q-btn>
-        <!-- Запись голоса: удерживать для записи -->
+        <!-- Запись голоса: удерживать для записи (скрыта при pending файлах) -->
         <q-btn
-          v-if="!inputText.trim()"
+          v-if="!pendingFiles.length && !inputText.trim()"
           round
           dense
           icon="mic"
@@ -788,7 +835,20 @@
           ● {{ recordSeconds }}с — отпустите для отправки
         </div>
         <q-input
-          v-if="!isRecording"
+          v-if="pendingFiles.length && !isRecording"
+          v-model="pendingCaption"
+          outlined
+          dense
+          autogrow
+          hide-bottom-space
+          placeholder="Подпись к файлу…"
+          style="flex: 1"
+          @keydown.enter.exact.prevent="sendWithAttachment"
+          @input="onTyping"
+          @paste="onPaste"
+        />
+        <q-input
+          v-else-if="!isRecording"
           v-model="inputText"
           outlined
           dense
@@ -806,8 +866,8 @@
           dense
           icon="send"
           color="green"
-          :disable="!inputText.trim()"
-          @click="sendText"
+          :disable="pendingFiles.length ? false : !inputText.trim()"
+          @click="pendingFiles.length ? sendWithAttachment() : sendText()"
         />
       </div>
     </div>
@@ -1548,6 +1608,9 @@ let _scrollBottomTimer = null
 const topSentinelEl = ref(null)
 let _topObserver = null
 const fileInput = ref(null)
+const pendingFiles = ref([])
+const pendingPreviews = ref([])
+const pendingCaption = ref('')
 const clientToken = ref('')
 const showScriptDialog = ref(false)
 const showInviteMenu = ref(false)
@@ -2535,18 +2598,64 @@ async function sendSelectedCardFiles() {
   sendingCardFile.value = false
 }
 
-async function onFileSelected(event) {
-  const files = [...(event.target.files || [])]
-  await _processFiles(files)
+// ── File upload ───────────────────────────────────────────────────────────
+const IMAGE_EXTS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif']
+
+function isImageFile(file) {
+  return IMAGE_EXTS.includes(file.name.split('.').pop()?.toLowerCase() || '')
+}
+
+function addFilesToPending(files) {
+  if (!files.length) return
+  const newPreviews = files.map(f => isImageFile(f) ? URL.createObjectURL(f) : null)
+  const combined = [...pendingFiles.value, ...files]
+  const combinedPreviews = [...pendingPreviews.value, ...newPreviews]
+  if (combined.length > 20) {
+    $q.notify({ type: 'warning', message: 'Максимум 20 файлов за раз', timeout: 2500 })
+    combinedPreviews.slice(20).forEach(url => url && URL.revokeObjectURL(url))
+    pendingFiles.value = combined.slice(0, 20)
+    pendingPreviews.value = combinedPreviews.slice(0, 20)
+  } else {
+    pendingFiles.value = combined
+    pendingPreviews.value = combinedPreviews
+  }
+}
+
+function onFileSelected(event) {
+  addFilesToPending([...(event.target.files || [])])
   event.target.value = ''
 }
 
-async function _processFiles(files) {
+function removePendingFile(idx) {
+  const url = pendingPreviews.value[idx]
+  if (url) URL.revokeObjectURL(url)
+  pendingFiles.value = pendingFiles.value.filter((_, i) => i !== idx)
+  pendingPreviews.value = pendingPreviews.value.filter((_, i) => i !== idx)
+  if (!pendingFiles.value.length) pendingCaption.value = ''
+}
+
+async function sendWithAttachment() {
+  const files = pendingFiles.value
   if (!files.length) return
+  const caption = pendingCaption.value.trim()
+  const allImages = files.every(f => isImageFile(f))
+  const groupId = (files.length > 1 && allImages) ? crypto.randomUUID() : null
+
+  pendingFiles.value = []
+  pendingPreviews.value.forEach(url => url && URL.revokeObjectURL(url))
+  pendingPreviews.value = []
+  pendingCaption.value = ''
+
+  uploadProgress.value = 1
   const errors = []
-  for (const file of files) {
-    try { await _uploadSingleFile(file) } catch { errors.push(file.name) }
+  for (let i = 0; i < files.length; i++) {
+    try {
+      await _uploadSingleFile(files[i], groupId, i === files.length - 1 ? caption : null)
+    } catch {
+      errors.push(files[i].name)
+    }
   }
+  uploadProgress.value = 0
   if (errors.length) $q.notify({ type: 'negative', message: `Ошибка загрузки: ${errors.join(', ')}` })
 }
 
@@ -2564,25 +2673,24 @@ function onDragLeave() {
   if (_dragCounter <= 0) { _dragCounter = 0; isDraggingOver.value = false }
 }
 function onDragOver(e) { e.preventDefault() }
-async function onDrop(e) {
+function onDrop(e) {
   e.preventDefault()
   _dragCounter = 0
   isDraggingOver.value = false
   const files = [...(e.dataTransfer?.files || [])]
-  if (files.length) await _processFiles(files)
+  if (files.length) addFilesToPending(files)
 }
 
 // Вставка из буфера обмена
-async function onPaste(e) {
+function onPaste(e) {
   const files = [...(e.clipboardData?.files || [])]
   if (!files.length) return
   e.preventDefault()
-  await _processFiles(files)
+  addFilesToPending(files)
 }
 
-async function _uploadSingleFile(file) {
+async function _uploadSingleFile(file, groupId = null, caption = null) {
   const ext = file.name.split('.').pop()?.toLowerCase() || ''
-  const IMAGE_EXTS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif']
   const msgType = IMAGE_EXTS.includes(ext) ? 'image' : 'file'
   const isPdfUpload = ext === 'pdf'
   const tempId = `temp_${Date.now()}_${Math.random()}`
@@ -2620,6 +2728,8 @@ async function _uploadSingleFile(file) {
     const formData = new FormData()
     formData.append('file', file)
     formData.append('message_type', msgType)
+    if (groupId) formData.append('group_id', groupId)
+    if (caption) formData.append('caption', caption)
     uploadProgress.value = 1
     const { data: savedMsg } = await api.post(`/api/v1/chats/${chatId}/files`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },

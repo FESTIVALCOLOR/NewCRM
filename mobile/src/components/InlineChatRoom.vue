@@ -796,16 +796,13 @@
               :src="pendingPreviews[i]"
               style="width: 52px; height: 52px; object-fit: cover; border-radius: 6px; display: block"
             >
-            <q-btn
-              round
-              unelevated
-              dense
-              icon="close"
-              size="7px"
-              color="grey-9"
-              style="position: absolute; top: -5px; right: -5px; opacity: 0.9; width: 20px; height: 20px; min-width: 20px; border-radius: 50%"
-              @click="removePendingFile(i)"
-            />
+            <button
+              type="button"
+              style="position:absolute;top:-5px;right:-5px;width:20px;height:20px;border-radius:50%;background:rgba(0,0,0,0.75);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0"
+              @click.stop="removePendingFile(i)"
+            >
+              <q-icon name="close" size="10px" color="white" />
+            </button>
           </template>
           <q-chip
             v-else
