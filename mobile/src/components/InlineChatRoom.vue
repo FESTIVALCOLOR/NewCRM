@@ -251,7 +251,7 @@
     <div
       ref="messagesEl"
       class="col q-px-md q-py-sm"
-      style="overflow-y: auto; background: #F5F5F5"
+      :style="chatBgStyle"
     >
       <div v-if="!messages.length" class="text-center text-grey q-mt-lg">
         <q-icon name="chat_bubble_outline" size="32px" />
@@ -1533,6 +1533,16 @@ const chatUnreadStore = useChatUnreadStore()
 const $q = useQuasar()
 const { connectEmployee, disconnect, sendMessage, sendTypingStart, sendTypingStop, sendRead, typingUsers } = useChatWebSocket()
 
+const chatBgStyle = computed(() => {
+  const bgMap = {
+    supervision: { color: '#F5F0E3', img: 'bg-supervision.png' },
+    client:      { color: '#E8F5EE', img: 'bg-client.png' },
+    employee:    { color: '#E8F3F8', img: 'bg-admin.png' },
+  }
+  const { color, img } = bgMap[props.chatType] || bgMap.employee
+  return `overflow-y: auto; background-color: ${color}; background-image: url('/backgrounds/${img}'); background-repeat: repeat; background-size: 400px auto`
+})
+
 const loading = ref(false)
 const creating = ref(false)
 const chat = ref(null)
@@ -1548,6 +1558,7 @@ const clientChatId = ref(null)
 const pdfThumbnails = ref({})
 const pdfImgWidths = reactive({})
 function pdfBubbleStyle(msg) {
+  if (msg.message_type === 'image') return 'min-width: 0; width: min(60vw, 380px); max-width: min(60vw, 380px)'
   if (!isPdf(msg) || !pdfThumbnails.value[msg.id]) return 'min-width: 0'
   const w = pdfImgWidths[msg.id]
   return w ? `width: ${w}px; min-width: 0` : 'width: fit-content; max-width: min(85vw, 440px); min-width: 0'

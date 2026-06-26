@@ -167,7 +167,7 @@
     <div
       ref="messagesEl"
       class="col q-pa-md"
-      style="overflow-y: auto; background: #F5F5F5"
+      style="overflow-y: auto; background-color: #F5F5F5; background-image: url('/backgrounds/bg-employee.png'); background-repeat: repeat; background-size: 400px auto"
     >
       <!-- Sentinel для Intersection Observer (автозагрузка при скролле вверх) -->
       <div ref="topSentinelEl" style="height: 2px" />
@@ -1480,6 +1480,7 @@ const uploadProgress = ref(0)
 const pdfThumbnails = ref({})
 const pdfImgWidths = reactive({})
 function pdfBubbleStyle(msg) {
+  if (msg.message_type === 'image') return 'min-width: 0; width: min(60vw, 380px); max-width: min(60vw, 380px)'
   if (!isPdf(msg) || !pdfThumbnails.value[msg.id]) return 'min-width: 0'
   const w = pdfImgWidths[msg.id]
   return w ? `width: ${w}px; min-width: 0` : 'width: fit-content; max-width: min(85vw, 440px); min-width: 0'
