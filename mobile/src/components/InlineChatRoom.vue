@@ -3075,9 +3075,16 @@ const galleryVisible = ref(false)
 const galleryImages = ref([])
 const galleryStartIndex = ref(0)
 
+function imgStreamFullUrl(msg) {
+  if (!msg.yandex_path) return imgStreamUrl(msg)
+  const path = msg.yandex_path.replace(/^disk:/, '')
+  const token = localStorage.getItem('access_token') || ''
+  return `/api/v1/files/stream?yandex_path=${encodeURIComponent(path)}&token=${encodeURIComponent(token)}`
+}
+
 function openImgGallery(msgs, clickedIdx) {
   galleryImages.value = msgs.map(m => ({
-    src: imgStreamUrl(m),
+    src: imgStreamFullUrl(m),
     filename: m.file_name || 'Изображение',
     url: m.file_url || null,
   }))
