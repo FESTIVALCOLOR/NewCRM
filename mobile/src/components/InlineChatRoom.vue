@@ -803,7 +803,7 @@
               icon="close"
               size="7px"
               color="grey-9"
-              style="position: absolute; top: -5px; right: -5px; opacity: 0.9"
+              style="position: absolute; top: -5px; right: -5px; opacity: 0.9; width: 20px; height: 20px; min-width: 20px; border-radius: 50%"
               @click="removePendingFile(i)"
             />
           </template>
