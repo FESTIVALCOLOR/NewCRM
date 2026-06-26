@@ -299,22 +299,32 @@ async def startup_event():
 
     db = SessionLocal()
     try:
-        # Создаём admin если не существует (нужен для CI и первого запуска)
-        admin = db.query(Employee).filter(Employee.login == "admin").first()
-        if not admin:
-            admin = Employee(
-                full_name="Администратор",
-                phone="+70000000000",
-                login="admin",
-                password_hash=get_password_hash("admin123"),
-                role=POSITION_STUDIO_DIRECTOR,
-                position=POSITION_STUDIO_DIRECTOR,
-                department="Административный",
-                status="активный",
+        # Создаём admin только если в БД нет ни одного активного Руководителя студии
+        # (нужен для CI и первого запуска; на продакшне с реальным директором — пропускается)
+        existing_director = (
+            db.query(Employee)
+            .filter(
+                Employee.position == POSITION_STUDIO_DIRECTOR,
+                Employee.status == "активный",
             )
-            db.add(admin)
-            db.commit()
-            logger.info("Admin user seeded")
+            .first()
+        )
+        if not existing_director:
+            admin = db.query(Employee).filter(Employee.login == "admin").first()
+            if not admin:
+                admin = Employee(
+                    full_name="Администратор",
+                    phone="+70000000000",
+                    login="admin",
+                    password_hash=get_password_hash("admin123"),
+                    role=POSITION_STUDIO_DIRECTOR,
+                    position=POSITION_STUDIO_DIRECTOR,
+                    department="Административный",
+                    status="активный",
+                )
+                db.add(admin)
+                db.commit()
+                logger.info("Admin user seeded")
 
         seed_permissions(db)
         logger.info("Permissions seeded")
