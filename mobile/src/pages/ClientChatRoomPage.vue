@@ -302,13 +302,13 @@
                     <div
                       v-for="(gm, gi) in item.msgs"
                       :key="gm.id"
-                      style="display: block; overflow: hidden; cursor: pointer"
+                      :style="galleryItemContainerStyle(item.msgs.length, gi)"
                       @click="openImgGallery(item.msgs, gi)"
                     >
                       <q-img
                         v-if="imgStreamUrl(gm)"
                         :src="imgStreamUrl(gm)"
-                        :style="galleryImgStyle(item.msgs.length, gi)"
+                        :style="galleryImgStyle(item.msgs.length)"
                         fit="cover"
                         spinner-color="grey-4"
                         spinner-size="20px"
@@ -2094,19 +2094,18 @@ function galleryCols(count) {
   return best ? best.c : minCols
 }
 
-function galleryBubbleStyle(count) {
-  if (count <= 3) return 'min-width: 0; width: min(50vw, 282px); max-width: min(50vw, 282px)'
-  const thumbCount = count - 2
-  const cols = thumbCount > 0 ? galleryCols(thumbCount) : 2
-  const effectiveCols = Math.max(2, cols)
-  const targetW = effectiveCols * 140 + (effectiveCols - 1) * 2
-  return `min-width: 0; width: min(50vw, ${targetW}px); max-width: min(50vw, ${targetW}px)`
+function galleryBubbleStyle() {
+  return 'min-width: 0; width: min(60vw, 380px); max-width: min(60vw, 380px)'
 }
 
 function galleryGridStyle(count) {
-  if (count === 2) return 'display: grid; grid-template-columns: 1fr 1fr; gap: 2px;'
-  if (count === 3) return 'display: grid; grid-template-columns: 2fr 1fr; gap: 2px;'
+  if (count >= 2) return 'display: grid; grid-template-columns: 1fr 1fr; gap: 2px;'
   return undefined
+}
+
+function galleryItemContainerStyle(count, index) {
+  if (count === 3 && index === 2) return 'display: block; overflow: hidden; cursor: pointer; grid-column: span 2'
+  return 'display: block; overflow: hidden; cursor: pointer'
 }
 
 function galleryThumbGridStyle(count) {
@@ -2128,11 +2127,11 @@ function galleryItemSpanStyle(thumbCount, index) {
   return { gridColumn: `span ${pos < extra ? baseSpan + 1 : baseSpan}` }
 }
 
-function galleryImgStyle(count, index) {
+function galleryImgStyle(count) {
   const base = 'width: 100%; display: block;'
-  if (count <= 1) return `${base} height: clamp(140px, 42vw, 340px);`
-  if (count === 2) return `${base} height: 170px;`
-  if (count === 3) return index === 0 ? `${base} height: 184px;` : `${base} height: 91px;`
+  if (count <= 1) return `${base} height: clamp(200px, 56vw, 320px);`
+  if (count === 2) return `${base} height: 155px;`
+  if (count === 3) return `${base} height: 130px;`
   return base
 }
 
