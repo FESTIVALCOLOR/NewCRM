@@ -1,5 +1,23 @@
 <template>
-  <q-page class="column" :style="{ height: chatPageH, overflow: 'hidden' }">
+  <q-page
+    class="column"
+    :style="{ height: chatPageH, overflow: 'hidden', position: 'relative' }"
+    @dragenter="onDragEnter"
+    @dragleave="onDragLeave"
+    @dragover="onDragOver"
+    @drop="onDrop"
+  >
+    <!-- Drag & Drop оверлей -->
+    <div
+      v-if="isDraggingOver"
+      class="absolute-full flex flex-center"
+      style="background: rgba(25,118,210,0.13); border: 3px dashed #1976d2; border-radius: 8px; z-index: 9999; pointer-events: none"
+    >
+      <div class="text-center text-primary text-h6">
+        <q-icon name="upload_file" size="48px" class="q-mb-sm" style="display: block; margin: 0 auto" />
+        Отпустите файл для прикрепления
+      </div>
+    </div>
     <!-- Шапка -->
     <div class="row items-center q-px-md q-py-sm bg-white" style="border-bottom: 1px solid #E0E0E0; flex-shrink: 0">
       <q-btn
@@ -780,6 +798,7 @@
           style="flex: 1"
           @keydown.enter.exact.prevent="sendText"
           @input="onTyping"
+          @paste="onPaste"
         />
         <q-btn
           v-if="!isRecording"
@@ -2518,13 +2537,47 @@ async function sendSelectedCardFiles() {
 
 async function onFileSelected(event) {
   const files = [...(event.target.files || [])]
+  await _processFiles(files)
+  event.target.value = ''
+}
+
+async function _processFiles(files) {
   if (!files.length) return
   const errors = []
   for (const file of files) {
     try { await _uploadSingleFile(file) } catch { errors.push(file.name) }
   }
-  event.target.value = ''
   if (errors.length) $q.notify({ type: 'negative', message: `Ошибка загрузки: ${errors.join(', ')}` })
+}
+
+// Drag & Drop
+const isDraggingOver = ref(false)
+let _dragCounter = 0
+
+function onDragEnter(e) {
+  if (!e.dataTransfer?.types?.includes('Files')) return
+  _dragCounter++
+  isDraggingOver.value = true
+}
+function onDragLeave() {
+  _dragCounter--
+  if (_dragCounter <= 0) { _dragCounter = 0; isDraggingOver.value = false }
+}
+function onDragOver(e) { e.preventDefault() }
+async function onDrop(e) {
+  e.preventDefault()
+  _dragCounter = 0
+  isDraggingOver.value = false
+  const files = [...(e.dataTransfer?.files || [])]
+  if (files.length) await _processFiles(files)
+}
+
+// Вставка из буфера обмена
+async function onPaste(e) {
+  const files = [...(e.clipboardData?.files || [])]
+  if (!files.length) return
+  e.preventDefault()
+  await _processFiles(files)
 }
 
 async function _uploadSingleFile(file) {
