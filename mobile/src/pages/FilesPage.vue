@@ -54,8 +54,14 @@
           <q-item-section>
             <q-item-label>{{ item.name }}</q-item-label>
           </q-item-section>
-          <q-item-section side>
-            <q-icon name="chevron_right" color="grey-5" />
+          <q-item-section side style="min-width: 64px; text-align: right">
+            <template v-if="folderSizes[item.path] === undefined">
+              <q-spinner size="12px" color="grey-4" />
+            </template>
+            <span v-else-if="folderSizes[item.path] > 0" class="text-caption text-grey-6">
+              {{ formatSize(folderSizes[item.path]) }}
+            </span>
+            <q-icon v-else name="chevron_right" color="grey-5" />
           </q-item-section>
         </q-item>
 
@@ -197,6 +203,7 @@ const fileInput = ref(null)
 
 const folders = computed(() => items.value.filter(i => i.type === 'dir'))
 const files = computed(() => items.value.filter(i => i.type === 'file'))
+const folderSizes = ref({})  // path -> size in bytes (undefined = loading)
 
 // === Галерея превью ===
 const previewVisible = ref(false)
@@ -309,6 +316,7 @@ function normalizeDiskPath(path) {
 async function navigateTo(path) {
   currentPath.value = normalizeDiskPath(path)
   imageUrls.value = {}
+  folderSizes.value = {}
   await loadFolder()
 }
 
@@ -322,6 +330,21 @@ async function loadFolder() {
   } finally {
     loading.value = false
   }
+  loadFolderSizes()
+}
+
+function loadFolderSizes() {
+  const dirs = items.value.filter(i => i.type === 'dir')
+  dirs.forEach(dir => {
+    folderSizes.value[dir.path] = undefined  // loading state
+    filesApi.getFolderSize(dir.path)
+      .then(({ data }) => {
+        folderSizes.value = { ...folderSizes.value, [dir.path]: data.size ?? 0 }
+      })
+      .catch(() => {
+        folderSizes.value = { ...folderSizes.value, [dir.path]: 0 }
+      })
+  })
 }
 
 async function openFile(item) {

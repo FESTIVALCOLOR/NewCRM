@@ -155,6 +155,41 @@ async def list_yandex_files(
         raise HTTPException(status_code=500, detail=f"Error listing files: {error_str}")
 
 
+def _calc_folder_size(yd_service, path: str, max_depth: int = 5, _depth: int = 0) -> int:
+    """Рекурсивно суммирует размеры файлов в папке Яндекс.Диска."""
+    if _depth > max_depth:
+        return 0
+    try:
+        items = yd_service.list_files(path, limit=1000)
+    except Exception:
+        return 0
+    total = 0
+    for item in items:
+        if item.get("type") == "file":
+            total += item.get("size", 0)
+        elif item.get("type") == "dir":
+            total += _calc_folder_size(yd_service, item["path"], max_depth, _depth + 1)
+    return total
+
+
+@router.get("/folder-size")
+async def get_folder_size(
+    path: str,
+    current_user: Employee = Depends(get_current_user),
+):
+    """Вернуть суммарный размер папки (рекурсивно) в байтах."""
+    if not yandex_disk_available:
+        raise HTTPException(status_code=503, detail="Yandex Disk service not available")
+    try:
+        yd_service = get_yandex_disk_service()
+        size = _calc_folder_size(yd_service, path)
+        return {"path": path, "size": size}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error calculating folder size: {e}")
+
+
 @router.get("/public-folder")
 async def list_public_folder(
     url: str,

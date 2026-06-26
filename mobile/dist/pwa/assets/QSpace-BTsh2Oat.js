@@ -1,1 +1,0 @@
-import{Cn as e,en as t}from"./index-CK9cB5ln.js";var n=t({name:`QSpace`,setup(){let t=e(`div`,{class:`q-space`});return()=>t}});export{n as t};

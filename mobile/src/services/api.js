@@ -548,6 +548,9 @@ export const filesApi = {
   listFolder: (folderPath) =>
     api.get('/api/v1/files/list', { params: { folder_path: folderPath } }),
 
+  getFolderSize: (path) =>
+    api.get('/api/v1/files/folder-size', { params: { path } }),
+
   getPublicLink: (yandexPath) =>
     api.get('/api/v1/files/public-link', { params: { yandex_path: yandexPath } }),
 
