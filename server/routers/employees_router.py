@@ -49,7 +49,22 @@ from schemas import (
 )
 from sqlalchemy.orm import Session
 
-from database import ActionHistory, ActivityLog, ConcurrentEdit, CRMCard, Employee, Payment, RoleDefaultPermission, Salary, StageExecutor, SupervisionCard, UserPermission, UserSession, get_db
+from database import (
+    ActionHistory,
+    ActivityLog,
+    ConcurrentEdit,
+    CRMCard,
+    Employee,
+    InternalChatMember,
+    Payment,
+    RoleDefaultPermission,
+    Salary,
+    StageExecutor,
+    SupervisionCard,
+    UserPermission,
+    UserSession,
+    get_db,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["employees"])
@@ -229,6 +244,7 @@ async def delete_employee(employee_id: int, current_user: Employee = Depends(req
     db.query(Payment).filter(Payment.paid_by == employee_id).update({"paid_by": None}, synchronize_session=False)
     db.query(Salary).filter(Salary.employee_id == employee_id).update({"employee_id": None}, synchronize_session=False)
     db.query(ActionHistory).filter(ActionHistory.user_id == employee_id).delete(synchronize_session=False)
+    db.query(InternalChatMember).filter(InternalChatMember.employee_id == employee_id).delete(synchronize_session=False)
 
     # Обнуляем FK ссылки в crm_cards и supervision_cards
     for col in ["senior_manager_id", "sdp_id", "gap_id", "manager_id", "surveyor_id"]:
