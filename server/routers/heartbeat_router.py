@@ -26,8 +26,9 @@ async def send_heartbeat(employee_id: int = None, current_user: Employee = Depen
     Возвращает список онлайн пользователей.
     """
     try:
-        # Обновляем last_activity текущего пользователя
+        # Обновляем last_activity и last_login текущего пользователя
         current_user.last_activity = datetime.utcnow()
+        current_user.last_login = datetime.utcnow()
         current_user.is_online = True
         db.commit()
 
