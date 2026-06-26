@@ -195,7 +195,7 @@
     <div
       ref="messagesEl"
       class="col q-pa-md"
-      style="overflow-y: auto; background-color: #E8F5EE; background-image: url('/backgrounds/bg-client.png'); background-repeat: repeat; background-size: 400px auto"
+      style="overflow-y: auto; background-color: #F5F5F5; background-image: url('/backgrounds/bg-employee.png'); background-repeat: repeat; background-size: 400px auto"
     >
       <!-- Sentinel для Intersection Observer (автозагрузка при скролле вверх) -->
       <div ref="topSentinelEl" style="height: 2px" />

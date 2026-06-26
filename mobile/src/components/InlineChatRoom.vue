@@ -1534,13 +1534,7 @@ const $q = useQuasar()
 const { connectEmployee, disconnect, sendMessage, sendTypingStart, sendTypingStop, sendRead, typingUsers } = useChatWebSocket()
 
 const chatBgStyle = computed(() => {
-  const bgMap = {
-    supervision: { color: '#F5F0E3', img: 'bg-supervision.png' },
-    client:      { color: '#E8F5EE', img: 'bg-client.png' },
-    employee:    { color: '#E8F3F8', img: 'bg-admin.png' },
-  }
-  const { color, img } = bgMap[props.chatType] || bgMap.employee
-  return `overflow-y: auto; background-color: ${color}; background-image: url('/backgrounds/${img}'); background-repeat: repeat; background-size: 400px auto`
+  return 'overflow-y: auto; background-color: #F5F5F5; background-image: url(\'/backgrounds/bg-employee.png\'); background-repeat: repeat; background-size: 400px auto'
 })
 
 const loading = ref(false)
