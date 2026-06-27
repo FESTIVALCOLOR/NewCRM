@@ -430,8 +430,8 @@ async def notify_chat_message(
                 is_reply_target = reply_target_employee_id == m.employee_id
                 chat_url = f"https://crm.festivalcolor.ru/employee-chats/{chat_id}"
                 crm_link = f'<a href="{chat_url}">Перейти в чат</a>'
-                action = "написал(а) вам в чате" if is_reply_target else "написал(а) в чате"
-                title = f"Сотрудник: {sender_name} {action} {chat_title}:"
+                action = "написал(а) вам в чате:" if is_reply_target else "написал(а) в чате:"
+                title = f"Сотрудник: {sender_name} {action} {chat_title}"
                 body = f"{text_preview}\n\n{crm_link}"
 
                 # None (не задан) → фолбек "telegram"
@@ -493,8 +493,8 @@ async def notify_client_chat_employees(
             )
             logger.info(f"notify_client_chat_employees: chat_id={chat_id}, sender={sender_name!r}, members={[m.employee_id for m in members]}")
             chat_url = f"https://crm.festivalcolor.ru/client-chats/{chat_id}"
-            action = "написал(а) вам в чате" if is_reply else "написал(а) в чате"
-            title = f"Клиент: {sender_name} {action} {chat_title}:"
+            action = "написал(а) вам в чате:" if is_reply else "написал(а) в чате:"
+            title = f"Клиент: {sender_name} {action} {chat_title}"
             body = f'{text_preview}\n\n<a href="{chat_url}">Перейти в чат</a>'
             for m in members:
                 s = db.query(NotificationSettings).filter(NotificationSettings.employee_id == m.employee_id).first()
