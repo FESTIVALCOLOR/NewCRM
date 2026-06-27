@@ -661,6 +661,11 @@
                 <q-toggle v-model="notifSettings.notify_supervision" color="accent" />
               </q-item-section>
             </q-item>
+            <q-item tag="label">
+              <q-item-section>Чаты</q-item-section><q-item-section side>
+                <q-toggle v-model="notifSettings.notify_chat" color="accent" />
+              </q-item-section>
+            </q-item>
             <q-separator class="q-my-xs" />
             <q-item tag="label">
               <q-item-section>Индивидуальные</q-item-section><q-item-section side>
