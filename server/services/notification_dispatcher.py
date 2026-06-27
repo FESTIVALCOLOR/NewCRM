@@ -416,6 +416,7 @@ async def notify_chat_message(
                 )
                 .all()
             )
+            logger.info(f"notify_chat_message: chat_id={chat_id}, sender={sender_employee_id}, members={[m.employee_id for m in members]}")
             for m in members:
                 if m.employee_id == sender_employee_id:
                     continue
@@ -423,6 +424,7 @@ async def notify_chat_message(
                 s = db.query(NotificationSettings).filter(NotificationSettings.employee_id == m.employee_id).first()
                 # notify_chat=None (NULL) означает "включено по умолчанию", пропускаем только явный False
                 if s and getattr(s, "notify_chat", None) is False:
+                    logger.info(f"notify_chat_message: emp={m.employee_id} — notify_chat=False, пропуск")
                     continue
 
                 is_reply_target = reply_target_employee_id == m.employee_id
@@ -436,11 +438,14 @@ async def notify_chat_message(
                 # None (не задан) → фолбек "telegram"
                 channel = (getattr(s, "notification_channel", None) or "telegram") if s else "telegram"
                 employee = db.query(Employee).filter(Employee.id == m.employee_id).first()
+                tg_id = employee.telegram_user_id if employee else None
+                logger.info(f"notify_chat_message: emp={m.employee_id} channel={channel} tg_id={tg_id}")
 
                 # Telegram
                 if channel in ("telegram", "both"):
                     tg_enabled = getattr(s, "telegram_enabled", True) if s else True
                     if tg_enabled and employee and employee.telegram_user_id:
+                        logger.info(f"notify_chat_message: отправка Telegram → {employee.telegram_user_id}")
                         await _send_telegram(employee.telegram_user_id, title, body)
 
                 # Web Push
@@ -483,6 +488,7 @@ async def notify_client_chat_employees(
                 )
                 .all()
             )
+            logger.info(f"notify_client_chat_employees: chat_id={chat_id}, sender={sender_name!r}, members={[m.employee_id for m in members]}")
             title = f"👤 {sender_name}"
             body = text_preview
             for m in members:
@@ -562,9 +568,11 @@ async def _send_telegram(telegram_user_id: int, title: str, message: str) -> Non
         from telegram_service import get_telegram_service
 
         tg = get_telegram_service()
+        logger.info(f"_send_telegram: tg_user={telegram_user_id} bot_available={tg.bot_available}")
         if tg.bot_available:
             text = f"<b>{title}</b>\n{message}"
-            await asyncio.wait_for(tg.send_message(telegram_user_id, text), timeout=15.0)
+            result = await asyncio.wait_for(tg.send_message(telegram_user_id, text), timeout=15.0)
+            logger.info(f"_send_telegram: отправлено, message_id={result}")
     except asyncio.TimeoutError:
         logger.warning(f"Telegram таймаут (15с) для user_id={telegram_user_id}")
     except Exception as e:
