@@ -668,6 +668,13 @@ async def ws_client_chat(
                         "message": _message_to_dict(msg),
                     },
                 )
+                asyncio.create_task(
+                    notify_client_chat_employees(
+                        chat.id,
+                        guest.guest_name,
+                        (data.get("content", "") or "📎 Файл")[:100],
+                    )
+                )
 
             elif event_type == "typing_start":
                 await ws_manager.broadcast(
