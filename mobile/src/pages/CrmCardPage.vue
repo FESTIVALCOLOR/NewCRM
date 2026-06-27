@@ -236,13 +236,6 @@
                   <q-item-label style="font-size: 12px" :style="{ color: m.name ? '#333' : '#bbb', fontWeight: m.highlight ? '600' : 'normal' }">
                     {{ m.name || 'Не назначен' }}
                     <q-icon
-                      v-if="m.highlight === 'yellow'"
-                      name="edit"
-                      size="12px"
-                      color="amber-8"
-                      style="margin-left: 3px; vertical-align: middle"
-                    />
-                    <q-icon
                       v-if="m.highlight === 'green'"
                       name="check_circle"
                       size="12px"
