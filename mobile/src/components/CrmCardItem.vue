@@ -302,56 +302,49 @@ const substepColor = computed(() => {
   return m[ws.value] || '#E67E22'
 })
 
-// === Активная роль для подсветки команды (аналог get_highlight_role десктопа) ===
-const activeHighlightRole = computed(() => {
-  const wf = props.card.workflow_status
-  const col = (props.card.column_name || '').toLowerCase()
-  const pt = props.card.project_type || ''
-
-  if (wf === 'pending_review') return pt === 'Шаблонный' ? 'gap' : 'sdp'
-
-  if (wf === 'revision') {
-    const substepRole = (props.card.current_substep_executor_role || '').toLowerCase()
-    if (substepRole.includes('sdp') || substepRole.includes('сдп')) return 'sdp'
-    if (substepRole.includes('gap') || substepRole.includes('гап')) return 'gap'
-    if (substepRole.includes('дизайнер') || substepRole.includes('designer')) return 'designer'
-    if (substepRole.includes('чертёжник') || substepRole.includes('чертежник') || substepRole.includes('draftsman')) return 'draftsman'
-    // Роль подэтапа не определена — revision всегда у проверяющего
-    return pt === 'Шаблонный' ? 'gap' : 'sdp'
-  }
-
-  if (col.includes('концепция') || col.includes('визуализац')) return 'designer'
-  if (col.includes('планировочн') || col.includes('чертёж') || col.includes('чертеж')) return 'draftsman'
-  return null
-})
-
-const ROLE_KEY_MAP = { СМ: 'senior_manager', СДП: 'sdp', ГАП: 'gap', Менеджер: 'manager', Замерщик: 'surveyor', Дизайнер: 'designer', Чертёжник: 'draftsman', 'Пл.решения': 'designer', Концепция: 'designer', Визуализация: 'designer' }
-
 // === Команда с подсветкой ===
 const teamMembers = computed(() => {
   const c = props.card
+  const col = (c.column_name || '').toLowerCase()
+  const wf = c.workflow_status
+  const pt = c.project_type || ''
   const items = []
-  const add = (role, name, completed) => {
+
+  // Управленческие роли: жёлтый по статусу workflow
+  const mgmtIsActive = (roleKey) => {
+    if (wf === 'pending_review') return pt === 'Шаблонный' ? roleKey === 'gap' : roleKey === 'sdp'
+    if (wf === 'pending_decision') return roleKey === 'gap'
+    return false
+  }
+  const addMgmt = (label, name, roleKey) => {
     if (!name) return
-    const roleKey = ROLE_KEY_MAP[role]
-    const isActive = roleKey && roleKey === activeHighlightRole.value
-    const bg = completed ? '#C8E6C9' : isActive ? '#FFE082' : 'transparent'
-    items.push({ text: `${role}: ${name}${completed ? ' ✓' : ''}`, bg })
+    const bg = mgmtIsActive(roleKey) ? '#FFE082' : 'transparent'
+    items.push({ text: `${label}: ${name}`, bg })
   }
-  add('СМ', c.senior_manager_name)
-  if (c.sdp_name) add('СДП', c.sdp_name)
-  add('ГАП', c.gap_name)
-  add('Менеджер', c.manager_name)
-  add('Замерщик', c.surveyor_name)
-  // Стадии в правильном порядке: 1 → 2 → 3
-  add('Стадия 1', c.stage_plan_name, c.stage_plan_completed)
-  if (c.project_type === 'Шаблонный') {
-    add('Стадия 2', c.draftsman_name, c.draftsman_completed)
-    add('Стадия 3', c.designer_name, c.designer_completed)
+
+  // Исполнители стадий: жёлтый если текущая колонка совпадает и стадия не завершена
+  const addStage = (label, name, completed, colSubstr) => {
+    if (!name) return
+    const isCurrent = !completed && col.includes(colSubstr)
+    const bg = completed ? '#C8E6C9' : isCurrent ? '#FFE082' : 'transparent'
+    items.push({ text: `${label}: ${name}${completed ? ' ✓' : ''}`, bg })
+  }
+
+  addMgmt('СМ', c.senior_manager_name, 'senior_manager')
+  if (c.sdp_name) addMgmt('СДП', c.sdp_name, 'sdp')
+  addMgmt('ГАП', c.gap_name, 'gap')
+  addMgmt('Менеджер', c.manager_name, 'manager')
+  addMgmt('Замерщик', c.surveyor_name, 'surveyor')
+
+  addStage('Стадия 1', c.stage_plan_name, c.stage_plan_completed, 'планировочн')
+  if (pt === 'Шаблонный') {
+    addStage('Стадия 2', c.draftsman_name, c.draftsman_completed, 'чертеж')
+    addStage('Стадия 3', c.designer_name, c.designer_completed, 'визуализац')
   } else {
-    add('Стадия 2', c.designer_name, c.designer_completed)
-    add('Стадия 3', c.draftsman_name, c.draftsman_completed)
+    addStage('Стадия 2', c.designer_name, c.designer_completed, 'концепция')
+    addStage('Стадия 3', c.draftsman_name, c.draftsman_completed, 'чертеж')
   }
+
   return items
 })
 
