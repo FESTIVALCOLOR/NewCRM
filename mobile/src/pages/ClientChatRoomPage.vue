@@ -1668,7 +1668,7 @@ function pdfBubbleStyle(msg) {
 const chatYdFolder = ref(null)
 
 // Emoji реакции
-const QUICK_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥']
+const QUICK_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥', '🎉', '👏', '🙏', '😍', '🤔', '✅']
 
 // Голосовая запись
 const isRecording = ref(false)

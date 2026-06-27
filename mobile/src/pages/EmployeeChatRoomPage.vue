@@ -1738,7 +1738,7 @@ async function sendSelectedCardFiles() {
   sendingCardFile.value = false
 }
 // Emoji реакции
-const QUICK_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥']
+const QUICK_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥', '🎉', '👏', '🙏', '😍', '🤔', '✅']
 
 // Голосовая запись
 const isRecording = ref(false)
