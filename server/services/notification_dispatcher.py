@@ -428,12 +428,13 @@ async def notify_chat_message(
                     continue
 
                 is_reply_target = reply_target_employee_id == m.employee_id
+                crm_link = '<a href="https://crm.festivalcolor.ru">Зайдите в чат CRM Festivalcolor чтобы ответить</a>'
                 if is_reply_target:
                     title = f"↩ {sender_name} ответил(а) вам"
-                    body = f"{chat_title}: {text_preview}"
+                    body = f"{sender_name} — {chat_title}:\n{text_preview}\n\n{crm_link}"
                 else:
-                    title = f"💬 {sender_name}"
-                    body = f"{chat_title}: {text_preview}"
+                    title = f"💬 Новое сообщение в чате"
+                    body = f"{sender_name} — {chat_title}:\n{text_preview}\n\n{crm_link}"
 
                 # None (не задан) → фолбек "telegram"
                 channel = (getattr(s, "notification_channel", None) or "telegram") if s else "telegram"
@@ -474,10 +475,13 @@ async def notify_client_chat_employees(
 ) -> None:
     """Telegram + Push сотрудникам клиентского чата когда клиент отправил сообщение."""
     try:
-        from database import Employee, InternalChatMember, NotificationSettings, SessionLocal
+        from database import Employee, InternalChat, InternalChatMember, NotificationSettings, SessionLocal
 
         db = SessionLocal()
         try:
+            chat = db.query(InternalChat).filter(InternalChat.id == chat_id).first()
+            chat_title = chat.title if chat else f"Чат #{chat_id}"
+
             members = (
                 db.query(InternalChatMember)
                 .filter(
@@ -489,8 +493,8 @@ async def notify_client_chat_employees(
                 .all()
             )
             logger.info(f"notify_client_chat_employees: chat_id={chat_id}, sender={sender_name!r}, members={[m.employee_id for m in members]}")
-            title = f"👤 {sender_name}"
-            body = text_preview
+            title = "👤 Клиент написал вам"
+            body = f'{sender_name} — {chat_title}:\n{text_preview}\n\n<a href="https://crm.festivalcolor.ru">Зайдите в чат CRM Festivalcolor чтобы ответить</a>'
             for m in members:
                 s = db.query(NotificationSettings).filter(NotificationSettings.employee_id == m.employee_id).first()
                 if s and getattr(s, "notify_chat", None) is False:
