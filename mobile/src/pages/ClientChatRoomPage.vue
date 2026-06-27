@@ -2353,10 +2353,27 @@ function fillScriptVars(template) {
   }).filter(line => line !== null).join('\n').trim()
 }
 
-function sendText() {
+async function sendText() {
   const text = inputText.value.trim()
   if (!text) return
-  sendMessage(text, replyingTo.value?.id || null)
+  if (isConnected.value) {
+    sendMessage(text, replyingTo.value?.id || null)
+  } else {
+    // REST fallback когда WS недоступен
+    try {
+      const { data } = await api.post(`/api/v1/chats/${chatId}/messages`, {
+        content: text,
+        reply_to_id: replyingTo.value?.id || null,
+      })
+      if (data?.id && !messages.value.some(m => m.id === data.id)) {
+        messages.value.push(data)
+        nextTick(() => scrollToBottom())
+      }
+    } catch {
+      $q.notify({ type: 'negative', message: 'Ошибка отправки сообщения' })
+      return
+    }
+  }
   replyingTo.value = null
   inputText.value = ''
 }

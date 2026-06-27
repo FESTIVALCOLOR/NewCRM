@@ -523,36 +523,45 @@ async def ws_employee_chat(
                 await websocket.send_json({"type": "pong"})
 
             elif event_type == "message":
-                msg = add_text_message(
-                    db,
-                    chat_id,
-                    data.get("content", ""),
-                    sender_employee_id=employee_id,
-                    sender_display_name=_get_employee_display_name(emp),
-                    reply_to_id=data.get("reply_to_id"),
-                )
-                await ws_manager.broadcast(
-                    chat_id,
-                    {
-                        "type": "new_message",
-                        "message": _message_to_dict(msg),
-                    },
-                )
-                asyncio.create_task(
-                    notify_client_chat_guests(
+                try:
+                    msg = add_text_message(
+                        db,
                         chat_id,
-                        _get_employee_display_name(emp),
-                        (data.get("content", "") or "📎 Файл")[:100],
+                        data.get("content", ""),
+                        sender_employee_id=employee_id,
+                        sender_display_name=_get_employee_display_name(emp),
+                        reply_to_id=data.get("reply_to_id"),
                     )
-                )
-                asyncio.create_task(
-                    notify_chat_message(
+                    await ws_manager.broadcast(
                         chat_id,
-                        employee_id,
-                        _get_employee_display_name(emp),
-                        (data.get("content", "") or "📎 Файл")[:100],
+                        {
+                            "type": "new_message",
+                            "message": _message_to_dict(msg),
+                        },
                     )
-                )
+                    asyncio.create_task(
+                        notify_client_chat_guests(
+                            chat_id,
+                            _get_employee_display_name(emp),
+                            (data.get("content", "") or "📎 Файл")[:100],
+                        )
+                    )
+                    asyncio.create_task(
+                        notify_chat_message(
+                            chat_id,
+                            employee_id,
+                            _get_employee_display_name(emp),
+                            (data.get("content", "") or "📎 Файл")[:100],
+                        )
+                    )
+                except Exception as _exc:
+                    import logging as _log
+
+                    _log.getLogger(__name__).error(f"ws_employee_chat message error: {_exc}", exc_info=True)
+                    try:
+                        await websocket.send_json({"type": "error", "detail": "Ошибка сохранения сообщения"})
+                    except Exception:
+                        pass
 
             elif event_type == "typing_start":
                 await ws_manager.broadcast(
