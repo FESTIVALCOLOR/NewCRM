@@ -2348,7 +2348,7 @@ function isForwarded(msg) {
   return typeof msg.sender_display_name === 'string' && msg.sender_display_name.includes('(переслано)')
 }
 
-const QUICK_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥']
+const QUICK_EMOJIS = ['👍', '👎', '❤️', '😂', '😮', '😢', '🔥', '🎉', '👏', '🤝', '👌', '🙏', '😍', '🤔', '✅']
 
 async function sendReaction(msg, emoji) {
   if (!chat.value) return

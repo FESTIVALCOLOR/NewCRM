@@ -677,7 +677,7 @@ const editClientContent = ref('')
 const savingClientEdit = ref(false)
 
 // Emoji реакции (гостевые)
-const QUICK_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥']
+const QUICK_EMOJIS = ['👍', '👎', '❤️', '😂', '😮', '😢', '🔥', '🎉', '👏', '🤝', '👌', '🙏', '😍', '🤔', '✅']
 
 // Голосовая запись
 const isRecording = ref(false)
