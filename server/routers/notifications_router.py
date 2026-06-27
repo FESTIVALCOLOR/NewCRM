@@ -8,23 +8,28 @@ Endpoints:
   POST   /employees/{employee_id}/send-invite   → отправить приглашение сотруднику
   POST   /notifications/test                    → тест уведомления (Директор)
 """
+
+from datetime import datetime, timedelta
 import logging
 import secrets
-from datetime import datetime, timedelta
 from typing import List, Optional
 
+from auth import get_current_user
+from constants import (
+    POSITION_DAN,
+    POSITION_MEASURER,
+    POSITION_SDP,
+    POSITION_SENIOR_MANAGER,
+    POSITION_STUDIO_DIRECTOR,
+    ROLE_ADMIN,
+    ROLE_DIRECTOR,
+)
 from fastapi import APIRouter, Depends, HTTPException
+from permissions import SUPERUSER_ROLES, require_permission
+from schemas import NotificationResponse, NotificationSettingsResponse, NotificationSettingsUpdate
 from sqlalchemy.orm import Session
 
-from database import get_db, Employee, Notification, NotificationSettings
-from auth import get_current_user
-from permissions import require_permission, SUPERUSER_ROLES
-from schemas import NotificationResponse, NotificationSettingsResponse, NotificationSettingsUpdate
-from constants import (
-    POSITION_DAN, POSITION_SENIOR_MANAGER, POSITION_STUDIO_DIRECTOR,
-    POSITION_SDP, POSITION_MEASURER,
-    ROLE_ADMIN, ROLE_DIRECTOR,
-)
+from database import Employee, Notification, NotificationSettings, get_db
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +37,7 @@ router = APIRouter()
 
 
 # ── СТАТИЧЕСКИЕ ПУТИ ПЕРЕД ДИНАМИЧЕСКИМИ ──
+
 
 @router.get("/notifications/settings/{employee_id}", response_model=NotificationSettingsResponse)
 async def get_notification_settings(
@@ -51,18 +57,23 @@ async def get_notification_settings(
     settings = db.query(NotificationSettings).filter_by(employee_id=employee_id).first()
     if not settings:
         # Рекомендуемые дефолты по ролям (см. docs/notifications-scripts-guide.md §10)
-        role = employee.role or ''
-        pos = employee.position or ''
+        role = employee.role or ""
+        pos = employee.position or ""
 
         # supervision: ДАН, Ст.менеджер, Руководитель
         supervision_roles = {
-            POSITION_DAN, POSITION_SENIOR_MANAGER,
-            POSITION_STUDIO_DIRECTOR, ROLE_ADMIN, ROLE_DIRECTOR,
+            POSITION_DAN,
+            POSITION_SENIOR_MANAGER,
+            POSITION_STUDIO_DIRECTOR,
+            ROLE_ADMIN,
+            ROLE_DIRECTOR,
         }
         # payment: Руководитель, Ст.менеджер
         payment_roles = {
-            POSITION_STUDIO_DIRECTOR, POSITION_SENIOR_MANAGER,
-            ROLE_ADMIN, ROLE_DIRECTOR,
+            POSITION_STUDIO_DIRECTOR,
+            POSITION_SENIOR_MANAGER,
+            ROLE_ADMIN,
+            ROLE_DIRECTOR,
         }
         # crm_stage: Выкл для ДАН и Замерщик
         crm_stage_off = {POSITION_DAN, POSITION_MEASURER}
@@ -88,6 +99,7 @@ async def get_notification_settings(
             notify_template=role not in template_off,
             notify_duplicate_info=is_senior_manager,
             notify_revision_info=is_senior_manager,
+            notify_chat=True,
             telegram_connected=bool(employee.telegram_user_id),
         )
 
@@ -100,13 +112,14 @@ async def get_notification_settings(
         notify_deadline=settings.notify_deadline,
         notify_payment=settings.notify_payment,
         notify_supervision=settings.notify_supervision,
-        notify_individual=getattr(settings, 'notify_individual', True),
-        notify_template=getattr(settings, 'notify_template', True),
-        notify_duplicate_info=getattr(settings, 'notify_duplicate_info', False),
-        notify_revision_info=getattr(settings, 'notify_revision_info', False),
+        notify_individual=getattr(settings, "notify_individual", True),
+        notify_template=getattr(settings, "notify_template", True),
+        notify_duplicate_info=getattr(settings, "notify_duplicate_info", False),
+        notify_revision_info=getattr(settings, "notify_revision_info", False),
+        notify_chat=getattr(settings, "notify_chat", True),
         telegram_connected=bool(employee.telegram_user_id),
-        push_enabled=getattr(settings, 'push_enabled', False),
-        notification_channel=getattr(settings, 'notification_channel', 'telegram') or 'telegram',
+        push_enabled=getattr(settings, "push_enabled", False),
+        notification_channel=getattr(settings, "notification_channel", "telegram") or "telegram",
     )
 
 
@@ -144,6 +157,7 @@ async def update_notification_settings(
     settings.notify_template = data.notify_template
     settings.notify_duplicate_info = data.notify_duplicate_info
     settings.notify_revision_info = data.notify_revision_info
+    settings.notify_chat = data.notify_chat
     # Web Push поля
     if data.push_enabled is not None:
         settings.push_enabled = data.push_enabled
@@ -162,13 +176,14 @@ async def update_notification_settings(
         notify_deadline=settings.notify_deadline,
         notify_payment=settings.notify_payment,
         notify_supervision=settings.notify_supervision,
-        notify_individual=getattr(settings, 'notify_individual', True),
-        notify_template=getattr(settings, 'notify_template', True),
-        notify_duplicate_info=getattr(settings, 'notify_duplicate_info', False),
-        notify_revision_info=getattr(settings, 'notify_revision_info', False),
+        notify_individual=getattr(settings, "notify_individual", True),
+        notify_template=getattr(settings, "notify_template", True),
+        notify_duplicate_info=getattr(settings, "notify_duplicate_info", False),
+        notify_revision_info=getattr(settings, "notify_revision_info", False),
+        notify_chat=getattr(settings, "notify_chat", True),
         telegram_connected=bool(employee.telegram_user_id),
-        push_enabled=getattr(settings, 'push_enabled', False),
-        notification_channel=getattr(settings, 'notification_channel', 'telegram') or 'telegram',
+        push_enabled=getattr(settings, "push_enabled", False),
+        notification_channel=getattr(settings, "notification_channel", "telegram") or "telegram",
     )
 
 
@@ -189,6 +204,7 @@ async def send_test_notification(
 
     target_id = employee_id or current_user.id
     from services.notification_dispatcher import dispatch_notification
+
     await dispatch_notification(
         db=db,
         employee_id=target_id,
@@ -203,6 +219,7 @@ async def send_test_notification(
 async def get_vapid_public_key():
     """Получить VAPID public key для Web Push подписки"""
     from config import get_settings
+
     s = get_settings()
     return {"vapid_public_key": s.vapid_public_key or ""}
 
@@ -215,6 +232,7 @@ async def subscribe_push(
 ):
     """Сохранить Web Push подписку пользователя"""
     import json
+
     settings = db.query(NotificationSettings).filter_by(employee_id=current_user.id).first()
     if not settings:
         settings = NotificationSettings(employee_id=current_user.id)
@@ -222,8 +240,8 @@ async def subscribe_push(
     settings.push_subscription = json.dumps(subscription)
     settings.push_enabled = True
     # Если канал был только telegram — переключаем на both
-    if settings.notification_channel == 'telegram':
-        settings.notification_channel = 'both'
+    if settings.notification_channel == "telegram":
+        settings.notification_channel = "both"
     db.commit()
     return {"status": "subscribed"}
 
@@ -238,10 +256,10 @@ async def unsubscribe_push(
     if settings:
         settings.push_enabled = False
         settings.push_subscription = None
-        if settings.notification_channel == 'push':
-            settings.notification_channel = 'telegram'
-        elif settings.notification_channel == 'both':
-            settings.notification_channel = 'telegram'
+        if settings.notification_channel == "push":
+            settings.notification_channel = "telegram"
+        elif settings.notification_channel == "both":
+            settings.notification_channel = "telegram"
         db.commit()
     return {"status": "unsubscribed"}
 
@@ -254,7 +272,7 @@ async def update_notification_channel(
     db: Session = Depends(get_db),
 ):
     """Обновить канал уведомлений: telegram, push или both"""
-    if channel not in ('telegram', 'push', 'both'):
+    if channel not in ("telegram", "push", "both"):
         raise HTTPException(status_code=400, detail="Допустимые каналы: telegram, push, both")
     if employee_id != current_user.id and current_user.role not in SUPERUSER_ROLES:
         raise HTTPException(status_code=403, detail="Нет прав")
@@ -269,7 +287,8 @@ async def update_notification_channel(
 
 # ── ДИНАМИЧЕСКИЕ ПУТИ ──
 
-@router.get("/notifications", response_model=List[NotificationResponse])
+
+@router.get("/notifications", response_model=list[NotificationResponse])
 async def get_notifications(
     unread_only: bool = False,
     current_user: Employee = Depends(get_current_user),
@@ -289,13 +308,20 @@ async def mark_all_notifications_read(
 ):
     """Отметить все уведомления текущего пользователя как прочитанные"""
     now = datetime.utcnow()
-    updated = db.query(Notification).filter(
-        Notification.employee_id == current_user.id,
-        Notification.is_read == False,
-    ).update({
-        Notification.is_read: True,
-        Notification.read_at: now,
-    }, synchronize_session='fetch')
+    updated = (
+        db.query(Notification)
+        .filter(
+            Notification.employee_id == current_user.id,
+            Notification.is_read == False,
+        )
+        .update(
+            {
+                Notification.is_read: True,
+                Notification.read_at: now,
+            },
+            synchronize_session="fetch",
+        )
+    )
     db.commit()
     return {"message": f"Прочитано {updated} уведомлений", "count": updated}
 
@@ -307,10 +333,14 @@ async def mark_notification_read(
     db: Session = Depends(get_db),
 ):
     """Отметить уведомление как прочитанное"""
-    notification = db.query(Notification).filter(
-        Notification.id == notification_id,
-        Notification.employee_id == current_user.id,
-    ).first()
+    notification = (
+        db.query(Notification)
+        .filter(
+            Notification.id == notification_id,
+            Notification.employee_id == current_user.id,
+        )
+        .first()
+    )
 
     if not notification:
         raise HTTPException(status_code=404, detail="Уведомление не найдено")
@@ -345,6 +375,7 @@ async def send_employee_invite(
 
     # Временный пароль: используем существующий или генерируем новый
     from auth import get_password_hash
+
     if employee.invite_temp_password:
         temp_password = employee.invite_temp_password
     else:
@@ -355,6 +386,7 @@ async def send_employee_invite(
     db.commit()
 
     from email_service import get_email_service
+
     email_svc = get_email_service()
 
     if not email_svc.available:
@@ -364,6 +396,7 @@ async def send_employee_invite(
     bot_username = "festival_color_crm_bot"  # fallback
     try:
         from telegram_service import get_telegram_service
+
         tg = get_telegram_service()
         if tg.bot_available:
             bot_info = await tg._bot.get_me()
@@ -374,11 +407,9 @@ async def send_employee_invite(
 
     # Получить ссылку на скачивание из настроек
     from routers.messenger_router import load_messenger_settings
+
     messenger_settings = load_messenger_settings(db)
-    download_link = messenger_settings.get(
-        "app_download_url",
-        "https://disk.yandex.ru/d/5LT3jFbE5ISHpA"
-    )
+    download_link = messenger_settings.get("app_download_url", "https://disk.yandex.ru/d/5LT3jFbE5ISHpA")
 
     try:
         ok = await email_svc.send_welcome_email(

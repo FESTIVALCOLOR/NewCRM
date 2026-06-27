@@ -128,6 +128,17 @@
               <q-toggle v-model="settings.notify_supervision" color="positive" @update:model-value="save" />
             </q-item-section>
           </q-item>
+          <q-item>
+            <q-item-section>
+              <q-item-label>Чаты</q-item-label>
+              <q-item-label caption>
+                Новые сообщения и ответы в чатах
+              </q-item-label>
+            </q-item-section>
+            <q-item-section side>
+              <q-toggle v-model="settings.notify_chat" color="positive" @update:model-value="save" />
+            </q-item-section>
+          </q-item>
         </q-list>
       </q-card>
 
@@ -224,6 +235,7 @@ const settings = ref({
   notify_deadline: true,
   notify_payment: false,
   notify_supervision: false,
+  notify_chat: true,
   notify_individual: true,
   notify_template: true,
   notify_duplicate_info: false,

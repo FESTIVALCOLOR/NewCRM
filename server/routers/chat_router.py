@@ -370,7 +370,7 @@ async def send_message(
         },
     )
     preview = (data.content or "📎 Файл")[:100]
-    asyncio.create_task(notify_chat_message(chat_id, current_user.id, current_user.full_name, preview))
+    asyncio.create_task(notify_chat_message(chat_id, current_user.id, current_user.full_name, preview, reply_to_id=data.reply_to_id))
     return msg
 
 

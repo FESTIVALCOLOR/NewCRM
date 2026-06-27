@@ -1448,6 +1448,7 @@ class NotificationSettingsResponse(BaseModel):
     notify_template: bool
     notify_duplicate_info: bool
     notify_revision_info: bool
+    notify_chat: bool = True
     telegram_connected: bool  # вычисляемое: telegram_user_id is not None
     push_enabled: bool = False
     notification_channel: str = "telegram"  # 'telegram', 'push', 'both'
@@ -1468,6 +1469,7 @@ class NotificationSettingsUpdate(BaseModel):
     notify_template: bool = True
     notify_duplicate_info: bool = False
     notify_revision_info: bool = False
+    notify_chat: bool = True
     push_enabled: Optional[bool] = None
     notification_channel: Optional[str] = None  # 'telegram', 'push', 'both'
 

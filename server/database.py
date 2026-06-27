@@ -300,6 +300,9 @@ class NotificationSettings(Base):
     notify_duplicate_info = Column(Boolean, default=False)
     notify_revision_info = Column(Boolean, default=False)
 
+    # Чаты
+    notify_chat = Column(Boolean, default=True)  # Уведомления о новых сообщениях в чатах
+
     # Web Push уведомления
     push_enabled = Column(Boolean, default=False)
     push_subscription = Column(Text, nullable=True)  # JSON Web Push subscription
