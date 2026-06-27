@@ -731,18 +731,19 @@ def delete_message(db: Session, message_id: int, employee_id: int) -> bool:
 
 
 def mark_read(db: Session, chat_id: int, employee_id: int, last_message_id: int):
-    """Обновить last_read_message_id для участника."""
-    member = (
+    """Обновить last_read_message_id для участника (все дубликаты)."""
+    members = (
         db.query(InternalChatMember)
         .filter(
             InternalChatMember.chat_id == chat_id,
             InternalChatMember.employee_id == employee_id,
             InternalChatMember.is_active == True,
         )
-        .first()
+        .all()
     )
-    if member:
-        member.last_read_message_id = last_message_id
+    if members:
+        for member in members:
+            member.last_read_message_id = last_message_id
         db.commit()
 
 
@@ -753,7 +754,9 @@ def get_unread_count(db: Session, chat_id: int, employee_id: int) -> int:
         .filter(
             InternalChatMember.chat_id == chat_id,
             InternalChatMember.employee_id == employee_id,
+            InternalChatMember.is_active == True,  # noqa: E712
         )
+        .order_by(InternalChatMember.last_read_message_id.desc().nulls_last())
         .first()
     )
     if not member:
@@ -978,17 +981,18 @@ def get_batch_unread_counts(db: Session, chat_ids: list[int], employee_id: int) 
     if not chat_ids:
         return {}
 
-    # 1. Получить last_read_message_id для каждого чата одним запросом
+    # 1. Получить MAX(last_read_message_id) для каждого чата — GROUP BY защищает от дублей участников
     rows = (
-        db.query(InternalChatMember.chat_id, InternalChatMember.last_read_message_id)
+        db.query(InternalChatMember.chat_id, func.max(InternalChatMember.last_read_message_id).label("last_read"))
         .filter(
             InternalChatMember.chat_id.in_(chat_ids),
             InternalChatMember.employee_id == employee_id,
             InternalChatMember.is_active == True,  # noqa: E712
         )
+        .group_by(InternalChatMember.chat_id)
         .all()
     )
-    last_read_map: dict[int, int] = {r.chat_id: (r.last_read_message_id or 0) for r in rows}
+    last_read_map: dict[int, int] = {r.chat_id: (r.last_read or 0) for r in rows}
 
     # 2. Для каждого чата считаем unread через GROUP BY — один запрос
     # Фильтруем id > last_read через CASE...WHEN per chat_id (через Python post-filter)
