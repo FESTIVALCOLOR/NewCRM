@@ -37,7 +37,7 @@ from services.chat_service import (
 from services.chat_service import (
     manager as ws_manager,
 )
-from services.notification_dispatcher import notify_client_chat_employees, notify_client_chat_guests
+from services.notification_dispatcher import notify_chat_message, notify_client_chat_employees, notify_client_chat_guests
 from sqlalchemy.orm import Session
 
 from database import Employee, InternalChat, InternalChatMember, InternalChatMessage, get_db
@@ -541,6 +541,14 @@ async def ws_employee_chat(
                 asyncio.create_task(
                     notify_client_chat_guests(
                         chat_id,
+                        _get_employee_display_name(emp),
+                        (data.get("content", "") or "📎 Файл")[:100],
+                    )
+                )
+                asyncio.create_task(
+                    notify_chat_message(
+                        chat_id,
+                        employee_id,
                         _get_employee_display_name(emp),
                         (data.get("content", "") or "📎 Файл")[:100],
                     )

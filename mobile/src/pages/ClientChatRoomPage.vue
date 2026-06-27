@@ -2230,7 +2230,11 @@ async function loadMessages() {
     scrollToFirstUnread()
 
     if (messages.value.length) {
-      sendRead(messages.value[messages.value.length - 1].id)
+      const lastId = messages.value[messages.value.length - 1].id
+      sendRead(lastId)
+      // REST гарантирует доставку до сервера (WS может быть ещё не открыт)
+      api.post(`/api/v1/chats/${chatId}/messages/${lastId}/read`).catch(() => {})
+      firstUnreadId.value = null
     }
     chatUnreadStore.markChatRead(chatId)
 
@@ -3124,6 +3128,8 @@ function connectWs() {
         messages.value.push(msg)
         scrollToBottom()
         if (isPdf(msg)) loadPdfThumbnail(msg)
+        sendRead(msg.id)
+        firstUnreadId.value = null
       }
     },
     onMessageGroup: (msgs) => {
