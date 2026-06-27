@@ -165,6 +165,7 @@
                     ? (isOwn(msg) ? 'bubble-img-own' : 'bubble-img-staff')
                     : (isOwn(msg) ? 'bubble-own' : 'bubble-staff'), { 'bubble-forwarded': isForwarded(msg) }]"
                   :style="pdfBubbleStyle(msg)"
+                  @click="!msg.is_deleted && openMsgMenu(msg.id)"
                 >
                   <!-- Верхняя строка: имя отправителя + кнопка меню -->
                   <div
@@ -186,65 +187,72 @@
                       icon="more_vert"
                       color="grey-5"
                       style="margin: -4px -6px -2px 2px; flex-shrink: 0"
-                    >
-                      <q-menu auto-close>
-                        <q-list dense style="min-width: 210px; white-space: nowrap">
-                          <!-- Быстрые реакции -->
-                          <q-item dense style="padding: 4px 8px 2px">
-                            <div class="row items-center">
-                              <button
-                                v-for="em in QUICK_EMOJIS"
-                                :key="em"
-                                class="react-quick-btn"
-                                :class="{ 'react-quick-btn--active': isOwnGuestReaction(msg, em) }"
-                                @click.stop="sendGuestReaction(msg, em)"
-                              >
-                                {{ em }}
-                              </button>
-                            </div>
-                          </q-item>
-                          <q-separator />
-                          <q-item clickable @click="replyingTo = msg">
-                            <q-item-section avatar>
-                              <q-icon name="reply" size="16px" color="grey-7" />
-                            </q-item-section>
-                            <q-item-section style="font-size: 12px">
-                              Ответить
-                            </q-item-section>
-                          </q-item>
-                          <q-separator v-if="isOwn(msg)" />
-                          <q-item
-                            v-if="isOwn(msg) && msg.message_type === 'text'"
-                            clickable
-                            @click="startClientEdit(msg)"
-                          >
-                            <q-item-section avatar>
-                              <q-icon name="edit" size="16px" color="grey-7" />
-                            </q-item-section>
-                            <q-item-section style="font-size: 12px">
-                              Редактировать
-                            </q-item-section>
-                          </q-item>
-                          <q-separator v-if="isOwn(msg)" />
-                          <q-item v-if="isOwn(msg)" clickable @click="deleteClientMsg(msg)">
-                            <q-item-section avatar>
-                              <q-icon name="delete_outline" size="16px" color="red-5" />
-                            </q-item-section>
-                            <q-item-section class="text-red-6" style="font-size: 12px">
-                              Удалить
-                            </q-item-section>
-                          </q-item>
-                        </q-list>
-                      </q-menu>
-                    </q-btn>
+                      @click.stop="openMsgMenu(msg.id)"
+                    />
                   </div>
+
+                  <!-- Меню открывается касанием пузыря сообщения -->
+                  <q-menu
+                    v-if="!msg.is_deleted"
+                    :ref="el => { if (el) msgMenuRefs[msg.id] = el; else delete msgMenuRefs[msg.id] }"
+                    auto-close
+                    no-parent-event
+                  >
+                    <q-list dense style="min-width: 210px; white-space: nowrap">
+                      <!-- Быстрые реакции -->
+                      <q-item dense style="padding: 4px 8px 2px">
+                        <div class="row items-center" style="flex-wrap: wrap; gap: 2px">
+                          <button
+                            v-for="em in QUICK_EMOJIS"
+                            :key="em"
+                            class="react-quick-btn"
+                            :class="{ 'react-quick-btn--active': isOwnGuestReaction(msg, em) }"
+                            @click.stop="sendGuestReaction(msg, em)"
+                          >
+                            {{ em }}
+                          </button>
+                        </div>
+                      </q-item>
+                      <q-separator />
+                      <q-item clickable @click="replyingTo = msg">
+                        <q-item-section avatar>
+                          <q-icon name="reply" size="16px" color="grey-7" />
+                        </q-item-section>
+                        <q-item-section style="font-size: 12px">
+                          Ответить
+                        </q-item-section>
+                      </q-item>
+                      <q-separator v-if="isOwn(msg)" />
+                      <q-item
+                        v-if="isOwn(msg) && msg.message_type === 'text'"
+                        clickable
+                        @click="startClientEdit(msg)"
+                      >
+                        <q-item-section avatar>
+                          <q-icon name="edit" size="16px" color="grey-7" />
+                        </q-item-section>
+                        <q-item-section style="font-size: 12px">
+                          Редактировать
+                        </q-item-section>
+                      </q-item>
+                      <q-separator v-if="isOwn(msg)" />
+                      <q-item v-if="isOwn(msg)" clickable @click="deleteClientMsg(msg)">
+                        <q-item-section avatar>
+                          <q-icon name="delete_outline" size="16px" color="red-5" />
+                        </q-item-section>
+                        <q-item-section class="text-red-6" style="font-size: 12px">
+                          Удалить
+                        </q-item-section>
+                      </q-item>
+                    </q-list>
+                  </q-menu>
 
                   <!-- Цитата (reply preview) -->
                   <div
                     v-if="msg.reply_preview"
                     class="reply-quote q-mb-xs"
                     style="cursor: pointer"
-                    @click="scrollToMsg(msg.reply_preview.id)"
+                    @click.stop="scrollToMsg(msg.reply_preview.id)"
                   >
                     <div class="row no-wrap items-center" style="gap: 6px">
                       <q-img
@@ -678,6 +686,10 @@ const savingClientEdit = ref(false)
 
 // Emoji реакции (гостевые)
 const QUICK_EMOJIS = ['👍', '👎', '❤️', '😂', '😮', '😢', '🔥', '🎉', '👏', '🤝', '👌', '🙏', '😍', '🤔', '✅']
+
+// Рефы для программного открытия меню сообщений
+const msgMenuRefs = {}
+function openMsgMenu(msgId) { msgMenuRefs[msgId]?.show() }
 
 // Голосовая запись
 const isRecording = ref(false)

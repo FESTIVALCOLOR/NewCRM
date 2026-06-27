@@ -482,6 +482,7 @@
                     ? (isOwn(msg) ? 'bubble-img-own' : 'bubble-img-other')
                     : (isOwn(msg) ? 'bubble-own' : 'bubble-other'), { 'bubble-forwarded': isForwarded(msg) }]"
                   :style="pdfBubbleStyle(msg)"
+                  @click="(!msg.is_deleted && !msg._uploading) && openMsgMenu(msg.id)"
                 >
                   <!-- Верхняя строка: имя отправителя + кнопка меню -->
                   <div
@@ -513,78 +514,85 @@
                       icon="more_vert"
                       color="grey-6"
                       style="margin: -4px -6px -2px 2px; flex-shrink: 0"
-                    >
-                      <q-menu auto-close>
-                        <q-list dense style="min-width: 210px; font-size: 12px; white-space: nowrap">
-                          <!-- Быстрые реакции -->
-                          <q-item dense style="padding: 4px 8px 2px">
-                            <div class="row items-center">
-                              <button
-                                v-for="em in QUICK_EMOJIS"
-                                :key="em"
-                                class="react-quick-btn"
-                                :class="{ 'react-quick-btn--active': isOwnReaction(msg, em) }"
-                                @click.stop="sendReaction(msg, em)"
-                              >
-                                {{ em }}
-                              </button>
-                            </div>
-                          </q-item>
-                          <q-separator />
-                          <q-item clickable dense @click="togglePin(msg)">
-                            <q-item-section avatar style="min-width: 28px">
-                              <q-icon name="push_pin" size="14px" :color="msg.is_pinned ? 'orange-8' : 'grey-8'" />
-                            </q-item-section>
-                            <q-item-section style="font-size: 12px">
-                              {{ msg.is_pinned ? 'Открепить' : 'Закрепить' }}
-                            </q-item-section>
-                          </q-item>
-                          <q-item clickable dense @click="replyingTo = msg">
-                            <q-item-section avatar style="min-width: 28px">
-                              <q-icon name="reply" size="14px" color="grey-8" />
-                            </q-item-section>
-                            <q-item-section style="font-size: 12px">
-                              Ответить
-                            </q-item-section>
-                          </q-item>
-                          <q-separator />
-                          <q-item v-if="isOwn(msg) && msg.message_type === 'text'" clickable dense @click="startEdit(msg)">
-                            <q-item-section avatar style="min-width: 28px">
-                              <q-icon name="edit" size="14px" color="grey-8" />
-                            </q-item-section>
-                            <q-item-section style="font-size: 12px">
-                              Редактировать
-                            </q-item-section>
-                          </q-item>
-                          <q-item clickable dense @click="openForwardDialog(msg)">
-                            <q-item-section avatar style="min-width: 28px">
-                              <q-icon name="forward" size="14px" color="grey-8" />
-                            </q-item-section>
-                            <q-item-section style="font-size: 12px">
-                              Переслать
-                            </q-item-section>
-                          </q-item>
-                          <q-item v-if="msg.yandex_path && chat && chat.crm_card_id" clickable dense @click="openCopyToCard(msg)">
-                            <q-item-section avatar style="min-width: 28px">
-                              <q-icon name="drive_file_move" size="14px" color="grey-8" />
-                            </q-item-section>
-                            <q-item-section style="font-size: 12px">
-                              Скопировать в карточку
-                            </q-item-section>
-                          </q-item>
-                          <q-separator v-if="isOwn(msg)" />
-                          <q-item v-if="isOwn(msg)" clickable dense @click="deleteMsg(msg)">
-                            <q-item-section avatar style="min-width: 28px">
-                              <q-icon name="delete_outline" size="14px" color="grey-8" />
-                            </q-item-section>
-                            <q-item-section class="text-red-7" style="font-size: 12px">
-                              Удалить
-                            </q-item-section>
-                          </q-item>
-                        </q-list>
-                      </q-menu>
-                    </q-btn>
+                      @click.stop="openMsgMenu(msg.id)"
+                    />
                   </div>
+
+                  <!-- Меню открывается касанием пузыря сообщения -->
+                  <q-menu
+                    v-if="!msg.is_deleted && !msg._uploading"
+                    :ref="el => { if (el) msgMenuRefs[msg.id] = el; else delete msgMenuRefs[msg.id] }"
+                    auto-close
+                    no-parent-event
+                  >
+                    <q-list dense style="min-width: 210px; font-size: 12px; white-space: nowrap">
+                      <!-- Быстрые реакции -->
+                      <q-item dense style="padding: 4px 8px 2px">
+                        <div class="row items-center" style="flex-wrap: wrap; gap: 2px">
+                          <button
+                            v-for="em in QUICK_EMOJIS"
+                            :key="em"
+                            class="react-quick-btn"
+                            :class="{ 'react-quick-btn--active': isOwnReaction(msg, em) }"
+                            @click.stop="sendReaction(msg, em)"
+                          >
+                            {{ em }}
+                          </button>
+                        </div>
+                      </q-item>
+                      <q-separator />
+                      <q-item clickable dense @click="togglePin(msg)">
+                        <q-item-section avatar style="min-width: 28px">
+                          <q-icon name="push_pin" size="14px" :color="msg.is_pinned ? 'orange-8' : 'grey-8'" />
+                        </q-item-section>
+                        <q-item-section style="font-size: 12px">
+                          {{ msg.is_pinned ? 'Открепить' : 'Закрепить' }}
+                        </q-item-section>
+                      </q-item>
+                      <q-item clickable dense @click="replyingTo = msg">
+                        <q-item-section avatar style="min-width: 28px">
+                          <q-icon name="reply" size="14px" color="grey-8" />
+                        </q-item-section>
+                        <q-item-section style="font-size: 12px">
+                          Ответить
+                        </q-item-section>
+                      </q-item>
+                      <q-separator />
+                      <q-item v-if="isOwn(msg) && msg.message_type === 'text'" clickable dense @click="startEdit(msg)">
+                        <q-item-section avatar style="min-width: 28px">
+                          <q-icon name="edit" size="14px" color="grey-8" />
+                        </q-item-section>
+                        <q-item-section style="font-size: 12px">
+                          Редактировать
+                        </q-item-section>
+                      </q-item>
+                      <q-item clickable dense @click="openForwardDialog(msg)">
+                        <q-item-section avatar style="min-width: 28px">
+                          <q-icon name="forward" size="14px" color="grey-8" />
+                        </q-item-section>
+                        <q-item-section style="font-size: 12px">
+                          Переслать
+                        </q-item-section>
+                      </q-item>
+                      <q-item v-if="msg.yandex_path && chat && chat.crm_card_id" clickable dense @click="openCopyToCard(msg)">
+                        <q-item-section avatar style="min-width: 28px">
+                          <q-icon name="drive_file_move" size="14px" color="grey-8" />
+                        </q-item-section>
+                        <q-item-section style="font-size: 12px">
+                          Скопировать в карточку
+                        </q-item-section>
+                      </q-item>
+                      <q-separator v-if="isOwn(msg)" />
+                      <q-item v-if="isOwn(msg)" clickable dense @click="deleteMsg(msg)">
+                        <q-item-section avatar style="min-width: 28px">
+                          <q-icon name="delete_outline" size="14px" color="grey-8" />
+                        </q-item-section>
+                        <q-item-section class="text-red-7" style="font-size: 12px">
+                          Удалить
+                        </q-item-section>
+                      </q-item>
+                    </q-list>
+                  </q-menu>
 
                   <!-- Загрузка файла (оптимистичное сообщение) -->
                   <template v-if="msg._uploading">
@@ -607,7 +615,7 @@
                       v-if="msg.reply_preview"
                       class="reply-quote q-mb-xs"
                       style="border-left: 3px solid #1565C0; background: rgba(21,101,192,0.07); border-radius: 4px; padding: 4px 8px; cursor: pointer"
-                      @click="scrollToMsg(msg.reply_preview.id)"
+                      @click.stop="scrollToMsg(msg.reply_preview.id)"
                     >
                       <div class="row no-wrap items-center" style="gap: 6px">
                         <q-img
@@ -629,7 +637,7 @@
                     </div>
 
                     <template v-if="msg.message_type === 'image'">
-                      <div style="display: block; cursor: pointer; color: inherit" @click="openImgGallery([msg], 0)">
+                      <div style="display: block; cursor: pointer; color: inherit" @click.stop="openImgGallery([msg], 0)">
                         <q-img
                           v-if="imgStreamUrl(msg)"
                           :src="imgStreamUrl(msg)"
@@ -2349,6 +2357,10 @@ function isForwarded(msg) {
 }
 
 const QUICK_EMOJIS = ['👍', '👎', '❤️', '😂', '😮', '😢', '🔥', '🎉', '👏', '🤝', '👌', '🙏', '😍', '🤔', '✅']
+
+// Рефы для программного открытия меню сообщений
+const msgMenuRefs = {}
+function openMsgMenu(msgId) { msgMenuRefs[msgId]?.show() }
 
 async function sendReaction(msg, emoji) {
   if (!chat.value) return

@@ -406,6 +406,7 @@
                     ? (isOwn(msg) ? 'bubble-img-own' : 'bubble-img-other')
                     : (isOwn(msg) ? 'bubble-own' : 'bubble-other'), { 'bubble-forwarded': isForwarded(msg) }]"
                   :style="pdfBubbleStyle(msg)"
+                  @click="(!msg.is_deleted && !msg._uploading) && openMsgMenu(msg.id)"
                 >
                   <!-- Верхняя строка: имя отправителя + кнопка меню -->
                   <div
@@ -419,14 +420,31 @@
                     >
                       {{ msg.sender_display_name }}
                     </div>
+                    <!-- Кнопка меню -->
+                    <q-btn
+                      v-if="!msg.is_deleted && !msg._uploading"
+                      flat
+                      round
+                      dense
+                      size="xs"
+                      icon="more_vert"
+                      color="grey-6"
+                      style="margin: -4px -6px -2px 2px; flex-shrink: 0"
+                      @click.stop="openMsgMenu(msg.id)"
+                    />
                   </div>
 
                   <!-- Меню открывается касанием пузыря сообщения -->
-                  <q-menu v-if="!msg.is_deleted && !msg._uploading" auto-close>
+                  <q-menu
+                    v-if="!msg.is_deleted && !msg._uploading"
+                    :ref="el => { if (el) msgMenuRefs[msg.id] = el; else delete msgMenuRefs[msg.id] }"
+                    auto-close
+                    no-parent-event
+                  >
                     <q-list dense style="min-width: 210px; font-size: 12px; white-space: nowrap">
                       <!-- Быстрые реакции -->
                       <q-item dense style="padding: 4px 8px 2px">
-                        <div class="row items-center">
+                        <div class="row items-center" style="flex-wrap: wrap; gap: 2px">
                           <button
                             v-for="em in QUICK_EMOJIS"
                             :key="em"
@@ -1730,6 +1748,10 @@ async function sendSelectedCardFiles() {
 }
 // Emoji реакции
 const QUICK_EMOJIS = ['👍', '👎', '❤️', '😂', '😮', '😢', '🔥', '🎉', '👏', '🤝', '👌', '🙏', '😍', '🤔', '✅']
+
+// Рефы для программного открытия меню сообщений
+const msgMenuRefs = {}
+function openMsgMenu(msgId) { msgMenuRefs[msgId]?.show() }
 
 // Голосовая запись
 const isRecording = ref(false)
