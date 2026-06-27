@@ -302,6 +302,20 @@
                   >
                     <q-menu auto-close>
                       <q-list dense style="min-width: 210px; font-size: 12px; white-space: nowrap">
+                        <q-item dense style="padding: 4px 8px 2px">
+                          <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px">
+                            <button
+                              v-for="em in QUICK_EMOJIS"
+                              :key="em"
+                              class="react-quick-btn"
+                              :class="{ 'react-quick-btn--active': isOwnReaction(item.msgs[0], em) }"
+                              @click.stop="sendReaction(item.msgs[0], em)"
+                            >
+                              {{ em }}
+                            </button>
+                          </div>
+                        </q-item>
+                        <q-separator />
                         <q-item clickable dense @click="togglePin(item.msgs[0])">
                           <q-item-section avatar style="min-width: 28px">
                             <q-icon name="push_pin" size="14px" :color="item.msgs[0].is_pinned ? 'orange-8' : 'grey-8'" />
@@ -528,7 +542,7 @@
                     <q-list dense style="min-width: 210px; font-size: 12px; white-space: nowrap">
                       <!-- Быстрые реакции -->
                       <q-item dense style="padding: 4px 8px 2px">
-                        <div class="row items-center" style="flex-wrap: wrap; gap: 2px">
+                        <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px">
                           <button
                             v-for="em in QUICK_EMOJIS"
                             :key="em"

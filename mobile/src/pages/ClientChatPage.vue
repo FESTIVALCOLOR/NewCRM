@@ -64,6 +64,33 @@
                   >
                     {{ item.msgs[0].sender_display_name || (isOwn(item.msgs[0]) ? clientName : '') }}
                   </div>
+                  <q-btn
+                    flat
+                    round
+                    dense
+                    size="xs"
+                    icon="more_vert"
+                    color="grey-6"
+                    style="margin: -4px -6px -2px 2px; flex-shrink: 0"
+                  >
+                    <q-menu auto-close>
+                      <q-list dense style="min-width: 210px; font-size: 12px; white-space: nowrap">
+                        <q-item dense style="padding: 4px 8px 2px">
+                          <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px">
+                            <button
+                              v-for="em in QUICK_EMOJIS"
+                              :key="em"
+                              class="react-quick-btn"
+                              :class="{ 'react-quick-btn--active': isOwnGuestReaction(item.msgs[0], em) }"
+                              @click.stop="sendGuestReaction(item.msgs[0], em)"
+                            >
+                              {{ em }}
+                            </button>
+                          </div>
+                        </q-item>
+                      </q-list>
+                    </q-menu>
+                  </q-btn>
                 </div>
                 <template v-if="item.msgs.length < 4">
                   <div :class="galleryGridClass(item.msgs.length)" :style="galleryGridStyle(item.msgs.length)">
@@ -201,7 +228,7 @@
                     <q-list dense style="min-width: 210px; white-space: nowrap">
                       <!-- Быстрые реакции -->
                       <q-item dense style="padding: 4px 8px 2px">
-                        <div class="row items-center" style="flex-wrap: wrap; gap: 2px">
+                        <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px">
                           <button
                             v-for="em in QUICK_EMOJIS"
                             :key="em"
