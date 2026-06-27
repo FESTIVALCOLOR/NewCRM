@@ -421,8 +421,8 @@ async def notify_chat_message(
                     continue
 
                 s = db.query(NotificationSettings).filter(NotificationSettings.employee_id == m.employee_id).first()
-                # Если настроек нет — создаём дефолтные; если notify_chat выключен — пропускаем
-                if s and not getattr(s, "notify_chat", True):
+                # notify_chat=None (NULL) означает "включено по умолчанию", пропускаем только явный False
+                if s and getattr(s, "notify_chat", None) is False:
                     continue
 
                 is_reply_target = reply_target_employee_id == m.employee_id
@@ -433,7 +433,8 @@ async def notify_chat_message(
                     title = f"💬 {sender_name}"
                     body = f"{chat_title}: {text_preview}"
 
-                channel = getattr(s, "notification_channel", "telegram") if s else "telegram"
+                # None (не задан) → фолбек "telegram"
+                channel = (getattr(s, "notification_channel", None) or "telegram") if s else "telegram"
                 employee = db.query(Employee).filter(Employee.id == m.employee_id).first()
 
                 # Telegram
@@ -466,9 +467,9 @@ async def notify_client_chat_employees(
     sender_name: str,
     text_preview: str,
 ) -> None:
-    """Push сотрудникам клиентского чата когда клиент отправил сообщение."""
+    """Telegram + Push сотрудникам клиентского чата когда клиент отправил сообщение."""
     try:
-        from database import InternalChatMember, NotificationSettings, SessionLocal
+        from database import Employee, InternalChatMember, NotificationSettings, SessionLocal
 
         db = SessionLocal()
         try:
@@ -482,21 +483,34 @@ async def notify_client_chat_employees(
                 )
                 .all()
             )
+            title = f"👤 {sender_name}"
+            body = text_preview
             for m in members:
                 s = db.query(NotificationSettings).filter(NotificationSettings.employee_id == m.employee_id).first()
-                if not s or not getattr(s, "push_enabled", False):
+                if s and getattr(s, "notify_chat", None) is False:
                     continue
-                sub = getattr(s, "push_subscription", None)
-                if not sub:
-                    continue
-                await _send_web_push(
-                    sub,
-                    f"👤 {sender_name}",
-                    text_preview,
-                    entity_type="client_chat",
-                    entity_id=chat_id,
-                    tag=f"client-chat-{chat_id}",
-                )
+                channel = (getattr(s, "notification_channel", None) or "telegram") if s else "telegram"
+                employee = db.query(Employee).filter(Employee.id == m.employee_id).first()
+
+                # Telegram
+                if channel in ("telegram", "both"):
+                    tg_enabled = getattr(s, "telegram_enabled", True) if s else True
+                    if tg_enabled and employee and employee.telegram_user_id:
+                        await _send_telegram(employee.telegram_user_id, title, body)
+
+                # Web Push
+                if channel in ("push", "both"):
+                    push_enabled = getattr(s, "push_enabled", False) if s else False
+                    sub = getattr(s, "push_subscription", None) if s else None
+                    if push_enabled and sub:
+                        await _send_web_push(
+                            sub,
+                            title,
+                            body,
+                            entity_type="client_chat",
+                            entity_id=chat_id,
+                            tag=f"client-chat-{chat_id}",
+                        )
         finally:
             db.close()
     except Exception as e:
