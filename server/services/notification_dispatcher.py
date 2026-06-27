@@ -566,7 +566,7 @@ async def notify_client_chat_guests(
 
 
 async def _send_telegram(telegram_user_id: int, title: str, message: str) -> None:
-    """Отправить уведомление через Telegram Bot"""
+    """Отправить уведомление через Telegram Bot (3 попытки при сбое прокси)."""
     import asyncio
 
     try:
@@ -574,11 +574,19 @@ async def _send_telegram(telegram_user_id: int, title: str, message: str) -> Non
 
         tg = get_telegram_service()
         logger.info(f"_send_telegram: tg_user={telegram_user_id} bot_available={tg.bot_available}")
-        if tg.bot_available:
-            text = f"<b>{title}</b>\n{message}"
-            result = await asyncio.wait_for(tg.send_message(telegram_user_id, text), timeout=15.0)
-            logger.info(f"_send_telegram: отправлено, message_id={result}")
-    except asyncio.TimeoutError:
-        logger.warning(f"Telegram таймаут (15с) для user_id={telegram_user_id}")
+        if not tg.bot_available:
+            return
+        text = f"<b>{title}</b>\n{message}"
+        for attempt in range(3):
+            try:
+                result = await asyncio.wait_for(tg.send_message(telegram_user_id, text), timeout=15.0)
+                if result is not None:
+                    logger.info(f"_send_telegram: отправлено, message_id={result}")
+                    return
+                logger.warning(f"_send_telegram: попытка {attempt + 1}/3 — send_message вернул None")
+            except asyncio.TimeoutError:
+                logger.warning(f"_send_telegram: попытка {attempt + 1}/3 — таймаут 15с (user={telegram_user_id})")
+            if attempt < 2:
+                await asyncio.sleep(2)
     except Exception as e:
         logger.warning(f"Не удалось отправить Telegram уведомление: {e}")
