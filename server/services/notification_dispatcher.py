@@ -428,13 +428,11 @@ async def notify_chat_message(
                     continue
 
                 is_reply_target = reply_target_employee_id == m.employee_id
-                crm_link = '<a href="https://crm.festivalcolor.ru">Зайдите в чат CRM Festivalcolor чтобы ответить</a>'
-                if is_reply_target:
-                    title = f"↩ {sender_name} ответил(а) вам"
-                    body = f"{sender_name} — {chat_title}:\n{text_preview}\n\n{crm_link}"
-                else:
-                    title = f"💬 Новое сообщение в чате"
-                    body = f"{sender_name} — {chat_title}:\n{text_preview}\n\n{crm_link}"
+                chat_url = f"https://crm.festivalcolor.ru/employee-chats/{chat_id}"
+                crm_link = f'<a href="{chat_url}">Перейти в чат</a>'
+                action = "ответил(а) вам" if is_reply_target else "написал(а) вам"
+                title = f"Сотрудник: {sender_name} {action} в чате {chat_title}"
+                body = f"{text_preview}\n\n{crm_link}"
 
                 # None (не задан) → фолбек "telegram"
                 channel = (getattr(s, "notification_channel", None) or "telegram") if s else "telegram"
@@ -493,8 +491,9 @@ async def notify_client_chat_employees(
                 .all()
             )
             logger.info(f"notify_client_chat_employees: chat_id={chat_id}, sender={sender_name!r}, members={[m.employee_id for m in members]}")
-            title = "👤 Клиент написал вам"
-            body = f'{sender_name} — {chat_title}:\n{text_preview}\n\n<a href="https://crm.festivalcolor.ru">Зайдите в чат CRM Festivalcolor чтобы ответить</a>'
+            chat_url = f"https://crm.festivalcolor.ru/client-chats/{chat_id}"
+            title = f"Клиент: {sender_name} написал(а) вам в чате {chat_title}"
+            body = f'{text_preview}\n\n<a href="{chat_url}">Перейти в чат</a>'
             for m in members:
                 s = db.query(NotificationSettings).filter(NotificationSettings.employee_id == m.employee_id).first()
                 if s and getattr(s, "notify_chat", None) is False:
