@@ -179,7 +179,7 @@ async def client_send_message(
         },
     )
     preview = (data.content or "📎 Файл")[:100]
-    asyncio.create_task(notify_client_chat_employees(chat.id, guest.guest_name, preview))
+    asyncio.create_task(notify_client_chat_employees(chat.id, guest.guest_name, preview, is_reply=bool(getattr(data, "reply_to_id", None))))
     return _message_to_dict(msg)
 
 
@@ -673,6 +673,7 @@ async def ws_client_chat(
                         chat.id,
                         guest.guest_name,
                         (data.get("content", "") or "📎 Файл")[:100],
+                        is_reply=bool(data.get("reply_to_id")),
                     )
                 )
 
