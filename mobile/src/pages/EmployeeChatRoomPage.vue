@@ -21,18 +21,23 @@
     <!-- Шапка -->
     <div class="bg-white" style="border-bottom: 1px solid #E0E0E0; flex-shrink: 0">
       <!-- Строка 1: назад + заголовок + кнопки -->
-      <div class="row items-center no-wrap q-px-md q-pt-sm q-pb-xs">
+      <div class="row items-center no-wrap q-px-md q-pt-sm q-pb-xs" style="overflow: hidden">
         <q-btn
+          style="flex: 0 0 auto"
           flat
           round
           dense
           icon="arrow_back"
           @click="$router.back()"
         />
-        <div class="q-ml-xs text-subtitle2 text-weight-bold ellipsis" style="flex: 1; min-width: 0; line-height: 1.3">
+        <div
+          class="q-ml-xs text-subtitle2 text-weight-bold"
+          style="flex: 1 1 0; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; line-height: 1.3"
+        >
           {{ chatTitle }}
         </div>
         <q-btn
+          style="flex: 0 0 auto"
           flat
           round
           dense
@@ -42,6 +47,7 @@
           <q-tooltip>Поиск в чате</q-tooltip>
         </q-btn>
         <q-btn
+          style="flex: 0 0 auto"
           flat
           round
           dense
