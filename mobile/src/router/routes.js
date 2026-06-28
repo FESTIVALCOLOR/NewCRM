@@ -124,6 +124,12 @@ export default [
         component: () => import('src/pages/ProfilePage.vue'),
         meta: { title: 'Профиль', icon: 'person' },
       },
+      {
+        path: 'help',
+        name: 'help',
+        component: () => import('src/pages/HelpPage.vue'),
+        meta: { title: 'Инструкция', icon: 'menu_book' },
+      },
       // === Чаты сотрудников ===
       {
         path: 'employee-chats',

@@ -1097,25 +1097,7 @@ function refreshData() {
 }
 
 function openManual() {
-  // Публичные ссылки на инструкции по должности (yadi.sk)
-  const MANUAL_URLS = {
-    'Руководитель студии': 'https://yadi.sk/i/ri0ccGzd1hixUg',
-    'Старший менеджер проектов': 'https://yadi.sk/i/jc_MLORFQJYw8g',
-    'Менеджер': 'https://yadi.sk/i/_b3QKB0cxD1RIQ',
-    'СДП': 'https://yadi.sk/i/VWlLjErSrnk_Kw',
-    'ГАП': 'https://yadi.sk/i/lAhXe7-DNrtcuw',
-    'Дизайнер': 'https://yadi.sk/i/FuD7OjI9qGpThg',
-    'Чертёжник': 'https://yadi.sk/i/ByeUw6h0erkLuQ',
-    'Замерщик': 'https://yadi.sk/i/H4MJFHmKIu0zdQ',
-    'ДАН': 'https://yadi.sk/i/LAkkj1h3f5Bv7g',
-  }
-  const position = authStore.user?.position || ''
-  const url = MANUAL_URLS[position] || MANUAL_URLS[position.split('/')[0]?.trim()]
-  if (url) {
-    window.open(url, '_blank')
-  } else {
-    $q.notify({ type: 'info', message: `Инструкция для «${position}» пока не доступна` })
-  }
+  router.push('/help')
 }
 
 const showNotifDialog = ref(false)
