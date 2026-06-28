@@ -1559,6 +1559,8 @@ class InternalChatResponse(BaseModel):
     # Административный чат
     is_admin_chat: bool = False
     admin_chat_type: Optional[str] = None  # 'ip' | 'shp' | 'an'
+    # Тип проекта (из связанного Contract)
+    project_type: Optional[str] = None
     # Вычисляемые поля
     last_message: Optional[str] = None
     last_message_at: Optional[datetime] = None

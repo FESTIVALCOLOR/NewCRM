@@ -55,6 +55,12 @@
                   <q-icon name="push_pin" size="12px" color="amber-8" class="q-mr-xs" />
                   {{ chat.title || `Чат #${chat.id}` }}
                 </q-item-label>
+                <q-item-label caption>
+                  <q-badge :color="chatTypeLabel(chat).color" outline>
+                    {{ chatTypeLabel(chat).label }}
+                  </q-badge>
+                  <span class="q-ml-xs text-grey-6" style="font-size: 11px">Чат с клиентом</span>
+                </q-item-label>
                 <q-item-label v-if="chat.last_message" caption lines="1">
                   {{ chat.last_message }}
                 </q-item-label>
@@ -120,6 +126,12 @@
                 <q-item-label class="text-weight-medium">
                   {{ chat.title || `Чат #${chat.id}` }}
                 </q-item-label>
+                <q-item-label caption>
+                  <q-badge :color="chatTypeLabel(chat).color" outline>
+                    {{ chatTypeLabel(chat).label }}
+                  </q-badge>
+                  <span class="q-ml-xs text-grey-6" style="font-size: 11px">Чат с клиентом</span>
+                </q-item-label>
                 <q-item-label v-if="chat.last_message" caption lines="1">
                   {{ chat.last_message }}
                 </q-item-label>
@@ -169,6 +181,13 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+
+function chatTypeLabel(chat) {
+  if (chat.project_type === 'Авторский надзор') return { label: 'Надзор', color: 'teal' }
+  if (chat.project_type === 'Индивидуальный') return { label: 'ИП', color: 'blue' }
+  if (chat.project_type === 'Шаблонный') return { label: 'ШП', color: 'orange' }
+  return { label: 'Клиент', color: 'green' }
+}
 import { useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { api } from 'src/boot/axios'

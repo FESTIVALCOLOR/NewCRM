@@ -96,6 +96,7 @@ from services.notification_dispatcher import notify_chat_message
 from sqlalchemy.orm import Session
 
 from database import (
+    Contract,
     Employee,
     InternalChat,
     InternalChatMember,
@@ -220,7 +221,12 @@ def list_chats(
     unread_counts = get_batch_unread_counts(db, chat_ids, current_user.id)
     pinned_ids = get_user_pinned_chat_ids(db, current_user.id)
 
-    responses = [_chat_to_response(db, c, current_user.id, last_msgs, member_counts, unread_counts, pinned_ids) for c in chats]
+    # Batch-load project types (один запрос вместо N)
+    _cids = list({c.contract_id for c in chats if c.contract_id})
+    _contracts_pt = {c.id: c.project_type for c in db.query(Contract).filter(Contract.id.in_(_cids)).all()} if _cids else {}
+    _project_types_map = {c.id: ("Авторский надзор" if c.supervision_card_id and not c.crm_card_id else _contracts_pt.get(c.contract_id)) for c in chats}
+
+    responses = [_chat_to_response(db, c, current_user.id, last_msgs, member_counts, unread_counts, pinned_ids, _project_types_map) for c in chats]
 
     # Сортировка: 1) адм.чаты (ip→shp→an), 2) закреплённые (по времени), 3) остальные (по времени)
     _ADMIN_ORDER = {"ip": 0, "shp": 1, "an": 2}
@@ -1357,6 +1363,7 @@ def _chat_to_response(
     member_counts: Optional[dict] = None,
     unread_counts: Optional[dict] = None,
     pinned_ids: Optional[set] = None,
+    project_types: Optional[dict] = None,
 ) -> InternalChatResponse:
     # Используем preloaded данные если переданы, иначе lazy-запрос (для единичных вызовов)
     if last_msgs is not None:
@@ -1400,6 +1407,16 @@ def _chat_to_response(
             is not None
         )
 
+    if project_types is not None:
+        project_type = project_types.get(chat.id)
+    elif chat.supervision_card_id and not chat.crm_card_id:
+        project_type = "Авторский надзор"
+    elif chat.contract_id:
+        _contract = db.query(Contract).filter(Contract.id == chat.contract_id).first()
+        project_type = _contract.project_type if _contract else None
+    else:
+        project_type = None
+
     return InternalChatResponse(
         id=chat.id,
         chat_type=chat.chat_type,
@@ -1414,6 +1431,7 @@ def _chat_to_response(
         is_active=chat.is_active,
         is_admin_chat=bool(getattr(chat, "is_admin_chat", False)),
         admin_chat_type=getattr(chat, "admin_chat_type", None),
+        project_type=project_type,
         last_message=last_msg.content if last_msg and last_msg.message_type == "text" else (f"[{last_msg.message_type}]" if last_msg else None),
         last_message_at=last_msg.created_at if last_msg else None,
         unread_count=unread,

@@ -45,6 +45,11 @@
               <q-item-label class="text-weight-bold text-blue-9">
                 {{ chat.title || `Чат #${chat.id}` }}
               </q-item-label>
+              <q-item-label v-if="chatTypeInfo(chat)" caption>
+                <q-badge :color="chatTypeInfo(chat).color" outline>
+                  {{ chatTypeInfo(chat).label }}
+                </q-badge>
+              </q-item-label>
               <q-item-label v-if="chat.last_message" caption lines="1">
                 {{ chat.last_message }}
               </q-item-label>
@@ -95,6 +100,12 @@
                 <q-item-label class="text-weight-medium">
                   <q-icon name="push_pin" size="12px" color="amber-8" class="q-mr-xs" />
                   {{ chat.title || `Чат #${chat.id}` }}
+                </q-item-label>
+                <q-item-label v-if="chatTypeInfo(chat)" caption>
+                  <q-badge :color="chatTypeInfo(chat).color" outline>
+                    {{ chatTypeInfo(chat).label }}
+                  </q-badge>
+                  <span class="q-ml-xs text-grey-6" style="font-size: 11px">{{ chat.chat_type === 'client' ? 'Клиент' : 'Сотрудники' }}</span>
                 </q-item-label>
                 <q-item-label v-if="chat.last_message" caption lines="1">
                   {{ chat.last_message }}
@@ -161,6 +172,12 @@
                 <q-item-label class="text-weight-medium">
                   {{ chat.title || `Чат #${chat.id}` }}
                 </q-item-label>
+                <q-item-label v-if="chatTypeInfo(chat)" caption>
+                  <q-badge :color="chatTypeInfo(chat).color" outline>
+                    {{ chatTypeInfo(chat).label }}
+                  </q-badge>
+                  <span class="q-ml-xs text-grey-6" style="font-size: 11px">{{ chat.chat_type === 'client' ? 'Клиент' : 'Сотрудники' }}</span>
+                </q-item-label>
                 <q-item-label v-if="chat.last_message" caption lines="1">
                   {{ chat.last_message }}
                 </q-item-label>
@@ -217,6 +234,17 @@ const loading = ref(false)
 const chats = ref([])
 const searchText = ref('')
 const pinLoading = ref({})
+
+function chatTypeInfo(chat) {
+  if (chat.is_admin_chat) {
+    const map = { ip: { label: 'ИП', color: 'blue' }, shp: { label: 'ШП', color: 'orange' }, an: { label: 'АН', color: 'teal' } }
+    return map[chat.admin_chat_type] || null
+  }
+  if (chat.project_type === 'Авторский надзор') return { label: 'Надзор', color: 'teal' }
+  if (chat.project_type === 'Индивидуальный') return { label: 'ИП', color: 'blue' }
+  if (chat.project_type === 'Шаблонный') return { label: 'ШП', color: 'orange' }
+  return null
+}
 
 function fuzzyScore(str, query) {
   if (!query) return 3
