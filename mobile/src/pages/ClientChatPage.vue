@@ -153,6 +153,21 @@
                     </div>
                   </div>
                 </template>
+                <!-- Реакции на галерею -->
+                <div v-if="item.msgs[0].reactions && Object.keys(item.msgs[0].reactions).length" class="row items-center q-gutter-xs" style="padding: 0 8px 2px; flex-wrap: wrap">
+                  <button
+                    v-for="(reactors, emoji) in item.msgs[0].reactions"
+                    :key="emoji"
+                    class="reaction-chip"
+                    :class="{ 'reaction-chip--own': isOwnGuestReaction(item.msgs[0], emoji) }"
+                    @click="sendGuestReaction(item.msgs[0], emoji)"
+                  >
+                    {{ emoji }} {{ reactors.length }}
+                    <q-tooltip anchor="top middle" self="bottom middle" :offset="[0, 4]" style="font-size: 11px; max-width: 160px; padding: 4px 8px; white-space: pre-line">
+                      {{ reactors.map(r => r.display_name || (r.guest_token ? 'Клиент' : 'Сотрудник')).join('\n') }}
+                    </q-tooltip>
+                  </button>
+                </div>
                 <div class="row no-wrap items-center justify-end" style="padding: 2px 8px 4px; color: #888; font-size: 10px">
                   <span class="text-caption">{{ formatTime(item.msgs[item.msgs.length - 1].created_at) }}</span>
                 </div>
