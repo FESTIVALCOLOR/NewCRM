@@ -105,7 +105,7 @@
                   <q-badge :color="chatTypeInfo(chat).color" outline>
                     {{ chatTypeInfo(chat).label }}
                   </q-badge>
-                  <span class="q-ml-xs text-grey-6" style="font-size: 11px">{{ chat.chat_type === 'client' ? 'Клиент' : 'Сотрудники' }}</span>
+                  <span class="q-ml-xs text-grey-6" style="font-size: 11px">{{ chat.chat_type === 'client' ? 'Чат с клиентом' : 'Чат с сотрудниками' }}</span>
                 </q-item-label>
                 <q-item-label v-if="chat.last_message" caption lines="1">
                   {{ chat.last_message }}
@@ -176,7 +176,7 @@
                   <q-badge :color="chatTypeInfo(chat).color" outline>
                     {{ chatTypeInfo(chat).label }}
                   </q-badge>
-                  <span class="q-ml-xs text-grey-6" style="font-size: 11px">{{ chat.chat_type === 'client' ? 'Клиент' : 'Сотрудники' }}</span>
+                  <span class="q-ml-xs text-grey-6" style="font-size: 11px">{{ chat.chat_type === 'client' ? 'Чат с клиентом' : 'Чат с сотрудниками' }}</span>
                 </q-item-label>
                 <q-item-label v-if="chat.last_message" caption lines="1">
                   {{ chat.last_message }}
@@ -237,12 +237,16 @@ const pinLoading = ref({})
 
 function chatTypeInfo(chat) {
   if (chat.is_admin_chat) {
-    const map = { ip: { label: 'ИП', color: 'blue' }, shp: { label: 'ШП', color: 'orange' }, an: { label: 'АН', color: 'teal' } }
+    const map = {
+      ip: { label: 'Индивидуальный проект', color: 'green' },
+      shp: { label: 'Шаблонный проект', color: 'orange' },
+      an: { label: 'Авторский надзор', color: 'blue' },
+    }
     return map[chat.admin_chat_type] || null
   }
-  if (chat.project_type === 'Авторский надзор') return { label: 'Надзор', color: 'teal' }
-  if (chat.project_type === 'Индивидуальный') return { label: 'ИП', color: 'blue' }
-  if (chat.project_type === 'Шаблонный') return { label: 'ШП', color: 'orange' }
+  if (chat.project_type === 'Авторский надзор') return { label: 'Авторский надзор', color: 'blue' }
+  if (chat.project_type === 'Индивидуальный') return { label: 'Индивидуальный проект', color: 'green' }
+  if (chat.project_type === 'Шаблонный') return { label: 'Шаблонный проект', color: 'orange' }
   return null
 }
 

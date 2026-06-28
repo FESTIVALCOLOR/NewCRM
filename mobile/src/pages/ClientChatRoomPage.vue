@@ -43,7 +43,7 @@
           <span
             class="text-weight-medium"
             :style="`color: ${chatTypeChip ? chatTypeChip.color : '#2e7d32'}; font-size: 11px; background: ${chatTypeChip ? chatTypeChip.color : '#2e7d32'}18; border-radius: 3px; padding: 0 4px`"
-          >Клиент{{ chatTypeChip ? ' · ' + chatTypeChip.label : '' }}</span>
+          >Чат с клиентом{{ chatTypeChip ? ' · ' + chatTypeChip.label : '' }}</span>
           <span style="color: #ccc">•</span>
           <span v-if="isConnected">
             <q-icon name="wifi" size="10px" color="positive" class="q-mr-xs" />онлайн
@@ -1839,9 +1839,9 @@ const clientLink = computed(() => {
 })
 
 const chatTypeChip = computed(() => {
-  if (chatProjectType.value === 'Авторский надзор') return { label: 'Надзор', color: '#00796b' }
-  if (chatProjectType.value === 'Индивидуальный') return { label: 'ИП', color: '#1565c0' }
-  if (chatProjectType.value === 'Шаблонный') return { label: 'ШП', color: '#e65100' }
+  if (chatProjectType.value === 'Авторский надзор') return { label: 'Авторский надзор', color: '#1565c0' }
+  if (chatProjectType.value === 'Индивидуальный') return { label: 'Индивидуальный проект', color: '#2e7d32' }
+  if (chatProjectType.value === 'Шаблонный') return { label: 'Шаблонный проект', color: '#e65100' }
   return null
 })
 

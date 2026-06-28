@@ -44,7 +44,7 @@
             v-if="chatTypeChip"
             class="text-weight-medium"
             :style="`color: ${chatTypeChip.color}; font-size: 11px; background: ${chatTypeChip.color}18; border-radius: 3px; padding: 0 4px`"
-          >Сотрудники · {{ chatTypeChip.label }}</span>
+          >Чат с сотрудниками · {{ chatTypeChip.label }}</span>
           <span v-if="chatTypeChip" style="color: #ccc">•</span>
           <span v-if="wsConnected">
             <q-icon name="wifi" size="10px" color="positive" class="q-mr-xs" />онлайн
@@ -2068,9 +2068,9 @@ function recalcChatH() {
 let typingTimer = null
 
 const chatTypeChip = computed(() => {
-  if (chatProjectType.value === 'Авторский надзор') return { label: 'Надзор', color: '#00796b' }
-  if (chatProjectType.value === 'Индивидуальный') return { label: 'ИП', color: '#1565c0' }
-  if (chatProjectType.value === 'Шаблонный') return { label: 'ШП', color: '#e65100' }
+  if (chatProjectType.value === 'Авторский надзор') return { label: 'Авторский надзор', color: '#1565c0' }
+  if (chatProjectType.value === 'Индивидуальный') return { label: 'Индивидуальный проект', color: '#2e7d32' }
+  if (chatProjectType.value === 'Шаблонный') return { label: 'Шаблонный проект', color: '#e65100' }
   return null
 })
 

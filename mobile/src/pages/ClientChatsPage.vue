@@ -183,10 +183,10 @@
 import { ref, computed, onMounted } from 'vue'
 
 function chatTypeLabel(chat) {
-  if (chat.project_type === 'Авторский надзор') return { label: 'Надзор', color: 'teal' }
-  if (chat.project_type === 'Индивидуальный') return { label: 'ИП', color: 'blue' }
-  if (chat.project_type === 'Шаблонный') return { label: 'ШП', color: 'orange' }
-  return { label: 'Клиент', color: 'green' }
+  if (chat.project_type === 'Авторский надзор') return { label: 'Авторский надзор', color: 'blue' }
+  if (chat.project_type === 'Индивидуальный') return { label: 'Индивидуальный проект', color: 'green' }
+  if (chat.project_type === 'Шаблонный') return { label: 'Шаблонный проект', color: 'orange' }
+  return { label: 'Чат с клиентом', color: 'green' }
 }
 import { useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
