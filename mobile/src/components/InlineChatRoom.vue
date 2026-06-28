@@ -439,21 +439,6 @@
                 <div v-if="groupCaption(item.msgs)" class="text-body2" style="padding: 3px 8px 2px; white-space: pre-wrap; word-break: break-word; font-size: 13px">
                   {{ groupCaption(item.msgs) }}
                 </div>
-                <!-- Реакции на галерею -->
-                <div v-if="item.msgs[0].reactions && Object.keys(item.msgs[0].reactions).length" class="row items-center q-gutter-xs" style="padding: 0 8px 2px; flex-wrap: wrap">
-                  <button
-                    v-for="(reactors, emoji) in item.msgs[0].reactions"
-                    :key="emoji"
-                    class="reaction-chip"
-                    :class="{ 'reaction-chip--own': isOwnReaction(item.msgs[0], emoji) }"
-                    @click="sendReaction(item.msgs[0], emoji)"
-                  >
-                    {{ emoji }} {{ reactors.length }}
-                    <q-tooltip anchor="top middle" self="bottom middle" :offset="[0, 4]" style="font-size: 11px; max-width: 160px; padding: 4px 8px; white-space: pre-line">
-                      {{ reactors.map(r => r.display_name || 'Сотрудник').join('\n') }}
-                    </q-tooltip>
-                  </button>
-                </div>
                 <div class="row no-wrap items-center justify-between" style="padding: 2px 8px 4px 2px; margin-top: 0">
                   <q-btn
                     v-if="item.msgs.some(m => m.yandex_path)"
@@ -473,6 +458,21 @@
                   <div class="text-caption" style="color: #888; font-size: 10px">
                     {{ formatTime(item.msgs[item.msgs.length - 1].created_at) }}
                   </div>
+                </div>
+                <!-- Реакции на галерею -->
+                <div v-if="item.msgs[0].reactions && Object.keys(item.msgs[0].reactions).length" class="row items-center q-gutter-xs" style="padding: 0 8px 4px; flex-wrap: wrap">
+                  <button
+                    v-for="(reactors, emoji) in item.msgs[0].reactions"
+                    :key="emoji"
+                    class="reaction-chip"
+                    :class="{ 'reaction-chip--own': isOwnReaction(item.msgs[0], emoji) }"
+                    @click="sendReaction(item.msgs[0], emoji)"
+                  >
+                    {{ emoji }} {{ reactors.length }}
+                    <q-tooltip anchor="top middle" self="bottom middle" :offset="[0, 4]" style="font-size: 11px; max-width: 160px; padding: 4px 8px; white-space: pre-line">
+                      {{ reactors.map(r => r.display_name || 'Сотрудник').join('\n') }}
+                    </q-tooltip>
+                  </button>
                 </div>
               </div>
             </div>
