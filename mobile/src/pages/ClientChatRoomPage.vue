@@ -20,91 +20,96 @@
     </div>
     <!-- Шапка -->
     <div class="bg-white" style="border-bottom: 1px solid #E0E0E0; flex-shrink: 0">
-      <!-- Строка 1: назад + заголовок + кнопки -->
-      <div class="row no-wrap q-px-md q-pt-sm q-pb-xs" style="align-items: flex-start">
-        <q-btn
-          style="flex: 0 0 auto; margin-top: 2px"
-          flat
-          round
-          dense
-          icon="arrow_back"
-          @click="$router.back()"
-        />
-        <div
-          class="q-ml-xs text-subtitle2 text-weight-bold"
-          style="flex: 1; min-width: 0; word-break: break-word; line-height: 1.35"
-        >
-          {{ chatTitle }}
+      <!-- Шапка: адрес+бейдж слева | кнопки+онлайн справа -->
+      <div class="row no-wrap q-px-md q-pt-sm q-pb-sm" style="align-items: stretch">
+        <!-- Левая часть: кнопка назад + адрес + бейдж -->
+        <div style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+          <div class="row no-wrap items-start">
+            <q-btn
+              style="flex: 0 0 auto; margin-top: 2px"
+              flat
+              round
+              dense
+              icon="arrow_back"
+              @click="$router.back()"
+            />
+            <div
+              class="q-ml-xs text-subtitle2 text-weight-bold"
+              style="flex: 1; min-width: 0; word-break: break-word; line-height: 1.35"
+            >
+              {{ chatTitle }}
+            </div>
+          </div>
+          <div
+            class="q-ml-sm q-mt-xs"
+            style="display: flex; align-items: center; gap: 5px; flex-wrap: wrap; cursor: pointer"
+            @click="showMembers = true"
+          >
+            <span v-if="typingText" class="text-caption text-grey">{{ typingText }}</span>
+            <template v-else>
+              <span
+                class="text-weight-medium"
+                :style="`color: ${chatTypeChip ? chatTypeChip.color : '#2e7d32'}; font-size: 10px; background: ${chatTypeChip ? chatTypeChip.color : '#2e7d32'}18; border-radius: 3px; padding: 0 4px`"
+              >Чат с клиентом{{ chatTypeChip ? ' · ' + chatTypeChip.label : '' }}</span>
+              <template v-if="members.length">
+                <span class="text-caption" style="color: #aaa">•</span>
+                <span class="text-caption text-grey" style="display: flex; align-items: center; gap: 3px">
+                  <q-icon name="people" size="10px" />{{ members.length }}
+                </span>
+              </template>
+            </template>
+          </div>
         </div>
+        <!-- Вертикальный разделитель -->
         <div style="align-self: stretch; width: 1px; background: #E0E0E0; flex-shrink: 0; margin: 2px 4px" />
-        <q-btn
-          v-if="canManage"
-          style="flex: 0 0 auto"
-          flat
-          round
-          dense
-          icon="manage_accounts"
-          @click="showInviteMenu = true; extraInviteLink = ''"
-        >
-          <q-tooltip>Доступ клиента</q-tooltip>
-        </q-btn>
-        <q-btn
-          v-if="canScript"
-          style="flex: 0 0 auto"
-          flat
-          round
-          dense
-          icon="text_snippet"
-          @click="showScriptDialog = true"
-        >
-          <q-tooltip>Отправить скрипт</q-tooltip>
-        </q-btn>
-        <q-btn
-          style="flex: 0 0 auto"
-          flat
-          round
-          dense
-          icon="search"
-          @click="showSearch = !showSearch"
-        >
-          <q-tooltip>Поиск в чате</q-tooltip>
-        </q-btn>
-        <q-btn
-          style="flex: 0 0 auto"
-          flat
-          round
-          dense
-          icon="people"
-          @click="showMembers = true"
-        >
-          <q-tooltip>Участники</q-tooltip>
-        </q-btn>
-      </div>
-      <!-- Строка 2: тип чата · статус · участники -->
-      <div
-        class="row items-center q-px-md q-pb-sm"
-        style="gap: 5px; flex-wrap: wrap; cursor: pointer"
-        @click="showMembers = true"
-      >
-        <span v-if="typingText" class="text-caption text-grey">{{ typingText }}</span>
-        <template v-else>
-          <span
-            class="text-weight-medium"
-            :style="`color: ${chatTypeChip ? chatTypeChip.color : '#2e7d32'}; font-size: 11px; background: ${chatTypeChip ? chatTypeChip.color : '#2e7d32'}18; border-radius: 3px; padding: 0 4px`"
-          >Чат с клиентом{{ chatTypeChip ? ' · ' + chatTypeChip.label : '' }}</span>
-          <span class="text-caption" style="color: #ccc">•</span>
-          <span class="text-caption text-grey" style="display: flex; align-items: center; gap: 3px">
+        <!-- Правая часть: кнопки + онлайн -->
+        <div style="flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 2px 0">
+          <div class="row no-wrap">
+            <q-btn
+              v-if="canManage"
+              flat
+              round
+              dense
+              icon="manage_accounts"
+              @click="showInviteMenu = true; extraInviteLink = ''"
+            >
+              <q-tooltip>Доступ клиента</q-tooltip>
+            </q-btn>
+            <q-btn
+              v-if="canScript"
+              flat
+              round
+              dense
+              icon="text_snippet"
+              @click="showScriptDialog = true"
+            >
+              <q-tooltip>Отправить скрипт</q-tooltip>
+            </q-btn>
+            <q-btn
+              flat
+              round
+              dense
+              icon="search"
+              @click="showSearch = !showSearch"
+            >
+              <q-tooltip>Поиск в чате</q-tooltip>
+            </q-btn>
+            <q-btn
+              flat
+              round
+              dense
+              icon="people"
+              @click="showMembers = true"
+            >
+              <q-tooltip>Участники</q-tooltip>
+            </q-btn>
+          </div>
+          <span class="text-caption text-grey" style="display: flex; align-items: center; gap: 3px; font-size: 10px">
             <q-icon v-if="isConnected" name="wifi" size="10px" color="positive" />
             <q-icon v-else name="wifi_off" size="10px" color="negative" />
             {{ isConnected ? 'онлайн' : 'оффлайн' }}
           </span>
-          <template v-if="members.length">
-            <span class="text-caption" style="color: #aaa">•</span>
-            <span class="text-caption text-grey" style="display: flex; align-items: center; gap: 3px">
-              <q-icon name="people" size="10px" />{{ members.length }}
-            </span>
-          </template>
-        </template>
+        </div>
       </div>
     </div>
 
@@ -1843,7 +1848,7 @@ const clientLink = computed(() => {
 
 const chatTypeChip = computed(() => {
   if (chatProjectType.value === 'Авторский надзор') return { label: 'Авторский надзор', color: '#1565c0' }
-  if (chatProjectType.value === 'Индивидуальный') return { label: 'Инд. проект', color: '#2e7d32' }
+  if (chatProjectType.value === 'Индивидуальный') return { label: 'Индивидуальный проект', color: '#2e7d32' }
   if (chatProjectType.value === 'Шаблонный') return { label: 'Шаблонный проект', color: '#e65100' }
   return null
 })
