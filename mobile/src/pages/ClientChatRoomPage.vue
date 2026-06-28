@@ -36,6 +36,7 @@
         >
           {{ chatTitle }}
         </div>
+        <div style="align-self: stretch; width: 1px; background: #E0E0E0; flex-shrink: 0; margin: 2px 4px" />
         <q-btn
           v-if="canManage"
           style="flex: 0 0 auto"
@@ -1842,7 +1843,7 @@ const clientLink = computed(() => {
 
 const chatTypeChip = computed(() => {
   if (chatProjectType.value === 'Авторский надзор') return { label: 'Авторский надзор', color: '#1565c0' }
-  if (chatProjectType.value === 'Индивидуальный') return { label: 'Индивидуальный проект', color: '#2e7d32' }
+  if (chatProjectType.value === 'Индивидуальный') return { label: 'Инд. проект', color: '#2e7d32' }
   if (chatProjectType.value === 'Шаблонный') return { label: 'Шаблонный проект', color: '#e65100' }
   return null
 })
