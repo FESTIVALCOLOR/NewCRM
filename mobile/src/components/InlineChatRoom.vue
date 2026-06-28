@@ -106,17 +106,6 @@
       <!-- Правая часть: кнопки управления -->
       <div class="row no-wrap items-center">
         <q-btn
-          v-if="props.canScript"
-          flat
-          round
-          dense
-          icon="text_snippet"
-          color="grey-7"
-          @click="emit('script-click')"
-        >
-          <q-tooltip>Отправить скрипт</q-tooltip>
-        </q-btn>
-        <q-btn
           v-if="chatType === 'client' && props.cardId"
           flat
           round
@@ -128,14 +117,15 @@
           <q-tooltip>Доступ клиента</q-tooltip>
         </q-btn>
         <q-btn
+          v-if="props.canScript"
           flat
           round
           dense
-          icon="people"
+          icon="text_snippet"
           color="grey-7"
-          @click="showMembers = true"
+          @click="emit('script-click')"
         >
-          <q-tooltip>Участники</q-tooltip>
+          <q-tooltip>Отправить скрипт</q-tooltip>
         </q-btn>
         <q-btn
           flat
@@ -146,6 +136,16 @@
           @click="showSearch = !showSearch; searchQuery = ''; searchResults = []"
         >
           <q-tooltip>Поиск в чате</q-tooltip>
+        </q-btn>
+        <q-btn
+          flat
+          round
+          dense
+          icon="people"
+          color="grey-7"
+          @click="showMembers = true"
+        >
+          <q-tooltip>Участники</q-tooltip>
         </q-btn>
       </div>
     </div>
