@@ -52,18 +52,12 @@
                 class="text-weight-medium"
                 :style="`color: ${chatTypeChip.color}; font-size: 10px; background: ${chatTypeChip.color}18; border-radius: 3px; padding: 0 4px`"
               >Чат с сотрудниками · {{ chatTypeChip.label }}</span>
-              <template v-if="members.length">
-                <span class="text-caption" style="color: #aaa">•</span>
-                <span class="text-caption text-grey" style="display: flex; align-items: center; gap: 3px">
-                  <q-icon name="people" size="10px" />{{ members.length }}
-                </span>
-              </template>
             </template>
           </div>
         </div>
         <!-- Вертикальный разделитель -->
         <div style="align-self: stretch; width: 1px; background: #E0E0E0; flex-shrink: 0; margin: 2px 4px" />
-        <!-- Правая часть: кнопки + онлайн -->
+        <!-- Правая часть: кнопки + онлайн + участники -->
         <div style="flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 2px 0">
           <div class="row no-wrap">
             <q-btn
@@ -85,11 +79,15 @@
               <q-tooltip>Участники</q-tooltip>
             </q-btn>
           </div>
-          <span class="text-caption text-grey" style="display: flex; align-items: center; gap: 3px; font-size: 10px">
+          <div class="text-caption text-grey" style="display: flex; align-items: center; gap: 4px; font-size: 10px">
             <q-icon v-if="wsConnected" name="wifi" size="10px" color="positive" />
             <q-icon v-else name="wifi_off" size="10px" color="negative" />
             {{ wsConnected ? 'онлайн' : 'оффлайн' }}
-          </span>
+            <template v-if="members.length">
+              <span style="color: #ccc">•</span>
+              <q-icon name="people" size="10px" />{{ members.length }}
+            </template>
+          </div>
         </div>
       </div>
     </div>

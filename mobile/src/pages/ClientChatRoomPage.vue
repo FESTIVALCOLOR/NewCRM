@@ -51,12 +51,6 @@
                 class="text-weight-medium"
                 :style="`color: ${chatTypeChip ? chatTypeChip.color : '#2e7d32'}; font-size: 10px; background: ${chatTypeChip ? chatTypeChip.color : '#2e7d32'}18; border-radius: 3px; padding: 0 4px`"
               >Чат с клиентом{{ chatTypeChip ? ' · ' + chatTypeChip.label : '' }}</span>
-              <template v-if="members.length">
-                <span class="text-caption" style="color: #aaa">•</span>
-                <span class="text-caption text-grey" style="display: flex; align-items: center; gap: 3px">
-                  <q-icon name="people" size="10px" />{{ members.length }}
-                </span>
-              </template>
             </template>
           </div>
         </div>
@@ -104,11 +98,15 @@
               <q-tooltip>Участники</q-tooltip>
             </q-btn>
           </div>
-          <span class="text-caption text-grey" style="display: flex; align-items: center; gap: 3px; font-size: 10px">
+          <div class="text-caption text-grey" style="display: flex; align-items: center; gap: 4px; font-size: 10px">
             <q-icon v-if="isConnected" name="wifi" size="10px" color="positive" />
             <q-icon v-else name="wifi_off" size="10px" color="negative" />
             {{ isConnected ? 'онлайн' : 'оффлайн' }}
-          </span>
+            <template v-if="members.length">
+              <span style="color: #ccc">•</span>
+              <q-icon name="people" size="10px" />{{ members.length }}
+            </template>
+          </div>
         </div>
       </div>
     </div>
