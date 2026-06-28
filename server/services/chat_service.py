@@ -191,25 +191,27 @@ def _message_to_dict(msg: InternalChatMessage) -> dict:
     }
 
 
-def _reactions_summary(reactions: list) -> dict:
+def _reactions_summary(reactions: list, emp_names: dict = None) -> dict:
     """Сгруппировать список ORM-объектов реакций в dict {emoji: [reactor, ...]}."""
     result: dict = {}
     for r in reactions:
         if r.emoji not in result:
             result[r.emoji] = []
-        result[r.emoji].append(
-            {
-                "employee_id": r.employee_id,
-                "guest_token": r.guest_token,
-            }
-        )
+        reactor = {
+            "employee_id": r.employee_id,
+            "guest_token": r.guest_token,
+            "display_name": (emp_names or {}).get(r.employee_id) if r.employee_id else None,
+        }
+        result[r.emoji].append(reactor)
     return result
 
 
 def get_reactions_for_message(db: Session, message_id: int) -> dict:
     """Вернуть реакции для одного сообщения."""
     rows = db.query(InternalChatMessageReaction).filter(InternalChatMessageReaction.message_id == message_id).all()
-    return _reactions_summary(rows)
+    emp_ids = list({r.employee_id for r in rows if r.employee_id})
+    emp_names = {e.id: e.full_name for e in db.query(Employee).filter(Employee.id.in_(emp_ids)).all()} if emp_ids else {}
+    return _reactions_summary(rows, emp_names)
 
 
 def get_batch_reactions(db: Session, message_ids: list) -> dict:
@@ -217,6 +219,8 @@ def get_batch_reactions(db: Session, message_ids: list) -> dict:
     if not message_ids:
         return {}
     rows = db.query(InternalChatMessageReaction).filter(InternalChatMessageReaction.message_id.in_(message_ids)).all()
+    emp_ids = list({r.employee_id for r in rows if r.employee_id})
+    emp_names = {e.id: e.full_name for e in db.query(Employee).filter(Employee.id.in_(emp_ids)).all()} if emp_ids else {}
     result: dict = {}
     for r in rows:
         if r.message_id not in result:
@@ -227,6 +231,7 @@ def get_batch_reactions(db: Session, message_ids: list) -> dict:
             {
                 "employee_id": r.employee_id,
                 "guest_token": r.guest_token,
+                "display_name": emp_names.get(r.employee_id) if r.employee_id else None,
             }
         )
     return result

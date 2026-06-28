@@ -710,6 +710,9 @@
                       @click="sendReaction(msg, emoji)"
                     >
                       {{ emoji }} {{ reactors.length }}
+                      <q-tooltip anchor="top middle" self="bottom middle" :offset="[0, 4]" style="font-size: 11px; max-width: 160px; padding: 4px 8px; white-space: pre-line">
+                        {{ reactors.map(r => r.display_name || 'Сотрудник').join('\n') }}
+                      </q-tooltip>
                     </button>
                   </div>
                 </div>
