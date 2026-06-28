@@ -21,9 +21,9 @@
     <!-- Шапка -->
     <div class="bg-white" style="border-bottom: 1px solid #E0E0E0; flex-shrink: 0">
       <!-- Строка 1: назад + заголовок + кнопки -->
-      <div class="row items-center no-wrap q-px-md q-pt-sm q-pb-xs" style="overflow: hidden">
+      <div class="row no-wrap q-px-md q-pt-sm q-pb-xs" style="align-items: flex-start">
         <q-btn
-          style="flex: 0 0 auto"
+          style="flex: 0 0 auto; margin-top: 2px"
           flat
           round
           dense
@@ -32,7 +32,7 @@
         />
         <div
           class="q-ml-xs text-subtitle2 text-weight-bold"
-          style="flex: 1 1 0; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; line-height: 1.3"
+          style="flex: 1; min-width: 0; word-break: break-word; line-height: 1.35"
         >
           {{ chatTitle }}
         </div>
