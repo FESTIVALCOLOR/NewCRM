@@ -19,63 +19,65 @@
       </div>
     </div>
     <!-- Шапка -->
-    <div class="row items-center q-px-md q-py-sm bg-white" style="border-bottom: 1px solid #E0E0E0; flex-shrink: 0">
-      <q-btn
-        flat
-        round
-        dense
-        icon="arrow_back"
-        @click="$router.back()"
-      />
-      <div class="q-ml-sm column" style="flex: 1; min-width: 0">
-        <div class="text-subtitle2 text-weight-bold" style="word-break: break-word; line-height: 1.3">
+    <div class="bg-white" style="border-bottom: 1px solid #E0E0E0; flex-shrink: 0">
+      <!-- Строка 1: назад + заголовок + кнопки -->
+      <div class="row items-center no-wrap q-px-md q-pt-sm q-pb-xs">
+        <q-btn
+          flat
+          round
+          dense
+          icon="arrow_back"
+          @click="$router.back()"
+        />
+        <div class="q-ml-xs text-subtitle2 text-weight-bold ellipsis" style="flex: 1; min-width: 0; line-height: 1.3">
           {{ chatTitle }}
         </div>
-        <div v-if="typingText" class="text-caption text-grey ellipsis">
-          {{ typingText }}
-        </div>
-        <div
-          v-else
-          class="text-caption text-grey row no-wrap items-center"
-          style="gap: 4px; cursor: pointer"
+        <q-btn
+          flat
+          round
+          dense
+          icon="search"
+          @click="showSearch = !showSearch"
+        >
+          <q-tooltip>Поиск в чате</q-tooltip>
+        </q-btn>
+        <q-btn
+          flat
+          round
+          dense
+          icon="people"
           @click="showMembers = true"
         >
+          <q-tooltip>Участники</q-tooltip>
+        </q-btn>
+      </div>
+      <!-- Строка 2: тип чата · статус · участники -->
+      <div
+        class="row items-center q-px-md q-pb-sm"
+        style="gap: 5px; flex-wrap: wrap; cursor: pointer"
+        @click="showMembers = true"
+      >
+        <span v-if="typingText" class="text-caption text-grey">{{ typingText }}</span>
+        <template v-else>
           <span
             v-if="chatTypeChip"
             class="text-weight-medium"
             :style="`color: ${chatTypeChip.color}; font-size: 11px; background: ${chatTypeChip.color}18; border-radius: 3px; padding: 0 4px`"
           >Чат с сотрудниками · {{ chatTypeChip.label }}</span>
-          <span v-if="chatTypeChip" style="color: #ccc">•</span>
-          <span v-if="wsConnected">
-            <q-icon name="wifi" size="10px" color="positive" class="q-mr-xs" />онлайн
+          <span v-if="chatTypeChip" class="text-caption" style="color: #ccc">•</span>
+          <span class="text-caption text-grey" style="display: flex; align-items: center; gap: 3px">
+            <q-icon v-if="wsConnected" name="wifi" size="10px" color="positive" />
+            <q-icon v-else name="wifi_off" size="10px" color="negative" />
+            {{ wsConnected ? 'онлайн' : 'оффлайн' }}
           </span>
-          <span v-else>
-            <q-icon name="wifi_off" size="10px" color="negative" class="q-mr-xs" />оффлайн
-          </span>
-          <span v-if="members.length" style="color: #aaa">•</span>
-          <span v-if="members.length">
-            <q-icon name="people" size="10px" class="q-mr-xs" />{{ members.length }}
-          </span>
-        </div>
+          <template v-if="members.length">
+            <span class="text-caption" style="color: #aaa">•</span>
+            <span class="text-caption text-grey" style="display: flex; align-items: center; gap: 3px">
+              <q-icon name="people" size="10px" />{{ members.length }}
+            </span>
+          </template>
+        </template>
       </div>
-      <q-btn
-        flat
-        round
-        dense
-        icon="search"
-        @click="showSearch = !showSearch"
-      >
-        <q-tooltip>Поиск в чате</q-tooltip>
-      </q-btn>
-      <q-btn
-        flat
-        round
-        dense
-        icon="people"
-        @click="showMembers = true"
-      >
-        <q-tooltip>Участники</q-tooltip>
-      </q-btn>
     </div>
 
     <!-- Панель поиска -->
