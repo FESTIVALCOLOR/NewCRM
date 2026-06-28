@@ -1089,6 +1089,8 @@
               v-if="svChatTabVisited && card?.id"
               chat-type="supervision"
               :supervision-card-id="card.id"
+              :can-script="true"
+              @script-click="loadSvScriptsAndShow"
             />
           </div>
         </q-tab-panel>

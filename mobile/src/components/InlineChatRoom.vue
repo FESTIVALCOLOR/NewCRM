@@ -106,6 +106,17 @@
       <!-- Правая часть: кнопки управления -->
       <div class="row no-wrap items-center">
         <q-btn
+          v-if="props.canScript"
+          flat
+          round
+          dense
+          icon="text_snippet"
+          color="grey-7"
+          @click="emit('script-click')"
+        >
+          <q-tooltip>Отправить скрипт</q-tooltip>
+        </q-btn>
+        <q-btn
           v-if="chatType === 'client' && props.cardId"
           flat
           round
@@ -1564,7 +1575,13 @@ const props = defineProps({
     type: Number,
     default: null,
   },
+  canScript: {
+    type: Boolean,
+    default: false,
+  },
 })
+
+const emit = defineEmits(['script-click'])
 
 const authStore = useAuthStore()
 const chatUnreadStore = useChatUnreadStore()
