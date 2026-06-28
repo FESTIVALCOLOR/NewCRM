@@ -169,45 +169,75 @@
           Надзор
         </div>
         <q-list separator>
-          <q-item
+          <q-slide-item
             v-for="chat in filteredSupervisionChats"
             :key="chat.id"
-            v-ripple
-            clickable
-            @click="openSupervisionChat(chat)"
+            :right-color="chat.is_pinned_by_user ? 'warning' : 'primary'"
+            @right="(evt) => chat.is_pinned_by_user ? swipeSvUnpin(chat, evt) : swipeSvPin(chat, evt)"
           >
-            <q-item-section avatar>
-              <q-avatar color="blue-2" text-color="blue-9" size="42px">
-                <q-icon name="engineering" />
-              </q-avatar>
-            </q-item-section>
+            <template #right>
+              <q-icon :name="chat.is_pinned_by_user ? 'push_pin' : 'push_pin'" />
+              <span class="q-ml-xs text-caption">{{ chat.is_pinned_by_user ? 'Открепить' : 'Закрепить' }}</span>
+            </template>
 
-            <q-item-section>
-              <q-item-label class="text-weight-medium">
-                {{ chat.title || `Чат надзора #${chat.id}` }}
-              </q-item-label>
-              <q-item-label caption>
-                <q-badge color="blue" outline style="font-size: 10px; padding: 1px 5px">
-                  Авторский надзор
-                </q-badge>
-              </q-item-label>
-              <q-item-label v-if="chat.last_message" caption lines="1">
-                {{ chat.last_message }}
-              </q-item-label>
-              <q-item-label v-if="chat.member_count" caption>
-                {{ chat.member_count }} уч.<span v-if="chat.guest_count">, {{ chat.guest_count }} клиент(ов)</span>
-              </q-item-label>
-            </q-item-section>
+            <q-item
+              v-ripple
+              clickable
+              :class="chat.is_pinned_by_user ? 'pinned-sv-chat-item' : ''"
+              @click="openSupervisionChat(chat)"
+            >
+              <q-item-section avatar>
+                <q-avatar color="blue-2" text-color="blue-9" size="42px">
+                  <q-icon name="engineering" />
+                </q-avatar>
+              </q-item-section>
 
-            <q-item-section side>
-              <q-badge
-                v-if="chat.unread_count"
-                color="negative"
-                :label="chat.unread_count"
-                rounded
-              />
-            </q-item-section>
-          </q-item>
+              <q-item-section>
+                <q-item-label class="text-weight-medium">
+                  <q-icon
+                    v-if="chat.is_pinned_by_user"
+                    name="push_pin"
+                    size="12px"
+                    color="amber-8"
+                    class="q-mr-xs"
+                  />
+                  {{ chat.title || `Чат надзора #${chat.id}` }}
+                </q-item-label>
+                <q-item-label caption>
+                  <q-badge color="blue" outline style="font-size: 10px; padding: 1px 5px">
+                    Авторский надзор
+                  </q-badge>
+                </q-item-label>
+                <q-item-label v-if="chat.last_message" caption lines="1">
+                  {{ chat.last_message }}
+                </q-item-label>
+                <q-item-label v-if="chat.member_count" caption>
+                  {{ chat.member_count }} уч.<span v-if="chat.guest_count">, {{ chat.guest_count }} клиент(ов)</span>
+                </q-item-label>
+              </q-item-section>
+
+              <q-item-section side class="items-center row no-wrap q-gutter-xs">
+                <q-badge
+                  v-if="chat.unread_count"
+                  color="negative"
+                  :label="chat.unread_count"
+                  rounded
+                />
+                <q-btn
+                  flat
+                  dense
+                  round
+                  :icon="chat.is_pinned_by_user ? 'push_pin' : 'push_pin'"
+                  :color="chat.is_pinned_by_user ? 'amber-8' : 'grey-5'"
+                  size="sm"
+                  :loading="pinLoading[chat.id]"
+                  @click.stop="chat.is_pinned_by_user ? svUnpinChat(chat) : svPinChat(chat)"
+                >
+                  <q-tooltip>{{ chat.is_pinned_by_user ? 'Открепить' : 'Закрепить' }}</q-tooltip>
+                </q-btn>
+              </q-item-section>
+            </q-item>
+          </q-slide-item>
         </q-list>
       </template>
     </template>
@@ -312,6 +342,54 @@ function openSupervisionChat(chat) {
   router.push({ name: 'employee-chat-room', params: { chatId: chat.id } })
 }
 
+async function svPinChat(chat) {
+  pinLoading.value[chat.id] = true
+  try {
+    await api.post(`/api/v1/chats/${chat.id}/pin`)
+    chat.is_pinned_by_user = true
+    $q.notify({ type: 'positive', message: 'Чат закреплён', timeout: 1500 })
+  } catch {
+    $q.notify({ type: 'negative', message: 'Не удалось закрепить чат' })
+  } finally {
+    pinLoading.value[chat.id] = false
+  }
+}
+
+async function svUnpinChat(chat) {
+  pinLoading.value[chat.id] = true
+  try {
+    await api.delete(`/api/v1/chats/${chat.id}/pin`)
+    chat.is_pinned_by_user = false
+    $q.notify({ type: 'info', message: 'Чат откреплён', timeout: 1500 })
+  } catch {
+    $q.notify({ type: 'negative', message: 'Не удалось открепить чат' })
+  } finally {
+    pinLoading.value[chat.id] = false
+  }
+}
+
+async function swipeSvPin(chat, { reset }) {
+  try {
+    await api.post(`/api/v1/chats/${chat.id}/pin`)
+    chat.is_pinned_by_user = true
+    $q.notify({ type: 'positive', message: 'Чат закреплён', timeout: 1500 })
+  } catch {
+    $q.notify({ type: 'negative', message: 'Не удалось закрепить чат' })
+    reset()
+  }
+}
+
+async function swipeSvUnpin(chat, { reset }) {
+  try {
+    await api.delete(`/api/v1/chats/${chat.id}/pin`)
+    chat.is_pinned_by_user = false
+    $q.notify({ type: 'info', message: 'Чат откреплён', timeout: 1500 })
+  } catch {
+    $q.notify({ type: 'negative', message: 'Не удалось открепить чат' })
+    reset()
+  }
+}
+
 async function pinChat(chat) {
   pinLoading.value[chat.id] = true
   try {
@@ -374,5 +452,9 @@ onMounted(loadChats)
 
 .pinned-chat-item {
   background: #f1f8e9;
+}
+
+.pinned-sv-chat-item {
+  background: #e3f2fd;
 }
 </style>

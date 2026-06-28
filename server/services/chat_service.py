@@ -866,6 +866,20 @@ def get_all_accessible_chats(db: Session, employee_id: int, chat_type: Optional[
     card_ids_exec = [r[0] for r in db.query(StageExecutor.crm_card_id).filter(StageExecutor.executor_id == employee_id).all()]
     all_card_ids = list(set(card_ids_fields + card_ids_exec))
 
+    # SupervisionCard, в которых сотрудник назначен как ДАН / старший менеджер / директор
+    supervision_card_ids = [
+        r[0]
+        for r in db.query(SupervisionCard.id)
+        .filter(
+            or_(
+                SupervisionCard.dan_id == employee_id,
+                SupervisionCard.senior_manager_id == employee_id,
+                SupervisionCard.studio_director_id == employee_id,
+            )
+        )
+        .all()
+    ]
+
     # Чаты для этих карточек (исключаем уже найденные через членство).
     # ВАЖНО: только чаты сотрудников — клиентские чаты доступны только явным участникам.
     extra_ids: set[int] = set()
@@ -877,6 +891,32 @@ def get_all_accessible_chats(db: Session, employee_id: int, chat_type: Optional[
             InternalChat.chat_type == "employee",  # только чаты сотрудников
         )
         extra_ids = {r[0] for r in q_card.all()}
+
+    # Чаты для карточек надзора (supervision_card_id)
+    if supervision_card_ids and (chat_type is None or chat_type == "employee"):
+        q_sv = db.query(InternalChat.id).filter(
+            InternalChat.supervision_card_id.in_(supervision_card_ids),
+            InternalChat.is_active == True,  # noqa: E712
+            InternalChat.id.notin_(member_chat_ids),
+            InternalChat.chat_type == "employee",
+        )
+        extra_ids.update(r[0] for r in q_sv.all())
+
+    # Авто-добавить сотрудника как участника чатов, где он назначен на карточку
+    # но ещё не является явным членом — чтобы WebSocket и счётчики работали корректно
+    if extra_ids:
+        emp = db.query(Employee).filter(Employee.id == employee_id).first()
+        if emp:
+            extra_chats = db.query(InternalChat).filter(InternalChat.id.in_(extra_ids)).all()
+            for chat in extra_chats:
+                _add_employee_member(db, chat, emp)
+            try:
+                db.commit()
+                # После commit эти чаты уже в member_chat_ids при следующем вызове
+                member_chat_ids.update(extra_ids)
+                extra_ids = set()
+            except Exception:
+                db.rollback()
 
     all_ids = member_chat_ids | extra_ids
     if not all_ids:

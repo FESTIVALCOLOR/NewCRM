@@ -51,7 +51,7 @@
                 v-if="chatTypeChip"
                 class="text-weight-medium"
                 :style="`color: ${chatTypeChip.color}; font-size: 10px; background: ${chatTypeChip.color}18; border-radius: 3px; padding: 0 4px`"
-              >Чат с сотрудниками · {{ chatTypeChip.label }}</span>
+              >{{ chatSupervisionCardId ? 'Чат надзора' : 'Чат с сотрудниками' }} · {{ chatTypeChip.label }}</span>
             </template>
           </div>
         </div>
@@ -1613,6 +1613,13 @@ function pdfBubbleStyle(msg) {
 }
 
 // ── Файлы из карточки CRM ─────────────────────────────────────
+const _CONTRACT_ONLY_STAGES = ['documents', 'acts', 'info_letters']
+const _EXEC_ONLY_POSITIONS = ['Дизайнер', 'Чертёжник', 'Замерщик']
+const _cfIsExecOnly = computed(() => {
+  const pos = authStore.user?.position || ''
+  const sec = authStore.user?.secondary_position || ''
+  return _EXEC_ONLY_POSITIONS.some(p => p === pos || p === sec)
+})
 const _CF_STAGE_LABELS = {
   measurement: 'Замер',
   stage1: 'Стадия 1 — Планировочное решение',
@@ -1721,6 +1728,7 @@ const cardFileItems = computed(() => {
   const byStage = {}
   for (const f of cardFiles.value) {
     const s = f.stage || 'documents'
+    if (_cfIsExecOnly.value && _CONTRACT_ONLY_STAGES.includes(s)) continue
     const v = f.variation || 1
     if (!byStage[s]) byStage[s] = {}
     if (!byStage[s][v]) byStage[s][v] = []

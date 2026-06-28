@@ -166,6 +166,7 @@
            2. КЛИЕНТЫ
            ══════════════════════════════════════════════════ -->
       <q-expansion-item
+        v-if="can('access.clients')"
         v-model="expanded.clients"
         icon="people"
         label="Клиенты"
@@ -226,6 +227,7 @@
            3. ДОГОВОРА
            ══════════════════════════════════════════════════ -->
       <q-expansion-item
+        v-if="can('access.contracts')"
         v-model="expanded.contracts"
         icon="description"
         label="Договора"
@@ -302,6 +304,7 @@
            4. CRM ДОСКА
            ══════════════════════════════════════════════════ -->
       <q-expansion-item
+        v-if="can('access.crm')"
         v-model="expanded.crm"
         icon="view_kanban"
         label="CRM — Доска проектов"
@@ -398,6 +401,7 @@
            5. CRM КАРТОЧКА ПРОЕКТА
            ══════════════════════════════════════════════════ -->
       <q-expansion-item
+        v-if="can('access.crm')"
         v-model="expanded.crmCard"
         icon="open_in_new"
         label="CRM — Карточка проекта (подробно)"
@@ -500,6 +504,7 @@
            6. WORKFLOW — СОГЛАСОВАНИЕ
            ══════════════════════════════════════════════════ -->
       <q-expansion-item
+        v-if="can('access.crm')"
         v-model="expanded.workflow"
         icon="alt_route"
         label="Workflow — процесс согласования работ"
@@ -577,6 +582,7 @@
            7. АВТОРСКИЙ НАДЗОР
            ══════════════════════════════════════════════════ -->
       <q-expansion-item
+        v-if="can('access.supervision')"
         v-model="expanded.supervision"
         icon="engineering"
         label="Авторский надзор"
@@ -800,6 +806,7 @@
            10. ФАЙЛЫ
            ══════════════════════════════════════════════════ -->
       <q-expansion-item
+        v-if="can('access.crm')"
         v-model="expanded.files"
         icon="folder"
         label="Файлы (Яндекс.Диск)"
@@ -844,6 +851,7 @@
            11. ЗАРПЛАТЫ
            ══════════════════════════════════════════════════ -->
       <q-expansion-item
+        v-if="can('access.salaries')"
         v-model="expanded.salaries"
         icon="payments"
         label="Зарплаты и выплаты"
@@ -898,6 +906,7 @@
            12. ОТЧЁТЫ
            ══════════════════════════════════════════════════ -->
       <q-expansion-item
+        v-if="can('access.reports')"
         v-model="expanded.reports"
         icon="bar_chart"
         label="Отчёты и статистика"
@@ -942,6 +951,7 @@
            13. СОТРУДНИКИ
            ══════════════════════════════════════════════════ -->
       <q-expansion-item
+        v-if="can('access.employees')"
         v-model="expanded.employees"
         icon="badge"
         label="Сотрудники"
@@ -1027,6 +1037,7 @@
            14. АДМИНИСТРИРОВАНИЕ
            ══════════════════════════════════════════════════ -->
       <q-expansion-item
+        v-if="can('access.admin')"
         v-model="expanded.admin"
         icon="admin_panel_settings"
         label="Администрирование"
@@ -1059,6 +1070,7 @@
 
       <!-- МЕНЕДЖЕР -->
       <q-expansion-item
+        v-if="isMySection('manager')"
         v-model="expanded.manager"
         :header-style="isMySection('manager') ? 'background: #fffde7' : ''"
         style="font-size: 14px"
@@ -1096,6 +1108,7 @@
 
       <!-- ДИЗАЙНЕР -->
       <q-expansion-item
+        v-if="isMySection('designer')"
         v-model="expanded.designer"
         :header-style="isMySection('designer') ? 'background: #fffde7' : ''"
         style="font-size: 14px"
@@ -1128,6 +1141,7 @@
 
       <!-- ЧЕРТЁЖНИК -->
       <q-expansion-item
+        v-if="isMySection('draftsman')"
         v-model="expanded.draftsman"
         :header-style="isMySection('draftsman') ? 'background: #fffde7' : ''"
         style="font-size: 14px"
@@ -1160,6 +1174,7 @@
 
       <!-- СДП / ГАП -->
       <q-expansion-item
+        v-if="isMySection('sdp')"
         v-model="expanded.sdp"
         :header-style="isMySection('sdp') ? 'background: #fffde7' : ''"
         style="font-size: 14px"
@@ -1192,6 +1207,7 @@
 
       <!-- ДАН -->
       <q-expansion-item
+        v-if="isMySection('dan')"
         v-model="expanded.dan"
         :header-style="isMySection('dan') ? 'background: #fffde7' : ''"
         style="font-size: 14px"
@@ -1224,6 +1240,7 @@
 
       <!-- ЗАМЕРЩИК -->
       <q-expansion-item
+        v-if="isMySection('measurer')"
         v-model="expanded.measurer"
         :header-style="isMySection('measurer') ? 'background: #fffde7' : ''"
         style="font-size: 14px"
@@ -1254,6 +1271,7 @@
 
       <!-- РУКОВОДИТЕЛЬ / СТАРШИЙ МЕНЕДЖЕР -->
       <q-expansion-item
+        v-if="isMySection('director')"
         v-model="expanded.director"
         :header-style="isMySection('director') ? 'background: #fffde7' : ''"
         style="font-size: 14px"
@@ -1295,8 +1313,10 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from 'src/stores/auth'
+import { usePermission } from 'src/composables/usePermission'
 
 const authStore = useAuthStore()
+const { can } = usePermission()
 const appVersion = '1.3.0'
 
 const POSITION_MAP = {
