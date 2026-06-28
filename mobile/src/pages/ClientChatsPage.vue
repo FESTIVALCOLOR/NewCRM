@@ -56,10 +56,9 @@
                   {{ chat.title || `Чат #${chat.id}` }}
                 </q-item-label>
                 <q-item-label caption>
-                  <q-badge :color="chatTypeLabel(chat).color" outline>
+                  <q-badge :color="chatTypeLabel(chat).color" outline style="font-size: 10px; padding: 1px 5px">
                     {{ chatTypeLabel(chat).label }}
                   </q-badge>
-                  <span class="q-ml-xs text-grey-6" style="font-size: 11px">Чат с клиентом</span>
                 </q-item-label>
                 <q-item-label v-if="chat.last_message" caption lines="1">
                   {{ chat.last_message }}
@@ -127,10 +126,9 @@
                   {{ chat.title || `Чат #${chat.id}` }}
                 </q-item-label>
                 <q-item-label caption>
-                  <q-badge :color="chatTypeLabel(chat).color" outline>
+                  <q-badge :color="chatTypeLabel(chat).color" outline style="font-size: 10px; padding: 1px 5px">
                     {{ chatTypeLabel(chat).label }}
                   </q-badge>
-                  <span class="q-ml-xs text-grey-6" style="font-size: 11px">Чат с клиентом</span>
                 </q-item-label>
                 <q-item-label v-if="chat.last_message" caption lines="1">
                   {{ chat.last_message }}

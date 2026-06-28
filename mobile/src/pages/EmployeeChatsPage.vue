@@ -46,7 +46,7 @@
                 {{ chat.title || `Чат #${chat.id}` }}
               </q-item-label>
               <q-item-label v-if="chatTypeInfo(chat)" caption>
-                <q-badge :color="chatTypeInfo(chat).color" outline>
+                <q-badge :color="chatTypeInfo(chat).color" outline style="font-size: 10px; padding: 1px 5px">
                   {{ chatTypeInfo(chat).label }}
                 </q-badge>
               </q-item-label>
@@ -102,10 +102,9 @@
                   {{ chat.title || `Чат #${chat.id}` }}
                 </q-item-label>
                 <q-item-label v-if="chatTypeInfo(chat)" caption>
-                  <q-badge :color="chatTypeInfo(chat).color" outline>
+                  <q-badge :color="chatTypeInfo(chat).color" outline style="font-size: 10px; padding: 1px 5px">
                     {{ chatTypeInfo(chat).label }}
                   </q-badge>
-                  <span class="q-ml-xs text-grey-6" style="font-size: 11px">{{ chat.chat_type === 'client' ? 'Чат с клиентом' : 'Чат с сотрудниками' }}</span>
                 </q-item-label>
                 <q-item-label v-if="chat.last_message" caption lines="1">
                   {{ chat.last_message }}
@@ -173,10 +172,9 @@
                   {{ chat.title || `Чат #${chat.id}` }}
                 </q-item-label>
                 <q-item-label v-if="chatTypeInfo(chat)" caption>
-                  <q-badge :color="chatTypeInfo(chat).color" outline>
+                  <q-badge :color="chatTypeInfo(chat).color" outline style="font-size: 10px; padding: 1px 5px">
                     {{ chatTypeInfo(chat).label }}
                   </q-badge>
-                  <span class="q-ml-xs text-grey-6" style="font-size: 11px">{{ chat.chat_type === 'client' ? 'Чат с клиентом' : 'Чат с сотрудниками' }}</span>
                 </q-item-label>
                 <q-item-label v-if="chat.last_message" caption lines="1">
                   {{ chat.last_message }}
