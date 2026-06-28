@@ -282,7 +282,8 @@ async function loadChats() {
   loading.value = true
   try {
     const { data } = await api.get('/api/v1/chats', { params: { chat_type: 'employee' } })
-    chats.value = Array.isArray(data) ? data : (data.items || [])
+    const all = Array.isArray(data) ? data : (data.items || [])
+    chats.value = all.filter(c => !c.supervision_card_id)
   } catch (e) {
     console.error('[EmployeeChatsPage] Ошибка загрузки:', e)
   } finally {

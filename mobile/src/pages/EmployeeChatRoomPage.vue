@@ -61,6 +61,17 @@
         <div style="flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 2px 0">
           <div class="row no-wrap">
             <q-btn
+              v-if="chatSupervisionCardId"
+              flat
+              round
+              dense
+              icon="link"
+              :color="supervisionLink ? 'blue-7' : 'grey-5'"
+              @click="showSupervisionAccess = true"
+            >
+              <q-tooltip>{{ supervisionLink ? 'Ссылка для клиента' : 'Создать ссылку для клиента' }}</q-tooltip>
+            </q-btn>
+            <q-btn
               flat
               round
               dense
@@ -925,6 +936,58 @@
       </div>
     </div>
 
+    <!-- Диалог: ссылка надзора для клиента -->
+    <q-dialog v-model="showSupervisionAccess">
+      <q-card style="min-width: 320px; max-width: 440px; width: 100%">
+        <q-card-section class="row items-center q-pb-none">
+          <div class="text-h6">
+            Ссылка для клиента
+          </div>
+          <q-space />
+          <q-btn
+            v-close-popup
+            flat
+            round
+            dense
+            icon="close"
+          />
+        </q-card-section>
+
+        <q-card-section v-if="supervisionLink">
+          <div class="text-subtitle2 q-mb-xs">
+            <q-icon name="link" size="16px" class="q-mr-xs" />Текущая ссылка
+          </div>
+          <div class="text-caption text-grey-7 q-mb-sm">
+            Отправьте клиенту — он сможет читать переписку и отвечать
+          </div>
+          <q-input :model-value="supervisionLink" readonly outlined dense>
+            <template #append>
+              <q-btn flat dense icon="content_copy" @click="copySupervisionLink">
+                <q-tooltip>Скопировать</q-tooltip>
+              </q-btn>
+            </template>
+          </q-input>
+        </q-card-section>
+
+        <q-card-section>
+          <q-btn
+            :outline="!!supervisionLink"
+            :unelevated="!supervisionLink"
+            color="blue-7"
+            icon="add_link"
+            :label="supervisionLink ? 'Создать новую ссылку' : 'Создать ссылку для клиента'"
+            :loading="creatingSupervisionLink"
+            class="full-width"
+            @click="createSupervisionLink"
+          />
+        </q-card-section>
+
+        <q-card-actions align="right">
+          <q-btn v-close-popup flat label="Закрыть" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
     <!-- Диалог: скрипты -->
     <q-dialog v-model="showScriptDialog" @show="loadScripts">
       <q-card style="min-width: 380px; max-width: 520px">
@@ -1534,6 +1597,7 @@ const loadingAvailableEmps = ref(false)
 const addingMemberId = ref(null)
 const removingMemberId = ref(null)
 const chatCrmCardId = ref(null)
+const chatSupervisionCardId = ref(null)
 const chatYdFolder = ref(null)
 const fileInput = ref(null)
 const clientChatId = ref(null)
@@ -1860,6 +1924,42 @@ async function goToSearchResult(msg) {
   el.classList.add('msg-highlight')
   setTimeout(() => el.classList.remove('msg-highlight'), 1500)
   setTimeout(() => setupTopObserver(), 300)
+}
+
+// Ссылка надзора для клиента
+const showSupervisionAccess = ref(false)
+const supervisionLink = ref('')
+const creatingSupervisionLink = ref(false)
+
+async function loadSupervisionLink(chatId) {
+  try {
+    const { data } = await api.get(`/api/v1/chats/${chatId}/invite-links`)
+    const links = Array.isArray(data) ? data : []
+    supervisionLink.value = links.length > 0 ? links[0].url : ''
+  } catch { supervisionLink.value = '' }
+}
+
+async function createSupervisionLink() {
+  const chatId = route.params.chatId
+  if (!chatId || creatingSupervisionLink.value) return
+  creatingSupervisionLink.value = true
+  try {
+    const { data } = await api.post(`/api/v1/chats/${chatId}/invite-links`)
+    supervisionLink.value = data.url || ''
+    if (supervisionLink.value) navigator.clipboard.writeText(supervisionLink.value).catch(() => {})
+    $q.notify({ type: 'positive', message: 'Ссылка создана и скопирована' })
+  } catch (e) {
+    $q.notify({ type: 'negative', message: e.response?.data?.detail || 'Ошибка создания ссылки' })
+  } finally {
+    creatingSupervisionLink.value = false
+  }
+}
+
+function copySupervisionLink() {
+  if (!supervisionLink.value) return
+  navigator.clipboard.writeText(supervisionLink.value).then(() => {
+    $q.notify({ type: 'positive', message: 'Ссылка скопирована', timeout: 1000 })
+  }).catch(() => {})
 }
 
 // Диалог скриптов
@@ -2259,7 +2359,9 @@ async function loadMessages() {
       .forEach(m => loadPdfThumbnail(m))
 
     chatCrmCardId.value = data.crm_card_id || null
+    chatSupervisionCardId.value = data.supervision_card_id || null
     chatYdFolder.value = data.yandex_folder_path || null
+    if (data.supervision_card_id) loadSupervisionLink(data.id)
 
     // Загрузить клиентский чат для той же карточки (для пересылки)
     if (data.crm_card_id) {
