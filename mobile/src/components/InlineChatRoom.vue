@@ -47,98 +47,96 @@
         Отпустите файл для прикрепления
       </div>
     </div>
-    <!-- Шапка чата: ссылка и участники -->
+    <!-- Шапка чата: метка слева | кнопки справа -->
     <div
       class="q-px-md q-py-xs bg-white"
-      style="border-bottom: 1px solid #E0E0E0; flex-shrink: 0; min-height: 36px; display: flex; flex-wrap: nowrap; align-items: center; overflow: hidden; width: 100%; box-sizing: border-box"
+      style="border-bottom: 1px solid #E0E0E0; flex-shrink: 0; display: flex; align-items: stretch; overflow: hidden; width: 100%; box-sizing: border-box"
     >
-      <!-- Блок надзора: ссылка для клиента -->
-      <div
-        v-if="chatType === 'supervision'"
-        style="flex: 1 1 0%; min-width: 0; display: flex; flex-wrap: nowrap; align-items: center; overflow: hidden"
-      >
-        <template v-if="supervisionLink">
-          <q-icon
-            name="link"
-            size="14px"
-            color="blue-7"
-            class="q-mr-xs"
-            style="flex: 0 0 auto"
-          />
-          <span
-            class="text-caption text-blue-8"
-            style="flex: 1 1 0%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap"
-          >
-            {{ supervisionLink }}
-          </span>
-          <q-btn
-            flat
-            dense
-            size="xs"
-            icon="content_copy"
-            color="blue-7"
-            style="flex: 0 0 auto; margin-left: 4px"
-            @click="copySupervisionLink"
-          >
-            <q-tooltip>Копировать ссылку</q-tooltip>
-          </q-btn>
+      <!-- Левая часть: метка / ссылка надзора -->
+      <div style="flex: 1; min-width: 0; display: flex; align-items: center; overflow: hidden">
+        <template v-if="chatType === 'supervision'">
+          <template v-if="supervisionLink">
+            <q-icon
+              name="link"
+              size="14px"
+              color="blue-7"
+              class="q-mr-xs"
+              style="flex: 0 0 auto"
+            />
+            <span
+              class="text-caption text-blue-8"
+              style="flex: 1 1 0%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap"
+            >
+              {{ supervisionLink }}
+            </span>
+            <q-btn
+              flat
+              round
+              dense
+              size="xs"
+              icon="content_copy"
+              color="blue-7"
+              @click="copySupervisionLink"
+            >
+              <q-tooltip>Копировать ссылку</q-tooltip>
+            </q-btn>
+          </template>
+          <template v-else>
+            <span class="text-caption text-grey-6" style="flex: 1">Чат надзора</span>
+            <q-btn
+              flat
+              round
+              dense
+              size="xs"
+              icon="add_link"
+              color="blue-7"
+              :loading="creatingSupervisionLink"
+              @click="createSupervisionLink"
+            >
+              <q-tooltip>Создать ссылку для клиента</q-tooltip>
+            </q-btn>
+          </template>
         </template>
-        <template v-else>
-          <span class="text-caption text-grey-6" style="flex: 1 1 0%">Чат надзора</span>
-          <q-btn
-            flat
-            dense
-            size="xs"
-            icon="add_link"
-            color="blue-7"
-            :loading="creatingSupervisionLink"
-            style="flex: 0 0 auto"
-            @click="createSupervisionLink"
-          >
-            <q-tooltip>Создать ссылку для клиента</q-tooltip>
-          </q-btn>
-        </template>
+        <span v-else class="text-caption text-grey-6">
+          {{ chatType === 'client' ? 'Чат с клиентом' : 'Чат сотрудников' }}
+        </span>
       </div>
-      <span v-else class="text-caption text-grey-6" style="flex: 1 1 0%; min-width: 0">
-        {{ chatType === 'client' ? 'Чат с клиентом' : 'Чат сотрудников' }}
-      </span>
-      <!-- Кнопка доступа клиента (только для клиентского чата из карточки) -->
-      <q-btn
-        v-if="chatType === 'client' && props.cardId"
-        flat
-        dense
-        size="xs"
-        icon="manage_accounts"
-        color="green-7"
-        style="flex: 0 0 auto; margin-left: 2px"
-        @click="showClientAccess = true"
-      >
-        <q-tooltip>Доступ клиента</q-tooltip>
-      </q-btn>
-      <!-- Кнопка участников: всегда справа, никогда не сжимается -->
-      <q-btn
-        flat
-        dense
-        size="xs"
-        icon="people"
-        color="grey-7"
-        style="flex: 0 0 auto; margin-left: 4px"
-        @click="showMembers = true"
-      >
-        <q-tooltip>Участники</q-tooltip>
-      </q-btn>
-      <!-- Кнопка поиска -->
-      <q-btn
-        flat
-        dense
-        size="xs"
-        icon="search"
-        :color="showSearch ? 'primary' : 'grey-7'"
-        style="flex: 0 0 auto; margin-left: 2px"
-        @click="showSearch = !showSearch; searchQuery = ''; searchResults = []"
-      >
-        <q-tooltip>Поиск в чате</q-tooltip>
-      </q-btn>
+      <!-- Вертикальный разделитель -->
+      <div style="align-self: stretch; width: 1px; background: #E0E0E0; flex-shrink: 0; margin: 2px 4px" />
+      <!-- Правая часть: кнопки управления -->
+      <div class="row no-wrap items-center">
+        <q-btn
+          v-if="chatType === 'client' && props.cardId"
+          flat
+          round
+          dense
+          icon="manage_accounts"
+          color="green-7"
+          @click="showClientAccess = true"
+        >
+          <q-tooltip>Доступ клиента</q-tooltip>
+        </q-btn>
+        <q-btn
+          flat
+          round
+          dense
+          icon="people"
+          color="grey-7"
+          @click="showMembers = true"
+        >
+          <q-tooltip>Участники</q-tooltip>
+        </q-btn>
+        <q-btn
+          flat
+          round
+          dense
+          icon="search"
+          :color="showSearch ? 'primary' : 'grey-7'"
+          @click="showSearch = !showSearch; searchQuery = ''; searchResults = []"
+        >
+          <q-tooltip>Поиск в чате</q-tooltip>
+        </q-btn>
+      </div>
     </div>
 
     <!-- Поиск по сообщениям -->
