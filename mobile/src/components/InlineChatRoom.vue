@@ -52,59 +52,27 @@
       class="q-px-md q-py-xs bg-white"
       style="border-bottom: 1px solid #E0E0E0; flex-shrink: 0; display: flex; align-items: stretch; overflow: hidden; width: 100%; box-sizing: border-box"
     >
-      <!-- Левая часть: метка / ссылка надзора -->
+      <!-- Левая часть: метка -->
       <div style="flex: 1; min-width: 0; display: flex; align-items: center; overflow: hidden">
-        <template v-if="chatType === 'supervision'">
-          <template v-if="supervisionLink">
-            <q-icon
-              name="link"
-              size="14px"
-              color="blue-7"
-              class="q-mr-xs"
-              style="flex: 0 0 auto"
-            />
-            <span
-              class="text-caption text-blue-8"
-              style="flex: 1 1 0%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap"
-            >
-              {{ supervisionLink }}
-            </span>
-            <q-btn
-              flat
-              round
-              dense
-              size="xs"
-              icon="content_copy"
-              color="blue-7"
-              @click="copySupervisionLink"
-            >
-              <q-tooltip>Копировать ссылку</q-tooltip>
-            </q-btn>
-          </template>
-          <template v-else>
-            <span class="text-caption text-grey-6" style="flex: 1">Чат надзора</span>
-            <q-btn
-              flat
-              round
-              dense
-              size="xs"
-              icon="add_link"
-              color="blue-7"
-              :loading="creatingSupervisionLink"
-              @click="createSupervisionLink"
-            >
-              <q-tooltip>Создать ссылку для клиента</q-tooltip>
-            </q-btn>
-          </template>
-        </template>
-        <span v-else class="text-caption text-grey-6">
-          {{ chatType === 'client' ? 'Чат с клиентом' : 'Чат сотрудников' }}
+        <span class="text-caption text-grey-6">
+          {{ chatType === 'client' ? 'Чат с клиентом' : chatType === 'supervision' ? 'Чат надзора' : 'Чат сотрудников' }}
         </span>
       </div>
       <!-- Вертикальный разделитель -->
       <div style="align-self: stretch; width: 1px; background: #E0E0E0; flex-shrink: 0; margin: 2px 4px" />
       <!-- Правая часть: кнопки управления -->
       <div class="row no-wrap items-center">
+        <q-btn
+          v-if="chatType === 'supervision'"
+          flat
+          round
+          dense
+          icon="link"
+          :color="supervisionLink ? 'blue-7' : 'grey-5'"
+          @click="showSupervisionAccess = true"
+        >
+          <q-tooltip>{{ supervisionLink ? 'Ссылка для клиента' : 'Создать ссылку для клиента' }}</q-tooltip>
+        </q-btn>
         <q-btn
           v-if="chatType === 'client' && props.cardId"
           flat
@@ -1533,6 +1501,58 @@
             :loading="creatingClientLink"
             class="full-width"
             @click="createClientInviteLink"
+          />
+        </q-card-section>
+
+        <q-card-actions align="right">
+          <q-btn v-close-popup flat label="Закрыть" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- Диалог: Ссылка надзора для клиента -->
+    <q-dialog v-model="showSupervisionAccess">
+      <q-card style="min-width: 320px; max-width: 440px; width: 100%">
+        <q-card-section class="row items-center q-pb-none">
+          <div class="text-h6">
+            Ссылка для клиента
+          </div>
+          <q-space />
+          <q-btn
+            v-close-popup
+            flat
+            round
+            dense
+            icon="close"
+          />
+        </q-card-section>
+
+        <q-card-section v-if="supervisionLink">
+          <div class="text-subtitle2 q-mb-xs">
+            <q-icon name="link" size="16px" class="q-mr-xs" />Текущая ссылка
+          </div>
+          <div class="text-caption text-grey-7 q-mb-sm">
+            Отправьте клиенту — он сможет читать переписку и отвечать
+          </div>
+          <q-input :model-value="supervisionLink" readonly outlined dense>
+            <template #append>
+              <q-btn flat dense icon="content_copy" @click="copySupervisionLink">
+                <q-tooltip>Скопировать</q-tooltip>
+              </q-btn>
+            </template>
+          </q-input>
+        </q-card-section>
+
+        <q-card-section>
+          <q-btn
+            :outline="!!supervisionLink"
+            :unelevated="!supervisionLink"
+            color="blue-7"
+            icon="add_link"
+            :label="supervisionLink ? 'Создать новую ссылку' : 'Создать ссылку для клиента'"
+            :loading="creatingSupervisionLink"
+            class="full-width"
+            @click="createSupervisionLink"
           />
         </q-card-section>
 
@@ -3160,6 +3180,8 @@ function copyClientLink() {
     $q.notify({ type: 'positive', message: 'Ссылка скопирована' })
   }).catch(() => {})
 }
+
+const showSupervisionAccess = ref(false)
 
 const showClientAccess = ref(false)
 const sendingInvite = ref(false)

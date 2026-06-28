@@ -20,7 +20,7 @@
       <q-spinner size="32px" color="primary" />
     </div>
 
-    <template v-else-if="filteredChats.length">
+    <template v-else-if="hasAnyChats">
       <!-- Закреплённые чаты -->
       <template v-if="pinnedChats.length">
         <div class="section-header q-px-md q-py-xs text-caption text-grey-6">
@@ -162,6 +162,54 @@
           </q-slide-item>
         </q-list>
       </template>
+
+      <!-- Чаты надзора (с доступом для клиента) -->
+      <template v-if="filteredSupervisionChats.length">
+        <div class="section-header q-px-md q-py-xs text-caption text-grey-6">
+          Надзор
+        </div>
+        <q-list separator>
+          <q-item
+            v-for="chat in filteredSupervisionChats"
+            :key="chat.id"
+            v-ripple
+            clickable
+            @click="openSupervisionChat(chat)"
+          >
+            <q-item-section avatar>
+              <q-avatar color="blue-2" text-color="blue-9" size="42px">
+                <q-icon name="engineering" />
+              </q-avatar>
+            </q-item-section>
+
+            <q-item-section>
+              <q-item-label class="text-weight-medium">
+                {{ chat.title || `Чат надзора #${chat.id}` }}
+              </q-item-label>
+              <q-item-label caption>
+                <q-badge color="blue" outline style="font-size: 10px; padding: 1px 5px">
+                  Авторский надзор
+                </q-badge>
+              </q-item-label>
+              <q-item-label v-if="chat.last_message" caption lines="1">
+                {{ chat.last_message }}
+              </q-item-label>
+              <q-item-label v-if="chat.member_count" caption>
+                {{ chat.member_count }} уч.<span v-if="chat.guest_count">, {{ chat.guest_count }} клиент(ов)</span>
+              </q-item-label>
+            </q-item-section>
+
+            <q-item-section side>
+              <q-badge
+                v-if="chat.unread_count"
+                color="negative"
+                :label="chat.unread_count"
+                rounded
+              />
+            </q-item-section>
+          </q-item>
+        </q-list>
+      </template>
     </template>
 
     <!-- Пусто -->
@@ -194,6 +242,7 @@ const router = useRouter()
 const $q = useQuasar()
 const loading = ref(false)
 const chats = ref([])
+const supervisionChats = ref([])
 const searchText = ref('')
 const pinLoading = ref({})
 
@@ -223,14 +272,31 @@ const filteredChats = computed(() => {
     .map(({ c }) => c)
 })
 
+const filteredSupervisionChats = computed(() => {
+  const q = searchText.value?.trim() || ''
+  if (!q) return supervisionChats.value
+  return supervisionChats.value
+    .map(c => ({ c, score: fuzzyScore(c.title || `Чат #${c.id}`, q) }))
+    .filter(({ score }) => score >= 1)
+    .sort((a, b) => b.score - a.score)
+    .map(({ c }) => c)
+})
+
+const hasAnyChats = computed(() => filteredChats.value.length > 0 || filteredSupervisionChats.value.length > 0)
+
 const pinnedChats = computed(() => filteredChats.value.filter(c => c.is_pinned_by_user))
 const regularChats = computed(() => filteredChats.value.filter(c => !c.is_pinned_by_user))
 
 async function loadChats() {
   loading.value = true
   try {
-    const { data } = await api.get('/api/v1/chats', { params: { chat_type: 'client' } })
-    chats.value = Array.isArray(data) ? data : (data.items || [])
+    const [clientRes, svRes] = await Promise.all([
+      api.get('/api/v1/chats', { params: { chat_type: 'client' } }),
+      api.get('/api/v1/chats', { params: { chat_type: 'employee' } }),
+    ])
+    chats.value = Array.isArray(clientRes.data) ? clientRes.data : (clientRes.data.items || [])
+    const allEmployee = Array.isArray(svRes.data) ? svRes.data : (svRes.data.items || [])
+    supervisionChats.value = allEmployee.filter(c => c.supervision_card_id != null)
   } catch (e) {
     console.error('[ClientChatsPage] Ошибка:', e)
   } finally {
@@ -240,6 +306,10 @@ async function loadChats() {
 
 function openChat(chat) {
   router.push({ name: 'client-chat-room', params: { chatId: chat.id } })
+}
+
+function openSupervisionChat(chat) {
+  router.push({ name: 'employee-chat-room', params: { chatId: chat.id } })
 }
 
 async function pinChat(chat) {
