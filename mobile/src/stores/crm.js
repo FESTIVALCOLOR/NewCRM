@@ -52,7 +52,6 @@ export const useCrmStore = defineStore('crm', () => {
     if (hasPos('Руководитель студии', 'Старший менеджер проектов')) return cards.value
 
     const empId = auth.user.id
-    const empName = auth.user.full_name || ''
 
     return cards.value.filter(card => {
       // Менеджер — по manager_id

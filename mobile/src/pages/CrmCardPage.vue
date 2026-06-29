@@ -1646,9 +1646,17 @@
               outlined
               dense
               type="date"
-              clearable
               class="q-mb-xs"
-            />
+            >
+              <template #append>
+                <q-icon
+                  v-if="timelineEditActualDate"
+                  name="cancel"
+                  style="cursor: pointer; font-size: 18px; line-height: 1; color: rgba(0,0,0,0.4)"
+                  @click.stop="timelineEditActualDate = null"
+                />
+              </template>
+            </q-input>
             <div style="font-size: 11px; color: #888">
               Заполните дату выполнения подэтапа
             </div>
