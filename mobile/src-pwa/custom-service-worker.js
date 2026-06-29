@@ -23,7 +23,7 @@ precacheAndRoute(self.__WB_MANIFEST)
 // SPA fallback: все навигационные запросы кроме /api → index.html
 registerRoute(
   new NavigationRoute(createHandlerBoundToURL('/index.html'), {
-    denylist: [/^\/api/],
+    denylist: [/^\/api/, /^\/vpn\//],
   }),
 )
 
