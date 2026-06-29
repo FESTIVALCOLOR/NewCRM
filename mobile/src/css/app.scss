@@ -215,6 +215,15 @@ body {
   padding-bottom: 0;
 }
 
+// Quasar ставит padding-top на native input для floating label —
+// из-за этого браузерная иконка календаря опускается вниз в dense-полях
+input[type="date"].q-field__native {
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  align-self: center;
+  height: 100%;
+}
+
 // ===== TYPOGRAPHY =====
 .text-fc-primary { color: var(--fc-text); }
 .text-fc-secondary { color: var(--fc-text-secondary); }
