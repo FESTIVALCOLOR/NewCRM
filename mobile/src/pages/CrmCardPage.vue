@@ -835,7 +835,7 @@
                     <q-tooltip>Добавить вариацию</q-tooltip>
                   </q-btn>
                   <q-btn
-                    v-if="getVariations(stage.code).length > 1 && !isArchived"
+                    v-if="getVariations(stage.code).length > 1 && canUploadForProjectStage(stage.code) && !isArchived"
                     outline
                     dense
                     size="xs"
@@ -902,7 +902,7 @@
                       <q-tooltip>Добавить вариацию</q-tooltip>
                     </q-btn>
                     <q-btn
-                      v-if="getVariations(sub.code).length > 1 && !isArchived"
+                      v-if="getVariations(sub.code).length > 1 && canUploadForProjectStage(sub.code) && !isArchived"
                       outline
                       dense
                       size="xs"
