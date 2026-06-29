@@ -106,7 +106,7 @@
               <q-toggle v-model="settings.notify_deadline" color="positive" @update:model-value="save" />
             </q-item-section>
           </q-item>
-          <q-item>
+          <q-item v-if="!isExecutor">
             <q-item-section>
               <q-item-label>Оплаты</q-item-label>
               <q-item-label caption>
@@ -117,7 +117,7 @@
               <q-toggle v-model="settings.notify_payment" color="positive" @update:model-value="save" />
             </q-item-section>
           </q-item>
-          <q-item>
+          <q-item v-if="!isExecutor">
             <q-item-section>
               <q-item-label>Авторский надзор</q-item-label>
               <q-item-label caption>
@@ -169,8 +169,8 @@
         </q-list>
       </q-card>
 
-      <!-- Дополнительно -->
-      <q-card class="q-mb-md" style="border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.08)">
+      <!-- Дополнительно — только для руководства (у исполнителей нет подчинённых) -->
+      <q-card v-if="!isExecutor" class="q-mb-md" style="border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.08)">
         <q-card-section class="q-pb-xs">
           <div class="text-subtitle2 text-weight-bold" style="color: #333">
             Дополнительно
@@ -225,6 +225,14 @@ function urlBase64ToUint8Array(base64String) {
 
 const $q = useQuasar()
 const auth = useAuthStore()
+
+// Исполнители (дизайнер/чертёжник/замерщик) — скрываем неприменимые настройки
+const isExecutor = computed(() => {
+  const pos = auth.user?.position || ''
+  const secPos = auth.user?.secondary_position || ''
+  const executorPositions = ['Дизайнер', 'Чертёжник', 'Замерщик']
+  return executorPositions.some(p => pos === p || secPos === p)
+})
 const loading = ref(true)
 
 const settings = ref({

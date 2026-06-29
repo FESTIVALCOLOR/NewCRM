@@ -2367,7 +2367,7 @@ const allEmployeesList = ref([])
 const ROLE_POSITION_FILTER = {
   senior_manager: ['Старший менеджер', 'Руководитель'],
   sdp: ['Руководитель студии', 'СДП'],
-  gap: ['ГАП', 'руководитель'],
+  gap: ['ГАП', 'руководитель', 'Старший менеджер'],
   manager: ['Менеджер', 'Старший менеджер'],
   surveyor: ['Замерщик'],
   designer: ['Дизайнер'],
@@ -4234,5 +4234,11 @@ onBeforeUnmount(() => {
   .data-blocks-grid > .is-card {
     margin-bottom: 0 !important;
   }
+}
+
+/* Выравниваем крестик clearable по центру с иконкой календаря у date-инпутов */
+:deep(.q-field--dense .q-field__append) {
+  align-self: center;
+  padding-top: 0;
 }
 </style>
