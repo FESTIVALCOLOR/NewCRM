@@ -576,7 +576,7 @@
                   </div>
                   <div class="row q-gutter-xs">
                     <q-btn
-                      v-if="can('crm_cards.files_upload') && !isArchived"
+                      v-if="can('crm_cards.files_upload') && !isArchived && !isExecutor"
                       outline
                       dense
                       size="xs"
@@ -626,7 +626,7 @@
                         style="border-radius: 4px; padding: 2px 8px; min-width: 88px"
                         @click.stop="openFile(f)"
                       /><q-btn
-                        v-if="can('crm_cards.files_delete')"
+                        v-if="can('crm_cards.files_delete') && !isExecutor"
                         outline
                         dense
                         size="xs"
@@ -654,7 +654,7 @@
                   </div>
                   <div class="row q-gutter-xs">
                     <q-btn
-                      v-if="can('crm_cards.files_upload') && !isArchived"
+                      v-if="can('crm_cards.files_upload') && !isArchived && (!isExecutor || isSurveyor)"
                       outline
                       dense
                       size="xs"
@@ -666,7 +666,7 @@
                       @click="showMeasurementDlg = true"
                     />
                     <q-btn
-                      v-if="contractData?.measurement_image_link && can('crm_cards.files_delete') && !isArchived"
+                      v-if="contractData?.measurement_image_link && can('crm_cards.files_delete') && !isArchived && (!isExecutor || isSurveyor)"
                       outline
                       dense
                       size="xs"
@@ -703,7 +703,7 @@
                   </div>
                   <div class="row q-gutter-xs">
                     <q-btn
-                      v-if="can('crm_cards.files_upload') && !isArchived"
+                      v-if="can('crm_cards.files_upload') && !isArchived && (!isExecutor || isSurveyor)"
                       outline
                       dense
                       size="xs"
@@ -715,7 +715,7 @@
                       @click="uploadCrmFile('photo_documentation')"
                     />
                     <q-btn
-                      v-if="(contractData?.photo_folder_public_link || contractData?.photo_documentation_yandex_path) && can('crm_cards.files_delete') && !isArchived"
+                      v-if="(contractData?.photo_folder_public_link || contractData?.photo_documentation_yandex_path) && can('crm_cards.files_delete') && !isArchived && (!isExecutor || isSurveyor)"
                       outline
                       dense
                       size="xs"
@@ -749,7 +749,7 @@
                   </div>
                   <div class="row q-gutter-xs">
                     <q-btn
-                      v-if="can('crm_cards.files_upload') && !isArchived"
+                      v-if="can('crm_cards.files_upload') && !isArchived && !isExecutor"
                       outline
                       dense
                       size="xs"
@@ -761,7 +761,7 @@
                       @click="uploadCrmFile('references')"
                     />
                     <q-btn
-                      v-if="contractData?.references_yandex_path && can('crm_cards.files_delete') && !isArchived"
+                      v-if="contractData?.references_yandex_path && can('crm_cards.files_delete') && !isArchived && !isExecutor"
                       outline
                       dense
                       size="xs"
@@ -2126,6 +2126,13 @@ const isExecutor = computed(() => {
   const secPos = authStore.user?.secondary_position || ''
   const executorPositions = ['Дизайнер', 'Чертёжник', 'Замерщик']
   return executorPositions.some(p => pos === p || secPos === p) && !can('crm_cards.deadlines')
+})
+
+// Замерщик — может работать только с замерами и фотофиксацией
+const isSurveyor = computed(() => {
+  const pos = authStore.user?.position || ''
+  const secPos = authStore.user?.secondary_position || ''
+  return pos === 'Замерщик' || secPos === 'Замерщик'
 })
 
 /**
