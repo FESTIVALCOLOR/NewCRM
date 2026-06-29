@@ -2141,6 +2141,11 @@ function canUploadForProjectStage(stageCode) {
   const empId = authStore.user?.id
   const se = card.value.stage_executors || []
 
+  // Исполнитель может загружать файлы только когда карточка сейчас в его стадии
+  const currentColumn = card.value.column_name || ''
+  const currentStageExec = se.find(e => e.stage_name === currentColumn)
+  if (!currentStageExec || currentStageExec.executor_id !== empId) return false
+
   // Подэтапы Индивидуального stage2 — оба доступны исполнителям Stage 2 (концепция)
   if ((stageCode === 'stage2_concept' || stageCode === 'stage2_3d') && card.value.project_type === 'Индивидуальный') {
     return se.some(e => e.executor_id === empId && (e.stage_name || '').toLowerCase().includes('концепция'))

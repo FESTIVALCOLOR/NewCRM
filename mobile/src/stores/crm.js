@@ -64,28 +64,14 @@ export const useCrmStore = defineStore('crm', () => {
       // СДП — по sdp_id
       if (hasPos('СДП') && card.sdp_id === empId) return true
 
-      // Дизайнер — только на Стадии 2 по designer_name
-      if (hasPos('Дизайнер')) {
-        const col = card.column_name || ''
-        if (col.includes('Стадия 2')) {
-          if (card.designer_name === empName) return true
-        }
-      }
+      // Дизайнер — если назначен исполнителем концепции (независимо от текущей стадии)
+      if (hasPos('Дизайнер') && card.designer_executor_id === empId) return true
 
-      // Чертёжник — по draftsman_name на допустимых стадиях
-      if (hasPos('Чертёжник')) {
-        const col = card.column_name || ''
-        const isTemplate = card.project_type === 'Шаблонный'
-        const allowed = isTemplate
-          ? ['Стадия 1', 'Стадия 2']
-          : ['Стадия 1', 'Стадия 3']
-        if (allowed.some(s => col.includes(s)) && card.draftsman_name === empName) return true
-      }
+      // Чертёжник — если назначен исполнителем чертежей ИЛИ планировки (независимо от стадии)
+      if (hasPos('Чертёжник') && (card.draftsman_executor_id === empId || card.stage_plan_executor_id === empId)) return true
 
-      // Замерщик — по surveyor_id, если замер не загружен
-      if (hasPos('Замерщик') && card.surveyor_id === empId) {
-        if (!card.measurement_image_link && !card.survey_date) return true
-      }
+      // Замерщик — по surveyor_id (всегда, независимо от статуса замера)
+      if (hasPos('Замерщик') && card.surveyor_id === empId) return true
 
       return false
     })
