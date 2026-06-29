@@ -651,12 +651,12 @@
                 <q-toggle v-model="notifSettings.notify_deadline" color="accent" />
               </q-item-section>
             </q-item>
-            <q-item tag="label">
+            <q-item v-if="!isExecutor" tag="label">
               <q-item-section>Оплаты</q-item-section><q-item-section side>
                 <q-toggle v-model="notifSettings.notify_payment" color="accent" />
               </q-item-section>
             </q-item>
-            <q-item tag="label">
+            <q-item v-if="!isExecutor" tag="label">
               <q-item-section>Авт. надзор</q-item-section><q-item-section side>
                 <q-toggle v-model="notifSettings.notify_supervision" color="accent" />
               </q-item-section>
@@ -677,17 +677,19 @@
                 <q-toggle v-model="notifSettings.notify_template" color="accent" />
               </q-item-section>
             </q-item>
-            <q-separator class="q-my-xs" />
-            <q-item tag="label">
-              <q-item-section>Дублирование (подчинённые)</q-item-section><q-item-section side>
-                <q-toggle v-model="notifSettings.notify_duplicates" color="accent" />
-              </q-item-section>
-            </q-item>
-            <q-item tag="label">
-              <q-item-section>Исправления подчинённых</q-item-section><q-item-section side>
-                <q-toggle v-model="notifSettings.notify_subordinate_revisions" color="accent" />
-              </q-item-section>
-            </q-item>
+            <template v-if="!isExecutor">
+              <q-separator class="q-my-xs" />
+              <q-item tag="label">
+                <q-item-section>Дублирование (подчинённые)</q-item-section><q-item-section side>
+                  <q-toggle v-model="notifSettings.notify_duplicates" color="accent" />
+                </q-item-section>
+              </q-item>
+              <q-item tag="label">
+                <q-item-section>Исправления подчинённых</q-item-section><q-item-section side>
+                  <q-toggle v-model="notifSettings.notify_subordinate_revisions" color="accent" />
+                </q-item-section>
+              </q-item>
+            </template>
           </q-list>
         </q-card-section>
         <q-card-actions align="center" class="column q-gutter-sm q-pb-md">
@@ -794,6 +796,12 @@ const { connect: wsConnect, disconnect: wsDisconnect, isConnected: wsConnected }
 const chatUnreadStore = useChatUnreadStore()
 const drawerOpen = ref(!$q.screen.lt.md)
 const unreadCount = computed(() => notificationsStore.unreadCount)
+
+const isExecutor = computed(() => {
+  const pos = authStore.user?.position || ''
+  const secPos = authStore.user?.secondary_position || ''
+  return ['Дизайнер', 'Чертёжник', 'Замерщик'].some(p => pos === p || secPos === p)
+})
 
 // PWA установка
 const { canInstall, isIos, isInstalled, isYandex, isMobile, isMacSafari, install: installPwa } = usePwaInstall()
