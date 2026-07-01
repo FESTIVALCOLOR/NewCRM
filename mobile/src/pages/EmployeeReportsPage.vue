@@ -402,13 +402,6 @@ async function loadData() {
       .map(e => ({ name: e.full_name, active_stages: e.total_stages - e.completed_stages }))
   }
 
-  if (projR.status === 'fulfilled') {
-    const data = projR.value.data
-    if (data?.by_stages && executorLoad.value.length === 0) {
-      executorLoad.value = Object.entries(data.by_stages).map(([name, count]) => ({ name, active_stages: count })).sort((a, b) => b.active_stages - a.active_stages).slice(0, 10)
-    }
-  }
-
   loading.value = false
 }
 

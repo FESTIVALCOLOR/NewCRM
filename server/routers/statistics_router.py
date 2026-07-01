@@ -326,11 +326,72 @@ async def get_employee_statistics(
         else:
             visit_map = {}
 
+        # Подсчёт карточек для управленческих ролей (ГАП, СДП, Менеджер, Старший менеджер).
+        # Эти роли хранятся как FK-поля на CRMCard, а не в StageExecutor.
+        # Факт выполнения = карточка в "Выполненный проект" или is_archived.
+        emp_id_set = set(emp_ids)
+        card_role_map: dict = {}
+
+        if project_type in (None, "individual", "template"):
+            card_q = db.query(
+                CRMCard.gap_id,
+                CRMCard.sdp_id,
+                CRMCard.manager_id,
+                CRMCard.senior_manager_id,
+                CRMCard.is_archived,
+                CRMCard.column_name,
+            ).join(Contract, CRMCard.contract_id == Contract.id)
+
+            if project_type in _CRM_PT:
+                card_q = card_q.filter(Contract.project_type == _CRM_PT[project_type])
+            if year:
+                card_q = card_q.filter(extract("year", CRMCard.created_at) == year)
+            if quarter:
+                card_q = card_q.filter(extract("month", CRMCard.created_at).between((quarter - 1) * 3 + 1, quarter * 3))
+            if month:
+                card_q = card_q.filter(extract("month", CRMCard.created_at) == month)
+
+            for row in card_q.all():
+                is_done = bool(row.is_archived) or row.column_name == "Выполненный проект"
+                for role_id in (row.gap_id, row.sdp_id, row.manager_id, row.senior_manager_id):
+                    if role_id and role_id in emp_id_set:
+                        entry = card_role_map.setdefault(role_id, {"total": 0, "completed": 0})
+                        entry["total"] += 1
+                        if is_done:
+                            entry["completed"] += 1
+
+        # Supervision: ДАН и Старший менеджер через поля SupervisionCard
+        if project_type in (None, "supervision"):
+            sup_q = db.query(
+                SupervisionCard.dan_id,
+                SupervisionCard.senior_manager_id,
+                SupervisionCard.dan_completed,
+            ).join(Contract, SupervisionCard.contract_id == Contract.id)
+
+            if year:
+                sup_q = sup_q.filter(extract("year", Contract.created_at) == year)
+            if quarter:
+                sup_q = sup_q.filter(extract("month", Contract.created_at).between((quarter - 1) * 3 + 1, quarter * 3))
+            if month:
+                sup_q = sup_q.filter(extract("month", Contract.created_at) == month)
+
+            for row in sup_q.all():
+                is_done = bool(row.dan_completed)
+                for role_id in (row.dan_id, row.senior_manager_id):
+                    if role_id and role_id in emp_id_set:
+                        entry = card_role_map.setdefault(role_id, {"total": 0, "completed": 0})
+                        entry["total"] += 1
+                        if is_done:
+                            entry["completed"] += 1
+
         result = []
         for emp in employees:
             stage_data = stage_map.get(emp.id, {"total": 0, "completed": 0})
-            total_stages = stage_data["total"]
-            completed_stages = stage_data["completed"]
+            card_data = card_role_map.get(emp.id, {"total": 0, "completed": 0})
+            # Управленческие роли не имеют StageExecutor-записей, а исполнители — card-level полей,
+            # поэтому сумма даёт корректный результат для обоих типов без двойного счёта.
+            total_stages = stage_data["total"] + card_data["total"]
+            completed_stages = stage_data["completed"] + card_data["completed"]
             total_salary = salary_map.get(emp.id, 0)
 
             result.append(
