@@ -83,25 +83,33 @@
                   {{ task.column_name }}
                 </q-item-label>
               </q-item-section>
-              <q-item-section side style="min-width: 24px; padding-right: 4px; align-items: center">
-                <button
-                  class="dash-mute-bell-btn"
-                  @click.stop="cardMutes.toggleMute(entityType(task), task.id)"
-                >
-                  <span
-                    class="material-icons"
-                    :style="{ fontSize: '16px', color: cardMutes.isMuted(entityType(task), task.id) ? '#333' : '#CCC' }"
+              <q-item-section side style="padding-left: 4px">
+                <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0">
+                  <button
+                    class="dash-mute-bell-btn"
+                    @click.stop="cardMutes.toggleMute(entityType(task), task.id)"
                   >
-                    {{ cardMutes.isMuted(entityType(task), task.id) ? 'notifications_off' : 'notifications' }}
-                  </span>
-                </button>
-              </q-item-section>
-              <q-item-section side style="min-width: 48px; max-width: 56px; text-align: right; white-space: normal; line-height: 1.2">
-                <div v-if="task.is_paused" class="text-caption text-weight-bold" style="color: #B8860B">
-                  Пауза
-                </div>
-                <div v-else-if="task.deadline || task.current_stage_deadline" class="text-caption text-weight-bold" :style="{ color: dlColor(task.deadline || task.current_stage_deadline) }">
-                  {{ fmtDeadline(task.deadline || task.current_stage_deadline) }}
+                    <span
+                      class="material-icons"
+                      :style="{ fontSize: '16px', color: cardMutes.isMuted(entityType(task), task.id) ? '#333' : '#CCC' }"
+                    >
+                      {{ cardMutes.isMuted(entityType(task), task.id) ? 'notifications_off' : 'notifications' }}
+                    </span>
+                  </button>
+                  <div
+                    v-if="task.is_paused"
+                    style="width: 52px; text-align: right; font-size: 10px; font-weight: 600; color: #B8860B; line-height: 1.2; white-space: normal"
+                  >
+                    Пауза
+                  </div>
+                  <div
+                    v-else-if="task.deadline || task.current_stage_deadline"
+                    style="width: 52px; text-align: right; font-size: 10px; font-weight: 600; line-height: 1.2; white-space: normal"
+                    :style="{ color: dlColor(task.deadline || task.current_stage_deadline) }"
+                  >
+                    {{ fmtDeadline(task.deadline || task.current_stage_deadline) }}
+                  </div>
+                  <div v-else style="width: 52px" />
                 </div>
               </q-item-section>
             </q-item>
