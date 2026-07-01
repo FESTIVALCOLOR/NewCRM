@@ -73,7 +73,7 @@
               :style="taskBg(task)"
               @click="$router.push(task._card_type === 'supervision' ? `/supervision/${task.id}` : `/crm/${task.id}`)"
             >
-              <q-item-section avatar style="min-width: 28px; padding-right: 4px">
+              <q-item-section avatar style="min-width: 24px; padding-left: 0; padding-right: 8px">
                 <q-icon :name="task._card_type === 'supervision' ? 'engineering' : 'assignment'" :color="taskColor(task)" size="20px" />
               </q-item-section>
               <q-item-section>
@@ -140,6 +140,7 @@
               <q-badge v-if="notificationsStore.unreadCount > 0" color="negative" :label="notificationsStore.unreadCount" />
             </div>
           </div>
+          <div style="height: 1px; background: #222; margin-top: 6px" />
         </q-card-section>
         <q-list v-if="recentNotifications.length > 0" separator>
           <q-item
