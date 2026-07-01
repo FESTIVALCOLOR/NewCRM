@@ -128,7 +128,12 @@ async def get_dashboard_statistics(
 
 @router.get("/employees")
 async def get_employee_statistics(
-    year: Optional[int] = None, month: Optional[int] = None, project_type: Optional[str] = None, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)
+    year: Optional[int] = None,
+    month: Optional[int] = None,
+    quarter: Optional[int] = None,
+    project_type: Optional[str] = None,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """Получить статистику по сотрудникам. project_type: individual | template | supervision"""
     try:
@@ -138,18 +143,37 @@ async def get_employee_statistics(
         if not emp_ids:
             return []
 
+        # project_type param: 'individual' | 'template' | 'supervision' | None (all)
+        _CRM_PT = {"individual": "Индивидуальный", "template": "Шаблонный"}
+
         # Batch-load stage executor counts to avoid N+1 queries
-        stage_query = db.query(StageExecutor.executor_id, func.count(StageExecutor.id).label("total"), func.count(case((StageExecutor.completed == True, 1))).label("completed")).filter(
-            StageExecutor.executor_id.in_(emp_ids)
-        )
+        # Для supervision StageExecutor не используется → нули
+        if project_type == "supervision":
+            stage_map: dict = {}
+        else:
+            stage_query = db.query(
+                StageExecutor.executor_id,
+                func.count(StageExecutor.id).label("total"),
+                func.count(case((StageExecutor.completed == True, 1))).label("completed"),
+            ).filter(StageExecutor.executor_id.in_(emp_ids))
 
-        if year:
-            stage_query = stage_query.filter(extract("year", StageExecutor.assigned_date) == year)
-        if month:
-            stage_query = stage_query.filter(extract("month", StageExecutor.assigned_date) == month)
+            # Фильтр по типу проекта — JOIN с Contract
+            if project_type in _CRM_PT:
+                stage_query = (
+                    stage_query.join(CRMCard, StageExecutor.crm_card_id == CRMCard.id).join(Contract, CRMCard.contract_id == Contract.id).filter(Contract.project_type == _CRM_PT[project_type])
+                )
 
-        stage_counts = stage_query.group_by(StageExecutor.executor_id).all()
-        stage_map = {sc[0]: {"total": sc[1], "completed": sc[2]} for sc in stage_counts}
+            if year:
+                stage_query = stage_query.filter(extract("year", StageExecutor.assigned_date) == year)
+            if quarter:
+                _q_start = (quarter - 1) * 3 + 1
+                _q_end = quarter * 3
+                stage_query = stage_query.filter(extract("month", StageExecutor.assigned_date).between(_q_start, _q_end))
+            if month:
+                stage_query = stage_query.filter(extract("month", StageExecutor.assigned_date) == month)
+
+            stage_counts = stage_query.group_by(StageExecutor.executor_id).all()
+            stage_map = {sc[0]: {"total": sc[1], "completed": sc[2]} for sc in stage_counts}
 
         # Batch-load salary totals to avoid N+1 queries
         salary_query = db.query(Salary.employee_id, func.sum(Salary.amount).label("total")).filter(Salary.employee_id.in_(emp_ids))
@@ -163,9 +187,6 @@ async def get_employee_statistics(
 
         def _r(v):
             return round(float(v), 1) if v is not None else None
-
-        # project_type param: 'individual' | 'template' | 'supervision' | None (all)
-        _CRM_PT = {"individual": "Индивидуальный", "template": "Шаблонный"}
 
         # CRM survey scores (StageExecutor → CRMCard → Contract → ClientSurvey)
         # Skipped when viewing supervision tab — those surveys come via dan_id path

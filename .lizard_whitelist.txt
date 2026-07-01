@@ -56,3 +56,4 @@ create_crm_card
 update_crm_card
 delete_contract
 restore_deleted_contract
+get_employee_statistics
