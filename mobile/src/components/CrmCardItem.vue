@@ -1,13 +1,20 @@
 <template>
   <q-card flat bordered class="crm-card q-mb-sm" :style="archiveCardStyle">
     <q-card-section class="q-pa-sm">
-      <!-- 1. Верхняя строка: номер + статус работы -->
+      <!-- 1. Верхняя строка: номер + статус работы + колокольчик тишины -->
       <div class="row items-center justify-between q-mb-xs">
         <div style="color: #888; font-size: 10px">
           Договор: {{ card.contract_number || `#${card.id}` }}
         </div>
-        <div v-if="workStatusText" :style="{ fontSize: '8px', fontWeight: 'bold', color: workStatusColor, border: `1px solid ${workStatusColor}`, borderRadius: '3px', padding: '1px 6px' }">
-          {{ workStatusText }}
+        <div class="row items-center" style="gap: 4px">
+          <div v-if="workStatusText" :style="{ fontSize: '8px', fontWeight: 'bold', color: workStatusColor, border: `1px solid ${workStatusColor}`, borderRadius: '3px', padding: '1px 6px' }">
+            {{ workStatusText }}
+          </div>
+          <button v-if="!isArchived" class="mute-bell-btn" @click.stop="emit('toggle-mute')">
+            <span class="material-icons" :style="{ fontSize: '14px', color: isMuted ? '#333' : '#CCC' }">
+              {{ isMuted ? 'notifications_off' : 'notifications' }}
+            </span>
+          </button>
         </div>
       </div>
 
@@ -250,8 +257,11 @@ import { useAuthStore } from 'src/stores/auth'
 import { usePermission } from 'src/composables/usePermission'
 import { addWorkingDays, countWorkingDaysUntil } from 'src/composables/useDeadline'
 
-const props = defineProps({ card: { type: Object, required: true } })
-const emit = defineEmits(['click', 'longpress', 'submit-work', 'reject', 'client-send', 'client-approved', 'sign-act', 'send-act', 'add-measurement', 'add-tech-task', 'advance-round', 'close-stage', 'add-extra-round'])
+const props = defineProps({
+  card: { type: Object, required: true },
+  isMuted: { type: Boolean, default: false },
+})
+const emit = defineEmits(['click', 'longpress', 'submit-work', 'reject', 'client-send', 'client-approved', 'sign-act', 'send-act', 'add-measurement', 'add-tech-task', 'advance-round', 'close-stage', 'add-extra-round', 'toggle-mute'])
 
 function parseCrmTags(tagsStr) {
   if (!tagsStr) return []
@@ -495,4 +505,15 @@ const showAddTechTask = computed(() => {
 }
 .crm-add-measurement { background: #F39C12; }
 .crm-add-techtask { background: #9B59B6; }
+
+.mute-bell-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  line-height: 1;
+}
 </style>

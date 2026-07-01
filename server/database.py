@@ -1144,6 +1144,26 @@ class EmployeeKpiSnapshot(Base):
 
 
 # =========================
+# РЕЖИМ ТИШИНЫ КАРТОЧКИ
+# =========================
+
+
+class CardMuteSetting(Base):
+    """Режим тишины уведомлений для карточки — per-user, per-card"""
+
+    __tablename__ = "card_mute_settings"
+    __table_args__ = (UniqueConstraint("employee_id", "entity_type", "entity_id", name="uq_card_mute_per_user"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    employee_id = Column(Integer, ForeignKey("employees.id", ondelete="CASCADE"), nullable=False, index=True)
+    entity_type = Column(String(20), nullable=False)  # 'crm_card' | 'supervision_card'
+    entity_id = Column(Integer, nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    employee = relationship("Employee")
+
+
+# =========================
 # ВНУТРЕННИЙ ЧАТ
 # =========================
 

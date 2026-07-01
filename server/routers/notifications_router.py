@@ -29,7 +29,7 @@ from permissions import SUPERUSER_ROLES, require_permission
 from schemas import NotificationResponse, NotificationSettingsResponse, NotificationSettingsUpdate
 from sqlalchemy.orm import Session
 
-from database import Employee, Notification, NotificationSettings, get_db
+from database import CardMuteSetting, Employee, Notification, NotificationSettings, get_db
 
 logger = logging.getLogger(__name__)
 
@@ -428,3 +428,67 @@ async def send_employee_invite(
         raise HTTPException(status_code=500, detail="Ошибка отправки письма")
 
     return {"ok": True, "message": f"Приглашение отправлено на {employee.email}"}
+
+
+# ── РЕЖИМ ТИШИНЫ КАРТОЧЕК ──
+
+
+@router.get("/notifications/card-mutes")
+async def get_card_mutes(
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Получить список карточек в режиме тишины для текущего пользователя"""
+    mutes = db.query(CardMuteSetting).filter_by(employee_id=current_user.id).all()
+    return {
+        "crm_cards": [m.entity_id for m in mutes if m.entity_type == "crm_card"],
+        "supervision_cards": [m.entity_id for m in mutes if m.entity_type == "supervision_card"],
+    }
+
+
+@router.post("/notifications/card-mutes/{entity_type}/{entity_id}")
+async def mute_card(
+    entity_type: str,
+    entity_id: int,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Включить режим тишины для карточки"""
+    if entity_type not in ("crm_card", "supervision_card"):
+        raise HTTPException(status_code=422, detail="entity_type должен быть 'crm_card' или 'supervision_card'")
+
+    existing = (
+        db.query(CardMuteSetting)
+        .filter_by(
+            employee_id=current_user.id,
+            entity_type=entity_type,
+            entity_id=entity_id,
+        )
+        .first()
+    )
+    if not existing:
+        mute = CardMuteSetting(
+            employee_id=current_user.id,
+            entity_type=entity_type,
+            entity_id=entity_id,
+        )
+        db.add(mute)
+        db.commit()
+    return {"status": "muted"}
+
+
+@router.delete("/notifications/card-mutes/{entity_type}/{entity_id}")
+async def unmute_card(
+    entity_type: str,
+    entity_id: int,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Выключить режим тишины для карточки"""
+    db.query(CardMuteSetting).filter_by(
+        employee_id=current_user.id,
+        entity_type=entity_type,
+        entity_id=entity_id,
+    ).delete()
+    db.commit()
+    return {"status": "unmuted"}

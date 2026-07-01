@@ -90,6 +90,7 @@
                 >
                   <crm-card-item
                     :card="card"
+                    :is-muted="cardMutes.isMuted('crm_card', card.id)"
                     @click="openCard(card.id)"
                     @longpress="showMoveDialog(card)"
                     @submit-work="doCardAction(card.id, 'submit')"
@@ -103,6 +104,7 @@
                     @sign-act="doCardAction(card.id, 'sign-act')"
                     @add-measurement="openMeasurementDialog(card)"
                     @add-tech-task="openTechTaskDialog(card)"
+                    @toggle-mute="cardMutes.toggleMute('crm_card', card.id)"
                   />
                 </div>
               </div>
@@ -153,6 +155,7 @@
                   v-for="card in col.cards"
                   :key="card.id"
                   :card="card"
+                  :is-muted="cardMutes.isMuted('crm_card', card.id)"
                   @click="openCard(card.id)"
                   @longpress="showMoveDialog(card)"
                   @submit-work="doCardAction(card.id, 'submit')"
@@ -166,6 +169,7 @@
                   @sign-act="doCardAction(card.id, 'sign-act')"
                   @add-measurement="openMeasurementDialog(card)"
                   @add-tech-task="openTechTaskDialog(card)"
+                  @toggle-mute="cardMutes.toggleMute('crm_card', card.id)"
                 />
               </div>
               <div v-else class="column-empty">
@@ -205,6 +209,7 @@
                   v-for="card in col.cards"
                   :key="card.id"
                   :card="card"
+                  :is-muted="cardMutes.isMuted('crm_card', card.id)"
                   @click="openCard(card.id)"
                   @longpress="showMoveDialog(card)"
                   @submit-work="doCardAction(card.id, 'submit')"
@@ -218,6 +223,7 @@
                   @sign-act="doCardAction(card.id, 'sign-act')"
                   @add-measurement="openMeasurementDialog(card)"
                   @add-tech-task="openTechTaskDialog(card)"
+                  @toggle-mute="cardMutes.toggleMute('crm_card', card.id)"
                 />
               </div>
               <div v-else class="column-empty">
@@ -454,6 +460,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { useCrmStore } from 'src/stores/crm'
 import { useAuthStore } from 'src/stores/auth'
+import { useCardMutesStore } from 'src/stores/cardMutes'
 import { crmApi, employeesApi, contractsApi, paymentsApi, filesApi } from 'src/services/api'
 import { usePermission } from 'src/composables/usePermission'
 import { useOptimistic } from 'src/composables/useOptimistic'
@@ -472,6 +479,7 @@ const { uploadToYd } = useYdUpload()
 const router = useRouter()
 const route = useRoute()
 const crmStore = useCrmStore()
+const cardMutes = useCardMutesStore()
 const currentSlide = ref(parseInt(sessionStorage.getItem('crm_slide') || '0'))
 const moveDialogVisible = ref(false)
 const moveCard = ref(null)
@@ -1074,6 +1082,7 @@ onMounted(async () => {
   }
   crmStore.loadCards()
   if (can('crm_cards.view_archive')) loadArchiveCount()
+  cardMutes.load()
   try {
     const { data } = await employeesApi.getList()
     employeeOpts.value = data.filter(e => e.status === 'активный').map(e => ({ id: e.id, label: `${e.full_name} (${e.position})` }))

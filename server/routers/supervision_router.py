@@ -567,9 +567,21 @@ async def move_supervision_card_to_column(
             if allowed_return != "Новый заказ" and new_column not in [allowed_return, "Выполненный проект"]:
                 raise HTTPException(status_code=422, detail=f'Из "В ожидании" можно вернуть только в "{allowed_return}" или "Выполненный проект".')
 
-        # === ПРАВИЛО: При переходе в "В ожидании" — сохраняем previous_column ===
+        # === ПРАВИЛО: При переходе в "В ожидании" — сохраняем previous_column + авто-пауза ===
         if new_column == "В ожидании" and old_column != "В ожидании":
             card.previous_column = old_column
+            # Авто-пауза: deadline_checker пропустит карточку, уведомления не придут
+            if not card.is_paused:
+                card.is_paused = True
+                card.paused_at = datetime.utcnow()
+                card.pause_reason = "Перемещено в «В ожидании»"
+                pause_history = SupervisionProjectHistory(
+                    supervision_card_id=card_id,
+                    entry_type="pause",
+                    message="Авто-пауза: перемещено в «В ожидании»",
+                    created_by=current_user.id,
+                )
+                db.add(pause_history)
 
         # === ПРАВИЛО: При возврате из "В ожидании" — автоматически возобновляем ===
         if old_column == "В ожидании" and new_column != "В ожидании":

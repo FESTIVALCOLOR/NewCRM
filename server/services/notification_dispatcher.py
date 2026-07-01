@@ -89,6 +89,23 @@ async def dispatch_notification(
             logger.info(f"dispatch_notification: сотрудник id={employee_id} имеет статус '{employee_check.status}', пропуск")
             return
 
+        # 0.5. Проверить режим тишины для данной карточки (per-user, per-card)
+        if related_entity_type in ("crm_card", "supervision_card") and related_entity_id:
+            from database import CardMuteSetting
+
+            mute = (
+                db.query(CardMuteSetting)
+                .filter_by(
+                    employee_id=employee_id,
+                    entity_type=related_entity_type,
+                    entity_id=related_entity_id,
+                )
+                .first()
+            )
+            if mute:
+                logger.info(f"dispatch_notification: {related_entity_type}#{related_entity_id} в режиме тишины для employee={employee_id}, пропуск")
+                return
+
         # 1. Загрузить настройки уведомлений сотрудника (создать если нет)
         settings = db.query(NotificationSettings).filter_by(employee_id=employee_id).first()
 

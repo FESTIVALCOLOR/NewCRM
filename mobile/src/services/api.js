@@ -219,6 +219,19 @@ export const notificationsApi = {
     api.post('/api/v1/notifications/mark-all-read', { employee_id: empId }),
 }
 
+// === Режим тишины карточек ===
+
+export const cardMutesApi = {
+  getMyMutes: () =>
+    api.get('/api/v1/notifications/card-mutes'),
+
+  mute: (entityType, entityId) =>
+    api.post(`/api/v1/notifications/card-mutes/${entityType}/${entityId}`),
+
+  unmute: (entityType, entityId) =>
+    api.delete(`/api/v1/notifications/card-mutes/${entityType}/${entityId}`),
+}
+
 // === Web Push ===
 
 export const pushApi = {

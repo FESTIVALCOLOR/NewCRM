@@ -81,21 +81,28 @@
                         <div style="color: #888; font-size: 10px">
                           {{ card.contract_number || `#${card.id}` }}
                         </div>
-                        <q-badge
-                          v-if="!card.is_paused"
-                          color="blue-grey-3"
-                          text-color="blue-grey-9"
-                          :label="card.column_name"
-                          dense
-                          style="font-size: 9px"
-                        />
-                        <q-badge
-                          v-else
-                          color="warning"
-                          label="Приостановлено"
-                          dense
-                          style="font-size: 9px"
-                        />
+                        <div class="row items-center" style="gap: 4px">
+                          <q-badge
+                            v-if="!card.is_paused"
+                            color="blue-grey-3"
+                            text-color="blue-grey-9"
+                            :label="card.column_name"
+                            dense
+                            style="font-size: 9px"
+                          />
+                          <q-badge
+                            v-else
+                            color="warning"
+                            label="Приостановлено"
+                            dense
+                            style="font-size: 9px"
+                          />
+                          <button class="sv-mute-bell-btn" @click.stop="cardMutes.toggleMute('supervision_card', card.id)">
+                            <span class="material-icons" :style="{ fontSize: '14px', color: cardMutes.isMuted('supervision_card', card.id) ? '#333' : '#CCC' }">
+                              {{ cardMutes.isMuted('supervision_card', card.id) ? 'notifications_off' : 'notifications' }}
+                            </span>
+                          </button>
+                        </div>
                       </div>
                       <div class="text-weight-bold q-mb-xs" style="font-size: 13px; color: #222">
                         {{ card.address || 'Без адреса' }}
@@ -162,26 +169,33 @@
               <div v-if="col.cards.length > 0" class="column-body">
                 <q-card v-for="card in col.cards" :key="card.id" class="crm-card q-mb-sm" :style="card.is_paused ? { background: '#FFF8E1', borderColor: '#F39C12' } : {}">
                   <q-card-section class="q-pa-sm">
-                    <!-- 1. Номер договора (слева) + Стадия (справа) -->
+                    <!-- 1. Номер договора (слева) + Стадия + Тишина (справа) -->
                     <div class="row items-center justify-between q-mb-xs">
                       <div style="color: #888; font-size: 10px">
                         {{ card.contract_number || `#${card.id}` }}
                       </div>
-                      <q-badge
-                        v-if="!card.is_paused"
-                        color="blue-grey-3"
-                        text-color="blue-grey-9"
-                        :label="card.column_name"
-                        dense
-                        style="font-size: 9px"
-                      />
-                      <q-badge
-                        v-else
-                        color="warning"
-                        label="Приостановлено"
-                        dense
-                        style="font-size: 9px"
-                      />
+                      <div class="row items-center" style="gap: 4px">
+                        <q-badge
+                          v-if="!card.is_paused"
+                          color="blue-grey-3"
+                          text-color="blue-grey-9"
+                          :label="card.column_name"
+                          dense
+                          style="font-size: 9px"
+                        />
+                        <q-badge
+                          v-else
+                          color="warning"
+                          label="Приостановлено"
+                          dense
+                          style="font-size: 9px"
+                        />
+                        <button class="sv-mute-bell-btn" @click.stop="cardMutes.toggleMute('supervision_card', card.id)">
+                          <span class="material-icons" :style="{ fontSize: '14px', color: cardMutes.isMuted('supervision_card', card.id) ? '#333' : '#CCC' }">
+                            {{ cardMutes.isMuted('supervision_card', card.id) ? 'notifications_off' : 'notifications' }}
+                          </span>
+                        </button>
+                      </div>
                     </div>
                     <!-- Причина паузы -->
                     <div v-if="card.is_paused && card.pause_reason" class="q-mb-xs">
@@ -332,12 +346,14 @@ import { supervisionApi } from 'src/services/api'
 import { usePermission } from 'src/composables/usePermission'
 import { useReferencesStore } from 'src/stores/references'
 import { useAuthStore } from 'src/stores/auth'
+import { useCardMutesStore } from 'src/stores/cardMutes'
 import PageDashboard from 'src/components/PageDashboard.vue'
 
 const router = useRouter()
 const $q = useQuasar()
 const { can } = usePermission()
 const refsStore = useReferencesStore()
+const cardMutes = useCardMutesStore()
 
 function agentColorFor(agentType) {
   const agent = refsStore.agentByName?.(agentType)
@@ -535,7 +551,7 @@ async function loadCards() {
 
 watch(showArchive, (isArchive) => { if (!isArchive && can('supervision.view_archive')) loadArchiveCount() })
 
-onMounted(() => { loadCards(); if (can('supervision.view_archive')) loadArchiveCount() })
+onMounted(() => { loadCards(); cardMutes.load(); if (can('supervision.view_archive')) loadArchiveCount() })
 </script>
 
 <style scoped>
@@ -581,5 +597,15 @@ onMounted(() => { loadCards(); if (can('supervision.view_archive')) loadArchiveC
   border-color: #ffd93c;
   box-shadow: 0 0 0 2px #ffd93c;
   background: #fffde7;
+}
+.sv-mute-bell-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  line-height: 1;
 }
 </style>
