@@ -58,6 +58,7 @@
           <div class="text-subtitle2 text-weight-bold" style="color: #333">
             Мои задачи
           </div>
+          <div style="height: 1px; background: #222; margin-top: 6px" />
         </q-card-section>
         <q-list dense separator>
           <template v-for="(task, idx) in myTasks" :key="`${task._card_type || 'crm'}-${task.id}`">
@@ -84,7 +85,7 @@
                 </q-item-label>
               </q-item-section>
               <q-item-section side style="padding-left: 4px">
-                <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0">
+                <div style="display: flex; align-items: center; gap: 10px; flex-shrink: 0">
                   <button
                     class="dash-mute-bell-btn"
                     @click.stop="cardMutes.toggleMute(entityType(task), task.id)"
