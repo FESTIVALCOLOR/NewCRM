@@ -83,7 +83,7 @@
                   {{ task.column_name }}
                 </q-item-label>
               </q-item-section>
-              <q-item-section side style="padding-right: 2px">
+              <q-item-section side style="min-width: 24px; padding-right: 4px; align-items: center">
                 <button
                   class="dash-mute-bell-btn"
                   @click.stop="cardMutes.toggleMute(entityType(task), task.id)"
@@ -96,7 +96,7 @@
                   </span>
                 </button>
               </q-item-section>
-              <q-item-section side>
+              <q-item-section side style="min-width: 90px; text-align: right">
                 <div v-if="task.is_paused" class="text-caption text-weight-bold" style="color: #B8860B">
                   Пауза
                 </div>
