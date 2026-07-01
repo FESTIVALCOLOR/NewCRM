@@ -96,7 +96,7 @@
                   </span>
                 </button>
               </q-item-section>
-              <q-item-section side style="min-width: 90px; text-align: right">
+              <q-item-section side style="min-width: 48px; max-width: 56px; text-align: right; white-space: normal; line-height: 1.2">
                 <div v-if="task.is_paused" class="text-caption text-weight-bold" style="color: #B8860B">
                   Пауза
                 </div>
