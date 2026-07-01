@@ -73,7 +73,7 @@
               :style="taskBg(task)"
               @click="$router.push(task._card_type === 'supervision' ? `/supervision/${task.id}` : `/crm/${task.id}`)"
             >
-              <q-item-section avatar>
+              <q-item-section avatar style="min-width: 28px; padding-right: 4px">
                 <q-icon :name="task._card_type === 'supervision' ? 'engineering' : 'assignment'" :color="taskColor(task)" size="20px" />
               </q-item-section>
               <q-item-section>
