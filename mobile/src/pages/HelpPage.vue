@@ -1,172 +1,1200 @@
 <template>
-  <q-page padding style="max-width: 900px; margin: 0 auto; padding-bottom: 80px">
+  <q-page padding style="max-width: 860px; margin: 0 auto; padding-bottom: 90px">
     <!-- Шапка -->
-    <div class="row items-center q-mb-md">
-      <q-icon name="menu_book" size="26px" color="accent" class="q-mr-sm" />
+    <div class="row items-center q-mb-md q-mt-xs">
+      <q-icon name="menu_book" size="24px" color="accent" class="q-mr-sm" />
       <div>
-        <div style="font-size: 18px; font-weight: 700; color: #222">
+        <div style="font-size: 17px; font-weight: 700; color: #222">
           Инструкция
         </div>
-        <div style="font-size: 12px; color: #888">
-          Interior Studio CRM — полное руководство
+        <div style="font-size: 11px; color: #888">
+          Interior Studio CRM · полное руководство
         </div>
       </div>
     </div>
 
-    <!-- Баннер роли -->
-    <q-banner v-if="mySection" rounded class="q-mb-md" style="background: #fffde7; border: 1px solid #ffd93c">
+    <!-- Баннер текущей роли -->
+    <q-banner
+      v-if="myRoleKey"
+      rounded
+      class="q-mb-md"
+      style="background: #fffde7; border: 1px solid #ffe082"
+    >
       <template #avatar>
-        <q-icon name="person" color="orange-8" />
+        <q-icon name="person_pin" color="amber-8" size="22px" />
       </template>
-      <div style="font-size: 13px; color: #555">
+      <div style="font-size: 13px; color: #444">
         Ваша должность: <b style="color: #222">{{ authStore.userPosition }}</b>
       </div>
-      <div style="font-size: 12px; color: #888; margin-top: 2px">
-        Раздел для вашей роли выделен ниже
+      <div style="font-size: 12px; color: #777; margin-top: 2px">
+        Ваш раздел открыт первым — прокрутите вниз для детальных справок
+      </div>
+    </q-banner>
+
+    <!-- Примечание о разных видах -->
+    <q-banner rounded class="q-mb-lg" style="background: #e8f5e9; border: 1px solid #a5d6a7">
+      <template #avatar>
+        <q-icon name="info" color="green-7" size="18px" />
+      </template>
+      <div style="font-size: 12px; color: #444">
+        Ваше меню может отличаться от скриншотов — набор разделов зависит от вашей должности и прав
       </div>
     </q-banner>
 
     <q-list bordered separator class="rounded-borders overflow-hidden">
-      <!-- ══════════════════════════════════════════════════
-           1. НАВИГАЦИЯ И ОБЩЕЕ
-           ══════════════════════════════════════════════════ -->
-      <q-expansion-item
-        v-model="expanded.general"
-        icon="apps"
-        label="Навигация и общее — для всех"
-        header-class="text-weight-medium"
-        style="font-size: 14px"
-      >
+      <!-- ══════════════════════════════════════════
+           РОЛИ — порядок действий по должности
+           ══════════════════════════════════════════ -->
+
+      <!-- МЕНЕДЖЕР -->
+      <q-expansion-item v-model="expanded.manager" :header-style="myRoleKey==='manager' ? 'background:#fffde7' : ''">
+        <template #header>
+          <q-item-section avatar>
+            <q-icon name="manage_accounts" :color="myRoleKey==='manager' ? 'amber-8' : 'grey-6'" size="22px" />
+          </q-item-section>
+          <q-item-section>
+            <div class="text-weight-medium" style="font-size: 14px">
+              Менеджер — порядок работы
+            </div>
+            <div style="font-size: 11px; color: #888">
+              Новый заказ → согласование → завершение
+            </div>
+          </q-item-section>
+          <q-item-section v-if="myRoleKey==='manager'" side>
+            <q-badge color="amber-8" label="ваша роль" style="font-size: 10px" />
+          </q-item-section>
+        </template>
         <q-card flat>
-          <q-card-section class="q-pa-md q-gutter-md">
-            <div class="help-topic">
-              <div class="help-topic__title">
-                <q-icon name="web_asset" size="16px" class="q-mr-xs" />Шапка приложения — все кнопки
+          <q-card-section class="q-pa-md">
+            <div class="role-block">
+              <div class="role-block__title">
+                <q-icon name="wb_sunny" size="14px" class="q-mr-xs" />Каждое утро
               </div>
-              <img src="/help/dashboard.png" class="help-img" @error="e => e.target.style.display='none'">
-              <ul class="help-steps">
-                <li><q-icon name="menu" size="14px" class="q-mr-xs" /><b>Меню</b> — открыть боковую панель со всеми разделами</li>
-                <li><q-icon name="search" size="14px" class="q-mr-xs" /><b>Поиск</b> — глобальный поиск по клиентам, договорам, проектам</li>
-                <li><q-icon name="refresh" size="14px" class="q-mr-xs" /><b>Обновить</b> — перезагрузить данные текущей страницы</li>
-                <li><q-icon name="menu_book" size="14px" class="q-mr-xs" /><b>Инструкция</b> — эта страница</li>
-                <li><q-icon name="settings" size="14px" class="q-mr-xs" /><b>Настройки уведомлений</b> — каналы и типы уведомлений</li>
-                <li><q-icon name="notifications" size="14px" class="q-mr-xs" /><b>Уведомления</b> — список; красная цифра = непрочитанных</li>
-                <li><q-icon name="add_to_home_screen" size="14px" class="q-mr-xs" /><b>Установить приложение</b> — добавить на рабочий стол</li>
-                <li><q-icon name="logout" size="14px" class="q-mr-xs" /><b>Выход</b> — завершить сессию</li>
-              </ul>
+              <div class="role-tree">
+                <div class="rt-step">
+                  1. <q-icon name="notifications" size="13px" /> Открыть уведомления — разобрать накопившееся
+                </div>
+                <div class="rt-branch">
+                  <div class="rt-leaf">
+                    ↳ Сдана работа → перейти к <b>шагу «Согласование»</b> ниже
+                  </div>
+                  <div class="rt-leaf">
+                    ↳ Красный дедлайн → позвонить исполнителю, уточнить статус
+                  </div>
+                  <div class="rt-leaf">
+                    ↳ Вопрос в чате → ответить в разделе <q-icon name="support_agent" size="12px" /> Чат с клиентами или <q-icon name="chat" size="12px" /> Чат сотрудников
+                  </div>
+                </div>
+                <div class="rt-step">
+                  2. <q-icon name="view_kanban" size="13px" /> CRM → просмотреть все активные проекты, запомнить просроченные
+                </div>
+              </div>
             </div>
 
-            <q-separator />
+            <q-separator class="q-my-sm" />
 
-            <div class="help-topic">
-              <div class="help-topic__title">
-                <q-icon name="menu" size="16px" class="q-mr-xs" />Боковое меню — все разделы
+            <div class="role-block">
+              <div class="role-block__title">
+                <q-icon name="post_add" size="14px" class="q-mr-xs" />Блок 1 — Новый заказ
               </div>
-              <img src="/help/drawer-menu.png" class="help-img" @error="e => e.target.style.display='none'">
-              <ol class="help-steps">
-                <li>Нажмите <q-icon name="menu" size="13px" /> (три черты) в верхнем левом углу — откроется панель</li>
-                <li>Вверху — ваше имя, должность и аватар</li>
-                <li>
-                  Разделы системы с иконками:
-                  <ul>
-                    <li><q-icon name="dashboard" size="13px" /> Дашборд · <q-icon name="people" size="13px" /> Клиенты · <q-icon name="description" size="13px" /> Договора</li>
-                    <li><q-icon name="view_kanban" size="13px" /> СРМ · <q-icon name="engineering" size="13px" /> СРМ надзора · <q-icon name="bar_chart" size="13px" /> Отчёты</li>
-                    <li><q-icon name="badge" size="13px" /> Сотрудники · <q-icon name="payments" size="13px" /> Зарплаты · <q-icon name="assessment" size="13px" /> Отчёты сотр.</li>
-                    <li><q-icon name="folder" size="13px" /> Файлы · <q-icon name="chat" size="13px" /> Чат сотрудников · <q-icon name="support_agent" size="13px" /> Чат с клиентами</li>
-                    <li><q-icon name="admin_panel_settings" size="13px" /> Администрирование</li>
-                  </ul>
-                </li>
-                <li>Зелёный индикатор «N онлайн» — сколько сотрудников в системе прямо сейчас</li>
-                <li>Внизу — <q-icon name="logout" size="13px" /> <b>Выйти</b></li>
-              </ol>
+              <div class="role-tree">
+                <div class="rt-step">
+                  1. Клиент обратился (звонок / сообщение)
+                </div>
+                <div class="rt-step">
+                  2. <q-icon name="people" size="13px" /> Клиенты → <q-icon name="add" size="13px" /> <b>Добавить клиента</b>
+                </div>
+                <div class="rt-branch">
+                  <div class="rt-leaf">
+                    • ФИО — обязательно
+                  </div>
+                  <div class="rt-leaf">
+                    • Телефон + Email — для связи и скриптов
+                  </div>
+                  <div class="rt-leaf">
+                    • Источник — откуда пришёл (реклама / сарафан / сайт / агент)
+                  </div>
+                  <div class="rt-leaf">
+                    • Адрес / Комментарий — любые заметки для команды
+                  </div>
+                </div>
+                <div class="rt-step">
+                  3. <q-icon name="description" size="13px" /> Договора → <q-icon name="add" size="13px" /> <b>Добавить договор</b>
+                </div>
+                <div class="rt-branch">
+                  <div class="rt-leaf">
+                    • Номер договора — уникальный (пример: 47-2026)
+                  </div>
+                  <div class="rt-leaf">
+                    • Клиент — выбрать из списка (или создать прямо здесь)
+                  </div>
+                  <div class="rt-leaf">
+                    • Тип проекта — <b>Индивидуальный</b> или <b>Шаблонный</b>
+                  </div>
+                  <div class="rt-leaf">
+                    • Адрес объекта — точный адрес помещения
+                  </div>
+                  <div class="rt-leaf">
+                    • Площадь — предварительная, уточнится после замера
+                  </div>
+                  <div class="rt-leaf">
+                    • Агент — компания-источник заказа (если есть)
+                  </div>
+                </div>
+                <div class="rt-step">
+                  4. CRM → в колонке <b>«Новый заказ»</b> появилась карточка
+                </div>
+              </div>
             </div>
 
-            <q-separator />
+            <q-separator class="q-my-sm" />
 
-            <div class="help-topic">
-              <div class="help-topic__title">
-                <q-icon name="tab" size="16px" class="q-mr-xs" />Нижняя панель быстрого доступа
+            <div class="role-block">
+              <div class="role-block__title">
+                <q-icon name="straighten" size="14px" class="q-mr-xs" />Блок 2 — Замер и назначение исполнителей
               </div>
-              <ol class="help-steps">
-                <li>Нижняя строка — иконки для мгновенного перехода между разделами</li>
-                <li>Порядок слева направо: <q-icon name="dashboard" size="13px" /> <q-icon name="people" size="13px" /> <q-icon name="description" size="13px" /> <q-icon name="view_kanban" size="13px" /> <q-icon name="engineering" size="13px" /> <q-icon name="bar_chart" size="13px" /> <q-icon name="badge" size="13px" /> <q-icon name="payments" size="13px" /> <q-icon name="chat" size="13px" /> <q-icon name="support_agent" size="13px" /></li>
-                <li>Красная точка на иконке чата = непрочитанные сообщения</li>
-              </ol>
+              <div class="role-tree">
+                <div class="rt-step">
+                  1. Карточка CRM → <q-icon name="swap_horiz" size="13px" /> <b>Переместить</b> → «В ожидании»
+                </div>
+                <div class="rt-step">
+                  2. Карточка → <b>Данные карточки</b> → вкладка <b>Исполнители</b>
+                </div>
+                <div class="rt-step">
+                  3. Нажать <b>«Назначить»</b> для строки <b>Замерщик</b> → выбрать сотрудника → установить дедлайн
+                </div>
+                <div class="rt-step">
+                  4. Замерщик выехал → измерил → сообщил результат в чат
+                </div>
+                <div class="rt-step">
+                  5. <q-icon name="description" size="13px" /> Договора → найти → <q-icon name="edit" size="13px" /> → обновить поле <b>Площадь</b>
+                </div>
+                <div class="rt-step">
+                  6. Карточка → <b>Переместить</b> → «Стадия 1: планировочные решения»
+                </div>
+                <div class="rt-step">
+                  7. Карточка → <b>Исполнители</b> → Назначить <b>Дизайнера</b> + дедлайн
+                </div>
+              </div>
             </div>
 
-            <q-separator />
+            <q-separator class="q-my-sm" />
 
-            <div class="help-topic">
-              <div class="help-topic__title">
-                <q-icon name="screen_rotation" size="16px" class="q-mr-xs" />Горизонтальный (ландшафтный) режим
+            <div class="role-block">
+              <div class="role-block__title">
+                <q-icon name="how_to_reg" size="14px" class="q-mr-xs" />Блок 3 — Согласование со стадии (повторяется для каждой стадии)
               </div>
-              <img src="/help/landscape.png" class="help-img" @error="e => e.target.style.display='none'">
-              <ol class="help-steps">
-                <li>Поверните телефон горизонтально — интерфейс перестраивается автоматически</li>
-                <li>В горизонтальном режиме боковое меню отображается <b>постоянно слева</b> — его не нужно открывать отдельно</li>
-                <li>Основной контент занимает правую часть экрана — больше места для данных</li>
-                <li>Удобно для: таблиц зарплат и отчётов, CRM-доски (видно больше колонок), Timeline проекта</li>
-                <li>Нижняя панель в горизонтальном режиме скрыта — используйте боковое меню</li>
-                <li>Чтобы вернуться в вертикальный режим — поверните телефон обратно</li>
-              </ol>
+              <div class="role-tree">
+                <div class="rt-step">
+                  1. Дизайнер сдал работу → СДП проверил → вы получили уведомление
+                </div>
+                <div class="rt-step">
+                  2. В карточке появилась кнопка <b>«Отправить клиенту»</b> → нажать
+                </div>
+                <div class="rt-branch">
+                  <div class="rt-leaf">
+                    → Скрипт с ссылкой на материалы уходит клиенту в чат
+                  </div>
+                </div>
+                <div class="rt-step">
+                  3. Ждём ответ клиента:
+                </div>
+                <div class="rt-branch">
+                  <div class="rt-leaf rt-ok">
+                    ✓ Клиент одобрил → <b>[Клиент одобрил]</b> → <b>[Подписать акт]</b>
+                  </div>
+                  <div class="rt-leaf">
+                    ↳ Стадия закрыта, переход к следующей
+                  </div>
+                  <div class="rt-leaf rt-warn">
+                    ↻ Клиент хочет правки → <b>[Добавить круг правок]</b>
+                  </div>
+                  <div class="rt-leaf">
+                    ↳ Уведомление дизайнеру → он исправляет → сдаёт снова → возвращаемся к шагу 2
+                  </div>
+                </div>
+                <div class="rt-step">
+                  4. Следующая стадия — назначить дизайнера (и чертёжника для стадии 3)
+                </div>
+                <div class="rt-step">
+                  5. Повторить шаги 1–4 для каждой стадии
+                </div>
+              </div>
             </div>
 
-            <q-separator />
+            <q-separator class="q-my-sm" />
 
-            <div class="help-topic">
-              <div class="help-topic__title">
-                <q-icon name="notifications" size="16px" class="q-mr-xs" />Уведомления
+            <div class="role-block">
+              <div class="role-block__title">
+                <q-icon name="done_all" size="14px" class="q-mr-xs" />Блок 4 — Завершение и передача в надзор
               </div>
-              <img src="/help/notifications.png" class="help-img" @error="e => e.target.style.display='none'">
-              <ol class="help-steps">
-                <li>Нажмите <q-icon name="notifications" size="13px" /> в шапке — список уведомлений</li>
-                <li>Непрочитанные выделены синей полосой слева</li>
-                <li>Нажмите на уведомление — переход к связанному объекту (карточке, договору)</li>
-                <li>Кнопка <b>«Все прочитаны»</b> вверху — отметить все как прочитанные</li>
-                <li>Нажмите <q-icon name="settings" size="13px" /> — настройки каналов: Telegram / Push-уведомления в браузере</li>
-                <li>Типы уведомлений: смена стадии CRM · назначение исполнителя · дедлайны · оплаты · надзор</li>
-              </ol>
-            </div>
-
-            <q-separator />
-
-            <div class="help-topic">
-              <div class="help-topic__title">
-                <q-icon name="add_to_home_screen" size="16px" class="q-mr-xs" />Установить приложение на телефон (PWA)
+              <div class="role-tree">
+                <div class="rt-step">
+                  1. Все стадии подписаны → карточка переходит в «Выполненный проект»
+                </div>
+                <div class="rt-step">
+                  2. <q-icon name="description" size="13px" /> Договора → найти договор → <q-icon name="edit" size="13px" /> → статус <b>«АВТОРСКИЙ НАДЗОР»</b>
+                </div>
+                <div class="rt-branch">
+                  <div class="rt-leaf">
+                    → В разделе <q-icon name="engineering" size="12px" /> Надзора автоматически появится карточка
+                  </div>
+                  <div class="rt-leaf">
+                    → CRM карточка уходит в архив
+                  </div>
+                </div>
+                <div class="rt-step">
+                  3. При полном завершении без надзора → статус <b>«СДАН»</b>
+                </div>
+                <div class="rt-step">
+                  4. При расторжении → статус <b>«РАСТОРГНУТ»</b>
+                </div>
               </div>
-              <ol class="help-steps">
-                <li>Нажмите <q-icon name="add_to_home_screen" size="13px" /> в шапке или дождитесь баннера внизу экрана</li>
-                <li><b>Android Chrome:</b> нажмите «Установить» в баннере. Или: три точки ⋮ → «Добавить на главный экран»</li>
-                <li><b>iPhone Safari:</b> кнопка «Поделиться» → «На экран Домой» → «Добавить»</li>
-                <li>После установки иконка CRM появится на рабочем столе</li>
-                <li>Приложение работает в полноэкранном режиме без адресной строки браузера</li>
-              </ol>
-            </div>
-
-            <q-separator />
-
-            <div class="help-topic">
-              <div class="help-topic__title">
-                <q-icon name="person" size="16px" class="q-mr-xs" />Профиль
-              </div>
-              <img src="/help/profile.png" class="help-img" @error="e => e.target.style.display='none'">
-              <ol class="help-steps">
-                <li>В боковом меню нажмите на <b>своё имя</b> в верхней части → откроется профиль</li>
-                <li>Доступно для изменения: имя, email, телефон</li>
-                <li>Кнопка <b>«Сменить пароль»</b> — изменить пароль для входа в систему</li>
-                <li>Раздел <b>«Telegram»</b> — подключить бота для получения уведомлений в Telegram</li>
-                <li>Для подключения Telegram: скопируйте токен → откройте бота → отправьте токен</li>
-              </ol>
             </div>
           </q-card-section>
         </q-card>
       </q-expansion-item>
 
-      <!-- ══════════════════════════════════════════════════
-           2. КЛИЕНТЫ
-           ══════════════════════════════════════════════════ -->
+      <!-- ДИЗАЙНЕР -->
+      <q-expansion-item v-model="expanded.designer" :header-style="myRoleKey==='designer' ? 'background:#fffde7' : ''">
+        <template #header>
+          <q-item-section avatar>
+            <q-icon name="palette" :color="myRoleKey==='designer' ? 'amber-8' : 'grey-6'" size="22px" />
+          </q-item-section>
+          <q-item-section>
+            <div class="text-weight-medium" style="font-size: 14px">
+              Дизайнер — порядок работы
+            </div>
+            <div style="font-size: 11px; color: #888">
+              Задание → выполнение → сдача → правки
+            </div>
+          </q-item-section>
+          <q-item-section v-if="myRoleKey==='designer'" side>
+            <q-badge color="amber-8" label="ваша роль" style="font-size: 10px" />
+          </q-item-section>
+        </template>
+        <q-card flat>
+          <q-card-section class="q-pa-md">
+            <div class="role-block">
+              <div class="role-block__title">
+                <q-icon name="wb_sunny" size="14px" class="q-mr-xs" />Каждое утро
+              </div>
+              <div class="role-tree">
+                <div class="rt-step">
+                  1. <q-icon name="notifications" size="13px" /> Уведомления → разобрать
+                </div>
+                <div class="rt-branch">
+                  <div class="rt-leaf">
+                    ↳ Новое назначение → открыть карточку, изучить ТЗ и дедлайн
+                  </div>
+                  <div class="rt-leaf">
+                    ↳ Работа отклонена → прочитать причину, запланировать правки
+                  </div>
+                  <div class="rt-leaf">
+                    ↳ Дедлайн сегодня/завтра → приоритизировать эту карточку
+                  </div>
+                </div>
+                <div class="rt-step">
+                  2. <q-icon name="view_kanban" size="13px" /> CRM → найти все карточки где вы исполнитель → проверить дедлайны
+                </div>
+              </div>
+            </div>
+
+            <q-separator class="q-my-sm" />
+
+            <div class="role-block">
+              <div class="role-block__title">
+                <q-icon name="assignment" size="14px" class="q-mr-xs" />Получено новое задание
+              </div>
+              <div class="role-tree">
+                <div class="rt-step">
+                  1. Открыть карточку CRM → вкладка <b>Исполнители</b>
+                </div>
+                <div class="rt-branch">
+                  <div class="rt-leaf">
+                    • Найдите строку со своей ролью (Дизайнер)
+                  </div>
+                  <div class="rt-leaf">
+                    • Запомните дедлайн
+                  </div>
+                </div>
+                <div class="rt-step">
+                  2. Вкладка <b>Сроки</b> → посмотрите общий Timeline проекта
+                </div>
+                <div class="rt-step">
+                  3. Вкладка <b>Данные</b> → описание задания, пожелания клиента
+                </div>
+                <div class="rt-step">
+                  4. Вкладка <b>Файлы</b> → скачайте все материалы для работы:
+                </div>
+                <div class="rt-branch">
+                  <div class="rt-leaf">
+                    • Стадия 1: планировка от застройщика, ТЗ, замерный план
+                  </div>
+                  <div class="rt-leaf">
+                    • Стадия 2: планировочное решение Стадии 1
+                  </div>
+                  <div class="rt-leaf">
+                    • Стадия 3: концепция и утверждённые материалы
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <q-separator class="q-my-sm" />
+
+            <div class="role-block">
+              <div class="role-block__title">
+                <q-icon name="upload" size="14px" class="q-mr-xs" />Выполнение и сдача
+              </div>
+              <div class="role-tree">
+                <div class="rt-step">
+                  1. Выполнить работу (в ваших рабочих программах)
+                </div>
+                <div class="rt-step">
+                  2. Загрузить результат в <b>Яндекс.Диск</b>:
+                </div>
+                <div class="rt-branch">
+                  <div class="rt-leaf">
+                    • Открыть приложение ЯД на телефоне или компьютере
+                  </div>
+                  <div class="rt-leaf">
+                    • Путь к папке: <b>Карточка CRM → раздел "Папка ЯД"</b>
+                  </div>
+                  <div class="rt-leaf">
+                    • Загрузить в подпапку нужной стадии (Стадия 1 / 2 / 3)
+                  </div>
+                  <div class="rt-leaf">
+                    • Именуйте файлы понятно: <i>Планировка_v1.pdf, Концепция_финал.pdf</i>
+                  </div>
+                </div>
+                <div class="rt-step">
+                  3. Вернуться в CRM карточку → кнопка <b>«Сдать работу»</b>
+                </div>
+                <div class="rt-branch">
+                  <div class="rt-leaf">
+                    → Уведомление уходит СДП/ГАП на проверку
+                  </div>
+                  <div class="rt-leaf">
+                    → Статус карточки меняется на «На проверке»
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <q-separator class="q-my-sm" />
+
+            <div class="role-block">
+              <div class="role-block__title">
+                <q-icon name="sync" size="14px" class="q-mr-xs" />Результат проверки
+              </div>
+              <div class="role-tree">
+                <div class="rt-branch">
+                  <div class="rt-leaf rt-ok">
+                    ✓ ПРИНЯТО → ждите подтверждения клиента (это работа менеджера)
+                  </div>
+                  <div class="rt-leaf rt-warn">
+                    ✗ ОТКЛОНЕНО:
+                  </div>
+                </div>
+                <div class="rt-step" style="margin-left:16px">
+                  1. Уведомление с причиной отклонения
+                </div>
+                <div class="rt-branch" style="margin-left:16px">
+                  <div class="rt-leaf">
+                    • Прочитайте комментарий СДП — <b>конкретно что не так</b>
+                  </div>
+                  <div class="rt-leaf">
+                    • Если непонятно → спросите в чате карточки или в Telegram
+                  </div>
+                </div>
+                <div class="rt-step" style="margin-left:16px">
+                  2. Исправьте файлы в Яндекс.Диске (заменить / добавить)
+                </div>
+                <div class="rt-step" style="margin-left:16px">
+                  3. Снова нажмите <b>«Сдать работу»</b>
+                </div>
+                <div class="rt-branch" style="margin-left:16px">
+                  <div class="rt-leaf">
+                    → Можно сдавать столько раз, сколько нужно
+                  </div>
+                  <div class="rt-leaf">
+                    → Каждая сдача — новое уведомление СДП
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <q-separator class="q-my-sm" />
+
+            <div class="role-block">
+              <div class="role-block__title">
+                <q-icon name="chat" size="14px" class="q-mr-xs" />Коммуникация
+              </div>
+              <div class="role-tree">
+                <div class="rt-step">
+                  • Вопросы по заданию → Карточка → вкладка <b>Чат сотрудников</b>
+                </div>
+                <div class="rt-step">
+                  • Не знаете куда загружать → напишите менеджеру в чат карточки
+                </div>
+                <div class="rt-step">
+                  • <b>Не используйте личные мессенджеры</b> — история должна быть в системе
+                </div>
+              </div>
+            </div>
+          </q-card-section>
+        </q-card>
+      </q-expansion-item>
+
+      <!-- ЧЕРТЁЖНИК -->
+      <q-expansion-item v-model="expanded.draftsman" :header-style="myRoleKey==='draftsman' ? 'background:#fffde7' : ''">
+        <template #header>
+          <q-item-section avatar>
+            <q-icon name="architecture" :color="myRoleKey==='draftsman' ? 'amber-8' : 'grey-6'" size="22px" />
+          </q-item-section>
+          <q-item-section>
+            <div class="text-weight-medium" style="font-size: 14px">
+              Чертёжник — порядок работы
+            </div>
+            <div style="font-size: 11px; color: #888">
+              Назначение → изучение концепции → чертежи → сдача
+            </div>
+          </q-item-section>
+          <q-item-section v-if="myRoleKey==='draftsman'" side>
+            <q-badge color="amber-8" label="ваша роль" style="font-size: 10px" />
+          </q-item-section>
+        </template>
+        <q-card flat>
+          <q-card-section class="q-pa-md">
+            <div class="role-block">
+              <div class="role-block__title">
+                <q-icon name="wb_sunny" size="14px" class="q-mr-xs" />Каждое утро
+              </div>
+              <div class="role-tree">
+                <div class="rt-step">
+                  1. <q-icon name="notifications" size="13px" /> Уведомления → новые назначения, отклонения
+                </div>
+                <div class="rt-step">
+                  2. <q-icon name="view_kanban" size="13px" /> CRM → мои карточки в «Рабочие чертежи» → дедлайны
+                </div>
+              </div>
+            </div>
+
+            <q-separator class="q-my-sm" />
+
+            <div class="role-block">
+              <div class="role-block__title">
+                <q-icon name="folder_open" size="14px" class="q-mr-xs" />Получено задание на чертежи
+              </div>
+              <div class="role-tree">
+                <div class="rt-step">
+                  1. Открыть карточку → вкладка <b>Исполнители</b> → мой дедлайн
+                </div>
+                <div class="rt-step">
+                  2. Вкладка <b>Файлы</b> → скачать все исходники:
+                </div>
+                <div class="rt-branch">
+                  <div class="rt-leaf">
+                    • Планировочное решение Стадии 1 (согласованное)
+                  </div>
+                  <div class="rt-leaf">
+                    • Концепция дизайна Стадии 2 (утверждённая)
+                  </div>
+                  <div class="rt-leaf">
+                    • Замерный план (точные размеры)
+                  </div>
+                  <div class="rt-leaf">
+                    • Если неполный комплект — написать в <b>Чат сотрудников</b>
+                  </div>
+                </div>
+                <div class="rt-step">
+                  3. Вкладка <b>Данные</b> → особые пожелания клиента по чертежам
+                </div>
+              </div>
+            </div>
+
+            <q-separator class="q-my-sm" />
+
+            <div class="role-block">
+              <div class="role-block__title">
+                <q-icon name="upload" size="14px" class="q-mr-xs" />Загрузка и сдача
+              </div>
+              <div class="role-tree">
+                <div class="rt-step">
+                  1. Выполнить чертежи (DWG, PDF)
+                </div>
+                <div class="rt-step">
+                  2. Загрузить в Яндекс.Диск → папка проекта → <b>Стадия 3 / Рабочие чертежи</b>
+                </div>
+                <div class="rt-branch">
+                  <div class="rt-leaf">
+                    • Путь папки: Карточка CRM → раздел "Папка ЯД"
+                  </div>
+                  <div class="rt-leaf">
+                    • Имена файлов: <i>ПЛ_v1.pdf, ЭЛ_v1.pdf, ПЛАН_ПОЛОВ_v1.pdf</i>
+                  </div>
+                </div>
+                <div class="rt-step">
+                  3. Карточка CRM → <b>«Сдать работу»</b>
+                </div>
+                <div class="rt-step">
+                  4. При отклонении → читаем причину → исправляем → сдаём снова
+                </div>
+              </div>
+            </div>
+          </q-card-section>
+        </q-card>
+      </q-expansion-item>
+
+      <!-- СДП / ГАП -->
+      <q-expansion-item v-model="expanded.sdp" :header-style="myRoleKey==='sdp' ? 'background:#fffde7' : ''">
+        <template #header>
+          <q-item-section avatar>
+            <q-icon name="rate_review" :color="myRoleKey==='sdp' ? 'amber-8' : 'grey-6'" size="22px" />
+          </q-item-section>
+          <q-item-section>
+            <div class="text-weight-medium" style="font-size: 14px">
+              СДП / ГАП — приёмка работ
+            </div>
+            <div style="font-size: 11px; color: #888">
+              Проверка → принять или отклонить с причиной
+            </div>
+          </q-item-section>
+          <q-item-section v-if="myRoleKey==='sdp'" side>
+            <q-badge color="amber-8" label="ваша роль" style="font-size: 10px" />
+          </q-item-section>
+        </template>
+        <q-card flat>
+          <q-card-section class="q-pa-md">
+            <div class="role-block">
+              <div class="role-block__title">
+                <q-icon name="wb_sunny" size="14px" class="q-mr-xs" />Каждое утро
+              </div>
+              <div class="role-tree">
+                <div class="rt-step">
+                  1. <q-icon name="notifications" size="13px" /> Уведомления → есть новые сдачи работ?
+                </div>
+                <div class="rt-step">
+                  2. CRM → карточки со статусом «На проверке» (жёлтый индикатор) — это ваша очередь
+                </div>
+              </div>
+            </div>
+
+            <q-separator class="q-my-sm" />
+
+            <div class="role-block">
+              <div class="role-block__title">
+                <q-icon name="fact_check" size="14px" class="q-mr-xs" />Проверка сданной работы
+              </div>
+              <div class="role-tree">
+                <div class="rt-step">
+                  1. Открыть карточку CRM → вкладка <b>Файлы</b>
+                </div>
+                <div class="rt-step">
+                  2. В папке ЯД найти файлы нужной стадии → открыть и проверить:
+                </div>
+                <div class="rt-branch">
+                  <div class="rt-leaf">
+                    • <b>Полнота:</b> все необходимые листы / виды присутствуют
+                  </div>
+                  <div class="rt-leaf">
+                    • <b>Качество:</b> соответствие стандартам студии
+                  </div>
+                  <div class="rt-leaf">
+                    • <b>Соответствие ТЗ:</b> пожелания клиента из вкладки «Данные» учтены
+                  </div>
+                  <div class="rt-leaf">
+                    • <b>Согласованность:</b> нет противоречий с предыдущими стадиями
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <q-separator class="q-my-sm" />
+
+            <div class="role-block">
+              <div class="role-block__title">
+                <q-icon name="gavel" size="14px" class="q-mr-xs" />Решение
+              </div>
+              <div class="role-tree">
+                <div class="rt-branch">
+                  <div class="rt-leaf rt-ok">
+                    ✓ ПРИНЯТЬ → кнопка <b>«Принять работу»</b>
+                  </div>
+                </div>
+                <div class="rt-branch" style="margin-left:12px">
+                  <div class="rt-leaf">
+                    → Статус меняется на «Принято»
+                  </div>
+                  <div class="rt-leaf">
+                    → Менеджер получает возможность отправить клиенту
+                  </div>
+                </div>
+                <div class="rt-branch">
+                  <div class="rt-leaf rt-warn">
+                    ✗ ОТКЛОНИТЬ → кнопка <b>«Отклонить»</b>
+                  </div>
+                </div>
+                <div class="rt-step" style="margin-left:12px">
+                  1. Поле <b>«Причина»</b> — написать конкретно что не так:
+                </div>
+                <div class="rt-branch" style="margin-left:24px">
+                  <div class="rt-leaf">
+                    • Плохо: "Переделать" — непонятно что именно
+                  </div>
+                  <div class="rt-leaf">
+                    • Хорошо: "Отсутствует план потолков. На листе ПЛ-01 неверные размеры санузла"
+                  </div>
+                </div>
+                <div class="rt-step" style="margin-left:12px">
+                  2. Поле <b>«Этап доработки»</b> — что именно надо переделать
+                </div>
+                <div class="rt-step" style="margin-left:12px">
+                  3. <b>«Подтвердить»</b> → дизайнер/чертёжник получит уведомление с вашим комментарием
+                </div>
+              </div>
+            </div>
+
+            <q-separator class="q-my-sm" />
+
+            <div class="role-block">
+              <div class="role-block__title">
+                <q-icon name="speed" size="14px" class="q-mr-xs" />Мониторинг
+              </div>
+              <div class="role-tree">
+                <div class="rt-step">
+                  • CRM → ваши проекты → дедлайны в вкладке «Сроки»
+                </div>
+                <div class="rt-step">
+                  • <q-icon name="bar_chart" size="13px" /> Отчёты → статистика выполнения по стадиям
+                </div>
+                <div class="rt-step">
+                  • При системных просрочках исполнителя → сообщить менеджеру
+                </div>
+              </div>
+            </div>
+          </q-card-section>
+        </q-card>
+      </q-expansion-item>
+
+      <!-- ДАН -->
+      <q-expansion-item v-model="expanded.dan" :header-style="myRoleKey==='dan' ? 'background:#fffde7' : ''">
+        <template #header>
+          <q-item-section avatar>
+            <q-icon name="engineering" :color="myRoleKey==='dan' ? 'amber-8' : 'grey-6'" size="22px" />
+          </q-item-section>
+          <q-item-section>
+            <div class="text-weight-medium" style="font-size: 14px">
+              ДАН — авторский надзор на объекте
+            </div>
+            <div style="font-size: 11px; color: #888">
+              Объекты → выезды → журнал → этапы
+            </div>
+          </q-item-section>
+          <q-item-section v-if="myRoleKey==='dan'" side>
+            <q-badge color="amber-8" label="ваша роль" style="font-size: 10px" />
+          </q-item-section>
+        </template>
+        <q-card flat>
+          <q-card-section class="q-pa-md">
+            <div class="role-block">
+              <div class="role-block__title">
+                <q-icon name="wb_sunny" size="14px" class="q-mr-xs" />Каждое утро
+              </div>
+              <div class="role-tree">
+                <div class="rt-step">
+                  1. <q-icon name="notifications" size="13px" /> Уведомления → новые назначения, просрочки
+                </div>
+                <div class="rt-step">
+                  2. <q-icon name="engineering" size="13px" /> СРМ Надзора → мои объекты → дедлайны текущих этапов
+                </div>
+              </div>
+            </div>
+
+            <q-separator class="q-my-sm" />
+
+            <div class="role-block">
+              <div class="role-block__title">
+                <q-icon name="directions_car" size="14px" class="q-mr-xs" />Перед выездом на объект
+              </div>
+              <div class="role-tree">
+                <div class="rt-step">
+                  1. <q-icon name="engineering" size="13px" /> Надзор → открыть карточку объекта
+                </div>
+                <div class="rt-step">
+                  2. Вкладка <b>Исполнители</b> → узнать текущий этап и контакты
+                </div>
+                <div class="rt-step">
+                  3. Вкладка <b>Файлы</b> → скачать актуальные чертежи для данного этапа
+                </div>
+                <div class="rt-branch">
+                  <div class="rt-leaf">
+                    • Какие материалы применяются по чертежам
+                  </div>
+                  <div class="rt-leaf">
+                    • Какие размеры критичны для проверки
+                  </div>
+                </div>
+                <div class="rt-step">
+                  4. Если статус «Приостановлено» → уточнить у менеджера актуально ли
+                </div>
+              </div>
+            </div>
+
+            <q-separator class="q-my-sm" />
+
+            <div class="role-block">
+              <div class="role-block__title">
+                <q-icon name="event_available" size="14px" class="q-mr-xs" />После выезда — обязательно!
+              </div>
+              <div class="role-tree">
+                <div class="rt-step">
+                  1. Карточка надзора → вкладка <b>Выезды</b>
+                </div>
+                <div class="rt-step">
+                  2. Кнопка <b>«+ Добавить выезд»</b>
+                </div>
+                <div class="rt-step">
+                  3. Заполнить:
+                </div>
+                <div class="rt-branch">
+                  <div class="rt-leaf">
+                    • <b>Дата</b> — дата фактического посещения объекта
+                  </div>
+                  <div class="rt-leaf">
+                    • <b>Комментарий</b> — что проверили, что одобрено, что нужно исправить подрядчику
+                  </div>
+                  <div class="rt-leaf">
+                    • Пример: "Проверены плиточные работы санузла. Одобрено. Замечание: наклон пола под душем 1° вместо 2°, попросил исправить"
+                  </div>
+                </div>
+                <div class="rt-step">
+                  4. Сохранить
+                </div>
+              </div>
+            </div>
+
+            <q-separator class="q-my-sm" />
+
+            <div class="role-block">
+              <div class="role-block__title">
+                <q-icon name="task_alt" size="14px" class="q-mr-xs" />Завершение этапа и паузы
+              </div>
+              <div class="role-tree">
+                <div class="rt-step">
+                  Этап полностью принят:
+                </div>
+                <div class="rt-branch">
+                  <div class="rt-leaf">
+                    → Карточка → кнопка <b>«Завершить этап»</b>
+                  </div>
+                  <div class="rt-leaf">
+                    → Карточка переходит к следующему этапу автоматически
+                  </div>
+                </div>
+                <div class="rt-step">
+                  Стройка приостановлена (заморозка, отпуск подрядчика):
+                </div>
+                <div class="rt-branch">
+                  <div class="rt-leaf">
+                    → Кнопка <b>«Пауза»</b> → написать причину → подтвердить
+                  </div>
+                  <div class="rt-leaf">
+                    → Менеджер получает уведомление о паузе
+                  </div>
+                  <div class="rt-leaf">
+                    → Когда стройка возобновилась: кнопка <b>«Возобновить»</b>
+                  </div>
+                </div>
+                <div class="rt-step">
+                  Переместить карточку вручную:
+                </div>
+                <div class="rt-branch">
+                  <div class="rt-leaf">
+                    → Кнопка <b>«Переместить»</b> → выбрать нужную колонку-этап
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <q-separator class="q-my-sm" />
+
+            <div class="role-block">
+              <div class="role-block__title">
+                <q-icon name="chat" size="14px" class="q-mr-xs" />Коммуникация
+              </div>
+              <div class="role-tree">
+                <div class="rt-step">
+                  • Карточка → вкладка <b>Чат надзора</b> → общение с менеджером и командой по данному объекту
+                </div>
+                <div class="rt-step">
+                  • Замечания по чертежам → написать в чат, упомянуть дизайнера
+                </div>
+                <div class="rt-step">
+                  • Фото с объекта → прикрепить в чат через <q-icon name="attach_file" size="12px" />
+                </div>
+              </div>
+            </div>
+          </q-card-section>
+        </q-card>
+      </q-expansion-item>
+
+      <!-- ЗАМЕРЩИК -->
+      <q-expansion-item v-model="expanded.measurer" :header-style="myRoleKey==='measurer' ? 'background:#fffde7' : ''">
+        <template #header>
+          <q-item-section avatar>
+            <q-icon name="straighten" :color="myRoleKey==='measurer' ? 'amber-8' : 'grey-6'" size="22px" />
+          </q-item-section>
+          <q-item-section>
+            <div class="text-weight-medium" style="font-size: 14px">
+              Замерщик — порядок работы
+            </div>
+            <div style="font-size: 11px; color: #888">
+              Назначение → выезд → внести площадь → отчёт
+            </div>
+          </q-item-section>
+          <q-item-section v-if="myRoleKey==='measurer'" side>
+            <q-badge color="amber-8" label="ваша роль" style="font-size: 10px" />
+          </q-item-section>
+        </template>
+        <q-card flat>
+          <q-card-section class="q-pa-md">
+            <div class="role-block">
+              <div class="role-block__title">
+                <q-icon name="notifications" size="14px" class="q-mr-xs" />Получено задание на замер
+              </div>
+              <div class="role-tree">
+                <div class="rt-step">
+                  1. Уведомление: «Назначен на замер — [адрес]»
+                </div>
+                <div class="rt-step">
+                  2. CRM → найти карточку в колонке <b>«В ожидании»</b>
+                </div>
+                <div class="rt-step">
+                  3. Открыть карточку → вкладка <b>Исполнители</b> → мой дедлайн
+                </div>
+                <div class="rt-step">
+                  4. Получить данные для выезда:
+                </div>
+                <div class="rt-branch">
+                  <div class="rt-leaf">
+                    • Адрес объекта — вверху карточки
+                  </div>
+                  <div class="rt-leaf">
+                    • Телефон клиента — в разделе <q-icon name="people" size="12px" /> Клиенты → найти клиента
+                  </div>
+                  <div class="rt-leaf">
+                    • Вкладка <b>Данные</b> → особые инструкции менеджера
+                  </div>
+                  <div class="rt-leaf">
+                    • Вкладка <b>Файлы</b> → планировка застройщика (если есть)
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <q-separator class="q-my-sm" />
+
+            <div class="role-block">
+              <div class="role-block__title">
+                <q-icon name="home_work" size="14px" class="q-mr-xs" />После замера
+              </div>
+              <div class="role-tree">
+                <div class="rt-step">
+                  1. <q-icon name="description" size="13px" /> Договора → найти договор (по адресу или клиенту)
+                </div>
+                <div class="rt-step">
+                  2. <q-icon name="edit" size="13px" /> <b>Редактировать</b> → поле <b>Площадь</b> → ввести итоговые м²
+                </div>
+                <div class="rt-step">
+                  3. <b>Сохранить</b>
+                </div>
+                <div class="rt-step">
+                  4. Карточка CRM → вкладка <b>Чат сотрудников</b> → написать менеджеру:
+                </div>
+                <div class="rt-branch">
+                  <div class="rt-leaf">
+                    • Итоговая площадь: Х м²
+                  </div>
+                  <div class="rt-leaf">
+                    • Особенности планировки (сложные зоны, перепады высот и т.д.)
+                  </div>
+                  <div class="rt-leaf">
+                    • Загруженный на ЯД замерный план
+                  </div>
+                </div>
+                <div class="rt-step">
+                  5. Загрузить замерный план в ЯД → папка проекта → «Замерный план»
+                </div>
+              </div>
+            </div>
+          </q-card-section>
+        </q-card>
+      </q-expansion-item>
+
+      <!-- РУКОВОДИТЕЛЬ / СТАРШИЙ МЕНЕДЖЕР -->
+      <q-expansion-item v-model="expanded.director" :header-style="myRoleKey==='director' ? 'background:#fffde7' : ''">
+        <template #header>
+          <q-item-section avatar>
+            <q-icon name="admin_panel_settings" :color="myRoleKey==='director' ? 'amber-8' : 'grey-6'" size="22px" />
+          </q-item-section>
+          <q-item-section>
+            <div class="text-weight-medium" style="font-size: 14px">
+              Руководитель / Старший менеджер
+            </div>
+            <div style="font-size: 11px; color: #888">
+              Контроль, аналитика, управление командой
+            </div>
+          </q-item-section>
+          <q-item-section v-if="myRoleKey==='director'" side>
+            <q-badge color="amber-8" label="ваша роль" style="font-size: 10px" />
+          </q-item-section>
+        </template>
+        <q-card flat>
+          <q-card-section class="q-pa-md">
+            <div class="role-block">
+              <div class="role-block__title">
+                <q-icon name="wb_sunny" size="14px" class="q-mr-xs" />Каждое утро
+              </div>
+              <div class="role-tree">
+                <div class="rt-step">
+                  1. <q-icon name="notifications" size="13px" /> Уведомления → критические события
+                </div>
+                <div class="rt-step">
+                  2. CRM → обзор всех активных карточек
+                </div>
+                <div class="rt-branch">
+                  <div class="rt-leaf">
+                    ↳ Красные дедлайны → уточнить у менеджера/исполнителя причину
+                  </div>
+                  <div class="rt-leaf">
+                    ↳ Карточки «В ожидании» дольше 3 дней → уточнить у менеджера
+                  </div>
+                </div>
+                <div class="rt-step">
+                  3. Проверить здоровье сервера → в шапке кнопка <b>«55.3%»</b> → статус RAM и диска
+                </div>
+              </div>
+            </div>
+
+            <q-separator class="q-my-sm" />
+
+            <div class="role-block">
+              <div class="role-block__title">
+                <q-icon name="assessment" size="14px" class="q-mr-xs" />Еженедельная аналитика
+              </div>
+              <div class="role-tree">
+                <div class="rt-step">
+                  1. <q-icon name="bar_chart" size="13px" /> Отчёты → вкладка <b>«Общее»</b> → число новых договоров, динамика
+                </div>
+                <div class="rt-step">
+                  2. Вкладка <b>«Воронка»</b> → конверсия: сколько заказов прошло каждый этап
+                </div>
+                <div class="rt-step">
+                  3. Вкладка <b>«Клиенты»</b> → рост базы по месяцам
+                </div>
+                <div class="rt-step">
+                  4. <q-icon name="assessment" size="13px" /> Отчёты по сотрудникам → выбрать сотрудника → период:
+                </div>
+                <div class="rt-branch">
+                  <div class="rt-leaf">
+                    • Кол-во завершённых этапов
+                  </div>
+                  <div class="rt-leaf">
+                    • Среднее время выполнения vs норма
+                  </div>
+                  <div class="rt-leaf">
+                    • Суммы начисленных зарплат
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <q-separator class="q-my-sm" />
+
+            <div class="role-block">
+              <div class="role-block__title">
+                <q-icon name="badge" size="14px" class="q-mr-xs" />Управление командой
+              </div>
+              <div class="role-tree">
+                <div class="rt-step">
+                  Добавить сотрудника:
+                </div>
+                <div class="rt-branch">
+                  <div class="rt-leaf">
+                    → <q-icon name="badge" size="12px" /> Сотрудники → <q-icon name="add" size="12px" /> → ФИО, должность, логин, пароль
+                  </div>
+                  <div class="rt-leaf">
+                    → Кнопка «Пригласить» → сотрудник получит ссылку для первого входа
+                  </div>
+                  <div class="rt-leaf">
+                    → Вкладка «Telegram» → помочь подключить бота для уведомлений
+                  </div>
+                </div>
+                <div class="rt-step">
+                  Настроить права:
+                </div>
+                <div class="rt-branch">
+                  <div class="rt-leaf">
+                    → Карточка сотрудника → вкладка <b>Права</b> → индивидуальные переключатели
+                  </div>
+                  <div class="rt-leaf">
+                    → Или <q-icon name="admin_panel_settings" size="12px" /> Администрирование → <b>Матрица прав</b> → изменить всей роли
+                  </div>
+                </div>
+                <div class="rt-step">
+                  Уволить сотрудника:
+                </div>
+                <div class="rt-branch">
+                  <div class="rt-leaf">
+                    → Карточка сотрудника → статус «Уволен» → сотрудник теряет доступ
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <q-separator class="q-my-sm" />
+
+            <div class="role-block">
+              <div class="role-block__title">
+                <q-icon name="payments" size="14px" class="q-mr-xs" />Финансы и зарплаты
+              </div>
+              <div class="role-tree">
+                <div class="rt-step">
+                  1. <q-icon name="payments" size="13px" /> Зарплаты → фильтр по периоду (месяц)
+                </div>
+                <div class="rt-step">
+                  2. Вкладка <b>«По типам»</b> → итого к выплате по категориям
+                </div>
+                <div class="rt-step">
+                  3. Отметить оплаченными:
+                </div>
+                <div class="rt-branch">
+                  <div class="rt-leaf">
+                    → Нажать на строку → <b>«Отметить оплаченным»</b>
+                  </div>
+                  <div class="rt-leaf">
+                    → Или выбрать несколько → групповая отметка
+                  </div>
+                </div>
+                <div class="rt-step">
+                  4. Ставки сотрудника: карточка сотрудника → вкладка <b>Ставки</b> → изменить тариф
+                </div>
+              </div>
+            </div>
+
+            <q-separator class="q-my-sm" />
+
+            <div class="role-block">
+              <div class="role-block__title">
+                <q-icon name="settings" size="14px" class="q-mr-xs" />Системные настройки
+              </div>
+              <div class="role-tree">
+                <div class="rt-step">
+                  <q-icon name="admin_panel_settings" size="13px" /> Администрирование:
+                </div>
+                <div class="rt-branch">
+                  <div class="rt-leaf">
+                    • <b>Матрица прав ролей</b> — глобальные права по должностям
+                  </div>
+                  <div class="rt-leaf">
+                    • <b>Нормодни</b> — шаблоны сроков на каждый этап (для Timeline)
+                  </div>
+                  <div class="rt-leaf">
+                    • <b>Агенты</b> — партнёры с цветовыми метками на CRM-карточках
+                  </div>
+                  <div class="rt-leaf">
+                    • <b>Города</b> — справочник для договоров
+                  </div>
+                </div>
+              </div>
+            </div>
+          </q-card-section>
+        </q-card>
+      </q-expansion-item>
+
+      <!-- ══════════════════════════════════════════
+           СПРАВОЧНЫЕ РАЗДЕЛЫ
+           ══════════════════════════════════════════ -->
+
+      <q-item class="q-mt-sm" style="background: #f5f5f5; min-height: 36px">
+        <q-item-section>
+          <div style="font-size: 11px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.5px">
+            Детальные справки по разделам системы
+          </div>
+        </q-item-section>
+      </q-item>
+
+      <!-- НАВИГАЦИЯ -->
       <q-expansion-item
-        v-if="can('access.clients')"
+        v-model="expanded.nav"
+        icon="apps"
+        label="Навигация и интерфейс"
+        header-class="text-weight-medium"
+        style="font-size: 14px"
+      >
+        <q-card flat>
+          <q-card-section class="q-pa-md q-gutter-sm">
+            <img src="/help/dashboard.png" class="help-img" @error="e => e.target.style.display='none'">
+            <div class="help-topic">
+              <div class="help-topic__title">
+                <q-icon name="web_asset" size="15px" class="q-mr-xs" />Кнопки шапки (сверху)
+              </div>
+              <ul class="help-ul">
+                <li><q-icon name="menu" size="13px" /> <b>Меню</b> — открыть боковую панель</li>
+                <li><q-icon name="search" size="13px" /> <b>Поиск</b> — глобальный поиск по всей системе</li>
+                <li><q-icon name="refresh" size="13px" /> <b>Обновить</b> — перезагрузить данные страницы</li>
+                <li><q-icon name="menu_book" size="13px" /> <b>Инструкция</b> — эта страница</li>
+                <li><q-icon name="settings" size="13px" /> <b>Настройки уведомлений</b> — каналы и типы</li>
+                <li><q-icon name="notifications" size="13px" /> <b>Уведомления</b> — красная цифра = непрочитанных</li>
+                <li><q-icon name="add_to_home_screen" size="13px" /> <b>Установить приложение</b> — добавить на рабочий стол</li>
+                <li><q-icon name="logout" size="13px" /> <b>Выход</b> — завершить сеанс</li>
+              </ul>
+            </div>
+            <q-separator />
+            <div class="help-topic">
+              <div class="help-topic__title">
+                <q-icon name="menu" size="15px" class="q-mr-xs" />Боковая панель
+              </div>
+              <img src="/help/drawer-menu.png" class="help-img" @error="e => e.target.style.display='none'">
+              <ul class="help-ul">
+                <li>Нажмите <q-icon name="menu" size="13px" /> → откроется меню со всеми доступными разделами</li>
+                <li>Вверху — ваше имя, должность, аватар (нажмите → профиль)</li>
+                <li>Зелёный индикатор «N онлайн» — коллеги сейчас в системе</li>
+                <li><b>Ваш набор разделов зависит от должности</b> — это нормально, если у вас меньше пунктов чем у руководителя</li>
+              </ul>
+            </div>
+            <q-separator />
+            <div class="help-topic">
+              <div class="help-topic__title">
+                <q-icon name="screen_rotation" size="15px" class="q-mr-xs" />Горизонтальный режим
+              </div>
+              <img src="/help/landscape.png" class="help-img" @error="e => e.target.style.display='none'">
+              <ul class="help-ul">
+                <li>Поверните телефон — интерфейс адаптируется автоматически</li>
+                <li>При ширине ≥1024px боковое меню <b>постоянно видно слева</b> — не нужно открывать</li>
+                <li>Удобно для: таблиц зарплат, отчётов, CRM-доски, Timeline</li>
+                <li>Нижняя панель скрыта — навигация через боковое меню</li>
+              </ul>
+            </div>
+            <q-separator />
+            <div class="help-topic">
+              <div class="help-topic__title">
+                <q-icon name="add_to_home_screen" size="15px" class="q-mr-xs" />Установить на телефон (PWA)
+              </div>
+              <ul class="help-ul">
+                <li><b>Android Chrome:</b> нажать <q-icon name="add_to_home_screen" size="12px" /> в шапке или три точки ⋮ → «Добавить на главный экран»</li>
+                <li><b>iPhone Safari:</b> кнопка «Поделиться» → «На экран "Домой"» → «Добавить»</li>
+                <li>Приложение работает без браузерной строки, как нативное</li>
+              </ul>
+            </div>
+          </q-card-section>
+        </q-card>
+      </q-expansion-item>
+
+      <!-- КЛИЕНТЫ -->
+      <q-expansion-item
         v-model="expanded.clients"
         icon="people"
         label="Клиенты"
@@ -174,60 +1202,41 @@
         style="font-size: 14px"
       >
         <q-card flat>
-          <q-card-section class="q-pa-md q-gutter-md">
+          <q-card-section class="q-pa-md q-gutter-sm">
+            <img src="/help/client-form.png" class="help-img" @error="e => e.target.style.display='none'">
             <div class="help-topic">
               <div class="help-topic__title">
-                <q-icon name="people" size="16px" class="q-mr-xs" />Список клиентов
+                <q-icon name="person_add" size="15px" class="q-mr-xs" />Добавить клиента
               </div>
-              <img src="/help/clients.png" class="help-img" @error="e => e.target.style.display='none'">
-              <ol class="help-steps">
-                <li>Раздел <q-icon name="people" size="13px" /> <b>«Клиенты»</b> — полный список всех клиентов компании</li>
-                <li>Строка поиска вверху — найти по ФИО, телефону, email или адресу</li>
-                <li>Нажмите на клиента — откроется его карточка</li>
-              </ol>
+              <ul class="help-ul">
+                <li>Раздел <q-icon name="people" size="13px" /> Клиенты → <q-icon name="add" size="13px" /> (кнопка правый нижний угол)</li>
+                <li><b>ФИО</b> — полное имя (обязательно)</li>
+                <li><b>Телефон</b> — основной контакт для звонков и скриптов мессенджера</li>
+                <li><b>Email</b> — для документов и скриптов</li>
+                <li><b>Адрес</b> — адрес проживания или объекта (для справки)</li>
+                <li><b>Источник</b> — откуда пришёл: реклама / сарафан / сайт / выставка / агент / соцсети</li>
+                <li><b>Комментарий</b> — любые важные заметки: «требует частых звонков», «всё через WhatsApp» и т.д.</li>
+              </ul>
             </div>
-
             <q-separator />
-
             <div class="help-topic">
               <div class="help-topic__title">
-                <q-icon name="person_add" size="16px" class="q-mr-xs" />Создать нового клиента
+                <q-icon name="manage_accounts" size="15px" class="q-mr-xs" />Карточка клиента
               </div>
-              <ol class="help-steps">
-                <li>Нажмите кнопку <q-icon name="add" size="13px" /> <b>«Добавить»</b> в нижнем правом углу экрана</li>
-                <li><b>ФИО клиента</b> — обязательное поле</li>
-                <li><b>Телефон</b> — основной контакт для связи</li>
-                <li><b>Email</b> — для отправки документов</li>
-                <li><b>Адрес</b> — адрес объекта или проживания</li>
-                <li><b>Источник</b> — откуда пришёл клиент: реклама, сарафанное радио, соцсети, сайт и т.д.</li>
-                <li><b>Комментарий</b> — любые заметки: пожелания, особенности работы с клиентом</li>
-                <li>Нажмите <b>«Сохранить»</b> — клиент добавлен в базу</li>
-              </ol>
-            </div>
-
-            <q-separator />
-
-            <div class="help-topic">
-              <div class="help-topic__title">
-                <q-icon name="manage_accounts" size="16px" class="q-mr-xs" />Карточка клиента
-              </div>
-              <ol class="help-steps">
-                <li>Нажмите на клиента в списке — все его контакты и история</li>
-                <li>Нажмите <q-icon name="edit" size="13px" /> <b>«Редактировать»</b> — изменить данные</li>
-                <li>Кнопка <q-icon name="delete" size="13px" /> <b>«Удалить»</b> — удалить клиента (только если нет связанных договоров)</li>
-                <li>Раздел <b>«Договора»</b> в карточке — все договора этого клиента со статусами</li>
-                <li>Нажмите на договор в карточке — перейти к нему</li>
-              </ol>
+              <ul class="help-ul">
+                <li>Нажмите на клиента в списке → все контакты и привязанные договора</li>
+                <li><q-icon name="edit" size="13px" /> Редактировать → изменить любые данные</li>
+                <li>Блок «Договора» → все договора этого клиента с текущими статусами</li>
+                <li>Нажмите на договор → перейдёте к нему</li>
+                <li>Удаление возможно только если у клиента нет договоров</li>
+              </ul>
             </div>
           </q-card-section>
         </q-card>
       </q-expansion-item>
 
-      <!-- ══════════════════════════════════════════════════
-           3. ДОГОВОРА
-           ══════════════════════════════════════════════════ -->
+      <!-- ДОГОВОРА -->
       <q-expansion-item
-        v-if="can('access.contracts')"
         v-model="expanded.contracts"
         icon="description"
         label="Договора"
@@ -235,354 +1244,188 @@
         style="font-size: 14px"
       >
         <q-card flat>
-          <q-card-section class="q-pa-md q-gutter-md">
+          <q-card-section class="q-pa-md q-gutter-sm">
+            <img src="/help/contract-form.png" class="help-img" @error="e => e.target.style.display='none'">
             <div class="help-topic">
               <div class="help-topic__title">
-                <q-icon name="description" size="16px" class="q-mr-xs" />Список договоров и фильтры
+                <q-icon name="post_add" size="15px" class="q-mr-xs" />Создать договор
               </div>
-              <img src="/help/contracts.png" class="help-img" @error="e => e.target.style.display='none'">
-              <ol class="help-steps">
-                <li>Раздел <q-icon name="description" size="13px" /> <b>«Договора»</b> — все договора компании</li>
-                <li><b>Фильтр по статусу:</b> Новый заказ · СДАН · РАСТОРГНУТ · АВТОРСКИЙ НАДЗОР</li>
-                <li><b>Фильтр по типу:</b> Индивидуальный · Шаблонный</li>
-                <li><b>Фильтр по году</b> — выбрать конкретный год заключения договора</li>
-                <li>Строка поиска — по номеру договора или адресу объекта</li>
-              </ol>
-            </div>
-
-            <q-separator />
-
-            <div class="help-topic">
-              <div class="help-topic__title">
-                <q-icon name="post_add" size="16px" class="q-mr-xs" />Создать новый договор
-              </div>
-              <ol class="help-steps">
-                <li>Нажмите <q-icon name="add" size="13px" /> <b>«Добавить»</b></li>
-                <li><b>Номер договора</b> — уникальный (пример: 25-2026)</li>
-                <li><b>Клиент</b> — выберите из существующих или создайте нового прямо здесь</li>
+              <ul class="help-ul">
+                <li><b>Номер договора</b> — уникальный номер (пример: 47-2026)</li>
+                <li><b>Клиент</b> — выбрать из выпадающего списка или создать прямо здесь</li>
                 <li><b>Тип проекта</b> — Индивидуальный / Шаблонный</li>
-                <li><b>Адрес объекта</b> — адрес проектируемого помещения</li>
-                <li><b>Площадь</b> — площадь объекта в м²</li>
-                <li><b>Агент</b> — компания-партнёр, источник заказа</li>
-                <li><b>Город</b> — выбор из справочника</li>
-                <li>Нажмите <b>«Сохранить»</b> — договор создан. CRM-карточка появится автоматически в разделе <q-icon name="view_kanban" size="13px" /> СРМ</li>
-              </ol>
+                <li><b>Адрес объекта</b> — точный адрес проектируемого помещения</li>
+                <li><b>Площадь</b> — предварительная, уточняется после замера</li>
+                <li><b>Агент</b> — компания-партнёр, если заказ через агента</li>
+                <li>После сохранения → CRM карточка создаётся автоматически</li>
+              </ul>
             </div>
-
             <q-separator />
-
             <div class="help-topic">
               <div class="help-topic__title">
-                <q-icon name="find_in_page" size="16px" class="q-mr-xs" />Карточка договора
+                <q-icon name="swap_horiz" size="15px" class="q-mr-xs" />Статусы договора и переходы
               </div>
-              <ol class="help-steps">
-                <li>Нажмите на договор — детали: клиент, номер, тип, адрес, площадь, статус, агент</li>
-                <li>Нажмите <q-icon name="edit" size="13px" /> — редактировать данные договора</li>
-                <li>Вкладка <b>«Файлы»</b> — сканы договора и документы на Яндекс.Диске</li>
-              </ol>
+              <ul class="help-ul">
+                <li><b>Новый заказ</b> — договор создан, проект в работе</li>
+                <li><b>АВТОРСКИЙ НАДЗОР</b> → в разделе Надзора появится карточка объекта</li>
+                <li><b>СДАН</b> → проект полностью завершён</li>
+                <li><b>РАСТОРГНУТ</b> → договор прекращён</li>
+              </ul>
+              <div class="help-note">
+                Смена статуса: <q-icon name="description" size="12px" /> Договора → найти → <q-icon name="edit" size="12px" /> → поле «Статус» → сохранить
+              </div>
             </div>
-
             <q-separator />
-
             <div class="help-topic">
               <div class="help-topic__title">
-                <q-icon name="transfer_within_a_station" size="16px" class="q-mr-xs" />Перевод проекта в авторский надзор
+                <q-icon name="filter_list" size="15px" class="q-mr-xs" />Фильтры и поиск
               </div>
-              <ol class="help-steps">
-                <li>Когда дизайн-проект завершён — откройте нужный договор</li>
-                <li>Нажмите <q-icon name="edit" size="13px" /> → измените <b>статус</b> на <b>«АВТОРСКИЙ НАДЗОР»</b> → Сохранить</li>
-                <li>В разделе <q-icon name="engineering" size="13px" /> <b>«СРМ надзора»</b> автоматически появится карточка этого объекта</li>
-                <li>Для полного завершения — статус <b>«СДАН»</b></li>
-                <li>При расторжении — статус <b>«РАСТОРГНУТ»</b></li>
-              </ol>
+              <ul class="help-ul">
+                <li>Фильтр по статусу — «Новый заказ» / «СДАН» / «РАСТОРГНУТ» / «АВТОРСКИЙ НАДЗОР»</li>
+                <li>Фильтр по типу — Индивидуальный / Шаблонный</li>
+                <li>Фильтр по году — только договора выбранного года</li>
+                <li>Поиск — по номеру договора или адресу объекта</li>
+              </ul>
             </div>
           </q-card-section>
         </q-card>
       </q-expansion-item>
 
-      <!-- ══════════════════════════════════════════════════
-           4. CRM ДОСКА
-           ══════════════════════════════════════════════════ -->
+      <!-- CRM ДОСКА -->
       <q-expansion-item
-        v-if="can('access.crm')"
         v-model="expanded.crm"
         icon="view_kanban"
-        label="CRM — Доска проектов"
+        label="CRM — доска проектов"
         header-class="text-weight-medium"
         style="font-size: 14px"
       >
         <q-card flat>
-          <q-card-section class="q-pa-md q-gutter-md">
+          <q-card-section class="q-pa-md q-gutter-sm">
+            <img src="/help/crm-board.png" class="help-img" @error="e => e.target.style.display='none'">
             <div class="help-topic">
               <div class="help-topic__title">
-                <q-icon name="view_kanban" size="16px" class="q-mr-xs" />Обзор CRM-доски
-              </div>
-              <img src="/help/crm-board.png" class="help-img" @error="e => e.target.style.display='none'">
-              <ol class="help-steps">
-                <li>Раздел <q-icon name="view_kanban" size="13px" /> <b>«СРМ»</b> — активные проекты на канбан-доске</li>
-                <li>Кнопки <b>«Инд.»</b> и <b>«Шабл.»</b> — переключение между Индивидуальными и Шаблонными проектами</li>
-                <li>Кнопки <b>«Активные»</b> / <b>«Архив»</b> — активные или завершённые проекты</li>
-                <li>Число на кнопке типа (Инд. 5) — количество активных карточек</li>
-              </ol>
-            </div>
-
-            <q-separator />
-
-            <div class="help-topic">
-              <div class="help-topic__title">
-                <q-icon name="view_column" size="16px" class="q-mr-xs" />Колонки и этапы
+                <q-icon name="view_column" size="15px" class="q-mr-xs" />Колонки по типам
               </div>
               <div class="help-note">
                 Индивидуальный проект:
               </div>
-              <ol class="help-steps" style="margin-top: 4px">
-                <li><b>Новый заказ</b> → <b>В ожидании</b> → <b>Стадия 1: Планировочные решения</b></li>
-                <li>→ <b>Стадия 2: Концепция дизайна</b> → <b>Стадия 3: Рабочие чертежи</b> → <b>Выполненный проект</b></li>
-              </ol>
+              <div style="font-size: 12px; color: #444; margin-top: 4px; line-height: 1.8">
+                Новый заказ → В ожидании → <b>Стадия 1:</b> планировочные решения → <b>Стадия 2:</b> концепция дизайна → <b>Стадия 3:</b> рабочие чертежи → Выполненный проект
+              </div>
               <div class="help-note q-mt-sm">
                 Шаблонный проект:
               </div>
-              <ol class="help-steps" style="margin-top: 4px">
-                <li><b>Новый заказ</b> → <b>В ожидании</b> → <b>Стадия 1: Планировочные решения</b></li>
-                <li>→ <b>Стадия 2: Рабочие чертежи</b> → <b>Стадия 3: 3Д визуализация</b> → <b>Выполненный проект</b></li>
-              </ol>
-              <ol class="help-steps q-mt-sm">
-                <li>Нажмите на кнопку колонки (название этапа) — отобразятся карточки этой стадии</li>
-                <li>Число в кнопке колонки — количество карточек на данном этапе</li>
-              </ol>
+              <div style="font-size: 12px; color: #444; margin-top: 4px; line-height: 1.8">
+                Новый заказ → В ожидании → <b>Стадия 1:</b> планировочные решения → <b>Стадия 2:</b> рабочие чертежи → <b>Стадия 3:</b> 3D визуализация → Выполненный проект
+              </div>
             </div>
-
             <q-separator />
-
             <div class="help-topic">
               <div class="help-topic__title">
-                <q-icon name="credit_card" size="16px" class="q-mr-xs" />Мини-карточка в колонке
+                <q-icon name="credit_card" size="15px" class="q-mr-xs" />Что видно на мини-карточке
               </div>
-              <ol class="help-steps">
-                <li>Каждая карточка показывает: номер договора, статус, адрес объекта, площадь, агент</li>
-                <li>Команда (число участников) — нажмите, чтобы раскрыть список</li>
-                <li>Цветные бейджи дедлайнов — сроки этапов (красный = просрочено)</li>
-                <li>Кнопка <q-icon name="open_in_new" size="13px" /> <b>«Данные карточки»</b> — открыть полную карточку проекта</li>
-                <li>Кнопка <q-icon name="swap_horiz" size="13px" /> <b>«Переместить»</b> — переместить карточку в другую колонку</li>
-              </ol>
-            </div>
-
-            <q-separator />
-
-            <div class="help-topic">
-              <div class="help-topic__title">
-                <q-icon name="swap_horiz" size="16px" class="q-mr-xs" />Перемещение карточки между этапами
-              </div>
-              <ol class="help-steps">
-                <li>Нажмите <q-icon name="swap_horiz" size="13px" /> <b>«Переместить»</b> на карточке</li>
-                <li>Выберите целевой этап из выпадающего списка</li>
-                <li>Карточка переместится мгновенно</li>
-                <li><b>Важно:</b> некоторые роли могут перемещать только в следующую колонку. Руководство может перемещать в любую</li>
-              </ol>
-            </div>
-
-            <q-separator />
-
-            <div class="help-topic">
-              <div class="help-topic__title">
-                <q-icon name="inventory" size="16px" class="q-mr-xs" />Архив CRM
-              </div>
-              <ol class="help-steps">
-                <li>Нажмите <b>«Архив»</b> вверху — список завершённых и переданных в надзор проектов</li>
-                <li>Архивные карточки доступны только для просмотра</li>
-                <li>Поиск по адресу, номеру договора или клиенту</li>
-              </ol>
+              <ul class="help-ul">
+                <li>Номер договора, адрес объекта, площадь, агент</li>
+                <li>Цветные бейджи дедлайнов — <span style="color:#c62828">красный</span> = просрочено, <span style="color:#f57c00">оранжевый</span> = скоро</li>
+                <li>Число участников команды — нажмите для просмотра</li>
+                <li>Кнопка <b>«Данные карточки»</b> <q-icon name="open_in_new" size="12px" /> — открыть полную карточку</li>
+                <li>Кнопка <b>«Переместить»</b> <q-icon name="swap_horiz" size="12px" /> — сменить стадию</li>
+              </ul>
             </div>
           </q-card-section>
         </q-card>
       </q-expansion-item>
 
-      <!-- ══════════════════════════════════════════════════
-           5. CRM КАРТОЧКА ПРОЕКТА
-           ══════════════════════════════════════════════════ -->
+      <!-- CRM КАРТОЧКА -->
       <q-expansion-item
-        v-if="can('access.crm')"
         v-model="expanded.crmCard"
         icon="open_in_new"
-        label="CRM — Карточка проекта (подробно)"
+        label="CRM — карточка проекта (вкладки)"
         header-class="text-weight-medium"
         style="font-size: 14px"
       >
         <q-card flat>
-          <q-card-section class="q-pa-md q-gutter-md">
+          <q-card-section class="q-pa-md q-gutter-sm">
+            <img src="/help/crm-card-team.png" class="help-img" @error="e => e.target.style.display='none'">
             <div class="help-topic">
               <div class="help-topic__title">
-                <q-icon name="open_in_new" size="16px" class="q-mr-xs" />Открыть карточку проекта
+                <q-icon name="group" size="15px" class="q-mr-xs" />Вкладка «Исполнители»
               </div>
-              <img src="/help/crm-card.png" class="help-img" @error="e => e.target.style.display='none'">
-              <ol class="help-steps">
-                <li>На CRM-доске нажмите <q-icon name="open_in_new" size="13px" /> <b>«Данные карточки»</b></li>
-                <li>Страница карточки: номер договора, адрес, площадь, тип проекта, текущий этап</li>
-                <li>Ниже — разделы: Команда · Timeline · Файлы · Чат · Выплаты · Workflow</li>
-              </ol>
+              <ul class="help-ul">
+                <li>Список участников по ролям: Замерщик · Дизайнер · Чертёжник</li>
+                <li>Для каждого: статус задачи, дедлайн, кнопка назначения</li>
+                <li><b>«Назначить»</b> → выбрать сотрудника из списка → установить дедлайн → сохранить</li>
+                <li>После назначения сотрудник получает уведомление <q-icon name="notifications" size="12px" /></li>
+                <li>Сменить исполнителя — нажмите рядом с именем текущего исполнителя</li>
+              </ul>
             </div>
-
             <q-separator />
-
+            <img src="/help/crm-card-timeline.png" class="help-img" @error="e => e.target.style.display='none'">
             <div class="help-topic">
               <div class="help-topic__title">
-                <q-icon name="group" size="16px" class="q-mr-xs" />Команда — назначение исполнителей
+                <q-icon name="schedule" size="15px" class="q-mr-xs" />Вкладка «Сроки» (Timeline)
               </div>
-              <ol class="help-steps">
-                <li>Раздел <b>«Команда»</b> — участники проекта по ролям и этапам</li>
-                <li>Каждый этап: дизайнер, чертёжник, замерщик — и дедлайн</li>
-                <li>Кнопка <b>«Назначить исполнителя»</b> — выбрать сотрудника для этапа</li>
-                <li>После назначения сотрудник получает уведомление <q-icon name="notifications" size="13px" /></li>
-                <li>Нажмите на имя участника — его контакты</li>
-                <li>Сменить исполнителя можно в любой момент — кнопка рядом с его именем</li>
-              </ol>
+              <ul class="help-ul">
+                <li>Расписание всех этапов с плановыми датами начала и окончания</li>
+                <li>Нормодни — рассчитываются автоматически по шаблонам из Администрирования</li>
+                <li>Просроченные дедлайны выделены красным</li>
+                <li>Руководитель может изменить дедлайн — нажмите на дату</li>
+              </ul>
             </div>
-
             <q-separator />
-
+            <img src="/help/crm-workflow.png" class="help-img" @error="e => e.target.style.display='none'">
             <div class="help-topic">
               <div class="help-topic__title">
-                <q-icon name="schedule" size="16px" class="q-mr-xs" />Timeline — сроки этапов
+                <q-icon name="alt_route" size="15px" class="q-mr-xs" />Вкладка «Данные» (Workflow)
               </div>
-              <ol class="help-steps">
-                <li>Раздел <b>«Timeline»</b> — расписание всех этапов с плановыми датами</li>
-                <li>Для каждого этапа: дата начала, дедлайн, количество рабочих дней</li>
-                <li>Просроченные дедлайны выделены красным цветом</li>
-                <li>Руководитель может изменить дедлайн — нажмите на дату этапа</li>
-                <li>Нормодни рассчитываются автоматически на основе шаблонов в Администрировании</li>
-              </ol>
+              <ul class="help-ul">
+                <li>Текущий статус workflow, доступные кнопки действий</li>
+                <li>Кнопки меняются в зависимости от вашей роли и текущего статуса</li>
+                <li>Исполнитель видит: <b>«Сдать работу»</b></li>
+                <li>СДП видит: <b>«Принять»</b> / <b>«Отклонить»</b></li>
+                <li>Менеджер видит: <b>«Отправить клиенту»</b> / <b>«Клиент одобрил»</b> / <b>«Подписать акт»</b> / <b>«Добавить круг правок»</b></li>
+              </ul>
             </div>
-
             <q-separator />
-
             <div class="help-topic">
               <div class="help-topic__title">
-                <q-icon name="folder_open" size="16px" class="q-mr-xs" />Файлы проекта (Яндекс.Диск)
+                <q-icon name="chat" size="15px" class="q-mr-xs" />Вкладка «Чат сотрудников»
               </div>
-              <ol class="help-steps">
-                <li>Раздел <b>«Файлы»</b> — структура папок проекта на Яндекс.Диске</li>
-                <li>Папки организованы по этапам: Стадия 1 · Стадия 2 · Стадия 3</li>
-                <li>Нажмите на папку <q-icon name="folder" size="13px" /> — раскрыть содержимое</li>
-                <li>Нажмите на файл — открыть по публичной ссылке в браузере</li>
-                <li>Файлы загружаются через приложение Яндекс.Диска — путь к папке указан в договоре</li>
-              </ol>
+              <ul class="help-ul">
+                <li>Внутренний чат команды по данному проекту</li>
+                <li>Если чата нет — нажмите «Создать чат», участники добавятся автоматически</li>
+                <li>Сообщение: ввести → <q-icon name="send" size="12px" />; файл: <q-icon name="attach_file" size="12px" /></li>
+                <li>Удержать сообщение → Ответить / Закрепить / Удалить</li>
+              </ul>
             </div>
-
             <q-separator />
-
             <div class="help-topic">
               <div class="help-topic__title">
-                <q-icon name="chat" size="16px" class="q-mr-xs" />Чат команды по проекту
+                <q-icon name="support_agent" size="15px" class="q-mr-xs" />Вкладка «Чат с клиентом»
               </div>
-              <ol class="help-steps">
-                <li>Раздел <b>«Чат»</b> — внутренний чат всех участников этого проекта</li>
-                <li>Если чата ещё нет — нажмите <b>«Создать чат»</b></li>
-                <li>Чат автоматически включает всех назначенных исполнителей</li>
-                <li>Отправка текста: введите → <q-icon name="send" size="13px" /></li>
-                <li>Отправка файла: <q-icon name="attach_file" size="13px" /> → выбрать файл</li>
-                <li>Удержите сообщение — меню: Ответить · Закрепить · Удалить</li>
-              </ol>
+              <ul class="help-ul">
+                <li>Переписка с заказчиком по данному проекту</li>
+                <li>Клиент получает ссылку и открывает чат <b>без регистрации</b></li>
+                <li>Ссылка отправляется автоматически при нажатии «Отправить клиенту» в workflow</li>
+              </ul>
             </div>
-
             <q-separator />
-
             <div class="help-topic">
               <div class="help-topic__title">
-                <q-icon name="payments" size="16px" class="q-mr-xs" />Выплаты по проекту
+                <q-icon name="payments" size="15px" class="q-mr-xs" />Вкладка «Оплаты»
               </div>
-              <ol class="help-steps">
-                <li>Раздел <b>«Выплаты»</b> — начисления сотрудникам за этапы данного проекта</li>
-                <li>Каждая строка: сотрудник, роль, этап, сумма, статус (Оплачено / Не оплачено)</li>
+              <ul class="help-ul">
+                <li>Начисленные зарплаты исполнителям за этапы данного проекта</li>
                 <li>Суммы рассчитываются автоматически по ставкам сотрудника</li>
-              </ol>
+                <li>Статус каждой выплаты: Оплачено / Не оплачено</li>
+              </ul>
             </div>
           </q-card-section>
         </q-card>
       </q-expansion-item>
 
-      <!-- ══════════════════════════════════════════════════
-           6. WORKFLOW — СОГЛАСОВАНИЕ
-           ══════════════════════════════════════════════════ -->
+      <!-- АВТОРСКИЙ НАДЗОР -->
       <q-expansion-item
-        v-if="can('access.crm')"
-        v-model="expanded.workflow"
-        icon="alt_route"
-        label="Workflow — процесс согласования работ"
-        header-class="text-weight-medium"
-        style="font-size: 14px"
-      >
-        <q-card flat>
-          <q-card-section class="q-pa-md q-gutter-md">
-            <div class="help-topic">
-              <div class="help-topic__title">
-                <q-icon name="alt_route" size="16px" class="q-mr-xs" />Цикл согласования каждой стадии
-              </div>
-              <ol class="help-steps">
-                <li>🔵 <b>В работе</b> — исполнитель выполняет задание</li>
-                <li>🟡 <b>На проверке</b> — исполнитель нажал «Сдать работу», ожидает проверки СДП/ГАП</li>
-                <li>🔴 <b>Доработка</b> — СДП отклонил, указал причину. Исполнитель исправляет и сдаёт снова</li>
-                <li>🟢 <b>Принято СДП</b> — работа принята, следующий шаг разблокирован для менеджера</li>
-                <li>🔵 <b>Согласование с клиентом</b> — менеджер нажал «Отправить клиенту»</li>
-                <li>✅ <b>Клиент одобрил</b> — менеджер нажал «Клиент одобрил»</li>
-                <li>📝 <b>Подписание акта</b> — менеджер нажал «Подписать акт» → стадия закрыта</li>
-                <li>Проект автоматически переходит к следующей стадии</li>
-              </ol>
-            </div>
-
-            <q-separator />
-
-            <div class="help-topic">
-              <div class="help-topic__title">
-                <q-icon name="upload" size="16px" class="q-mr-xs" />Исполнитель (Дизайнер / Чертёжник) — сдача работы
-              </div>
-              <ol class="help-steps">
-                <li>Загрузите файлы работы в папку проекта на Яндекс.Диске</li>
-                <li>В CRM-карточке нажмите <b>«Сдать работу»</b></li>
-                <li>Статус изменится на «На проверке», СДП/ГАП получит уведомление</li>
-                <li>Если работа <b>отклонена</b> — придёт уведомление <q-icon name="notifications" size="13px" /> с причиной</li>
-                <li>Прочитайте причину → исправьте файлы → нажмите «Сдать работу» снова</li>
-              </ol>
-            </div>
-
-            <q-separator />
-
-            <div class="help-topic">
-              <div class="help-topic__title">
-                <q-icon name="rate_review" size="16px" class="q-mr-xs" />СДП / ГАП — проверка и приёмка
-              </div>
-              <ol class="help-steps">
-                <li>При сдаче работы — придёт уведомление <q-icon name="notifications" size="13px" /></li>
-                <li>Откройте карточку → <b>«Файлы»</b> — просмотрите результат</li>
-                <li><b>Принять</b> — работа принята, следующий шаг открывается менеджеру</li>
-                <li><b>Отклонить</b> → укажите <b>причину</b> текстом и <b>этап доработки</b> → подтвердите</li>
-                <li>Исполнитель получит уведомление с вашим комментарием</li>
-                <li>Кнопка <b>«Сбросить этап»</b> — вернуть карточку в статус «В работе» вручную (для руководства)</li>
-              </ol>
-            </div>
-
-            <q-separator />
-
-            <div class="help-topic">
-              <div class="help-topic__title">
-                <q-icon name="supervisor_account" size="16px" class="q-mr-xs" />Менеджер — согласование с клиентом
-              </div>
-              <ol class="help-steps">
-                <li>После принятия СДП — нажмите <b>«Отправить клиенту»</b> (скрипт уходит клиенту в чат)</li>
-                <li>Клиент просматривает материалы и даёт ответ</li>
-                <li>Клиент одобрил → нажмите <b>«Клиент одобрил»</b></li>
-                <li>Клиент просит правки → нажмите <b>«Добавить круг правок»</b> → работа возвращается исполнителю</li>
-                <li>После одобрения → <b>«Подписать акт»</b> → стадия закрыта, переход к следующей</li>
-              </ol>
-            </div>
-          </q-card-section>
-        </q-card>
-      </q-expansion-item>
-
-      <!-- ══════════════════════════════════════════════════
-           7. АВТОРСКИЙ НАДЗОР
-           ══════════════════════════════════════════════════ -->
-      <q-expansion-item
-        v-if="can('access.supervision')"
         v-model="expanded.supervision"
         icon="engineering"
         label="Авторский надзор"
@@ -590,84 +1433,47 @@
         style="font-size: 14px"
       >
         <q-card flat>
-          <q-card-section class="q-pa-md q-gutter-md">
+          <q-card-section class="q-pa-md q-gutter-sm">
+            <img src="/help/supervision-card.png" class="help-img" @error="e => e.target.style.display='none'">
             <div class="help-topic">
               <div class="help-topic__title">
-                <q-icon name="transfer_within_a_station" size="16px" class="q-mr-xs" />Перевод проекта из CRM в надзор
+                <q-icon name="engineering" size="15px" class="q-mr-xs" />Карточка надзора
               </div>
-              <ol class="help-steps">
-                <li>Откройте раздел <q-icon name="description" size="13px" /> <b>«Договора»</b> → найдите нужный договор</li>
-                <li>Нажмите <q-icon name="edit" size="13px" /> → измените статус на <b>«АВТОРСКИЙ НАДЗОР»</b> → Сохранить</li>
-                <li>В разделе <q-icon name="engineering" size="13px" /> <b>«СРМ надзора»</b> автоматически создастся карточка этого объекта</li>
-                <li>CRM-карточка переходит в Архив</li>
-              </ol>
+              <ul class="help-ul">
+                <li>Адрес объекта, текущий этап строительства, ответственный ДАН</li>
+                <li>Статус «Приостановлено» — объект на паузе (кнопка «Возобновить»)</li>
+                <li>Переместить в другую колонку → кнопка «Переместить»</li>
+                <li>Завершить текущий этап → «Завершить этап» (следующий откроется автоматически)</li>
+              </ul>
             </div>
-
             <q-separator />
-
+            <img src="/help/supervision-visits.png" class="help-img" @error="e => e.target.style.display='none'">
             <div class="help-topic">
               <div class="help-topic__title">
-                <q-icon name="engineering" size="16px" class="q-mr-xs" />Доска надзора
+                <q-icon name="event_available" size="15px" class="q-mr-xs" />Вкладка «Выезды» — журнал
               </div>
-              <img src="/help/supervision.png" class="help-img" @error="e => e.target.style.display='none'">
-              <ol class="help-steps">
-                <li>Раздел <q-icon name="engineering" size="13px" /> <b>«СРМ надзора»</b> — все объекты на авторском надзоре</li>
-                <li>Карточки распределены по колонкам-этапам</li>
-                <li>Кнопки <b>«Активные»</b> / <b>«Архив»</b> — переключение видов</li>
-                <li>Нажмите на карточку — детальная страница объекта</li>
-              </ol>
+              <ul class="help-ul">
+                <li>Каждый выезд ДАН на объект нужно фиксировать здесь</li>
+                <li><b>«+ Добавить выезд»</b> → дата посещения + комментарий что проверили</li>
+                <li>История всех выездов хранится в системе — руководство видит активность ДАН</li>
+              </ul>
             </div>
-
             <q-separator />
-
             <div class="help-topic">
               <div class="help-topic__title">
-                <q-icon name="task_alt" size="16px" class="q-mr-xs" />Карточка надзора — этапы и управление
+                <q-icon name="pause" size="15px" class="q-mr-xs" />Пауза и возобновление
               </div>
-              <ol class="help-steps">
-                <li>Адрес объекта, текущий этап, ответственный ДАН (дизайнер авторского надзора)</li>
-                <li>Список этапов с отметками выполнения</li>
-                <li>Кнопка <b>«Завершить этап»</b> — текущий этап помечается выполненным, следующий активируется</li>
-                <li>Кнопка <b>«Пауза»</b> — приостановить надзор (если стройка остановлена). Укажите причину паузы</li>
-                <li>Кнопка <b>«Возобновить»</b> — снять паузу</li>
-                <li>Кнопка <b>«Переместить»</b> — перевести карточку в другую колонку вручную</li>
-              </ol>
-            </div>
-
-            <q-separator />
-
-            <div class="help-topic">
-              <div class="help-topic__title">
-                <q-icon name="event_available" size="16px" class="q-mr-xs" />Журнал визитов на объект
-              </div>
-              <ol class="help-steps">
-                <li>Вкладка <b>«Визиты»</b> в карточке надзора</li>
-                <li>Нажмите <b>«Добавить визит»</b> → укажите дату выезда и комментарий (что проверили)</li>
-                <li>Список всех визитов с датами и комментариями хранится в системе</li>
-                <li>История доступна руководству для контроля активности ДАН</li>
-              </ol>
-            </div>
-
-            <q-separator />
-
-            <div class="help-topic">
-              <div class="help-topic__title">
-                <q-icon name="timeline" size="16px" class="q-mr-xs" />Timeline надзора и файлы
-              </div>
-              <ol class="help-steps">
-                <li>Вкладка <b>«Timeline»</b> — плановые сроки этапов надзора</li>
-                <li>Руководитель задаёт дедлайн для каждого этапа — нажмите на поле даты</li>
-                <li>Вкладка <b>«Файлы»</b> — рабочие чертежи и документы по объекту на Яндекс.Диске</li>
-                <li>Вкладка <b>«Чат»</b> — внутренний чат команды надзора по данному объекту</li>
-              </ol>
+              <ul class="help-ul">
+                <li>Стройка остановилась → кнопка <b>«Пауза»</b> → указать причину</li>
+                <li>Менеджер получит уведомление о паузе</li>
+                <li>Стройка возобновилась → кнопка <b>«Возобновить»</b></li>
+              </ul>
             </div>
           </q-card-section>
         </q-card>
       </q-expansion-item>
 
-      <!-- ══════════════════════════════════════════════════
-           8. ЧАТ СОТРУДНИКОВ
-           ══════════════════════════════════════════════════ -->
+      <!-- ЧАТ СОТРУДНИКОВ -->
       <q-expansion-item
         v-model="expanded.chats"
         icon="chat"
@@ -676,77 +1482,43 @@
         style="font-size: 14px"
       >
         <q-card flat>
-          <q-card-section class="q-pa-md q-gutter-md">
+          <q-card-section class="q-pa-md q-gutter-sm">
+            <img src="/help/chats.png" class="help-img" @error="e => e.target.style.display='none'">
             <div class="help-topic">
               <div class="help-topic__title">
-                <q-icon name="chat" size="16px" class="q-mr-xs" />Список чатов
+                <q-icon name="textsms" size="15px" class="q-mr-xs" />Работа в чат-комнате
               </div>
-              <img src="/help/chats.png" class="help-img" @error="e => e.target.style.display='none'">
-              <ol class="help-steps">
-                <li>Раздел <q-icon name="chat" size="13px" /> <b>«Чат сотрудников»</b> — внутренние чаты по проектам</li>
-                <li>Каждый чат привязан к CRM-проекту или объекту надзора</li>
-                <li>Красная цифра = количество непрочитанных сообщений</li>
-                <li>Нажмите на чат — откроется комната переписки</li>
-              </ol>
-            </div>
-
-            <q-separator />
-
-            <div class="help-topic">
-              <div class="help-topic__title">
-                <q-icon name="add_comment" size="16px" class="q-mr-xs" />Создание чата по проекту
-              </div>
-              <ol class="help-steps">
-                <li>Откройте CRM-карточку или карточку надзора</li>
-                <li>Перейдите на вкладку <b>«Чат»</b></li>
-                <li>Если чат не создан — нажмите <b>«Создать чат»</b></li>
-                <li>Чат автоматически включает всех назначенных исполнителей проекта</li>
-                <li>Добавить нового участника — <q-icon name="person_add" size="13px" /> в заголовке чата</li>
-              </ol>
-            </div>
-
-            <q-separator />
-
-            <div class="help-topic">
-              <div class="help-topic__title">
-                <q-icon name="textsms" size="16px" class="q-mr-xs" />Работа в чат-комнате
-              </div>
-              <ol class="help-steps">
-                <li>Введите текст → нажмите <q-icon name="send" size="13px" /> или Enter</li>
-                <li>Нажмите <q-icon name="attach_file" size="13px" /> — прикрепить файл (фото, PDF, документ)</li>
+              <ul class="help-ul">
+                <li>Текст: ввести → <q-icon name="send" size="12px" /> или Enter</li>
+                <li>Файл/фото: <q-icon name="attach_file" size="12px" /> → выбрать файл</li>
                 <li>
-                  <b>Удержите сообщение</b> — контекстное меню:
-                  <ul>
-                    <li><q-icon name="reply" size="13px" /> <b>Ответить</b> — процитировать сообщение в ответе</li>
-                    <li><q-icon name="push_pin" size="13px" /> <b>Закрепить</b> — закреплённые видны вверху чата</li>
-                    <li><q-icon name="content_copy" size="13px" /> <b>Копировать</b> — скопировать текст</li>
-                    <li><q-icon name="delete" size="13px" /> <b>Удалить</b> — только своё сообщение</li>
-                  </ul>
+                  <b>Удержать сообщение</b> → меню:
+                  <q-icon name="reply" size="12px" /> Ответить ·
+                  <q-icon name="push_pin" size="12px" /> Закрепить ·
+                  <q-icon name="content_copy" size="12px" /> Копировать ·
+                  <q-icon name="delete" size="12px" /> Удалить
                 </li>
-                <li>Нажмите на плашку закреплённых сообщений вверху — просмотреть все закреплённые</li>
-                <li>Сообщения обновляются в реальном времени — не нужно обновлять страницу</li>
-              </ol>
+                <li>Закреплённые сообщения видны вверху чата — нажмите для просмотра всех</li>
+                <li>Сообщения обновляются в реальном времени — не надо обновлять страницу</li>
+              </ul>
             </div>
-
             <q-separator />
-
             <div class="help-topic">
               <div class="help-topic__title">
-                <q-icon name="group" size="16px" class="q-mr-xs" />Участники чата
+                <q-icon name="group" size="15px" class="q-mr-xs" />Участники
               </div>
-              <ol class="help-steps">
-                <li>Нажмите на заголовок чата или <q-icon name="group" size="13px" /> — список участников</li>
-                <li>Менеджер или руководитель могут добавлять и удалять участников</li>
-                <li>При смене исполнителя в проекте — чат обновляется автоматически</li>
-              </ol>
+              <ul class="help-ul">
+                <li>Нажмите на заголовок чата → список участников</li>
+                <li><q-icon name="person_add" size="12px" /> — добавить нового участника</li>
+                <li>Удалить участника → удержать имя в списке → «Удалить»</li>
+                <li>При смене исполнителя в проекте чат обновляется автоматически</li>
+              </ul>
             </div>
           </q-card-section>
         </q-card>
       </q-expansion-item>
 
-      <!-- ══════════════════════════════════════════════════
-           9. ЧАТ С КЛИЕНТАМИ
-           ══════════════════════════════════════════════════ -->
+      <!-- ЧАТ С КЛИЕНТАМИ -->
       <q-expansion-item
         v-model="expanded.clientChats"
         icon="support_agent"
@@ -755,58 +1527,38 @@
         style="font-size: 14px"
       >
         <q-card flat>
-          <q-card-section class="q-pa-md q-gutter-md">
+          <q-card-section class="q-pa-md q-gutter-sm">
+            <img src="/help/client-chats.png" class="help-img" @error="e => e.target.style.display='none'">
             <div class="help-topic">
               <div class="help-topic__title">
-                <q-icon name="support_agent" size="16px" class="q-mr-xs" />Как работает клиентский чат
+                <q-icon name="link" size="15px" class="q-mr-xs" />Как клиент получает доступ
               </div>
-              <img src="/help/client-chats.png" class="help-img" @error="e => e.target.style.display='none'">
-              <ol class="help-steps">
-                <li>Раздел <q-icon name="support_agent" size="13px" /> <b>«Чат с клиентами»</b> — переписки с заказчиками</li>
-                <li>Каждый чат привязан к CRM-проекту</li>
-                <li>Клиент получает ссылку-приглашение — открывает чат в браузере <b>без регистрации и пароля</b></li>
-                <li>Менеджер видит и отвечает в этом же разделе</li>
-              </ol>
+              <ul class="help-ul">
+                <li><b>Автоматически</b> — при нажатии «Отправить клиенту» в workflow скрипт с ссылкой уходит клиенту</li>
+                <li><b>Вручную</b> — откройте чат → скопируйте ссылку → отправьте сами</li>
+                <li>Клиент открывает ссылку → видит чат <b>без регистрации и пароля</b></li>
+                <li>Клиент может: писать текст, прикладывать фото замечаний, отправлять документы</li>
+              </ul>
             </div>
-
             <q-separator />
-
             <div class="help-topic">
               <div class="help-topic__title">
-                <q-icon name="link" size="16px" class="q-mr-xs" />Как клиент получает доступ к чату
+                <q-icon name="message" size="15px" class="q-mr-xs" />Работа с клиентским чатом
               </div>
-              <ol class="help-steps">
-                <li><b>Автоматически</b> — при нажатии кнопки Workflow «Отправить клиенту» скрипт с ссылкой уходит клиенту (через Telegram-бота или WhatsApp)</li>
-                <li><b>Вручную</b> — откройте клиентский чат → скопируйте ссылку → отправьте клиенту сами</li>
-                <li>Клиент переходит по ссылке — видит интерфейс чата на своём телефоне</li>
-                <li>Клиент может: отправлять текст, фото с объекта, документы с замечаниями</li>
-              </ol>
-            </div>
-
-            <q-separator />
-
-            <div class="help-topic">
-              <div class="help-topic__title">
-                <q-icon name="message" size="16px" class="q-mr-xs" />Работа в клиентском чате
-              </div>
-              <ol class="help-steps">
-                <li>Нажмите на чат в списке → откроется переписка с клиентом</li>
-                <li>Сообщения клиента — слева. Ваши — справа</li>
-                <li>Введите текст → <q-icon name="send" size="13px" /></li>
-                <li>Нажмите <q-icon name="attach_file" size="13px" /> — отправить файл клиенту</li>
-                <li>Клиент получит push-уведомление в браузере (если разрешил)</li>
-                <li>Переписка обновляется в реальном времени</li>
-              </ol>
+              <ul class="help-ul">
+                <li>Раздел <q-icon name="support_agent" size="12px" /> → список всех активных чатов с клиентами</li>
+                <li>Красная цифра = непрочитанное сообщение от клиента</li>
+                <li>Нажмите на чат → открывается переписка</li>
+                <li>Сообщения клиента — слева, ваши — справа</li>
+                <li>Клиент получает push-уведомление при ответе (если разрешил браузеру)</li>
+              </ul>
             </div>
           </q-card-section>
         </q-card>
       </q-expansion-item>
 
-      <!-- ══════════════════════════════════════════════════
-           10. ФАЙЛЫ
-           ══════════════════════════════════════════════════ -->
+      <!-- ФАЙЛЫ -->
       <q-expansion-item
-        v-if="can('access.crm')"
         v-model="expanded.files"
         icon="folder"
         label="Файлы (Яндекс.Диск)"
@@ -814,44 +1566,37 @@
         style="font-size: 14px"
       >
         <q-card flat>
-          <q-card-section class="q-pa-md q-gutter-md">
+          <q-card-section class="q-pa-md q-gutter-sm">
+            <img src="/help/files.png" class="help-img" @error="e => e.target.style.display='none'">
             <div class="help-topic">
               <div class="help-topic__title">
-                <q-icon name="folder" size="16px" class="q-mr-xs" />Структура файлов
+                <q-icon name="folder" size="15px" class="q-mr-xs" />Структура папок
               </div>
-              <img src="/help/files.png" class="help-img" @error="e => e.target.style.display='none'">
-              <ol class="help-steps">
-                <li>Раздел <q-icon name="folder" size="13px" /> <b>«Файлы»</b> — дерево папок проектов на Яндекс.Диске</li>
-                <li>Структура: <b>Проекты</b> → <b>Номер договора</b> → <b>Стадии</b> → <b>Файлы</b></li>
-                <li>Нажмите на папку <q-icon name="folder" size="13px" /> — раскрыть содержимое</li>
-                <li>Размер папки отображается справа от названия</li>
-                <li>Нажмите на файл — открыть по публичной ссылке в браузере (PDF, JPG, DWG и др.)</li>
-              </ol>
+              <ul class="help-ul">
+                <li>Папки организованы по проектам: <b>Проекты → Номер договора → Стадии → Файлы</b></li>
+                <li>Нажмите <q-icon name="folder" size="12px" /> — раскрыть папку и увидеть файлы</li>
+                <li>Нажмите на файл — открыть по публичной ссылке в браузере</li>
+                <li>Поддерживаются: PDF, DWG, JPG, PNG, DOCX и другие</li>
+              </ul>
             </div>
-
             <q-separator />
-
             <div class="help-topic">
               <div class="help-topic__title">
-                <q-icon name="upload_file" size="16px" class="q-mr-xs" />Загрузка файлов в проект
+                <q-icon name="upload_file" size="15px" class="q-mr-xs" />Загрузка файлов
               </div>
-              <ol class="help-steps">
+              <ul class="help-ul">
                 <li>Файлы загружаются через <b>приложение Яндекс.Диска</b> на телефоне или компьютере</li>
-                <li>Путь папки указан в карточке договора → поле «Папка ЯД»</li>
-                <li>После загрузки файлы автоматически появятся в разделе «Файлы» CRM</li>
-                <li>Файлы также можно прикрепить в чат — они сохранятся в истории переписки</li>
-                <li>Прямо из CRM-карточки (вкладка «Файлы») — просматривайте, но загружайте через ЯД</li>
-              </ol>
+                <li>Путь к папке проекта: в CRM-карточке → поле «Папка ЯД» (пример: Проекты / 47-2026)</li>
+                <li>Правило именования: <i>ПЛ-01_v1.pdf</i>, <i>Концепция_финал.pdf</i> — понятное, с версией</li>
+                <li>После загрузки файлы автоматически появятся в системе через несколько секунд</li>
+              </ul>
             </div>
           </q-card-section>
         </q-card>
       </q-expansion-item>
 
-      <!-- ══════════════════════════════════════════════════
-           11. ЗАРПЛАТЫ
-           ══════════════════════════════════════════════════ -->
+      <!-- ЗАРПЛАТЫ -->
       <q-expansion-item
-        v-if="can('access.salaries')"
         v-model="expanded.salaries"
         icon="payments"
         label="Зарплаты и выплаты"
@@ -859,54 +1604,37 @@
         style="font-size: 14px"
       >
         <q-card flat>
-          <q-card-section class="q-pa-md q-gutter-md">
+          <q-card-section class="q-pa-md q-gutter-sm">
+            <img src="/help/salaries-detail.png" class="help-img" @error="e => e.target.style.display='none'">
             <div class="help-topic">
               <div class="help-topic__title">
-                <q-icon name="payments" size="16px" class="q-mr-xs" />Список выплат
+                <q-icon name="filter_list" size="15px" class="q-mr-xs" />Фильтры
               </div>
-              <img src="/help/salaries.png" class="help-img" @error="e => e.target.style.display='none'">
-              <ol class="help-steps">
-                <li>Раздел <q-icon name="payments" size="13px" /> <b>«Зарплаты»</b> — все начисленные выплаты</li>
-                <li>Фильтры: <b>период</b> (месяц/год) · <b>сотрудник</b> · <b>тип выплаты</b> · <b>статус</b></li>
-                <li>Статус: <b style="color: #c62828">Не оплачено</b> / <b style="color: #2e7d32">Оплачено</b></li>
-                <li>Типы: Дизайн · Чертежи · Замер · Авторский надзор · Управление</li>
-              </ol>
+              <ul class="help-ul">
+                <li>По периоду — выбрать месяц и год</li>
+                <li>По сотруднику — только его начисления</li>
+                <li>По типу выплаты — дизайн / чертежи / замер / надзор / управление</li>
+                <li>По статусу — Оплачено / Не оплачено</li>
+              </ul>
             </div>
-
             <q-separator />
-
             <div class="help-topic">
               <div class="help-topic__title">
-                <q-icon name="check_circle" size="16px" class="q-mr-xs" />Отметить выплату как оплаченную
+                <q-icon name="check_circle" size="15px" class="q-mr-xs" />Отметить оплату
               </div>
-              <ol class="help-steps">
-                <li>Нажмите на строку выплаты → откроется детальная карточка</li>
-                <li>Нажмите <b>«Отметить оплаченным»</b> — статус изменится на «Оплачено»</li>
-                <li>Повторное нажатие → <b>«Снять отметку»</b> — вернуть в «Не оплачено»</li>
-              </ol>
-            </div>
-
-            <q-separator />
-
-            <div class="help-topic">
-              <div class="help-topic__title">
-                <q-icon name="summarize" size="16px" class="q-mr-xs" />Сводка и пересчёт
-              </div>
-              <ol class="help-steps">
-                <li>Вкладка <b>«По типам»</b> — итоговые суммы в разбивке по типам выплат</li>
-                <li>«К выплате» — сумма всех неоплаченных начислений за период</li>
-                <li>Кнопка <b>«Пересчитать»</b> — пересчитать суммы по действующим ставкам сотрудников</li>
-              </ol>
+              <ul class="help-ul">
+                <li>Нажать на строку выплаты → <b>«Отметить оплаченным»</b></li>
+                <li>Чтобы отменить → нажать снова → <b>«Снять отметку»</b></li>
+                <li>Вкладка <b>«По типам»</b> → итоговые суммы по категориям за период</li>
+                <li>«К выплате» — сумма всех неоплаченных начислений</li>
+              </ul>
             </div>
           </q-card-section>
         </q-card>
       </q-expansion-item>
 
-      <!-- ══════════════════════════════════════════════════
-           12. ОТЧЁТЫ
-           ══════════════════════════════════════════════════ -->
+      <!-- ОТЧЁТЫ -->
       <q-expansion-item
-        v-if="can('access.reports')"
         v-model="expanded.reports"
         icon="bar_chart"
         label="Отчёты и статистика"
@@ -914,44 +1642,36 @@
         style="font-size: 14px"
       >
         <q-card flat>
-          <q-card-section class="q-pa-md q-gutter-md">
+          <q-card-section class="q-pa-md q-gutter-sm">
+            <img src="/help/reports.png" class="help-img" @error="e => e.target.style.display='none'">
             <div class="help-topic">
               <div class="help-topic__title">
-                <q-icon name="bar_chart" size="16px" class="q-mr-xs" />Разделы аналитики
+                <q-icon name="bar_chart" size="15px" class="q-mr-xs" />Разделы аналитики
               </div>
-              <img src="/help/reports.png" class="help-img" @error="e => e.target.style.display='none'">
-              <ol class="help-steps">
-                <li>Раздел <q-icon name="bar_chart" size="13px" /> <b>«Отчёты и Статистика»</b> — аналитика бизнеса</li>
-                <li><b>«Общее»</b> — договора, клиенты, проекты по периодам</li>
-                <li><b>«Воронка»</b> — конверсия: сколько заказов прошло каждый этап</li>
-                <li><b>«Клиенты»</b> — динамика прироста клиентской базы по месяцам</li>
-                <li><b>«По проектам»</b> — детальная статистика по завершённым проектам</li>
-                <li>Фильтр периода и типа проекта — вверху страницы</li>
-              </ol>
+              <ul class="help-ul">
+                <li><b>Общее</b> — договора и клиенты по периодам, типам, городам</li>
+                <li><b>Воронка</b> — конверсия: сколько заказов прошло каждый этап</li>
+                <li><b>Клиенты</b> — динамика прироста базы по месяцам</li>
+                <li><b>По проектам</b> — статистика по завершённым проектам</li>
+              </ul>
             </div>
-
             <q-separator />
-
             <div class="help-topic">
               <div class="help-topic__title">
-                <q-icon name="assessment" size="16px" class="q-mr-xs" />Отчёты по сотрудникам (KPI)
+                <q-icon name="assessment" size="15px" class="q-mr-xs" />Отчёты по сотрудникам
               </div>
-              <ol class="help-steps">
-                <li>Раздел <q-icon name="assessment" size="13px" /> <b>«Отчёты по сотрудникам»</b> — KPI каждого сотрудника</li>
-                <li>Выберите сотрудника из списка и период (месяц)</li>
-                <li>Данные: количество завершённых этапов · среднее время выполнения · суммы выплат</li>
-                <li>Графики по месяцам — анализ динамики эффективности</li>
-              </ol>
+              <ul class="help-ul">
+                <li>Выбрать сотрудника и период → показывает KPI за месяц</li>
+                <li>Данные: кол-во завершённых этапов · среднее время · суммы выплат</li>
+                <li>Графики по месяцам → динамика эффективности</li>
+              </ul>
             </div>
           </q-card-section>
         </q-card>
       </q-expansion-item>
 
-      <!-- ══════════════════════════════════════════════════
-           13. СОТРУДНИКИ
-           ══════════════════════════════════════════════════ -->
+      <!-- СОТРУДНИКИ -->
       <q-expansion-item
-        v-if="can('access.employees')"
         v-model="expanded.employees"
         icon="badge"
         label="Сотрудники"
@@ -959,85 +1679,49 @@
         style="font-size: 14px"
       >
         <q-card flat>
-          <q-card-section class="q-pa-md q-gutter-md">
+          <q-card-section class="q-pa-md q-gutter-sm">
+            <img src="/help/employees.png" class="help-img" @error="e => e.target.style.display='none'">
             <div class="help-topic">
               <div class="help-topic__title">
-                <q-icon name="badge" size="16px" class="q-mr-xs" />Список сотрудников
+                <q-icon name="person_add" size="15px" class="q-mr-xs" />Добавить сотрудника
               </div>
-              <img src="/help/employees.png" class="help-img" @error="e => e.target.style.display='none'">
-              <ol class="help-steps">
-                <li>Раздел <q-icon name="badge" size="13px" /> <b>«Сотрудники»</b> — все сотрудники компании</li>
-                <li>Фильтр по должности — вверху страницы</li>
-                <li>Статус: <b style="color: #2e7d32">Активный</b> / <b style="color: #888">Уволен</b></li>
-                <li>Нажмите на сотрудника — его карточка</li>
-              </ol>
+              <ul class="help-ul">
+                <li>ФИО · Телефон · Email — контактные данные</li>
+                <li><b>Должность</b> — определяет базовые права и роль в workflow</li>
+                <li><b>Логин</b> — имя пользователя для входа (латиница без пробелов)</li>
+                <li><b>Пароль</b> — временный, сотрудник сменит в профиле</li>
+                <li>Кнопка «Пригласить» → ссылка для первого входа</li>
+              </ul>
             </div>
-
             <q-separator />
-
             <div class="help-topic">
               <div class="help-topic__title">
-                <q-icon name="person_add" size="16px" class="q-mr-xs" />Добавить нового сотрудника
+                <q-icon name="security" size="15px" class="q-mr-xs" />Права доступа
               </div>
-              <ol class="help-steps">
-                <li>Нажмите <q-icon name="add" size="13px" /> <b>«Добавить»</b></li>
-                <li><b>ФИО</b> · Телефон · Email — контактные данные</li>
-                <li><b>Должность</b> — основная роль: Дизайнер · Чертёжник · Менеджер · СДП · ДАН · Замерщик и др.</li>
-                <li><b>Логин</b> — имя пользователя для входа</li>
-                <li><b>Пароль</b> — начальный пароль (сотрудник сменит в профиле)</li>
-                <li>Нажмите <b>«Сохранить»</b></li>
-              </ol>
+              <ul class="help-ul">
+                <li>Карточка сотрудника → вкладка <b>Права</b></li>
+                <li>По умолчанию права берутся из матрицы должности</li>
+                <li>Переключатели — индивидуальная настройка для конкретного сотрудника</li>
+                <li>«Сбросить до умолчаний» → вернуть права должности</li>
+                <li>Изменить права всей должности → Администрирование → Матрица прав</li>
+              </ul>
             </div>
-
             <q-separator />
-
             <div class="help-topic">
               <div class="help-topic__title">
-                <q-icon name="security" size="16px" class="q-mr-xs" />Права доступа сотрудника
+                <q-icon name="monetization_on" size="15px" class="q-mr-xs" />Ставки
               </div>
-              <ol class="help-steps">
-                <li>В карточке сотрудника — вкладка <b>«Права»</b></li>
-                <li>По умолчанию права наследуются от должности</li>
-                <li>Переключите нужные права — индивидуальная настройка для этого сотрудника</li>
-                <li>Кнопка <b>«Сбросить до умолчаний»</b> — вернуть права должности</li>
-                <li>Категории прав: доступ к разделам · создание/редактирование/удаление данных · финансы</li>
-              </ol>
-            </div>
-
-            <q-separator />
-
-            <div class="help-topic">
-              <div class="help-topic__title">
-                <q-icon name="send" size="16px" class="q-mr-xs" />Пригласить и подключить Telegram
-              </div>
-              <ol class="help-steps">
-                <li>В карточке сотрудника — кнопка <b>«Пригласить»</b> → отправляется ссылка для первого входа</li>
-                <li>Вкладка <b>«Telegram»</b> — подключить бота для уведомлений</li>
-                <li>Сотрудник сканирует QR-код или копирует токен и отправляет боту</li>
-              </ol>
-            </div>
-
-            <q-separator />
-
-            <div class="help-topic">
-              <div class="help-topic__title">
-                <q-icon name="monetization_on" size="16px" class="q-mr-xs" />Ставки сотрудника
-              </div>
-              <ol class="help-steps">
-                <li>Вкладка <b>«Ставки»</b> — тарифы для расчёта зарплаты</li>
-                <li>Задаются по типу проекта (Индивидуальный / Шаблонный) и этапу (Стадия 1, 2, 3)</li>
-                <li>При завершении этапа выплата рассчитывается автоматически по ставке</li>
-              </ol>
+              <ul class="help-ul">
+                <li>Карточка → вкладка <b>Ставки</b> → тариф по типу проекта и этапу</li>
+                <li>При завершении этапа зарплата рассчитывается автоматически по ставке</li>
+              </ul>
             </div>
           </q-card-section>
         </q-card>
       </q-expansion-item>
 
-      <!-- ══════════════════════════════════════════════════
-           14. АДМИНИСТРИРОВАНИЕ
-           ══════════════════════════════════════════════════ -->
+      <!-- АДМИНИСТРИРОВАНИЕ -->
       <q-expansion-item
-        v-if="can('access.admin')"
         v-model="expanded.admin"
         icon="admin_panel_settings"
         label="Администрирование"
@@ -1045,267 +1729,27 @@
         style="font-size: 14px"
       >
         <q-card flat>
-          <q-card-section class="q-pa-md q-gutter-md">
+          <q-card-section class="q-pa-md q-gutter-sm">
+            <img src="/help/admin.png" class="help-img" @error="e => e.target.style.display='none'">
             <div class="help-topic">
               <div class="help-topic__title">
-                <q-icon name="admin_panel_settings" size="16px" class="q-mr-xs" />Системные настройки
+                <q-icon name="admin_panel_settings" size="15px" class="q-mr-xs" />Что здесь можно сделать
               </div>
-              <img src="/help/admin.png" class="help-img" @error="e => e.target.style.display='none'">
-              <ol class="help-steps">
-                <li>Раздел <q-icon name="admin_panel_settings" size="13px" /> <b>«Администрирование»</b> — доступен только руководству</li>
-                <li><b>Матрица прав ролей</b> — глобальные права по должностям. Изменения применяются ко всем сотрудникам данной должности</li>
-                <li><b>Нормодни</b> — шаблоны рабочих дней на каждый этап по типу проекта. Используются для автоматического расчёта дедлайнов Timeline</li>
-                <li><b>Города</b> — справочник городов для указания в договорах</li>
-                <li><b>Агенты</b> — список компаний-партнёров с цветовой маркировкой. Каждый агент отображается цветным тегом в CRM-карточках</li>
-                <li><b>Индикатор диска</b> в шапке (цветной %) — нажмите для просмотра детальной статистики сервера (CPU, RAM, диск)</li>
-              </ol>
+              <ul class="help-ul">
+                <li><b>Матрица прав ролей</b> — изменить права сразу всей должности</li>
+                <li><b>Нормодни</b> — шаблоны рабочих дней на каждый этап; используются для Timeline</li>
+                <li><b>Агенты</b> — компании-партнёры с цветовыми метками (видны на CRM-карточках)</li>
+                <li><b>Города</b> — справочник для договоров</li>
+                <li><b>Статус сервера</b> → кнопка «XX%» в шапке → CPU, RAM, диск</li>
+              </ul>
             </div>
-          </q-card-section>
-        </q-card>
-      </q-expansion-item>
-
-      <!-- ══════════════════════════════════════════════════
-           РОЛИ — КРАТКОЕ РУКОВОДСТВО
-           ══════════════════════════════════════════════════ -->
-
-      <!-- МЕНЕДЖЕР -->
-      <q-expansion-item
-        v-if="isMySection('manager')"
-        v-model="expanded.manager"
-        :header-style="isMySection('manager') ? 'background: #fffde7' : ''"
-        style="font-size: 14px"
-      >
-        <template #header>
-          <q-item-section avatar>
-            <q-icon name="manage_accounts" :color="isMySection('manager') ? 'orange-8' : 'grey-7'" />
-          </q-item-section>
-          <q-item-section class="text-weight-medium">
-            Менеджер — мой рабочий день
-          </q-item-section>
-          <q-item-section v-if="isMySection('manager')" side>
-            <q-badge color="orange" label="ваша роль" style="font-size: 10px" />
-          </q-item-section>
-        </template>
-        <q-card flat>
-          <q-card-section class="q-pa-md">
-            <div class="help-note q-mb-sm">
-              Основные задачи менеджера в CRM:
-            </div>
-            <ol class="help-steps">
-              <li><q-icon name="people" size="13px" /> Добавить клиента → раздел Клиенты → <q-icon name="add" size="13px" /></li>
-              <li><q-icon name="description" size="13px" /> Создать договор → раздел Договора → <q-icon name="add" size="13px" /> → номер, клиент, тип, адрес, площадь</li>
-              <li><q-icon name="view_kanban" size="13px" /> После создания договора — CRM-карточка появляется в «Новый заказ» автоматически</li>
-              <li>Переместить карточку → <q-icon name="swap_horiz" size="13px" /> «Переместить» на карточке → выбрать этап</li>
-              <li>Назначить исполнителей → открыть карточку → «Команда» → «Назначить»</li>
-              <li>Workflow: после принятия СДП → «Отправить клиенту» → «Клиент одобрил» → «Подписать акт»</li>
-              <li>Перевести в надзор → в договоре сменить статус на «АВТОРСКИЙ НАДЗОР»</li>
-              <li><q-icon name="support_agent" size="13px" /> Чат с клиентами — переписка с заказчиком</li>
-              <li>Отслеживать дедлайны — красные бейджи в CRM-карточках = просрочка</li>
-            </ol>
-          </q-card-section>
-        </q-card>
-      </q-expansion-item>
-
-      <!-- ДИЗАЙНЕР -->
-      <q-expansion-item
-        v-if="isMySection('designer')"
-        v-model="expanded.designer"
-        :header-style="isMySection('designer') ? 'background: #fffde7' : ''"
-        style="font-size: 14px"
-      >
-        <template #header>
-          <q-item-section avatar>
-            <q-icon name="palette" :color="isMySection('designer') ? 'orange-8' : 'grey-7'" />
-          </q-item-section>
-          <q-item-section class="text-weight-medium">
-            Дизайнер — мой рабочий день
-          </q-item-section>
-          <q-item-section v-if="isMySection('designer')" side>
-            <q-badge color="orange" label="ваша роль" style="font-size: 10px" />
-          </q-item-section>
-        </template>
-        <q-card flat>
-          <q-card-section class="q-pa-md">
-            <ol class="help-steps">
-              <li><q-icon name="view_kanban" size="13px" /> Мои проекты → раздел СРМ → карточки, где вы назначены</li>
-              <li>Открыть карточку → «Команда» — ваши этапы выделены. «Timeline» — ваш дедлайн</li>
-              <li>Загрузить работу → приложение Яндекс.Диска → папка проекта → нужная стадия</li>
-              <li>Сдать работу → кнопка <b>«Сдать работу»</b> в карточке</li>
-              <li>При отклонении → <q-icon name="notifications" size="13px" /> уведомление с причиной → исправить → сдать снова</li>
-              <li><q-icon name="folder" size="13px" /> Файлы → изучить ТЗ и материалы предыдущих стадий</li>
-              <li><q-icon name="chat" size="13px" /> Чат → вкладка «Чат» в карточке — общение с командой</li>
-            </ol>
-          </q-card-section>
-        </q-card>
-      </q-expansion-item>
-
-      <!-- ЧЕРТЁЖНИК -->
-      <q-expansion-item
-        v-if="isMySection('draftsman')"
-        v-model="expanded.draftsman"
-        :header-style="isMySection('draftsman') ? 'background: #fffde7' : ''"
-        style="font-size: 14px"
-      >
-        <template #header>
-          <q-item-section avatar>
-            <q-icon name="architecture" :color="isMySection('draftsman') ? 'orange-8' : 'grey-7'" />
-          </q-item-section>
-          <q-item-section class="text-weight-medium">
-            Чертёжник — мой рабочий день
-          </q-item-section>
-          <q-item-section v-if="isMySection('draftsman')" side>
-            <q-badge color="orange" label="ваша роль" style="font-size: 10px" />
-          </q-item-section>
-        </template>
-        <q-card flat>
-          <q-card-section class="q-pa-md">
-            <ol class="help-steps">
-              <li><q-icon name="view_kanban" size="13px" /> Мои проекты → раздел СРМ → этапы «Рабочие чертежи»</li>
-              <li>Открыть карточку → вкладка «Файлы» → изучить ТЗ от дизайнера</li>
-              <li>Дедлайн чертежей → вкладка «Timeline»</li>
-              <li>Загрузить чертежи → приложение Яндекс.Диска → папка проекта → Стадия 3</li>
-              <li>Готово → кнопка <b>«Сдать работу»</b></li>
-              <li>Отклонение → уведомление с комментарием → исправить → сдать снова</li>
-              <li><q-icon name="chat" size="13px" /> Вкладка «Чат» → общение с командой и менеджером</li>
-            </ol>
-          </q-card-section>
-        </q-card>
-      </q-expansion-item>
-
-      <!-- СДП / ГАП -->
-      <q-expansion-item
-        v-if="isMySection('sdp')"
-        v-model="expanded.sdp"
-        :header-style="isMySection('sdp') ? 'background: #fffde7' : ''"
-        style="font-size: 14px"
-      >
-        <template #header>
-          <q-item-section avatar>
-            <q-icon name="rate_review" :color="isMySection('sdp') ? 'orange-8' : 'grey-7'" />
-          </q-item-section>
-          <q-item-section class="text-weight-medium">
-            СДП / ГАП — приёмка работ
-          </q-item-section>
-          <q-item-section v-if="isMySection('sdp')" side>
-            <q-badge color="orange" label="ваша роль" style="font-size: 10px" />
-          </q-item-section>
-        </template>
-        <q-card flat>
-          <q-card-section class="q-pa-md">
-            <ol class="help-steps">
-              <li><q-icon name="notifications" size="13px" /> При сдаче работы исполнителем — придёт уведомление</li>
-              <li>Откройте карточку → вкладка <b>«Файлы»</b> → просмотрите результат работы</li>
-              <li><b>Принять</b> — работа принята, следующий шаг разблокируется для менеджера</li>
-              <li><b>Отклонить</b> → укажите причину и этап доработки → подтвердите</li>
-              <li>Исполнитель получит ваш комментарий и уведомление</li>
-              <li>Карточки на проверке — в <q-icon name="view_kanban" size="13px" /> СРМ, статус «На проверке» (жёлтый)</li>
-              <li><q-icon name="bar_chart" size="13px" /> Отчёты — аналитика по вашим проектам</li>
-            </ol>
-          </q-card-section>
-        </q-card>
-      </q-expansion-item>
-
-      <!-- ДАН -->
-      <q-expansion-item
-        v-if="isMySection('dan')"
-        v-model="expanded.dan"
-        :header-style="isMySection('dan') ? 'background: #fffde7' : ''"
-        style="font-size: 14px"
-      >
-        <template #header>
-          <q-item-section avatar>
-            <q-icon name="engineering" :color="isMySection('dan') ? 'orange-8' : 'grey-7'" />
-          </q-item-section>
-          <q-item-section class="text-weight-medium">
-            ДАН — Дизайнер авторского надзора
-          </q-item-section>
-          <q-item-section v-if="isMySection('dan')" side>
-            <q-badge color="orange" label="ваша роль" style="font-size: 10px" />
-          </q-item-section>
-        </template>
-        <q-card flat>
-          <q-card-section class="q-pa-md">
-            <ol class="help-steps">
-              <li><q-icon name="engineering" size="13px" /> Мои объекты → раздел «СРМ надзора»</li>
-              <li>Открыть карточку объекта → адрес, текущий этап, контакты прораба/клиента</li>
-              <li>Выезд на объект → вкладка <b>«Визиты»</b> → «Добавить визит» → дата + комментарий</li>
-              <li>Завершили этап → кнопка <b>«Завершить этап»</b></li>
-              <li>Стройка остановлена → <b>«Пауза»</b> с указанием причины. Возобновилась → <b>«Возобновить»</b></li>
-              <li><q-icon name="folder" size="13px" /> Файлы объекта (чертежи) → раздел «Файлы» или вкладка «Файлы» в карточке надзора</li>
-              <li><q-icon name="chat" size="13px" /> Чат → вкладка «Чат» в карточке надзора — общение с командой</li>
-            </ol>
-          </q-card-section>
-        </q-card>
-      </q-expansion-item>
-
-      <!-- ЗАМЕРЩИК -->
-      <q-expansion-item
-        v-if="isMySection('measurer')"
-        v-model="expanded.measurer"
-        :header-style="isMySection('measurer') ? 'background: #fffde7' : ''"
-        style="font-size: 14px"
-      >
-        <template #header>
-          <q-item-section avatar>
-            <q-icon name="straighten" :color="isMySection('measurer') ? 'orange-8' : 'grey-7'" />
-          </q-item-section>
-          <q-item-section class="text-weight-medium">
-            Замерщик — мой рабочий день
-          </q-item-section>
-          <q-item-section v-if="isMySection('measurer')" side>
-            <q-badge color="orange" label="ваша роль" style="font-size: 10px" />
-          </q-item-section>
-        </template>
-        <q-card flat>
-          <q-card-section class="q-pa-md">
-            <ol class="help-steps">
-              <li><q-icon name="view_kanban" size="13px" /> Объекты для замера → раздел СРМ → карточки в «В ожидании»</li>
-              <li>Открыть карточку → адрес объекта, контакты клиента</li>
-              <li><q-icon name="folder" size="13px" /> Вкладка «Файлы» → планировки для подготовки к замеру</li>
-              <li>После замера → обновить площадь: в разделе <q-icon name="description" size="13px" /> Договора → найти договор → <q-icon name="edit" size="13px" /> → поле «Площадь» → Сохранить</li>
-              <li><q-icon name="chat" size="13px" /> Вкладка «Чат» в карточке → сообщить менеджеру о результатах замера</li>
-            </ol>
-          </q-card-section>
-        </q-card>
-      </q-expansion-item>
-
-      <!-- РУКОВОДИТЕЛЬ / СТАРШИЙ МЕНЕДЖЕР -->
-      <q-expansion-item
-        v-if="isMySection('director')"
-        v-model="expanded.director"
-        :header-style="isMySection('director') ? 'background: #fffde7' : ''"
-        style="font-size: 14px"
-      >
-        <template #header>
-          <q-item-section avatar>
-            <q-icon name="admin_panel_settings" :color="isMySection('director') ? 'orange-8' : 'grey-7'" />
-          </q-item-section>
-          <q-item-section class="text-weight-medium">
-            Старший менеджер / Руководитель студии
-          </q-item-section>
-          <q-item-section v-if="isMySection('director')" side>
-            <q-badge color="orange" label="ваша роль" style="font-size: 10px" />
-          </q-item-section>
-        </template>
-        <q-card flat>
-          <q-card-section class="q-pa-md">
-            <ol class="help-steps">
-              <li><q-icon name="view_kanban" size="13px" /> Мониторинг проектов → раздел СРМ — все проекты студии</li>
-              <li>Контроль дедлайнов → красные бейджи в карточках = просрочка</li>
-              <li><q-icon name="badge" size="13px" /> Управление сотрудниками → раздел Сотрудники: добавить, уволить, настроить права</li>
-              <li><q-icon name="payments" size="13px" /> Зарплаты → контроль начислений, отметить оплаченными</li>
-              <li><q-icon name="bar_chart" size="13px" /> Аналитика → раздел Отчёты: динамика бизнеса, воронка продаж</li>
-              <li><q-icon name="assessment" size="13px" /> KPI сотрудников → раздел Отчёты по сотрудникам</li>
-              <li><q-icon name="admin_panel_settings" size="13px" /> Системные настройки → Администрирование: матрица прав, нормодни, агенты, города</li>
-              <li>Состояние сервера → цветной % диска в шапке → нажмите для статистики RAM и диска</li>
-            </ol>
           </q-card-section>
         </q-card>
       </q-expansion-item>
     </q-list>
 
-    <div class="text-center q-mt-lg" style="font-size: 11px; color: #bbb">
-      Interior Studio CRM v{{ appVersion }} · crm.festivalcolor.ru
+    <div class="text-center q-mt-lg" style="font-size: 11px; color: #ccc">
+      Interior Studio CRM · crm.festivalcolor.ru
     </div>
   </q-page>
 </template>
@@ -1313,11 +1757,8 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from 'src/stores/auth'
-import { usePermission } from 'src/composables/usePermission'
 
 const authStore = useAuthStore()
-const { can } = usePermission()
-const appVersion = '1.3.0'
 
 const POSITION_MAP = {
   'Менеджер': 'manager',
@@ -1332,22 +1773,26 @@ const POSITION_MAP = {
   'Замерщик': 'measurer',
 }
 
-const mySection = computed(() => {
+const myRoleKey = computed(() => {
   const pos = authStore.userPosition || ''
-  return POSITION_MAP[pos] || POSITION_MAP[pos.split('/')[0]?.trim()] || null
+  return POSITION_MAP[pos] || null
 })
 
-function isMySection(key) {
-  return mySection.value === key
-}
-
 const expanded = ref({
-  general: true,
+  // роли
+  manager: false,
+  designer: false,
+  draftsman: false,
+  sdp: false,
+  dan: false,
+  measurer: false,
+  director: false,
+  // справочники
+  nav: false,
   clients: false,
   contracts: false,
   crm: false,
   crmCard: false,
-  workflow: false,
   supervision: false,
   chats: false,
   clientChats: false,
@@ -1356,58 +1801,93 @@ const expanded = ref({
   reports: false,
   employees: false,
   admin: false,
-  manager: false,
-  designer: false,
-  draftsman: false,
-  sdp: false,
-  dan: false,
-  measurer: false,
-  director: false,
 })
 
 onMounted(() => {
-  const section = mySection.value
-  if (section) {
-    expanded.value[section] = true
+  const key = myRoleKey.value
+  if (key) {
+    expanded.value[key] = true
   }
 })
 </script>
 
 <style scoped>
+/* ─── Деревья действий по ролям ─── */
+.role-block {
+  margin-bottom: 4px;
+}
+.role-block__title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #333;
+  display: flex;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.role-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 4px;
+}
+.rt-step {
+  font-size: 13px;
+  color: #333;
+  line-height: 1.6;
+  padding: 1px 0;
+}
+.rt-branch {
+  padding-left: 16px;
+  border-left: 2px solid #e0e0e0;
+  margin: 2px 0 2px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.rt-leaf {
+  font-size: 12px;
+  color: #555;
+  line-height: 1.6;
+}
+.rt-ok {
+  color: #2e7d32;
+  font-weight: 600;
+}
+.rt-warn {
+  color: #b71c1c;
+  font-weight: 600;
+}
+
+/* ─── Справочные разделы ─── */
 .help-topic {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
-
 .help-topic__title {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: #333;
   display: flex;
   align-items: center;
 }
-
+.help-ul {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  color: #444;
+  line-height: 1.75;
+}
+.help-ul li {
+  margin-bottom: 2px;
+}
 .help-img {
   width: 100%;
   border-radius: 10px;
   border: 1px solid #E0E0E0;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.07);
   display: block;
 }
-
-.help-steps {
-  margin: 0;
-  padding-left: 20px;
-  font-size: 13px;
-  color: #444;
-  line-height: 1.7;
-}
-
-.help-steps li {
-  margin-bottom: 4px;
-}
-
 .help-note {
   font-size: 12px;
   color: #666;
