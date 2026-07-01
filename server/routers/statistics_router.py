@@ -328,7 +328,8 @@ async def get_employee_statistics(
 
         # Подсчёт карточек для управленческих ролей (ГАП, СДП, Менеджер, Старший менеджер).
         # Эти роли хранятся как FK-поля на CRMCard, а не в StageExecutor.
-        # Факт выполнения = карточка в "Выполненный проект" или is_archived.
+        # Факт выполнения = карточка в "Выполненный проект" или договор в архивном статусе.
+        # Период НЕ применяется — управленческие роли назначаются на весь срок проекта.
         emp_id_set = set(emp_ids)
         card_role_map: dict = {}
 
@@ -338,21 +339,15 @@ async def get_employee_statistics(
                 CRMCard.sdp_id,
                 CRMCard.manager_id,
                 CRMCard.senior_manager_id,
-                CRMCard.is_archived,
+                Contract.status.label("contract_status"),
                 CRMCard.column_name,
             ).join(Contract, CRMCard.contract_id == Contract.id)
 
             if project_type in _CRM_PT:
                 card_q = card_q.filter(Contract.project_type == _CRM_PT[project_type])
-            if year:
-                card_q = card_q.filter(extract("year", CRMCard.created_at) == year)
-            if quarter:
-                card_q = card_q.filter(extract("month", CRMCard.created_at).between((quarter - 1) * 3 + 1, quarter * 3))
-            if month:
-                card_q = card_q.filter(extract("month", CRMCard.created_at) == month)
 
             for row in card_q.all():
-                is_done = bool(row.is_archived) or row.column_name == "Выполненный проект"
+                is_done = row.column_name == "Выполненный проект" or (row.contract_status and row.contract_status in ARCHIVE_STATUSES)
                 for role_id in (row.gap_id, row.sdp_id, row.manager_id, row.senior_manager_id):
                     if role_id and role_id in emp_id_set:
                         entry = card_role_map.setdefault(role_id, {"total": 0, "completed": 0})
@@ -367,13 +362,6 @@ async def get_employee_statistics(
                 SupervisionCard.senior_manager_id,
                 SupervisionCard.dan_completed,
             ).join(Contract, SupervisionCard.contract_id == Contract.id)
-
-            if year:
-                sup_q = sup_q.filter(extract("year", Contract.created_at) == year)
-            if quarter:
-                sup_q = sup_q.filter(extract("month", Contract.created_at).between((quarter - 1) * 3 + 1, quarter * 3))
-            if month:
-                sup_q = sup_q.filter(extract("month", Contract.created_at) == month)
 
             for row in sup_q.all():
                 is_done = bool(row.dan_completed)
