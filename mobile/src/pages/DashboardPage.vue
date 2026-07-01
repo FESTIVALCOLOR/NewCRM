@@ -83,6 +83,19 @@
                   {{ task.column_name }}
                 </q-item-label>
               </q-item-section>
+              <q-item-section side style="padding-right: 2px">
+                <button
+                  class="dash-mute-bell-btn"
+                  @click.stop="cardMutes.toggleMute(entityType(task), task.id)"
+                >
+                  <span
+                    class="material-icons"
+                    :style="{ fontSize: '16px', color: cardMutes.isMuted(entityType(task), task.id) ? '#333' : '#CCC' }"
+                  >
+                    {{ cardMutes.isMuted(entityType(task), task.id) ? 'notifications_off' : 'notifications' }}
+                  </span>
+                </button>
+              </q-item-section>
               <q-item-section side>
                 <div v-if="task.is_paused" class="text-caption text-weight-bold" style="color: #B8860B">
                   Пауза
@@ -160,6 +173,7 @@ import { useDashboardStore } from 'src/stores/dashboard'
 import { crmApi, supervisionApi } from 'src/services/api'
 import { useNotificationsStore } from 'src/stores/notifications'
 import { usePermissionsStore } from 'src/stores/permissions'
+import { useCardMutesStore } from 'src/stores/cardMutes'
 import InstallBanner from 'src/components/InstallBanner.vue'
 
 const router = useRouter()
@@ -167,6 +181,11 @@ const authStore = useAuthStore()
 const dashboard = useDashboardStore()
 const notificationsStore = useNotificationsStore()
 const permissionsStore = usePermissionsStore()
+const cardMutes = useCardMutesStore()
+
+function entityType(task) {
+  return task._card_type === 'supervision' ? 'supervision_card' : 'crm_card'
+}
 
 const firstName = computed(() => authStore.user?.full_name?.split(' ')[0] || '')
 const greeting = computed(() => { const h = new Date().getHours(); return h < 6 ? 'Доброй ночи' : h < 12 ? 'Доброе утро' : h < 18 ? 'Добрый день' : 'Добрый вечер' })
@@ -316,5 +335,18 @@ async function markAllNotificationsRead() {
 
 function onRefresh(done) { Promise.all([dashboard.loadAll(), notificationsStore.load(), loadMyTasks()]).finally(done) }
 
-onMounted(() => { dashboard.loadAll(); loadMyTasks() })
+onMounted(() => { dashboard.loadAll(); loadMyTasks(); cardMutes.load() })
 </script>
+
+<style scoped>
+.dash-mute-bell-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  line-height: 1;
+}
+</style>
