@@ -49,6 +49,7 @@ async def get_dashboard_statistics(
     quarter: Optional[int] = None,
     agent_type: Optional[str] = None,
     city: Optional[str] = None,
+    project_type: Optional[str] = None,
     current_user: Employee = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -102,8 +103,12 @@ async def get_dashboard_statistics(
                 monthly_data[month_key]["count"] += 1
                 monthly_data[month_key]["amount"] += c.total_amount or 0
 
-        # Активные CRM карточки
-        active_cards = db.query(CRMCard).join(Contract).filter(~Contract.status.in_(ARCHIVE_STATUSES)).count()
+        # Активные CRM карточки (с фильтром по типу проекта если указан)
+        _CRM_PT = {"individual": "Индивидуальный", "template": "Шаблонный"}
+        if project_type in _CRM_PT:
+            active_cards = db.query(CRMCard).join(Contract).filter(~Contract.status.in_(ARCHIVE_STATUSES)).filter(Contract.project_type == _CRM_PT[project_type]).count()
+        else:
+            active_cards = db.query(CRMCard).join(Contract).filter(~Contract.status.in_(ARCHIVE_STATUSES)).count()
 
         # Карточки надзора
         supervision_cards = db.query(SupervisionCard).join(Contract).filter(Contract.status == STATUS_SUPERVISION).count()

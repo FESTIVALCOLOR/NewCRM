@@ -338,8 +338,8 @@ const quarters = [{ label: 'Все', value: null }, { label: 'Q1', value: 1 }, {
 const monthOpts = [{ label: 'Все', value: null }, ...Array.from({ length: 12 }, (_, i) => ({ label: new Date(2000, i).toLocaleDateString('ru-RU', { month: 'short' }), value: i + 1 }))]
 
 const ROLE_TABS = {
-  individual: [{ code: 'sdp', label: 'СДП' }, { code: 'gap', label: 'ГАП' }, { code: 'manager', label: 'Менеджер' }, { code: 'executor', label: 'Исполнитель' }],
-  template: [{ code: 'gap', label: 'ГАП' }, { code: 'manager', label: 'Менеджер' }, { code: 'executor', label: 'Чертёжник' }, { code: 'visualization', label: 'Визуализация' }],
+  individual: [{ code: 'sdp', label: 'СДП' }, { code: 'gap', label: 'ГАП' }, { code: 'manager', label: 'Менеджер' }, { code: 'designer', label: 'Дизайнер' }, { code: 'draftsman', label: 'Чертёжник' }],
+  template: [{ code: 'gap', label: 'ГАП' }, { code: 'manager', label: 'Менеджер' }, { code: 'draftsman', label: 'Чертёжник' }, { code: 'visualization', label: 'Визуализация' }],
   supervision: [{ code: 'dan', label: 'ДАН' }, { code: 'manager', label: 'Менеджер' }],
 }
 
@@ -347,10 +347,17 @@ const roleTabs = computed(() => ROLE_TABS[projectTab.value] || ROLE_TABS.individ
 
 const dashboardKpi = computed(() => {
   const d = dashboard.value || {}
+  const emps = roleEmployees.value
+  const avgCompletion = emps.length
+    ? Math.round(emps.reduce((s, e) => s + (e.completion_rate || 0), 0) / emps.length)
+    : null
+  const projectCount = projectTab.value === 'supervision'
+    ? (d.supervision_cards ?? '—')
+    : (d.active_crm_cards ?? '—')
   return [
-    { label: 'Сотрудников', value: d.active_employees ?? roleEmployees.value.length ?? '—' },
-    { label: 'Выполнение', value: d.avg_completion ? `${d.avg_completion.toFixed(0)}%` : '—' },
-    { label: 'Проектов', value: d.active_crm_cards ?? '—' },
+    { label: 'Сотрудников', value: emps.length || '—' },
+    { label: 'Выполнение', value: avgCompletion !== null ? `${avgCompletion}%` : '—' },
+    { label: 'Проектов', value: projectCount },
   ]
 })
 
@@ -364,7 +371,7 @@ async function loadData() {
   const PT_ENG = { 'Индивидуальный': 'individual', 'Шаблонный': 'template', 'Авторский надзор': 'supervision' }
 
   const [dashR, empR, projR, survR] = await Promise.allSettled([
-    statisticsApi.getDashboard(params),
+    statisticsApi.getDashboard({ ...params, project_type: projectTab.value }),
     statisticsApi.getEmployees({ ...params, project_type: projectTab.value }),
     statisticsApi.getProjects({ ...params, project_type: pt }),
     surveyApi.getStats({ project_type: PT_ENG[pt] || 'individual' }),
@@ -384,19 +391,17 @@ async function loadData() {
     else if (rt === 'gap') filtered = allEmps.filter(e => e.position?.includes('ГАП'))
     else if (rt === 'manager') filtered = allEmps.filter(e => e.position?.toLowerCase().includes('менеджер'))
     else if (rt === 'dan') filtered = allEmps.filter(e => e.position === 'ДАН' || e.position === 'Дизайнер авторского надзора')
+    else if (rt === 'designer') filtered = allEmps.filter(e => e.position === 'Дизайнер')
+    else if (rt === 'draftsman') filtered = allEmps.filter(e => e.position?.includes('Чертёжник'))
     else if (rt === 'visualization') filtered = allEmps.filter(e => e.position === 'Дизайнер')
     else if (rt === 'executor') {
-      if (projectTab.value === 'template') {
-        filtered = allEmps.filter(e => e.position?.includes('Чертёжник'))
-      } else {
-        filtered = allEmps.filter(e => ['Дизайнер', 'Чертёжник', 'Замерщик'].some(p => e.position?.includes(p)) && e.position !== 'ДАН' && e.position !== 'Дизайнер авторского надзора')
-      }
+      filtered = allEmps.filter(e => ['Дизайнер', 'Чертёжник', 'Замерщик'].some(p => e.position?.includes(p)) && e.position !== 'ДАН' && e.position !== 'Дизайнер авторского надзора')
     }
 
     roleEmployees.value = filtered.sort((a, b) => b.completion_rate - a.completion_rate)
 
-    // Нагрузка — все сотрудники с назначенными стадиями
-    executorLoad.value = allEmps.filter(e => e.total_stages > 0)
+    // Нагрузка — сотрудники текущей роли с назначенными стадиями
+    executorLoad.value = filtered.filter(e => e.total_stages > 0)
       .sort((a, b) => (b.total_stages - b.completed_stages) - (a.total_stages - a.completed_stages))
       .slice(0, 10)
       .map(e => ({ name: e.full_name, active_stages: e.total_stages - e.completed_stages }))
@@ -496,16 +501,14 @@ async function exportPDF() {
     function shortN(n) { if (!n) return '?'; const p = n.split(' '); return p.length >= 2 ? p[0] + ' ' + p[1] : n }
     function kHex(v) { if (v === null || v === undefined) return '#888'; if (v >= 8) return '#27AE60'; if (v >= 6) return '#F39C12'; return '#E74C3C' }
 
-    function filterRole(emps, rt, pt) {
+    function filterRole(emps, rt) {
       if (rt === 'sdp') return emps.filter(e => e.position?.includes('СДП'))
       if (rt === 'gap') return emps.filter(e => e.position?.includes('ГАП'))
       if (rt === 'manager') return emps.filter(e => e.position?.toLowerCase().includes('менеджер'))
       if (rt === 'dan') return emps.filter(e => e.position === 'ДАН' || e.position === 'Дизайнер авторского надзора')
-      if (rt === 'visualization') return emps.filter(e => e.position === 'Дизайнер')
-      if (rt === 'executor') {
-        if (pt === 'tmpl') return emps.filter(e => e.position?.includes('Чертёжник'))
-        return emps.filter(e => ['Дизайнер','Чертёжник','Замерщик'].some(p => e.position?.includes(p)) && e.position !== 'ДАН' && e.position !== 'Дизайнер авторского надзора')
-      }
+      if (rt === 'designer' || rt === 'visualization') return emps.filter(e => e.position === 'Дизайнер')
+      if (rt === 'draftsman') return emps.filter(e => e.position?.includes('Чертёжник'))
+      if (rt === 'executor') return emps.filter(e => ['Дизайнер','Чертёжник','Замерщик'].some(p => e.position?.includes(p)) && e.position !== 'ДАН' && e.position !== 'Дизайнер авторского надзора')
       return []
     }
 
@@ -550,7 +553,7 @@ async function exportPDF() {
       let roleHtml = ''
       let roleIndex = 0
       for (const role of roles) {
-        const rEmps = filterRole(emps, role.code, key).sort((a, b) => b.completion_rate - a.completion_rate)
+        const rEmps = filterRole(emps, role.code).sort((a, b) => b.completion_rate - a.completion_rate)
         if (!rEmps.length) continue
         const roleDivider = roleIndex > 0 ? '<hr style="border:none;border-top:2px solid #ddd;margin:18px 0 14px">' : ''
         roleIndex++
@@ -718,7 +721,14 @@ function resetFilters() {
   loadData()
 }
 
-watch([projectTab, roleTab], () => loadData())
+watch(projectTab, (newTab) => {
+  const tabs = ROLE_TABS[newTab] || ROLE_TABS.individual
+  if (!tabs.find(t => t.code === roleTab.value)) {
+    roleTab.value = tabs[0].code
+  }
+  loadData()
+})
+watch(roleTab, () => loadData())
 function onRefresh(done) { loadData().finally(done) }
 onMounted(() => loadData())
 </script>
