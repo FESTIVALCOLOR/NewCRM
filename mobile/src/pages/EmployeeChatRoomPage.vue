@@ -829,7 +829,7 @@
         <div class="text-caption text-weight-bold" style="color: #1565C0; font-size: 11px">
           {{ replyingTo.sender_display_name }}
         </div>
-        <div class="text-caption text-grey-7 ellipsis" style="font-size: 11px">
+        <div class="text-caption text-grey-7" style="font-size: 11px; word-break: break-word; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden">
           {{ replyingTo.content || '[Медиафайл]' }}
         </div>
       </div>

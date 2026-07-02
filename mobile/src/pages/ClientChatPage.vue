@@ -500,7 +500,7 @@
         <div class="text-caption text-weight-bold text-blue-8 ellipsis">
           {{ replyingTo.sender_display_name }}
         </div>
-        <div class="text-caption text-grey-7 ellipsis">
+        <div class="text-caption text-grey-7" style="word-break: break-word; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden">
           {{ replyingTo.message_type === 'image' ? '[Изображение]' : replyingTo.message_type === 'file' ? '[Файл]' : replyingTo.content }}
         </div>
       </div>
