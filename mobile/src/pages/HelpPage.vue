@@ -1088,6 +1088,42 @@
 
             <div class="role-block">
               <div class="role-block__title">
+                <q-icon name="more_vert" size="14px" class="q-mr-xs" />Кнопка ⋮ в CRM-карточке — служебные действия
+              </div>
+              <div class="role-tree">
+                <div class="rt-step">
+                  Жёлтая кнопка ⋮ в правом нижнем углу карточки → список действий:
+                </div>
+                <div class="rt-branch">
+                  <div class="rt-leaf">
+                    <q-icon name="build" size="12px" /> <b>Ремонт</b> — разблокировать «зависший» workflow (кнопки не появляются / статус не меняется)
+                  </div>
+                  <div class="rt-leaf">
+                    <q-icon name="restart_alt" size="12px" /> <b>Сброс согласования</b> — отменить ошибочно подписанный акт (только в архиве)
+                  </div>
+                  <div class="rt-leaf">
+                    <q-icon name="person_off" size="12px" /> <b>Сброс дизайнера / Сброс чертёжника</b> — снять исполнителя и назначить нового
+                  </div>
+                  <div class="rt-leaf">
+                    <q-icon name="sync" size="12px" /> <b>Синхронизация ЯД</b> — подтянуть файлы загруженные в ЯД снаружи системы
+                  </div>
+                  <div class="rt-leaf">
+                    <q-icon name="edit" size="12px" /> <b>Редактировать договор</b> — изменить площадь, статус, агента прямо из карточки
+                  </div>
+                  <div class="rt-leaf">
+                    <q-icon name="label" size="12px" /> <b>Теги</b> — цветные метки для визуальной маркировки карточки на доске
+                  </div>
+                  <div class="rt-leaf">
+                    <q-icon name="description" size="12px" /> <b>Посмотреть договор</b> — открыть детальную информацию о договоре
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <q-separator class="q-my-sm" />
+
+            <div class="role-block">
+              <div class="role-block__title">
                 <q-icon name="settings" size="14px" class="q-mr-xs" />Системные настройки
               </div>
               <div class="role-tree">
@@ -1484,34 +1520,104 @@
         <q-card flat>
           <q-card-section class="q-pa-md q-gutter-sm">
             <img src="/help/chats.png" class="help-img" @error="e => e.target.style.display='none'">
+
             <div class="help-topic">
               <div class="help-topic__title">
-                <q-icon name="textsms" size="15px" class="q-mr-xs" />Работа в чат-комнате
+                <q-icon name="view_headline" size="15px" class="q-mr-xs" />Кнопки шапки чата
               </div>
               <ul class="help-ul">
-                <li>Текст: ввести → <q-icon name="send" size="12px" /> или Enter</li>
-                <li>Файл/фото: <q-icon name="attach_file" size="12px" /> → выбрать файл</li>
-                <li>
-                  <b>Удержать сообщение</b> → меню:
-                  <q-icon name="reply" size="12px" /> Ответить ·
-                  <q-icon name="push_pin" size="12px" /> Закрепить ·
-                  <q-icon name="content_copy" size="12px" /> Копировать ·
-                  <q-icon name="delete" size="12px" /> Удалить
-                </li>
-                <li>Закреплённые сообщения видны вверху чата — нажмите для просмотра всех</li>
-                <li>Сообщения обновляются в реальном времени — не надо обновлять страницу</li>
+                <li><q-icon name="arrow_back" size="13px" /> <b>Назад</b> — вернуться к списку чатов</li>
+                <li><b>Название чата</b> (нажать) — открыть список участников</li>
+                <li><q-icon name="search" size="13px" /> <b>Поиск</b> — искать по тексту сообщений (мин. 2 символа) → нажать результат → прокрутить к сообщению</li>
+                <li><q-icon name="people" size="13px" /> <b>Участники</b> — список участников, кнопка добавить, удалить</li>
               </ul>
             </div>
+
             <q-separator />
+
             <div class="help-topic">
               <div class="help-topic__title">
-                <q-icon name="group" size="15px" class="q-mr-xs" />Участники
+                <q-icon name="push_pin" size="15px" class="q-mr-xs" />Закреплённые сообщения
               </div>
               <ul class="help-ul">
-                <li>Нажмите на заголовок чата → список участников</li>
-                <li><q-icon name="person_add" size="12px" /> — добавить нового участника</li>
-                <li>Удалить участника → удержать имя в списке → «Удалить»</li>
-                <li>При смене исполнителя в проекте чат обновляется автоматически</li>
+                <li>Оранжевая полоска вверху = есть закреплённые сообщения</li>
+                <li>Нажать на полоску — прокрутить к закреплённому; если их несколько — переключаться «1 из 3»</li>
+                <li>Нажать <q-icon name="close" size="12px" /> на полоске — открепить текущее</li>
+              </ul>
+            </div>
+
+            <q-separator />
+
+            <div class="help-topic">
+              <div class="help-topic__title">
+                <q-icon name="keyboard" size="15px" class="q-mr-xs" />Кнопки строки ввода
+              </div>
+              <ul class="help-ul">
+                <li>
+                  <q-icon name="attach_file" size="13px" /> <b>Прикрепить файл</b> — открывает галерею/файловый менеджер телефона.
+                  Поддерживаются: фото, PDF, DWG, Word, Excel, архивы и любые другие файлы.
+                  Можно выбрать <b>несколько файлов</b> сразу — они отправятся одной группой.
+                </li>
+                <li>
+                  <q-icon name="folder_open" size="13px" /> <b>Файлы из карточки ЯД</b> — выбрать файл прямо из папки проекта на Яндекс.Диске.
+                  Открывает браузер папок: разворачиваете нужную стадию → ставите галочки → «Отправить».
+                  Удобно пересылать чертежи коллегам без скачивания.
+                </li>
+                <li>
+                  <q-icon name="mic" size="13px" /> <b>Голосовое сообщение</b> — <b>удержите</b> кнопку микрофона для записи.
+                  Внизу появится счётчик секунд и красная точка «●». Отпустите — запись отправится автоматически.
+                  Принудительно отменить: сдвиньте палец влево до отпускания.
+                </li>
+                <li><q-icon name="send" size="13px" /> <b>Отправить</b> — появляется когда введён текст или прикреплён файл. Нажать или Enter (на клавиатуре).</li>
+              </ul>
+            </div>
+
+            <q-separator />
+
+            <div class="help-topic">
+              <div class="help-topic__title">
+                <q-icon name="more_vert" size="15px" class="q-mr-xs" />Меню сообщения (три точки ⋮ или удержать пузырь)
+              </div>
+              <ul class="help-ul">
+                <li><b>Быстрые реакции</b> — строка эмодзи над меню: нажмите — поставить/снять реакцию. Реакции видны всем под сообщением.</li>
+                <li><q-icon name="push_pin" size="13px" /> <b>Закрепить / Открепить</b> — сообщение появляется в оранжевой полоске шапки</li>
+                <li><q-icon name="reply" size="13px" /> <b>Ответить</b> — цитата сообщения вставится над вашим ответом. Нажмите на цитату в чате — прокрутит к оригиналу.</li>
+                <li><q-icon name="edit" size="13px" /> <b>Редактировать</b> — только для своих текстовых сообщений. Изменённое сообщение помечается «ред.»</li>
+                <li><q-icon name="forward" size="13px" /> <b>Переслать</b> — выбрать один или несколько чатов → сообщение уйдёт туда с пометкой «Переслано»</li>
+                <li>
+                  <q-icon name="drive_file_move" size="13px" /> <b>Скопировать в карточку</b> — только если в сообщении есть файл из ЯД.
+                  Открывает выбор папки-назначения в карточке CRM (ТЗ, Замер, Стадия 1 и т.д.)
+                </li>
+                <li><q-icon name="delete_outline" size="13px" /> <b>Удалить</b> — только для своих сообщений. Удалённое сообщение заменяется на «Сообщение удалено»</li>
+              </ul>
+            </div>
+
+            <q-separator />
+
+            <div class="help-topic">
+              <div class="help-topic__title">
+                <q-icon name="image" size="15px" class="q-mr-xs" />Типы сообщений и как они выглядят
+              </div>
+              <ul class="help-ul">
+                <li><b>Изображения</b> (JPG, PNG, HEIC) — показываются как миниатюра прямо в пузыре. Нажать — открыть полноэкранно.</li>
+                <li><b>PDF с превью</b> — первая страница показывается как картинка, под ней кнопка «Открыть»</li>
+                <li><b>Другие файлы</b> (DWG, DOCX, ZIP…) — иконка + имя файла + кнопка «Открыть». Нажать — открыть через браузер или скачать.</li>
+                <li><b>Голосовые</b> — плеер с кнопкой ► /⏸, полосой прогресса и таймером длительности</li>
+                <li><b>Пересланные</b> — синяя вертикальная черта слева + подпись «Переслано от [имя]»</li>
+              </ul>
+            </div>
+
+            <q-separator />
+
+            <div class="help-topic">
+              <div class="help-topic__title">
+                <q-icon name="group" size="15px" class="q-mr-xs" />Участники чата
+              </div>
+              <ul class="help-ul">
+                <li>Нажать <q-icon name="people" size="12px" /> в шапке → список всех участников с должностью</li>
+                <li><q-icon name="person_add" size="12px" /> — добавить ещё одного сотрудника (например, субподрядчика)</li>
+                <li>Нажать на участника → «Удалить из чата»</li>
+                <li>Когда менеджер меняет исполнителя в карточке — новый исполнитель добавляется в чат автоматически</li>
               </ul>
             </div>
           </q-card-section>
@@ -1534,23 +1640,35 @@
                 <q-icon name="link" size="15px" class="q-mr-xs" />Как клиент получает доступ
               </div>
               <ul class="help-ul">
-                <li><b>Автоматически</b> — при нажатии «Отправить клиенту» в workflow скрипт с ссылкой уходит клиенту</li>
-                <li><b>Вручную</b> — откройте чат → скопируйте ссылку → отправьте сами</li>
-                <li>Клиент открывает ссылку → видит чат <b>без регистрации и пароля</b></li>
-                <li>Клиент может: писать текст, прикладывать фото замечаний, отправлять документы</li>
+                <li><b>Автоматически</b> — при нажатии «Отправить клиенту» скрипт с персональной ссылкой уходит клиенту</li>
+                <li><b>Вручную</b> — откройте чат → скопируйте ссылку → отправьте сами в любом мессенджере</li>
+                <li>Клиент открывает ссылку в браузере → видит чат <b>без регистрации и пароля</b></li>
+                <li>Ссылка привязана к конкретному договору и не может быть использована другим клиентом</li>
               </ul>
             </div>
             <q-separator />
             <div class="help-topic">
               <div class="help-topic__title">
-                <q-icon name="message" size="15px" class="q-mr-xs" />Работа с клиентским чатом
+                <q-icon name="message" size="15px" class="q-mr-xs" />Работа в клиентском чате
               </div>
               <ul class="help-ul">
-                <li>Раздел <q-icon name="support_agent" size="12px" /> → список всех активных чатов с клиентами</li>
-                <li>Красная цифра = непрочитанное сообщение от клиента</li>
-                <li>Нажмите на чат → открывается переписка</li>
-                <li>Сообщения клиента — слева, ваши — справа</li>
-                <li>Клиент получает push-уведомление при ответе (если разрешил браузеру)</li>
+                <li>Раздел <q-icon name="support_agent" size="12px" /> → список всех чатов с заказчиками</li>
+                <li>Красная цифра = непрочитанное от клиента → ответьте как можно быстрее</li>
+                <li>Сообщения клиента — слева (серые), ваши — справа (синие)</li>
+                <li><q-icon name="attach_file" size="12px" /> — прикрепить файл: планировки, концепции, акты</li>
+                <li>Клиент тоже может прислать фото замечаний, документы, любые файлы</li>
+                <li>Клиент получает push-уведомление в браузере на ваш ответ (если разрешил)</li>
+              </ul>
+            </div>
+            <q-separator />
+            <div class="help-topic">
+              <div class="help-topic__title">
+                <q-icon name="more_vert" size="15px" class="q-mr-xs" />Меню сообщений (⋮)
+              </div>
+              <ul class="help-ul">
+                <li><q-icon name="reply" size="12px" /> <b>Ответить</b> — цитата уйдёт клиенту прямо под его сообщением</li>
+                <li><q-icon name="push_pin" size="12px" /> <b>Закрепить</b> — важное сообщение (ТЗ, финальные правки) всегда на виду</li>
+                <li><q-icon name="delete_outline" size="12px" /> <b>Удалить</b> — только свои сообщения</li>
               </ul>
             </div>
           </q-card-section>
@@ -1561,34 +1679,183 @@
       <q-expansion-item
         v-model="expanded.files"
         icon="folder"
-        label="Файлы (Яндекс.Диск)"
+        label="Файлы проектов"
         header-class="text-weight-medium"
         style="font-size: 14px"
       >
         <q-card flat>
           <q-card-section class="q-pa-md q-gutter-sm">
-            <img src="/help/files.png" class="help-img" @error="e => e.target.style.display='none'">
+            <q-banner rounded style="background: #fff3e0; border: 1px solid #ffcc80; font-size: 12px; color: #444">
+              <template #avatar>
+                <q-icon name="info" color="orange-8" size="16px" />
+              </template>
+              Раздел <b>«Файлы»</b> в меню доступен только Руководителю студии и Старшему менеджеру.
+              Остальные сотрудники работают с файлами <b>внутри карточек</b> — через вкладки «Данные», «Выезды» и «Закупки».
+            </q-banner>
+
+            <q-separator />
+
             <div class="help-topic">
               <div class="help-topic__title">
-                <q-icon name="folder" size="15px" class="q-mr-xs" />Структура папок
+                <q-icon name="view_kanban" size="15px" class="q-mr-xs" />Файлы в CRM карточке — вкладка «Данные»
+              </div>
+              <div style="font-size: 12px; color: #555; margin-bottom: 6px">
+                Карточка CRM → открыть → вкладка <b>Данные</b>
               </div>
               <ul class="help-ul">
-                <li>Папки организованы по проектам: <b>Проекты → Номер договора → Стадии → Файлы</b></li>
-                <li>Нажмите <q-icon name="folder" size="12px" /> — раскрыть папку и увидеть файлы</li>
-                <li>Нажмите на файл — открыть по публичной ссылке в браузере</li>
-                <li>Поддерживаются: PDF, DWG, JPG, PNG, DOCX и другие</li>
+                <li><b>Техническое задание</b> — ТЗ от менеджера: пожелания клиента, требования к проекту. Загружает менеджер кнопкой «Загрузить».</li>
+                <li><b>Замер</b> — замерные планы и обмерные чертежи. Загружает замерщик кнопкой «Загрузить».</li>
+                <li><b>Фотодокументация</b> — фото объекта «до» для дизайнера. Загружает замерщик или менеджер.</li>
+                <li><b>Референсы / Шаблоны</b> — материалы для вдохновения или шаблонные варианты. Загружает менеджер.</li>
+                <li><b>Стадия 1 / Стадия 2 / Стадия 3</b> — папка с результатами работы по каждой стадии. Дизайнер/чертёжник загружает через приложение Яндекс.Диск в соответствующую папку; файлы появляются здесь автоматически.</li>
+                <li><b>Документы, Акты, Информационные письма</b> — юридические документы по договору. Загружает менеджер.</li>
+              </ul>
+              <div class="help-note q-mt-xs">
+                <q-icon name="open_in_new" size="12px" class="q-mr-xs" />
+                Кнопка «Открыть в браузере» рядом с папкой — открывает её напрямую на Яндекс.Диске
+              </div>
+            </div>
+
+            <q-separator />
+
+            <div class="help-topic">
+              <div class="help-topic__title">
+                <q-icon name="engineering" size="15px" class="q-mr-xs" />Файлы в карточке Надзора — вкладка «Выезды»
+              </div>
+              <div style="font-size: 12px; color: #555; margin-bottom: 6px">
+                Надзор → открыть карточку → вкладка <b>Выезды</b>
+              </div>
+              <ul class="help-ul">
+                <li>Каждый выезд содержит кнопки для загрузки связанных файлов:</li>
+                <li><q-icon name="cloud_upload" size="13px" /> <b>ЯД</b> — загрузить отчёт / фото на Яндекс.Диск. Файл прикрепляется к данному выезду.</li>
+                <li><q-icon name="description" size="13px" /> <b>Отчёт</b> — открыть или заменить отчёт о выезде (PDF или DOCX)</li>
+                <li><q-icon name="photo_camera" size="13px" /> <b>Фото</b> — прикрепить фотоотчёт с объекта (JPG, PNG, HEIC)</li>
+                <li><q-icon name="event" size="13px" /> <b>Факт. выезд</b> — отметить фактическую дату выезда (если отличается от плановой)</li>
               </ul>
             </div>
+
             <q-separator />
+
             <div class="help-topic">
               <div class="help-topic__title">
-                <q-icon name="upload_file" size="15px" class="q-mr-xs" />Загрузка файлов
+                <q-icon name="shopping_cart" size="15px" class="q-mr-xs" />Файлы в карточке Надзора — вкладка «Закупки»
+              </div>
+              <div style="font-size: 12px; color: #555; margin-bottom: 6px">
+                Надзор → открыть карточку → вкладка <b>Закупки</b>
               </div>
               <ul class="help-ul">
-                <li>Файлы загружаются через <b>приложение Яндекс.Диска</b> на телефоне или компьютере</li>
-                <li>Путь к папке проекта: в CRM-карточке → поле «Папка ЯД» (пример: Проекты / 47-2026)</li>
-                <li>Правило именования: <i>ПЛ-01_v1.pdf</i>, <i>Концепция_финал.pdf</i> — понятное, с версией</li>
-                <li>После загрузки файлы автоматически появятся в системе через несколько секунд</li>
+                <li>Каждая запись закупки — один поход к поставщику/позиция в смете</li>
+                <li>Поля: плановая дата, фактическая дата, бюджет план / факт, поставщик, комиссия, исполнитель</li>
+                <li>Кнопка «Добавить запись» — зафиксировать новую закупку</li>
+                <li>К каждой закупке можно прикрепить файл (счёт, накладная, чек)</li>
+              </ul>
+            </div>
+
+            <q-separator />
+
+            <div class="help-topic">
+              <div class="help-topic__title">
+                <q-icon name="folder_special" size="15px" class="q-mr-xs" />Раздел «Файлы» (только для руководства)
+              </div>
+              <img src="/help/files.png" class="help-img" @error="e => e.target.style.display='none'">
+              <ul class="help-ul">
+                <li>Общий браузер папок Яндекс.Диска — все проекты сразу</li>
+                <li>Структура: <b>Проекты → Номер договора → Стадия → Файлы</b></li>
+                <li>Нажать <q-icon name="folder" size="12px" /> — раскрыть папку, нажать файл — открыть по публичной ссылке</li>
+                <li>Поиск файлов через строку поиска вверху (по имени файла)</li>
+              </ul>
+            </div>
+
+            <q-separator />
+
+            <div class="help-topic">
+              <div class="help-topic__title">
+                <q-icon name="upload" size="15px" class="q-mr-xs" />Как правильно загружать файлы (для всех)
+              </div>
+              <ul class="help-ul">
+                <li>Загрузка через кнопки внутри карточки (ТЗ, Замер, Стадия…) — открывает файловый менеджер телефона</li>
+                <li>Загрузка через приложение <b>Яндекс.Диск</b> на телефоне/ПК → папка проекта (путь виден в карточке → «Папка ЯД»)</li>
+                <li>Правило именования: <i>ПЛ-01_v2.pdf</i>, <i>Концепция_финал.pdf</i> — понятное, с номером версии</li>
+                <li>После загрузки через ЯД файлы появятся в системе автоматически через кнопку «Синхронизация ЯД» (⋮ меню карточки)</li>
+              </ul>
+            </div>
+          </q-card-section>
+        </q-card>
+      </q-expansion-item>
+
+      <!-- FAB МЕНЮ CRM -->
+      <q-expansion-item
+        v-model="expanded.crmFab"
+        icon="more_vert"
+        label="Кнопка ⋮ в CRM карточке — служебные действия"
+        header-class="text-weight-medium"
+        style="font-size: 14px"
+      >
+        <q-card flat>
+          <q-card-section class="q-pa-md q-gutter-sm">
+            <q-banner rounded style="background: #fff3e0; border: 1px solid #ffcc80; font-size: 12px; color: #444">
+              <template #avatar>
+                <q-icon name="info" color="orange-8" size="16px" />
+              </template>
+              Жёлтая кнопка <b>⋮</b> (более_верт) в правом нижнем углу CRM-карточки. Доступна только на вкладках «Исполнители», «Сроки», «Данные», «История», «Оплаты» — скрыта на вкладках чатов.
+            </q-banner>
+
+            <div class="help-topic q-mt-sm">
+              <div class="help-topic__title">
+                <q-icon name="more_vert" size="15px" class="q-mr-xs" />Действия в меню ⋮ CRM-карточки
+              </div>
+              <ul class="help-ul">
+                <li>
+                  <q-icon name="build" size="13px" color="orange-8" />
+                  <b> Ремонт</b> — сброс «зависшего» workflow в корректное состояние.
+                  Используется когда карточка застряла: кнопки не появляются, статус не меняется после выполнения действия.
+                  Доступно только когда система определила, что карточку можно восстановить.
+                </li>
+                <li>
+                  <q-icon name="restart_alt" size="13px" color="orange-8" />
+                  <b> Сброс согласования</b> — только для архивных карточек. Сбросить финальный статус согласования если акт был подписан ошибочно.
+                </li>
+                <li>
+                  <q-icon name="person_off" size="13px" color="orange-8" />
+                  <b> Сброс дизайнера</b> — снять текущего дизайнера с этапа. Нужно если назначен не тот сотрудник или он уволен. После сброса менеджер назначает нового.
+                </li>
+                <li>
+                  <q-icon name="person_off" size="13px" color="orange-8" />
+                  <b> Сброс чертёжника</b> — аналогично, для чертёжника.
+                </li>
+                <li>
+                  <q-icon name="sync" size="13px" color="blue-6" />
+                  <b> Синхронизация ЯД</b> — обновить список файлов в карточке из Яндекс.Диска.
+                  Нужно когда дизайнер/чертёжник загрузил файлы через приложение ЯД, но они ещё не появились в карточке.
+                  После синхронизации файлы отображаются во вкладке «Данные».
+                </li>
+                <li>
+                  <q-icon name="edit" size="13px" color="amber-9" />
+                  <b> Редактировать договор</b> — быстрый переход к форме редактирования договора прямо из карточки. Изменить площадь, статус, агента.
+                </li>
+                <li>
+                  <q-icon name="label" size="13px" color="amber-9" />
+                  <b> Теги</b> — добавить цветную метку к карточке. Видна всем в CRM-доске. Используется для визуальной маркировки: срочный / проблемный / VIP / ожидает решения.
+                </li>
+                <li>
+                  <q-icon name="description" size="13px" color="blue-6" />
+                  <b> Посмотреть договор</b> — открыть детали договора (клиент, площадь, статус, папка ЯД).
+                </li>
+              </ul>
+            </div>
+
+            <q-separator />
+
+            <div class="help-topic">
+              <div class="help-topic__title">
+                <q-icon name="more_horiz" size="15px" class="q-mr-xs" />Кнопка ⋯ в карточке Надзора
+              </div>
+              <ul class="help-ul">
+                <li>В карточке надзора кнопка ⋯ (more_horiz) содержит только одно действие:</li>
+                <li>
+                  <q-icon name="label" size="13px" color="amber-9" />
+                  <b> Теги</b> — цветные метки для карточки надзора (приоритет, статус, тип объекта и т.д.)
+                </li>
               </ul>
             </div>
           </q-card-section>
@@ -1797,6 +2064,7 @@ const expanded = ref({
   chats: false,
   clientChats: false,
   files: false,
+  crmFab: false,
   salaries: false,
   reports: false,
   employees: false,
