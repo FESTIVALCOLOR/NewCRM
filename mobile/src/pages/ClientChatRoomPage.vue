@@ -731,6 +731,31 @@
                   >
                     <span v-if="msg.is_edited" class="text-caption text-grey-5 q-mr-xs" style="font-size: 9px">изм.</span>
                     <span class="text-caption">{{ formatTime(msg.created_at) }}</span>
+                    <template v-if="isOwn(msg) && !msg.is_deleted && msgReadStatus(msg)">
+                      <button class="read-receipt-btn" @click.stop>
+                        <q-icon :name="msgReadStatus(msg).count > 0 ? 'done_all' : 'done'" :color="msgReadStatus(msg).status === 'all' ? 'light-blue-6' : 'grey-4'" size="12px" />
+                        <q-menu auto-close anchor="bottom right" self="top right" style="min-width:140px; max-width:220px">
+                          <q-list dense>
+                            <q-item-label header style="font-size:11px; padding:6px 12px 2px">
+                              Прочитано
+                            </q-item-label>
+                            <q-item v-if="!msgReadStatus(msg).readers.length" dense>
+                              <q-item-section style="font-size:12px; color:#888">
+                                Никто не прочитал
+                              </q-item-section>
+                            </q-item>
+                            <q-item v-for="r in msgReadStatus(msg).readers" :key="r.employee_id ?? r.id" dense>
+                              <q-item-section avatar style="min-width:28px">
+                                <q-icon name="person" size="14px" color="grey-6" />
+                              </q-item-section>
+                              <q-item-section style="font-size:12px">
+                                {{ r.display_name }}
+                              </q-item-section>
+                            </q-item>
+                          </q-list>
+                        </q-menu>
+                      </button>
+                    </template>
                   </div>
                   <!-- Реакции -->
                   <div
@@ -1895,6 +1920,16 @@ function isOwn(msg) {
 
 function isForwarded(msg) {
   return typeof msg.sender_display_name === 'string' && msg.sender_display_name.includes('(переслано)')
+}
+
+function msgReadStatus(msg) {
+  const myId = authStore.user?.id
+  if (!myId) return null
+  const others = members.value.filter(m => m.is_active && m.employee_id && m.employee_id !== Number(myId))
+  if (!others.length) return null
+  const readers = others.filter(m => m.last_read_message_id && m.last_read_message_id >= msg.id)
+  const status = readers.length === 0 ? 'sent' : readers.length < others.length ? 'partial' : 'all'
+  return { status, count: readers.length, readers }
 }
 
 function startEdit(msg) {
@@ -3250,6 +3285,10 @@ function connectWs() {
         if (atBottom) nextTick(() => requestAnimationFrame(() => { if (c) c.scrollTop = c.scrollHeight }))
       }
     },
+    onRead: (evt) => {
+      const idx = members.value.findIndex(m => m.employee_id === evt.employee_id)
+      if (idx !== -1) members.value[idx] = { ...members.value[idx], last_read_message_id: evt.last_message_id }
+    },
   })
 }
 
@@ -3335,6 +3374,16 @@ onUnmounted(() => {
   100% { background: transparent; }
 }
 .msg-highlight { animation: msg-highlight-pulse 1.5s ease-out; border-radius: 8px; }
+.read-receipt-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  margin-left: 3px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+}
 .reaction-chip {
   display: inline-flex;
   align-items: center;

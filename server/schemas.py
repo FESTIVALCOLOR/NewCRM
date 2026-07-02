@@ -1506,6 +1506,7 @@ class InternalChatMemberResponse(BaseModel):
     is_online: Optional[bool] = None
     last_login: Optional[datetime] = None
     photo_url: Optional[str] = None
+    last_read_message_id: Optional[int] = None
 
     class Config:
         from_attributes = True

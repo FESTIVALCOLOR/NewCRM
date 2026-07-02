@@ -1491,6 +1491,7 @@ def _chat_to_detail_response(db: Session, chat: InternalChat, employee_id: int, 
                 is_online=is_online,
                 last_login=last_login,
                 photo_url=photo_url,
+                last_read_message_id=m.last_read_message_id,
             )
         )
     first_unread_id = get_first_unread_message_id(db, chat.id, employee_id)

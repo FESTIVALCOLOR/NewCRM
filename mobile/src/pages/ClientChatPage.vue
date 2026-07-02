@@ -453,6 +453,31 @@
                     <div class="text-caption" style="color: #888; font-size: 10px">
                       {{ formatTime(msg.created_at) }}
                     </div>
+                    <template v-if="isOwn(msg) && !msg.is_deleted && msgReadStatus(msg)">
+                      <button class="read-receipt-btn" @click.stop>
+                        <q-icon :name="msgReadStatus(msg).count > 0 ? 'done_all' : 'done'" :color="msgReadStatus(msg).status === 'all' ? 'light-blue-6' : 'grey-4'" size="12px" />
+                        <q-menu auto-close anchor="bottom right" self="top right" style="min-width:140px; max-width:220px">
+                          <q-list dense>
+                            <q-item-label header style="font-size:11px; padding:6px 12px 2px">
+                              Прочитано
+                            </q-item-label>
+                            <q-item v-if="!msgReadStatus(msg).readers.length" dense>
+                              <q-item-section style="font-size:12px; color:#888">
+                                Никто не прочитал
+                              </q-item-section>
+                            </q-item>
+                            <q-item v-for="(r, ri) in msgReadStatus(msg).readers" :key="ri" dense>
+                              <q-item-section avatar style="min-width:28px">
+                                <q-icon name="person" size="14px" color="grey-6" />
+                              </q-item-section>
+                              <q-item-section style="font-size:12px">
+                                {{ r.display_name }}
+                              </q-item-section>
+                            </q-item>
+                          </q-list>
+                        </q-menu>
+                      </button>
+                    </template>
                   </div>
                   <!-- Реакции -->
                   <div
@@ -817,6 +842,26 @@ function isForwarded(msg) {
   return typeof msg.sender_display_name === 'string' && msg.sender_display_name.includes('(переслано)')
 }
 
+// staffReadMap: {employee_id -> {name, last_read_message_id}}
+const staffReadMap = ref({})
+
+function _updateStaffFromMessages() {
+  messages.value.forEach(m => {
+    if (m.sender_employee_id && !staffReadMap.value[m.sender_employee_id]) {
+      staffReadMap.value[m.sender_employee_id] = { name: m.sender_display_name, last_read_message_id: 0 }
+    }
+  })
+}
+
+function msgReadStatus(msg) {
+  if (!isOwn(msg) || msg.is_deleted) return null
+  const staff = Object.values(staffReadMap.value)
+  if (!staff.length) return null
+  const readers = staff.filter(s => s.last_read_message_id >= msg.id)
+  const status = readers.length === 0 ? 'sent' : readers.length < staff.length ? 'partial' : 'all'
+  return { status, count: readers.length, readers: readers.map(s => ({ display_name: s.name })) }
+}
+
 function imgStreamUrl(msg) {
   if (msg._previewUrl) return msg._previewUrl
   if (!msg.yandex_path) return ''
@@ -912,6 +957,7 @@ async function loadMessages() {
     chatTitle.value = data.title || 'Чат с бюро'
     messages.value = data.messages || []
     hasMoreMessages.value = data.has_more_messages || false
+    _updateStaffFromMessages()
 
     // Находим первое непрочитанное (localStorage-based, т.к. гость не имеет серверного трекинга)
     const lastRead = parseInt(localStorage.getItem(_lastReadKey) || '0', 10)
@@ -1211,6 +1257,15 @@ onMounted(async () => {
         if (atBottom) nextTick(() => requestAnimationFrame(() => { if (c) c.scrollTop = c.scrollHeight }))
       }
     },
+    onRead: (evt) => {
+      if (evt.employee_id) {
+        if (!staffReadMap.value[evt.employee_id]) {
+          const senderMsg = messages.value.find(m => m.sender_employee_id === evt.employee_id)
+          staffReadMap.value[evt.employee_id] = { name: senderMsg?.sender_display_name || 'Сотрудник', last_read_message_id: 0 }
+        }
+        staffReadMap.value[evt.employee_id] = { ...staffReadMap.value[evt.employee_id], last_read_message_id: evt.last_message_id }
+      }
+    },
   })
 })
 
@@ -1413,6 +1468,16 @@ async function _uploadGuestVoice(file) {
 .msg-highlight {
   animation: msg-highlight-pulse 1.5s ease-out;
   border-radius: 8px;
+}
+.read-receipt-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  margin-left: 3px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
 }
 .reaction-chip {
   display: inline-flex;
