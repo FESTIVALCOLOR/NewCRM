@@ -633,6 +633,8 @@ class DataAccess(QObject):
 
     def create_employee(self, employee_data: dict) -> Optional[dict]:
         """Создать сотрудника"""
+        from utils.api_client.exceptions import APIConnectionError, APITimeoutError
+
         _global_cache.invalidate("employees")
         employee_id = self.db.add_employee(employee_data)
 
@@ -647,9 +649,19 @@ class DataAccess(QObject):
                     if server_id and server_id != employee_id:
                         self._update_local_id("employees", employee_id, server_id)
                     return result
-            except Exception as e:
-                _safe_log(f"[DataAccess] API error create_employee: {e}")
+            except (APIConnectionError, APITimeoutError) as e:
+                # Сетевая ошибка — откладываем в очередь
+                _safe_log(f"[DataAccess] API network error create_employee: {e}")
                 self._queue_operation("create", "employee", employee_id, employee_data)
+            except Exception as e:
+                # Бизнес-ошибка (400/409) — откатываем локальную запись и пробрасываем
+                _safe_log(f"[DataAccess] API business error create_employee: {e}")
+                try:
+                    self.db.delete_employee(employee_id)
+                except Exception:
+                    pass
+                _global_cache.invalidate("employees")
+                raise
         elif self.api_client:
             self._queue_operation("create", "employee", employee_id, employee_data)
 

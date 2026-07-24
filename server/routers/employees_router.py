@@ -152,6 +152,13 @@ async def create_employee(employee_data: EmployeeCreate, current_user: Employee 
     if existing:
         raise HTTPException(status_code=400, detail="Логин уже занят")
 
+    # Проверка дублирования ФИО (регистронезависимая)
+    from sqlalchemy import func
+
+    dup_name = db.query(Employee).filter(func.lower(Employee.full_name) == func.lower(employee_data.full_name.strip())).first()
+    if dup_name:
+        raise HTTPException(status_code=409, detail=f"Сотрудник с именем «{dup_name.full_name}» уже существует (id={dup_name.id})")
+
     # Создание
     employee = Employee(
         **employee_data.model_dump(exclude={"password"}),
