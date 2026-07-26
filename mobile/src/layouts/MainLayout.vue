@@ -1350,6 +1350,19 @@ function _connectWebSocket() {
     onUserOnline() {
       sendHeartbeat()
     },
+    // Сервер отклонил соединение до handshake — токен устарел (403/401).
+    // Пробуем обновить сессию; если не удалось — logout (редирект на login).
+    async onAuthFailed() {
+      console.log('[WS] onAuthFailed: пробуем обновить токен...')
+      const ok = await authStore.restoreSession()
+      if (ok) {
+        console.log('[WS] Токен обновлён, переподключаемся...')
+        _connectWebSocket()
+      } else {
+        console.log('[WS] Обновление токена не удалось, выход...')
+        await authStore.logout()
+      }
+    },
   })
 }
 

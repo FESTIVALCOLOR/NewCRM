@@ -22,6 +22,7 @@ let reconnectDelay = 1000 // начальная задержка 1с
 const MAX_RECONNECT_DELAY = 30000 // максимум 30с
 const PING_INTERVAL = 30000 // пинг каждые 30с
 let manualClose = false // флаг для отличия ручного disconnect от разрыва
+let _didOpen = false   // true если onopen сработал (соединение было установлено)
 
 /**
  * Определить WebSocket URL по текущему адресу страницы.
@@ -84,6 +85,7 @@ export function useWebSocket() {
 
 function _doConnect(token, handlers) {
   const url = buildWsUrl(token)
+  _didOpen = false
 
   try {
     ws = new WebSocket(url)
@@ -94,11 +96,12 @@ function _doConnect(token, handlers) {
   }
 
   ws.onopen = () => {
+    _didOpen = true
     isConnected.value = true
     lastError.value = null
     reconnectDelay = 1000 // сбрасываем задержку при успешном подключении
     _startPing()
-     
+
     console.log('[WS] Подключён')
   }
 
@@ -143,12 +146,18 @@ function _doConnect(token, handlers) {
     _stopPing()
 
     if (manualClose) {
-       
       console.log('[WS] Отключён вручную')
       return
     }
 
-     
+    // Если onopen не срабатывал — сервер отклонил соединение на HTTP-уровне (401/403, истёкший токен).
+    // Пробуем обновить токен через callback, а не уходим в бесконечный цикл reconnect.
+    if (!_didOpen && handlers.onAuthFailed) {
+      console.log(`[WS] Соединение отклонено (code=${event.code}) — возможно токен истёк, вызываем onAuthFailed`)
+      handlers.onAuthFailed()
+      return
+    }
+
     console.log(`[WS] Соединение закрыто (code=${event.code}), переподключение через ${reconnectDelay}мс...`)
     _scheduleReconnect(token, handlers)
   }
