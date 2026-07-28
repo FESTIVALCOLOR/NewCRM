@@ -110,16 +110,20 @@ async def check_deadlines_once():
     db = SessionLocal()
     try:
         # === CRM дедлайны ===
-        executors = (
-            db.query(StageExecutor)
+        # JOIN вместо N+1 запросов — одна операция вместо N×3
+        crm_rows = (
+            db.query(StageExecutor, CRMCard, Contract)
+            .join(CRMCard, CRMCard.id == StageExecutor.crm_card_id)
+            .join(Contract, Contract.id == CRMCard.contract_id)
             .filter(
                 StageExecutor.deadline.isnot(None),
                 StageExecutor.completed == False,
+                Contract.status.notin_(["СДАН", "РАСТОРГНУТ", "АВТОРСКИЙ НАДЗОР"]),
             )
             .all()
         )
 
-        for ex in executors:
+        for ex, card, contract in crm_rows:
             try:
                 dl = ex.deadline
                 if isinstance(dl, str):
@@ -129,15 +133,6 @@ async def check_deadlines_once():
 
                 biz_days = _count_business_days_between(today, dl)
 
-                card = db.query(CRMCard).filter(CRMCard.id == ex.crm_card_id).first()
-                if not card:
-                    continue
-                contract = db.query(Contract).filter(Contract.id == card.contract_id).first()
-                if not contract:
-                    continue
-                # Пропускаем архивные договоры (СДАН, РАСТОРГНУТ, АВТОРСКИЙ НАДЗОР)
-                if contract.status in ("СДАН", "РАСТОРГНУТ", "АВТОРСКИЙ НАДЗОР"):
-                    continue
                 # Пропускаем если карточка уже перешла на другую стадию (безопасность)
                 if card.column_name != ex.stage_name:
                     continue
@@ -220,8 +215,10 @@ async def check_deadlines_once():
                 logger.warning(f"deadline_checker CRM executor {ex.id}: {e}")
 
         # === Надзор дедлайны ===
-        sv_cards = (
-            db.query(SupervisionCard)
+        # JOIN вместо N+1
+        sv_rows = (
+            db.query(SupervisionCard, Contract)
+            .join(Contract, Contract.id == SupervisionCard.contract_id)
             .filter(
                 SupervisionCard.deadline.isnot(None),
                 SupervisionCard.column_name != "Выполненный проект",
@@ -230,7 +227,7 @@ async def check_deadlines_once():
             .all()
         )
 
-        for sv in sv_cards:
+        for sv, contract in sv_rows:
             try:
                 dl = sv.deadline
                 if isinstance(dl, str):
@@ -239,7 +236,6 @@ async def check_deadlines_once():
                     dl = dl.date()
 
                 biz_days = _count_business_days_between(today, dl)
-                contract = db.query(Contract).filter(Contract.id == sv.contract_id).first()
                 address = contract.address if contract else ""
                 dl_str = dl.strftime("%d.%m.%Y")
                 recipients = [r for r in [sv.dan_id, sv.senior_manager_id] if r]
@@ -276,22 +272,23 @@ async def check_deadlines_once():
 
         # === Надзор дедлайны по стадиям (plan_date из SupervisionTimelineEntry) ===
         # Руководство §4: "Дедлайн по стадии "{stage_name}" надзора {address}"
-        sv_stages = (
-            db.query(SupervisionTimelineEntry)
+        # JOIN вместо N+1
+        sv_stage_rows = (
+            db.query(SupervisionTimelineEntry, SupervisionCard, Contract)
+            .join(SupervisionCard, SupervisionCard.id == SupervisionTimelineEntry.supervision_card_id)
+            .join(Contract, Contract.id == SupervisionCard.contract_id)
             .filter(
                 SupervisionTimelineEntry.plan_date.isnot(None),
                 SupervisionTimelineEntry.plan_date != "",
                 SupervisionTimelineEntry.status != "Выполнено",
+                SupervisionCard.column_name != "Выполненный проект",
+                SupervisionCard.is_paused == False,
             )
             .all()
         )
 
-        for ste in sv_stages:
+        for ste, sv, contract in sv_stage_rows:
             try:
-                sv = db.query(SupervisionCard).filter(SupervisionCard.id == ste.supervision_card_id).first()
-                if not sv or sv.column_name == "Выполненный проект" or sv.is_paused:
-                    continue
-
                 dl = ste.plan_date
                 if isinstance(dl, str):
                     dl = datetime.strptime(dl, "%Y-%m-%d").date()
@@ -299,7 +296,6 @@ async def check_deadlines_once():
                     dl = dl.date()
 
                 biz_days = _count_business_days_between(today, dl)
-                contract = db.query(Contract).filter(Contract.id == sv.contract_id).first()
                 address = contract.address if contract else ""
                 dl_str = dl.strftime("%d.%m.%Y")
                 recipients = [r for r in [sv.dan_id, sv.senior_manager_id] if r]
@@ -421,7 +417,11 @@ async def deadline_checker_loop():
 
     Если дедлайн выпал на выходной/праздник — уведомление придёт в первый рабочий день после.
     Например: просрочка в пятницу вечером или в субботу → уведомление в понедельник в 10:00.
+
+    File-lock: при нескольких uvicorn-воркерах только один запускает check_deadlines_once().
     """
+    import fcntl
+
     logger.info("Deadline checker запущен (10:00 МСК = 07:00 UTC, только рабочие дни РФ)")
     while True:
         try:
@@ -430,7 +430,21 @@ async def deadline_checker_loop():
             sleep_secs = (next_run - now).total_seconds()
             logger.info(f"Deadline checker: следующий запуск {next_run.strftime('%Y-%m-%d')} в 10:00 МСК (через {sleep_secs / 3600:.1f}ч)")
             await asyncio.sleep(sleep_secs)
-            await check_deadlines_once()
+
+            # Только один воркер выполняет проверку — остальные пропускают
+            lock_path = "/tmp/deadline_checker.lock"
+            try:
+                lock_fd = open(lock_path, "w")
+                fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except (IOError, OSError):
+                logger.info("Deadline checker: пропущен (другой воркер уже выполняет проверку)")
+                continue
+
+            try:
+                await check_deadlines_once()
+            finally:
+                fcntl.flock(lock_fd, fcntl.LOCK_UN)
+                lock_fd.close()
         except Exception as e:
             logger.error(f"deadline_checker_loop: {e}")
             await asyncio.sleep(3600)

@@ -402,8 +402,8 @@ class TelegramService:
                         except Exception:
                             pass
                     self._cleanup_session_locks()
-                    self._mtproto_disabled_until = time.monotonic() + 1800  # 30 мин
-                    raise RuntimeError("MTProto DC недоступен (timeout 90с): Telegram DC заблокирован хостингом. Повтор через 30 мин.")
+                    self._mtproto_disabled_until = time.monotonic() + 21600  # 6 часов
+                    raise RuntimeError("MTProto DC недоступен (timeout 90с): Telegram DC заблокирован хостингом. Повтор через 6 ч.")
                 except Exception as e:
                     err_msg = str(e)
                     logger.error(f"Pyrogram start() failed (попытка {attempt + 1}/{max_attempts}): {err_msg}")
