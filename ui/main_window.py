@@ -2089,7 +2089,7 @@ class MainWindow(QMainWindow):
 
         def _fetch():
             try:
-                data = self.api_client.get_server_disk_status()
+                data = self.data_access.get_server_disk_status()
                 QTimer.singleShot(0, lambda: self._apply_server_status(data))
             except Exception:
                 pass

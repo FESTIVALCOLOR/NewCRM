@@ -136,7 +136,7 @@ jobs:
           python-version: '3.11'
       - name: Установка зависимостей
         run: |
-          pip install pytest pytest-timeout hypothesis pydantic pydantic-settings requests urllib3
+          pip install pytest pytest-timeout hypothesis pydantic pydantic-settings requests urllib3 sqlalchemy
       - name: Запуск Property-based тестов
         run: pytest tests/property/ -v --timeout=60 -p no:qt
 

@@ -3844,6 +3844,24 @@ class DataAccess(QObject):
             _safe_log("[DataAccess] get_current_user: API недоступен")
         return None
 
+    def get_internal_chats(self, chat_type: str = None, crm_card_id: int = None) -> list:
+        """Список чатов (только API)"""
+        if self.api_client:
+            try:
+                return self.api_client.get_internal_chats(chat_type=chat_type, crm_card_id=crm_card_id) or []
+            except Exception as e:
+                _safe_log(f"[DataAccess] API get_internal_chats: {e}")
+        return []
+
+    def get_server_disk_status(self) -> Optional[dict]:
+        """Состояние диска и RAM сервера (только API, только для администраторов)"""
+        if self.api_client:
+            try:
+                return self.api_client.get_server_disk_status()
+            except Exception as e:
+                _safe_log(f"[DataAccess] API get_server_disk_status: {e}")
+        return None
+
     # ==================== ДОПОЛНИТЕЛЬНЫЕ МЕТОДЫ ====================
 
     def delete_order(self, contract_id: int, crm_card_id: int = None) -> bool:

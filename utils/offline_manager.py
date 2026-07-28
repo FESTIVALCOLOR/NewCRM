@@ -40,6 +40,15 @@ except ImportError:
         return _NoSignal()
 
     class QTimer:  # type: ignore[no-redef]
+        def __init__(self, *args, **kwargs):
+            self.timeout = _NoSignal()
+
+        def start(self, *a, **kw):
+            pass
+
+        def stop(self, *a, **kw):
+            pass
+
         @staticmethod
         def singleShot(ms, func):
             func()

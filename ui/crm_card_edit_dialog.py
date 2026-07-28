@@ -7213,7 +7213,7 @@ class CardEditDialog(QDialog):
             error = None
             msg = None
             try:
-                chats = self.api_client.get_internal_chats(chat_type="employee", crm_card_id=crm_card_id)
+                chats = self.data_access.get_internal_chats(chat_type="employee", crm_card_id=crm_card_id)
                 active = next((c for c in (chats or []) if c.get("is_active", True)), None)
                 if not active:
                     error = "Чат сотрудников не создан для этой карточки"

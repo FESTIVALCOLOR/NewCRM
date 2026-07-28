@@ -32,7 +32,6 @@ def _require_admin(current_user: Employee = Depends(get_current_user)):
 
 def _run_backup():
     """Выполнить pg_dump + gzip + загрузить на Яндекс.Диск."""
-    global _backup_state
     _backup_state["in_progress"] = True
     try:
         database_url = os.getenv("DATABASE_URL", "")
@@ -150,7 +149,6 @@ async def get_backup_status(current_user: Employee = Depends(_require_admin)):
 
 def _run_restore(filename: str):
     """Скачать бекап с ЯД, удалить все таблицы и восстановить через psql."""
-    global _restore_state
     _restore_state["in_progress"] = True
     tmp_sql = None
     try:
