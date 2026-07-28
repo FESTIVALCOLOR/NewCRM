@@ -14,20 +14,8 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-# Mock PyQt5 at module level so tests can run in headless CI without PyQt5 installed
-try:
-    import PyQt5  # noqa: F401
-except ImportError:
-    for _mod in [
-        "PyQt5",
-        "PyQt5.QtCore",
-        "PyQt5.QtWidgets",
-        "PyQt5.QtGui",
-        "PyQt5.QtNetwork",
-        "PyQt5.QtSvg",
-        "PyQt5.QtPrintSupport",
-    ]:
-        sys.modules.setdefault(_mod, MagicMock())
+# utils.icon_loader requires PyQt5 to import; skip the entire file if not available
+pytest.importorskip("PyQt5", reason="PyQt5 not installed")
 
 
 # ==================== Вспомогательные моки ====================

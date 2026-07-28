@@ -13,21 +13,8 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-# Mock PyQt5 at module level so ui.crm_tab can be imported in headless CI
-try:
-    import PyQt5  # noqa: F401
-except ImportError:
-    _mock = MagicMock()
-    for _mod in [
-        "PyQt5",
-        "PyQt5.QtCore",
-        "PyQt5.QtWidgets",
-        "PyQt5.QtGui",
-        "PyQt5.QtNetwork",
-        "PyQt5.QtSvg",
-        "PyQt5.QtPrintSupport",
-    ]:
-        sys.modules.setdefault(_mod, MagicMock())
+# ui.crm_tab requires PyQt5 to import; skip the entire file if not available
+pytest.importorskip("PyQt5", reason="PyQt5 not installed")
 
 
 @pytest.fixture(autouse=True)
