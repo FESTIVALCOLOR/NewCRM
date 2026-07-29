@@ -237,6 +237,48 @@ def _add_working_days_to_date(start_date_str, working_days):
     return current.strftime("%Y-%m-%d")
 
 
+def _compute_effective_deadline(card):
+    """Эффективный дедлайн с учётом паузы — для карточек «В ожидании» сдвигается на число рабочих дней паузы."""
+    base = str(card.deadline) if card.deadline else None
+    if card.column_name == "В ожидании" and card.paused_at and card.deadline:
+        try:
+            pd = _count_business_days(card.paused_at, datetime.utcnow())
+            if pd > 0:
+                return _add_working_days_to_date(str(card.deadline), pd)
+        except Exception:
+            pass
+    return base
+
+
+def _compute_is_client_stage(db, card, wf_status, substep_code):
+    """True если текущий этап — клиентский (вне объёма просрочки проекта)."""
+    if wf_status in ("client_approval", "pending_decision", "act_signing"):
+        return True
+    if card.column_name == "В ожидании":
+        return True
+    if substep_code:
+        tle = db.query(ProjectTimelineEntry.executor_role).filter(ProjectTimelineEntry.stage_code == substep_code).first()
+        if tle and tle.executor_role == "Клиент":
+            return True
+    return False
+
+
+def _format_stage_executor(se):
+    """Сериализовать StageExecutor в словарь для ответа API."""
+    return {
+        "id": se.id,
+        "stage_name": se.stage_name,
+        "executor_id": se.executor_id,
+        "executor_name": se.executor.full_name if se.executor else None,
+        "assigned_by": se.assigned_by,
+        "assigned_date": se.assigned_date.isoformat() if se.assigned_date else None,
+        "deadline": str(se.deadline) if se.deadline else None,
+        "submitted_date": se.submitted_date.isoformat() if se.submitted_date else None,
+        "completed": se.completed,
+        "completed_date": se.completed_date.isoformat() if se.completed_date else None,
+    }
+
+
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["crm"])
 
@@ -385,11 +427,30 @@ async def get_crm_cards(project_type: Optional[str] = None, archived: bool = Fal
             designer_employee = executor_employees_map.get(designer_executor.executor_id) if designer_executor else None
             draftsman_employee = executor_employees_map.get(draftsman_executor.executor_id) if draftsman_executor else None
 
+            # Эффективный дедлайн: для карточек в «В ожидании» сдвигаем на текущие дни паузы
+            # Это позволяет корректно отображать дедлайн без ежедневного изменения БД
+            _effective_deadline = str(card.deadline) if card.deadline else None
+            if card.column_name == "В ожидании" and card.paused_at and card.deadline:
+                try:
+                    _pause_days = _count_business_days(card.paused_at, datetime.utcnow())
+                    if _pause_days > 0:
+                        _effective_deadline = _add_working_days_to_date(str(card.deadline), _pause_days)
+                except Exception:
+                    pass
+
+            # Флаг «клиентский этап» — просрочка по таким этапам не должна красить дедлайн красным
+            _wf = wf_states_by_card.get((card.id, card.column_name))
+            _wf_status = _wf.status if _wf else None
+            _substep_role = substep_executor_role_map.get(_wf.current_substep_code) if _wf and _wf.current_substep_code else None
+            _is_client_stage = _wf_status in ("client_approval", "pending_decision", "act_signing") or _substep_role == "Клиент" or card.column_name == "В ожидании"
+
             card_data = {
                 "id": card.id,
                 "contract_id": card.contract_id,
                 "column_name": card.column_name,
                 "deadline": str(card.deadline) if card.deadline else None,
+                "effective_deadline": _effective_deadline,
+                "is_client_stage": _is_client_stage,
                 "tags": card.tags,
                 "tag_color": card.tag_color,
                 "is_approved": card.is_approved,
@@ -488,29 +549,15 @@ async def get_crm_card(card_id: int, current_user: Employee = Depends(get_curren
             return emp.full_name if emp else None
 
         stage_executors = db.query(StageExecutor).filter(StageExecutor.crm_card_id == card_id).all()
-
-        executor_data = []
-        for se in stage_executors:
-            executor_data.append(
-                {
-                    "id": se.id,
-                    "stage_name": se.stage_name,
-                    "executor_id": se.executor_id,
-                    "executor_name": se.executor.full_name if se.executor else None,
-                    "assigned_by": se.assigned_by,
-                    "assigned_date": se.assigned_date.isoformat() if se.assigned_date else None,
-                    "deadline": str(se.deadline) if se.deadline else None,
-                    "submitted_date": se.submitted_date.isoformat() if se.submitted_date else None,
-                    "completed": se.completed,
-                    "completed_date": se.completed_date.isoformat() if se.completed_date else None,
-                }
-            )
+        executor_data = [_format_stage_executor(se) for se in stage_executors]
+        _eff_dl_single = _compute_effective_deadline(card)
 
         result = {
             "id": card.id,
             "contract_id": card.contract_id,
             "column_name": card.column_name,
             "deadline": str(card.deadline) if card.deadline else None,
+            "effective_deadline": _eff_dl_single,
             "tags": card.tags,
             "tag_color": card.tag_color,
             "is_approved": card.is_approved,
@@ -557,6 +604,8 @@ async def get_crm_card(card_id: int, current_user: Employee = Depends(get_curren
             result["current_substep_name"] = None
             result["workflow_status"] = None
             result["revision_count"] = 0
+
+        result["is_client_stage"] = _compute_is_client_stage(db, card, result.get("workflow_status"), result.get("current_substep_code"))
 
         # Поля из контракта
         if contract:

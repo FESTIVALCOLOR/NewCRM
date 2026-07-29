@@ -98,17 +98,17 @@
                     </span>
                   </button>
                   <div
-                    v-if="task.is_paused"
+                    v-if="task.column_name === 'В ожидании' || task.is_paused"
                     style="width: 52px; text-align: right; font-size: 10px; font-weight: 600; color: #B8860B; line-height: 1.2; white-space: normal"
                   >
                     Пауза
                   </div>
                   <div
-                    v-else-if="task.deadline || task.current_stage_deadline"
+                    v-else-if="_taskDeadline(task)"
                     style="width: 52px; text-align: right; font-size: 10px; font-weight: 600; line-height: 1.2; white-space: normal"
-                    :style="{ color: dlColor(task.deadline || task.current_stage_deadline) }"
+                    :style="{ color: dlColor(_taskDeadline(task), task) }"
                   >
-                    {{ fmtDeadline(task.deadline || task.current_stage_deadline) }}
+                    {{ fmtDeadline(_taskDeadline(task), task) }}
                   </div>
                   <div v-else style="width: 52px" />
                 </div>
@@ -234,36 +234,68 @@ const myTasks = ref([])
 
 const recentNotifications = computed(() => notificationsStore.items.slice(0, 5))
 
+// Рабочие дни между двумя датами (без выходных и праздников РФ)
+const _RU_HOLIDAYS = new Set(['01-01','01-02','01-03','01-04','01-05','01-06','01-07','01-08','02-23','03-08','05-01','05-09','06-12','11-04'])
+function _countWorkDays(from, to) {
+  let d = new Date(from), count = 0
+  const sign = to > from ? 1 : -1
+  while (d.getTime() !== to.getTime()) {
+    d = new Date(d.getTime() + sign * 86400000)
+    const wd = d.getDay(), mm = String(d.getMonth()+1).padStart(2,'0'), dd = String(d.getDate()).padStart(2,'0')
+    if (wd !== 0 && wd !== 6 && !_RU_HOLIDAYS.has(`${mm}-${dd}`)) count += sign
+  }
+  return count
+}
+function _workDaysLeft(dateStr) {
+  if (!dateStr) return null
+  const now = new Date(); now.setHours(0,0,0,0)
+  const dl = new Date(dateStr); dl.setHours(0,0,0,0)
+  return _countWorkDays(now, dl)
+}
+
+function _taskDeadline(task) {
+  // effective_deadline учитывает дни паузы для карточек в «В ожидании»
+  return task.effective_deadline || task.deadline || task.current_stage_deadline
+}
+
 function taskBg(task) {
+  if (task.column_name === 'В ожидании') return { background: '#FFFDE7' }
   if (task.is_paused) return { background: '#FFFDE7' }
   if (task._card_type === 'supervision') return { background: '#E3F2FD' }
   return {}
 }
 
 function taskColor(task) {
-  if (task.is_paused) return 'amber-7'
+  if (task.column_name === 'В ожидании' || task.is_paused) return 'amber-7'
   if (task._card_type === 'supervision') return 'blue-5'
-  const d = task.deadline || task.current_stage_deadline
+  const d = _taskDeadline(task)
   if (!d) return 'grey-5'
-  const days = Math.ceil((new Date(d) - new Date()) / 86400000)
+  const days = _workDaysLeft(d)
+  if (days === null) return 'grey-5'
+  // Клиентский/согласовательный этап — серый даже при просрочке
+  if (task.is_client_stage && days < 0) return 'grey-6'
   if (days < 0) return 'negative'
   if (days <= 2) return 'warning'
   return 'grey-7'
 }
 
-function dlColor(d) {
-  const days = Math.ceil((new Date(d) - new Date()) / 86400000)
+function dlColor(d, task) {
+  const days = _workDaysLeft(d)
+  if (days === null) return '#888'
+  if (task && task.is_client_stage && days < 0) return '#9E9E9E'
   if (days < 0) return '#E74C3C'
   if (days <= 2) return '#F39C12'
   return '#888'
 }
 
-function fmtDeadline(d) {
-  const days = Math.ceil((new Date(d) - new Date()) / 86400000)
+function fmtDeadline(d, task) {
+  const days = _workDaysLeft(d)
+  if (days === null) return ''
+  if (task && task.is_client_stage && days < 0) return `${Math.abs(days)} дн. согл.`
   if (days < 0) return `${Math.abs(days)} дн. просрочено`
   if (days === 0) return 'Сегодня'
   if (days === 1) return 'Завтра'
-  return `${days} дн.`
+  return `${days} раб.дн.`
 }
 function notificationIcon(t) { return { assigned: 'assignment_ind', deadline: 'schedule', payment: 'payments', crm_stage: 'swap_horiz', supervision: 'engineering' }[t] || 'notifications' }
 function handleNotificationClick(n) { if (!n.is_read) notificationsStore.markRead(n.id); if (n.related_entity_type === 'crm_card') router.push(`/crm/${n.related_entity_id}`) }
@@ -313,8 +345,8 @@ async function loadMyTasks() {
       .map(c => ({ ...c, _card_type: 'supervision' }))
 
     const byDeadline = (a, b) => {
-      const da = a.deadline || a.current_stage_deadline
-      const db2 = b.deadline || b.current_stage_deadline
+      const da = _taskDeadline(a)
+      const db2 = _taskDeadline(b)
       if (!da && !db2) return 0
       if (!da) return 1
       if (!db2) return -1

@@ -2288,15 +2288,22 @@ class CRMCard(QFrame):
         if not is_surveyor:
             deadline_to_show = None
 
-            # Приоритет: исполнитель точно на ТЕКУЩЕЙ стадии, затем по типу стадии
+            # Используем effective_deadline (с учётом паузы) вместо raw deadline
+            # Приоритет: исполнитель текущей стадии → по типу стадии → проектный дедлайн
             if self.card_data.get("current_stage_deadline"):
                 deadline_to_show = self.card_data["current_stage_deadline"]
             elif "концепция дизайна" in current_column and self.card_data.get("designer_deadline"):
                 deadline_to_show = self.card_data["designer_deadline"]
             elif ("планировочные" in current_column or "чертежи" in current_column) and self.card_data.get("draftsman_deadline"):
                 deadline_to_show = self.card_data["draftsman_deadline"]
+            elif self.card_data.get("effective_deadline"):
+                deadline_to_show = self.card_data["effective_deadline"]
             elif self.card_data.get("deadline"):
                 deadline_to_show = self.card_data["deadline"]
+
+            # Флаг клиентского/паузного этапа: не показываем красный цвет при просрочке
+            is_client_stage = bool(self.card_data.get("is_client_stage", False))
+            is_waiting = current_column == "в ожидании"
 
             if deadline_to_show:
                 try:
@@ -2308,7 +2315,17 @@ class CRMCard(QFrame):
 
                     working_days = self.calculate_working_days(current_date, deadline_date)
 
-                    if working_days < 0:
+                    if is_waiting:
+                        # Карточка на паузе — жёлтый «ожидание», не красный
+                        bg_color = "#B8860B"
+                        text_color = "white"
+                        text = f"{deadline_display}  ПАУЗА"
+                    elif is_client_stage and working_days < 0:
+                        # Клиентский/согласовательный этап просрочен — серый, не красный
+                        bg_color = "#9E9E9E"
+                        text_color = "white"
+                        text = f"{deadline_display}  согл. ({abs(working_days)} раб.дн.)"
+                    elif working_days < 0:
                         bg_color = "#8B0000"
                         text_color = "white"
                         text = f"{deadline_display}  ПРОСРОЧЕН ({abs(working_days)} раб.дн.)"

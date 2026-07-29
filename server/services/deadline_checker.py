@@ -125,6 +125,10 @@ async def check_deadlines_once():
 
         for ex, card, contract in crm_rows:
             try:
+                # Карточки в «В ожидании» — дедлайн заморожен, уведомления не отправляем
+                if card.column_name == "В ожидании":
+                    continue
+
                 dl = ex.deadline
                 if isinstance(dl, str):
                     dl = datetime.strptime(dl, "%Y-%m-%d").date()
