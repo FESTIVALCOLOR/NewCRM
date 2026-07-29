@@ -539,7 +539,7 @@ def seed_permissions(db: Session):
             if emp.role in SUPERUSER_ROLES and emp.role not in DEFAULT_ROLE_PERMISSIONS:
                 continue
 
-            default_perms = _get_default_permissions(emp)
+            default_perms = _get_default_permissions(emp, db)
             if not default_perms:
                 continue
 
