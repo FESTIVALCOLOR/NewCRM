@@ -504,8 +504,9 @@
                     </template>
                     <span v-if="e.actual_days"> | Факт: {{ e.actual_days }} дн.</span>
                     <span v-if="e.executor_role"> | {{ e.executor_role }}</span>
-                    <span v-if="isOverdue(e)" style="color: #E74C3C; font-weight: bold"> | Просрочен</span>
-                    <span v-else-if="e.actual_date && !isOverdue(e)" style="color: #27AE60"> | В срок</span>
+                    <span v-if="e.is_in_contract_scope === false" style="color: #888888"> | Вне объёма</span>
+                    <span v-else-if="isOverdue(e)" style="color: #E74C3C; font-weight: bold"> | Просрочен</span>
+                    <span v-else-if="e.actual_date" style="color: #27AE60"> | В срок</span>
                   </q-item-label>
                 </q-item-section>
                 <q-item-section v-if="e.stage_code === 'START'" side style="min-width: auto; padding-right: 0">
@@ -2736,10 +2737,12 @@ const effectiveDeadline = computed(() => {
   return addWorkingDays(startDate, period)
 })
 // Просрочки по завершённым подэтапам (как в desktop _recalculate_days deviation_reasons)
+// Этапы вне объёма договора (is_in_contract_scope=false) исключаются из расчёта просрочки
 const deadlineDeviations = computed(() => {
   const result = []
   for (const e of timelineEntries.value) {
     if (e.executor_role === 'header') continue
+    if (e.is_in_contract_scope === false) continue
     const ad = e.actual_days || 0
     if (ad <= 0) continue
     const effectiveNorm = e.custom_norm_days || e.norm_days || 0
@@ -2753,6 +2756,7 @@ const aheadDeviations = computed(() => {
   const result = []
   for (const e of timelineEntries.value) {
     if (e.executor_role === 'header') continue
+    if (e.is_in_contract_scope === false) continue
     const ad = e.actual_days || 0
     if (ad <= 0) continue
     const effectiveNorm = e.custom_norm_days || e.norm_days || 0
@@ -2848,8 +2852,10 @@ async function deleteFolderSection(section) {
 }
 
 // Таймлайн: просрочен если actual_days > norm_days (как десктоп timeline_widget.py:828-834)
+// Строки вне объёма договора (is_in_contract_scope=false) никогда не считаются просроченными
 function isOverdue(e) {
   if (!e.actual_date || e.executor_role === 'header') return false
+  if (e.is_in_contract_scope === false) return false
   const norm = e.custom_norm_days || e.norm_days || 0
   return norm > 0 && (e.actual_days || 0) > norm
 }

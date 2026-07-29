@@ -2284,6 +2284,24 @@ class CRMCard(QFrame):
             tags_container.setFixedHeight(28)
             layout.addWidget(tags_container, 0)
 
+        # 6а. ПАУЗА-тег — показывается когда карточка в столбце «В ожидании»
+        if not is_surveyor and current_column.lower() == "в ожидании":
+            pause_container = QWidget()
+            pause_layout = QHBoxLayout()
+            pause_layout.setSpacing(4)
+            pause_layout.setContentsMargins(8, 3, 8, 3)
+            pause_layout.setAlignment(Qt.AlignVCenter)
+
+            pause_label = QLabel("⏸  ПАУЗА")
+            pause_label.setStyleSheet("color: white; font-size: 10px; font-weight: bold; background-color: transparent;")
+            pause_label.setAlignment(Qt.AlignVCenter)
+            pause_layout.addWidget(pause_label, 0, Qt.AlignVCenter)
+            pause_layout.addStretch()
+            pause_container.setLayout(pause_layout)
+            pause_container.setStyleSheet("background-color: #B8860B; border-radius: 4px;")
+            pause_container.setFixedHeight(26)
+            layout.addWidget(pause_container, 0)
+
         # 6. Дедлайн - скрываем для замерщика
         if not is_surveyor:
             deadline_to_show = None
