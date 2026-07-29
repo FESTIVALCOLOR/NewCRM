@@ -191,15 +191,24 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"user_permissions migration note: {e}")
 
+    # lock_timeout защищает startup от зависания: если DDL не может получить ACCESS EXCLUSIVE
+    # за 5 секунд (другой воркер держит транзакцию) — миграция пропускается и повторится при
+    # следующем перезапуске. Все миграции идемпотентны (IF NOT EXISTS).
+    _LOCK_TIMEOUT_MS = 5000
+
     # Миграция activity_log: employee_id должен быть nullable (для login_failed без сотрудника)
     try:
         from sqlalchemy import text as _text
 
         with engine.begin() as conn:
+            conn.execute(_text(f"SET LOCAL lock_timeout = '{_LOCK_TIMEOUT_MS}'"))
             conn.execute(_text("ALTER TABLE activity_log ALTER COLUMN employee_id DROP NOT NULL"))
             logger.info("Migrated activity_log: employee_id is now nullable")
     except Exception as e:
-        if "already" not in str(e).lower() and "no such" not in str(e).lower():
+        _em = str(e).lower()
+        if "lock" in _em or "timeout" in _em:
+            logger.warning(f"activity_log migration: lock timeout, will retry on next restart")
+        elif "already" not in _em and "no such" not in _em:
             logger.debug(f"activity_log migration note: {e}")
 
     # Миграция project_files: добавить stage_code
@@ -207,10 +216,14 @@ async def startup_event():
         from sqlalchemy import text as _text2
 
         with engine.begin() as conn:
+            conn.execute(_text2(f"SET LOCAL lock_timeout = '{_LOCK_TIMEOUT_MS}'"))
             conn.execute(_text2("ALTER TABLE project_files ADD COLUMN IF NOT EXISTS stage_code VARCHAR"))
             logger.info("Migrated project_files: added stage_code column")
     except Exception as e:
-        if "duplicate" not in str(e).lower() and "already" not in str(e).lower():
+        _em = str(e).lower()
+        if "lock" in _em or "timeout" in _em:
+            logger.warning(f"project_files migration: lock timeout, will retry on next restart")
+        elif "duplicate" not in _em and "already" not in _em:
             logger.debug(f"project_files migration note: {e}")
 
     # Миграция: добавить actual_date и visit_type в supervision_visits
@@ -218,11 +231,15 @@ async def startup_event():
         from sqlalchemy import text as _text3
 
         with engine.begin() as conn:
+            conn.execute(_text3(f"SET LOCAL lock_timeout = '{_LOCK_TIMEOUT_MS}'"))
             conn.execute(_text3("ALTER TABLE supervision_visits ADD COLUMN IF NOT EXISTS actual_date VARCHAR(30)"))
             conn.execute(_text3("ALTER TABLE supervision_visits ADD COLUMN IF NOT EXISTS visit_type VARCHAR(50) DEFAULT 'На объект'"))
             logger.info("Migrated supervision_visits: added actual_date, visit_type columns")
     except Exception as e:
-        if "duplicate" not in str(e).lower() and "already" not in str(e).lower():
+        _em = str(e).lower()
+        if "lock" in _em or "timeout" in _em:
+            logger.warning(f"supervision_visits migration: lock timeout, will retry on next restart")
+        elif "duplicate" not in _em and "already" not in _em:
             logger.debug(f"supervision_visits migration note: {e}")
 
     # Миграция: last_guest_activity в internal_chat_members
@@ -230,10 +247,14 @@ async def startup_event():
         from sqlalchemy import text as _text4
 
         with engine.begin() as conn:
+            conn.execute(_text4(f"SET LOCAL lock_timeout = '{_LOCK_TIMEOUT_MS}'"))
             conn.execute(_text4("ALTER TABLE internal_chat_members ADD COLUMN IF NOT EXISTS last_guest_activity TIMESTAMP"))
             logger.info("Migrated internal_chat_members: added last_guest_activity column")
     except Exception as e:
-        if "duplicate" not in str(e).lower() and "already" not in str(e).lower():
+        _em = str(e).lower()
+        if "lock" in _em or "timeout" in _em:
+            logger.warning(f"internal_chat_members migration: lock timeout, will retry on next restart")
+        elif "duplicate" not in _em and "already" not in _em:
             logger.debug(f"internal_chat_members migration note: {e}")
 
     # Миграция: min_visits_per_month в supervision_cards + is_additional + executor_role в supervision_visits
@@ -241,12 +262,16 @@ async def startup_event():
         from sqlalchemy import text as _text_visits
 
         with engine.begin() as conn:
+            conn.execute(_text_visits(f"SET LOCAL lock_timeout = '{_LOCK_TIMEOUT_MS}'"))
             conn.execute(_text_visits("ALTER TABLE supervision_cards ADD COLUMN IF NOT EXISTS min_visits_per_month INTEGER"))
             conn.execute(_text_visits("ALTER TABLE supervision_visits ADD COLUMN IF NOT EXISTS is_additional BOOLEAN DEFAULT FALSE"))
             conn.execute(_text_visits("ALTER TABLE supervision_visits ADD COLUMN IF NOT EXISTS executor_role VARCHAR(100)"))
             logger.info("Migrated: min_visits_per_month, is_additional, executor_role added")
     except Exception as e:
-        if "duplicate" not in str(e).lower() and "already" not in str(e).lower():
+        _em = str(e).lower()
+        if "lock" in _em or "timeout" in _em:
+            logger.warning(f"supervision visits migration: lock timeout, will retry on next restart")
+        elif "duplicate" not in _em and "already" not in _em:
             logger.debug(f"visits migration note: {e}")
 
     # Миграция: tag_color в crm_cards
@@ -254,10 +279,14 @@ async def startup_event():
         from sqlalchemy import text as _text_tag_color
 
         with engine.begin() as conn:
+            conn.execute(_text_tag_color(f"SET LOCAL lock_timeout = '{_LOCK_TIMEOUT_MS}'"))
             conn.execute(_text_tag_color("ALTER TABLE crm_cards ADD COLUMN IF NOT EXISTS tag_color VARCHAR"))
             logger.info("Migrated crm_cards: added tag_color column")
     except Exception as e:
-        if "duplicate" not in str(e).lower() and "already" not in str(e).lower():
+        _em = str(e).lower()
+        if "lock" in _em or "timeout" in _em:
+            logger.warning(f"crm_cards tag_color migration: lock timeout, will retry on next restart")
+        elif "duplicate" not in _em and "already" not in _em:
             logger.debug(f"tag_color migration note: {e}")
 
     # Миграция: tag_color в supervision_cards
@@ -265,10 +294,14 @@ async def startup_event():
         from sqlalchemy import text as _text_sv_tag_color
 
         with engine.begin() as conn:
+            conn.execute(_text_sv_tag_color(f"SET LOCAL lock_timeout = '{_LOCK_TIMEOUT_MS}'"))
             conn.execute(_text_sv_tag_color("ALTER TABLE supervision_cards ADD COLUMN IF NOT EXISTS tag_color VARCHAR"))
             logger.info("Migrated supervision_cards: added tag_color column")
     except Exception as e:
-        if "duplicate" not in str(e).lower() and "already" not in str(e).lower():
+        _em = str(e).lower()
+        if "lock" in _em or "timeout" in _em:
+            logger.warning(f"supervision_cards tag_color migration: lock timeout, will retry on next restart")
+        elif "duplicate" not in _em and "already" not in _em:
             logger.debug(f"supervision_cards tag_color migration note: {e}")
 
     # Миграция: is_admin_chat, admin_chat_type в internal_chats + таблица user_chat_pins
@@ -276,12 +309,16 @@ async def startup_event():
         from sqlalchemy import text as _text_admin_chat
 
         with engine.begin() as conn:
+            conn.execute(_text_admin_chat(f"SET LOCAL lock_timeout = '{_LOCK_TIMEOUT_MS}'"))
             conn.execute(_text_admin_chat("ALTER TABLE internal_chats ADD COLUMN IF NOT EXISTS is_admin_chat BOOLEAN DEFAULT FALSE"))
             conn.execute(_text_admin_chat("ALTER TABLE internal_chats ADD COLUMN IF NOT EXISTS admin_chat_type VARCHAR(10)"))
             conn.execute(_text_admin_chat("CREATE UNIQUE INDEX IF NOT EXISTS uq_admin_chat_type ON internal_chats (admin_chat_type) WHERE is_admin_chat = TRUE"))
         logger.info("Migrated internal_chats: added is_admin_chat, admin_chat_type, unique index")
     except Exception as e:
-        if "duplicate" not in str(e).lower() and "already" not in str(e).lower():
+        _em = str(e).lower()
+        if "lock" in _em or "timeout" in _em:
+            logger.warning(f"internal_chats migration: lock timeout, will retry on next restart")
+        elif "duplicate" not in _em and "already" not in _em:
             logger.debug(f"internal_chats admin chat migration: {e}")
 
     try:

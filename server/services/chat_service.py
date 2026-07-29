@@ -831,8 +831,13 @@ def get_employee_chats(db: Session, employee_id: int, chat_type: Optional[str] =
     return q.order_by(InternalChat.created_at.desc()).all()
 
 
-def get_all_accessible_chats(db: Session, employee_id: int, chat_type: Optional[str] = None) -> list:
-    """Все чаты, доступные сотруднику: явный участник + назначен на карточку + адм.чаты по позиции."""
+def get_all_accessible_chats(db: Session, employee_id: int, chat_type: Optional[str] = None) -> tuple:
+    """Все чаты, доступные сотруднику: явный участник + назначен на карточку + адм.чаты по позиции.
+
+    Возвращает (chats, extra_ids) — extra_ids это чаты где сотрудник назначен на карточку
+    но ещё не является явным участником. Caller должен запланировать авто-добавление через
+    BackgroundTask чтобы не блокировать GET-запрос записями в БД.
+    """
     # Чаты где сотрудник явно участник (включает адм.чаты — они туда добавляются при ensure)
     q_member_ids = (
         db.query(InternalChat.id)
@@ -902,28 +907,41 @@ def get_all_accessible_chats(db: Session, employee_id: int, chat_type: Optional[
         )
         extra_ids.update(r[0] for r in q_sv.all())
 
-    # Авто-добавить сотрудника как участника чатов, где он назначен на карточку
-    # но ещё не является явным членом — чтобы WebSocket и счётчики работали корректно
-    if extra_ids:
-        emp = db.query(Employee).filter(Employee.id == employee_id).first()
-        if emp:
-            extra_chats = db.query(InternalChat).filter(InternalChat.id.in_(extra_ids)).all()
-            for chat in extra_chats:
-                _add_employee_member(db, chat, emp)
-            try:
-                db.commit()
-                # После commit эти чаты уже в member_chat_ids при следующем вызове
-                member_chat_ids.update(extra_ids)
-                extra_ids = set()
-            except Exception:
-                db.rollback()
-
     all_ids = member_chat_ids | extra_ids
     if not all_ids:
-        return []
+        return [], extra_ids
 
     chats = db.query(InternalChat).filter(InternalChat.id.in_(all_ids)).order_by(InternalChat.created_at.desc()).all()
-    return chats
+    # Возвращаем extra_ids отдельно — caller планирует авто-добавление через BackgroundTask
+    # чтобы не выполнять db.commit() внутри GET-эндпоинта (предотвращает lock contention с DDL)
+    return chats, extra_ids
+
+
+def auto_add_chat_members(employee_id: int, extra_chat_ids: set) -> None:
+    """BackgroundTask: авто-добавить сотрудника в чаты карточки после GET-ответа.
+
+    Создаёт собственную DB-сессию, не блокирует GET-запрос.
+    """
+    if not extra_chat_ids:
+        return
+    import logging as _logging
+
+    from database import SessionLocal
+
+    _log = _logging.getLogger(__name__)
+    db = SessionLocal()
+    try:
+        emp = db.query(Employee).filter(Employee.id == employee_id).first()
+        if emp:
+            chats = db.query(InternalChat).filter(InternalChat.id.in_(extra_chat_ids)).all()
+            for chat in chats:
+                _add_employee_member(db, chat, emp)
+            db.commit()
+    except Exception as e:
+        db.rollback()
+        _log.debug(f"auto_add_chat_members background: {e}")
+    finally:
+        db.close()
 
 
 def get_card_chat_for_employee(db: Session, crm_card_id: int, chat_type: str, employee_id: int) -> Optional[InternalChat]:

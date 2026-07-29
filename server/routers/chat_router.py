@@ -40,7 +40,7 @@ import os
 from typing import List, Optional
 
 from auth import get_current_user
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect
 from permissions import require_permission
 from pydantic import BaseModel as PydanticBaseModel
 from schemas import (
@@ -62,6 +62,7 @@ from services.chat_service import (
     add_file_message,
     add_member_to_chat,
     add_text_message,
+    auto_add_chat_members,
     create_client_chat,
     create_employee_chat,
     create_invite_link,
@@ -185,6 +186,7 @@ def create_chat(
 
 @router.get("/", response_model=list[InternalChatResponse])
 def list_chats(
+    background_tasks: BackgroundTasks,
     chat_type: Optional[str] = Query(None, description="'employee' или 'client'"),
     crm_card_id: Optional[int] = Query(None),
     supervision_card_id: Optional[int] = Query(None),
@@ -211,7 +213,10 @@ def list_chats(
             return []
         return [_chat_to_response(db, chat, current_user.id)]
 
-    chats = get_all_accessible_chats(db, current_user.id, chat_type=chat_type)
+    chats, extra_ids = get_all_accessible_chats(db, current_user.id, chat_type=chat_type)
+    # Авто-добавление участника запускается после отправки ответа, не блокирует GET
+    if extra_ids:
+        background_tasks.add_task(auto_add_chat_members, current_user.id, extra_ids)
     if crm_card_id:
         chats = [c for c in chats if c.crm_card_id == crm_card_id]
 

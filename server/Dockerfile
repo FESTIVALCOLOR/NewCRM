@@ -33,4 +33,4 @@ USER appuser
 EXPOSE 8000
 
 # Команда запуска
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--limit-concurrency", "100", "--backlog", "2048"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--limit-concurrency", "100", "--backlog", "2048", "--max-requests", "1000", "--max-requests-jitter", "200"]
