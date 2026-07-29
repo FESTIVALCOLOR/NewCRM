@@ -5,36 +5,32 @@
 экспортом в Excel/PDF, интеграцией с дедлайнами.
 """
 
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTableWidget,
-    QTableWidgetItem, QPushButton, QHeaderView, QDateEdit,
-    QAbstractItemView, QFileDialog, QFrame
-)
-from PyQt5.QtCore import Qt, QDate, pyqtSignal, QEvent
-from PyQt5.QtGui import QColor, QFont, QBrush
-from utils.calendar_helpers import add_today_button_to_dateedit, add_working_days
-from utils.timeline_calc import calc_planned_dates
-from utils.icon_loader import IconLoader
 from datetime import datetime, timedelta
 import logging
 import threading
+
+from PyQt5.QtCore import QDate, QEvent, Qt, pyqtSignal
+from PyQt5.QtGui import QBrush, QColor, QFont
+from PyQt5.QtWidgets import QAbstractItemView, QDateEdit, QFileDialog, QFrame, QHBoxLayout, QHeaderView, QLabel, QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget
+
+from utils.calendar_helpers import add_today_button_to_dateedit, add_working_days
+from utils.icon_loader import IconLoader
+from utils.timeline_calc import calc_planned_dates
 
 logger = logging.getLogger(__name__)
 
 
 # ========== БИЗНЕС-ЛОГИКА ==========
 
+
 def calc_contract_term(project_type_code: int, area: float) -> int:
     """Расчёт срока договора. 1=Полный, 2=Эскизный, 3=Планировочный"""
     if project_type_code == 1:
-        thresholds = [(70,50),(100,60),(130,70),(160,80),(190,90),(220,100),
-                      (250,110),(300,120),(350,130),(400,140),(450,150),(500,160)]
+        thresholds = [(70, 50), (100, 60), (130, 70), (160, 80), (190, 90), (220, 100), (250, 110), (300, 120), (350, 130), (400, 140), (450, 150), (500, 160)]
     elif project_type_code == 3:
-        thresholds = [(70,10),(100,15),(130,20),(160,25),(190,30),(220,35),
-                      (250,40),(300,45),(350,50),(400,55),(450,60),(500,65)]
+        thresholds = [(70, 10), (100, 15), (130, 20), (160, 25), (190, 30), (220, 35), (250, 40), (300, 45), (350, 50), (400, 55), (450, 60), (500, 65)]
     else:
-        thresholds = [(70,30),(100,35),(130,40),(160,45),(190,50),(220,55),
-                      (250,60),(300,65),(350,70),(400,75),(450,80),(500,85)]
+        thresholds = [(70, 30), (100, 35), (130, 40), (160, 45), (190, 50), (220, 55), (250, 60), (300, 65), (350, 70), (400, 75), (450, 80), (500, 85)]
     for max_area, days in thresholds:
         if area <= max_area:
             return days
@@ -52,12 +48,12 @@ def networkdays(start_date, end_date):
         return 0
     if isinstance(start_date, str):
         try:
-            start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+            start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
         except ValueError:
             return 0
     if isinstance(end_date, str):
         try:
-            end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+            end_date = datetime.strptime(end_date, "%Y-%m-%d").date()
         except ValueError:
             return 0
 
@@ -65,6 +61,7 @@ def networkdays(start_date, end_date):
         return 0
 
     from utils.date_utils import is_working_day
+
     count = 0
     current = start_date
     while current < end_date:
@@ -75,33 +72,32 @@ def networkdays(start_date, end_date):
 
 
 # Цвета
-COLOR_STAGE_HEADER = QColor('#2F5496')
-COLOR_SUBSTAGE_HEADER = QColor('#D6E4F0')
-COLOR_DATE_CELL = QColor('#FFF2CC')
-COLOR_NORM_CELL = QColor('#F2F2F2')
-COLOR_START_DATE = QColor('#FCE4EC')
-COLOR_IN_SCOPE = QColor('#FFFFFF')
-COLOR_NOT_IN_SCOPE = QColor('#E0E0E0')
-COLOR_STATUS_OK_BG = QColor('#E8F5E9')
-COLOR_STATUS_FAIL_BG = QColor('#FFEBEE')
-COLOR_SUBTOTAL_BG = QColor('#E3F2FD')
-COLOR_GRANDTOTAL_BG = QColor('#FFF8E1')
+COLOR_STAGE_HEADER = QColor("#2F5496")
+COLOR_SUBSTAGE_HEADER = QColor("#D6E4F0")
+COLOR_DATE_CELL = QColor("#FFF2CC")
+COLOR_NORM_CELL = QColor("#F2F2F2")
+COLOR_START_DATE = QColor("#FCE4EC")
+COLOR_IN_SCOPE = QColor("#FFFFFF")
+COLOR_NOT_IN_SCOPE = QColor("#E0E0E0")
+COLOR_STATUS_OK_BG = QColor("#E8F5E9")
+COLOR_STATUS_FAIL_BG = QColor("#FFEBEE")
+COLOR_SUBTOTAL_BG = QColor("#E3F2FD")
+COLOR_GRANDTOTAL_BG = QColor("#FFF8E1")
 
 # Маппинг роли исполнителя -> поле в card_data для ФИО
 ROLE_TO_CARD_FIELD = {
-    'Чертежник': 'draftsman_name',
-    'Дизайнер': 'designer_name',
-    'СДП': 'sdp_name',
-    'ГАП': 'gap_name',
-    'Менеджер': 'manager_name',
+    "Чертежник": "draftsman_name",
+    "Дизайнер": "designer_name",
+    "СДП": "sdp_name",
+    "ГАП": "gap_name",
+    "Менеджер": "manager_name",
 }
 
 
 class ProjectTimelineWidget(QWidget):
     """Виджет таблицы сроков проекта CRM"""
 
-    COLUMNS = ['Действия по этапам', 'Дата', 'Кол-во дней', 'Норма дней',
-               'Статус', 'Исполнитель', 'ФИО']
+    COLUMNS = ["Действия по этапам", "Дата", "Кол-во дней", "Норма дней", "Статус", "Исполнитель", "ФИО"]
 
     # Сигнал для обновления таблицы из фонового потока
     _data_ready = pyqtSignal()
@@ -121,7 +117,7 @@ class ProjectTimelineWidget(QWidget):
         self._active_overlay_row = None
 
         # Получаем данные контракта (из API, чтобы advance_payment_paid_date был актуальным)
-        contract_id = card_data.get('contract_id')
+        contract_id = card_data.get("contract_id")
         self.contract_id = contract_id
         self.contract_data = {}
         if contract_id:
@@ -133,18 +129,18 @@ class ProjectTimelineWidget(QWidget):
                 pass
 
         # Получаем ФИО клиента из локальной БД (мгновенно)
-        self._client_name = ''
-        client_id = self.contract_data.get('client_id')
+        self._client_name = ""
+        client_id = self.contract_data.get("client_id")
         if client_id:
             try:
                 self.data.prefer_local = True
                 try:
                     client = self.data.get_client(client_id)
                     if client:
-                        if client.get('client_type') == 'Физическое лицо':
-                            self._client_name = client.get('full_name', '')
+                        if client.get("client_type") == "Физическое лицо":
+                            self._client_name = client.get("full_name", "")
                         else:
-                            self._client_name = client.get('organization_name', '')
+                            self._client_name = client.get("organization_name", "")
                 finally:
                     self.data.prefer_local = False
             except Exception:
@@ -166,38 +162,35 @@ class ProjectTimelineWidget(QWidget):
         header_layout.setContentsMargins(0, 0, 0, 0)
         header_layout.setSpacing(2)
 
-        address = self.contract_data.get('address', '-')
-        project_type = self.contract_data.get('project_type', '-')
-        project_subtype = self.contract_data.get('project_subtype', '')
-        area = self.contract_data.get('area', 0) or 0
+        address = self.contract_data.get("address", "-")
+        project_type = self.contract_data.get("project_type", "-")
+        project_subtype = self.contract_data.get("project_subtype", "")
+        area = self.contract_data.get("area", 0) or 0
 
         # Определяем pt_code из подтипа
         if project_subtype:
-            if 'Полный' in project_subtype:
+            if "Полный" in project_subtype:
                 pt_code = 1
-            elif 'Планировочный' in project_subtype:
+            elif "Планировочный" in project_subtype:
                 pt_code = 3
             else:
                 pt_code = 2
         else:
-            pt_code = 1 if project_type == 'Индивидуальный' else 2
+            pt_code = 1 if project_type == "Индивидуальный" else 2
 
         contract_term = calc_contract_term(pt_code, float(area)) if area else 0
         self._contract_term = contract_term
         K = calc_area_coefficient(float(area)) if area else 0
 
-        self.lbl_address = QLabel(f'Адрес: {address}')
-        self.lbl_address.setStyleSheet('font-size: 12px; font-weight: bold; color: #333;')
+        self.lbl_address = QLabel(f"Адрес: {address}")
+        self.lbl_address.setStyleSheet("font-size: 12px; font-weight: bold; color: #333;")
         header_layout.addWidget(self.lbl_address)
 
-        subtype_text = f'  |  Подтип: {project_subtype}' if project_subtype else ''
+        subtype_text = f"  |  Подтип: {project_subtype}" if project_subtype else ""
         # k_multiplier (коэфф. площади) отображается только для индивидуальных проектов
-        k_text = f'  |  Коэфф. площади (K): {K}' if project_type == 'Индивидуальный' else ''
-        info_line = QLabel(
-            f'Тип: {project_type}{subtype_text}  |  Площадь: {area} м\u00b2  |  '
-            f'Срок по договору: {contract_term} р.д.{k_text}'
-        )
-        info_line.setStyleSheet('font-size: 11px; color: #666;')
+        k_text = f"  |  Коэфф. площади (K): {K}" if project_type == "Индивидуальный" else ""
+        info_line = QLabel(f"Тип: {project_type}{subtype_text}  |  Площадь: {area} м\u00b2  |  Срок по договору: {contract_term} р.д.{k_text}")
+        info_line.setStyleSheet("font-size: 11px; color: #666;")
         header_layout.addWidget(info_line)
 
         # Расшифровка цветов
@@ -210,7 +203,7 @@ class ProjectTimelineWidget(QWidget):
             '<span style="background:#E8F5E9; padding:2px 6px; border-radius:2px;">Статус: в срок</span>  '
             '<span style="background:#FFEBEE; padding:2px 6px; border-radius:2px;">Статус: просрочен</span>'
         )
-        legend.setStyleSheet('font-size: 10px; color: #888; margin-top: 4px;')
+        legend.setStyleSheet("font-size: 10px; color: #888; margin-top: 4px;")
         legend.setTextFormat(Qt.RichText)
         legend.setWordWrap(True)
         header_layout.addWidget(legend)
@@ -232,9 +225,9 @@ class ProjectTimelineWidget(QWidget):
         for col in range(1, len(self.COLUMNS)):
             header.setSectionResizeMode(col, QHeaderView.Fixed)
         self.table.setColumnWidth(1, 130)  # Дата
-        self.table.setColumnWidth(2, 90)   # Кол-во дней
-        self.table.setColumnWidth(3, 90)   # Норма дней
-        self.table.setColumnWidth(4, 90)   # Статус
+        self.table.setColumnWidth(2, 90)  # Кол-во дней
+        self.table.setColumnWidth(3, 90)  # Норма дней
+        self.table.setColumnWidth(4, 90)  # Статус
         self.table.setColumnWidth(5, 110)  # Исполнитель
         self.table.setColumnWidth(6, 140)  # ФИО
 
@@ -268,7 +261,7 @@ class ProjectTimelineWidget(QWidget):
         btn_layout = QHBoxLayout()
         btn_layout.setSpacing(8)
 
-        self.btn_excel = QPushButton('Экспорт в Excel')
+        self.btn_excel = QPushButton("Экспорт в Excel")
         self.btn_excel.setFixedHeight(32)
         self.btn_excel.setStyleSheet("""
             QPushButton {
@@ -280,7 +273,7 @@ class ProjectTimelineWidget(QWidget):
         self.btn_excel.clicked.connect(self._export_excel)
         btn_layout.addWidget(self.btn_excel)
 
-        self.btn_pdf = QPushButton('Экспорт в PDF')
+        self.btn_pdf = QPushButton("Экспорт в PDF")
         self.btn_pdf.setFixedHeight(32)
         self.btn_pdf.setStyleSheet("""
             QPushButton {
@@ -306,14 +299,14 @@ class ProjectTimelineWidget(QWidget):
         dw_layout = QHBoxLayout(self._deviation_warning)
         dw_layout.setContentsMargins(8, 4, 10, 4)
         dw_layout.setSpacing(5)
-        dw_icon = IconLoader.load_colored('warning', '#E65100', 14)
+        dw_icon = IconLoader.load_colored("warning", "#E65100", 14)
         dw_icon_label = QLabel()
         dw_icon_label.setPixmap(dw_icon.pixmap(14, 14))
         dw_icon_label.setFixedSize(14, 14)
-        dw_icon_label.setStyleSheet('background: transparent; border: none;')
+        dw_icon_label.setStyleSheet("background: transparent; border: none;")
         dw_layout.addWidget(dw_icon_label)
         self._deviation_text = QLabel()
-        self._deviation_text.setStyleSheet('background: transparent; border: none; color: #E65100; font-size: 12px;')
+        self._deviation_text.setStyleSheet("background: transparent; border: none; color: #E65100; font-size: 12px;")
         dw_layout.addWidget(self._deviation_text)
         self._deviation_warning.hide()
         btn_layout.addWidget(self._deviation_warning)
@@ -332,43 +325,30 @@ class ProjectTimelineWidget(QWidget):
     def _fetch_entries(self):
         """Загрузить/инициализировать entries таймлайна (без UI).
         Возвращает отсортированный список entries."""
-        project_type = self.contract_data.get('project_type', 'Индивидуальный')
-        project_subtype = self.contract_data.get('project_subtype', '')
-        area = float(self.contract_data.get('area', 0) or 0)
-        floors = int(self.contract_data.get('floors', 1) or 1)
+        project_type = self.contract_data.get("project_type", "Индивидуальный")
+        project_subtype = self.contract_data.get("project_subtype", "")
+        area = float(self.contract_data.get("area", 0) or 0)
+        floors = int(self.contract_data.get("floors", 1) or 1)
 
         entries = self.data.get_project_timeline(self.contract_id)
 
         if entries:
-            has_template_codes = any(
-                e.get('stage_code', '').startswith('T') for e in entries
-                if e.get('executor_role') != 'header' and e.get('stage_code', '') != 'START'
-            )
-            is_template = (project_type == 'Шаблонный')
+            has_template_codes = any(e.get("stage_code", "").startswith("T") for e in entries if e.get("executor_role") != "header" and e.get("stage_code", "") != "START")
+            is_template = project_type == "Шаблонный"
             if is_template != has_template_codes and area > 0:
-                result = self.data.reinit_project_timeline(self.contract_id, {
-                    'project_type': project_type,
-                    'project_subtype': project_subtype,
-                    'area': area,
-                    'floors': floors
-                })
+                result = self.data.reinit_project_timeline(self.contract_id, {"project_type": project_type, "project_subtype": project_subtype, "area": area, "floors": floors})
                 if result:
                     entries = self.data.get_project_timeline(self.contract_id)
 
         if not entries:
             if area > 0:
-                result = self.data.init_project_timeline(self.contract_id, {
-                    'project_type': project_type,
-                    'project_subtype': project_subtype,
-                    'area': area,
-                    'floors': floors
-                })
-                if result and 'entries' in result:
-                    entries = result['entries']
+                result = self.data.init_project_timeline(self.contract_id, {"project_type": project_type, "project_subtype": project_subtype, "area": area, "floors": floors})
+                if result and "entries" in result:
+                    entries = result["entries"]
                 else:
                     entries = self.data.get_project_timeline(self.contract_id)
 
-        entries = sorted(entries or [], key=lambda e: e.get('sort_order', 0))
+        entries = sorted(entries or [], key=lambda e: e.get("sort_order", 0))
 
         # Синхронизация norm_days из admin шаблона для записей с norm_days=0
         self._sync_norm_days_from_template(entries)
@@ -381,50 +361,46 @@ class ProjectTimelineWidget(QWidget):
         (которые были переопределены СДП/ГАП при назначении исполнителя)."""
         if not entries:
             return
-        project_type = self.contract_data.get('project_type', 'Индивидуальный')
-        project_subtype = self.contract_data.get('project_subtype', '')
-        area = float(self.contract_data.get('area', 0) or 0)
-        agent_type = self.contract_data.get('agent_type', 'Все агенты') or 'Все агенты'
+        project_type = self.contract_data.get("project_type", "Индивидуальный")
+        project_subtype = self.contract_data.get("project_subtype", "")
+        area = float(self.contract_data.get("area", 0) or 0)
+        agent_type = self.contract_data.get("agent_type", "Все агенты") or "Все агенты"
         if area <= 0:
             return
         try:
-            template_data = self.data.preview_norm_days_template(
-                project_type, project_subtype, area, agent_type
-            )
+            template_data = self.data.preview_norm_days_template(project_type, project_subtype, area, agent_type)
             if not template_data or not isinstance(template_data, dict):
                 return
-            tpl_entries = template_data.get('entries', [])
+            tpl_entries = template_data.get("entries", [])
             if not tpl_entries:
                 return
             # Маппинг stage_code → norm_days из шаблона
             tpl_map = {}
             for te in tpl_entries:
-                code = te.get('stage_code', '')
-                nd = te.get('norm_days', 0) or te.get('base_norm_days', 0) or 0
+                code = te.get("stage_code", "")
+                nd = te.get("norm_days", 0) or te.get("base_norm_days", 0) or 0
                 if code and nd > 0:
                     tpl_map[code] = int(round(nd))
             # Применить norm_days из шаблона ко всем записям
             updated = []
             for entry in entries:
-                code = entry.get('stage_code', '')
-                role = entry.get('executor_role', '')
-                if role == 'header' or code == 'START':
+                code = entry.get("stage_code", "")
+                role = entry.get("executor_role", "")
+                if role == "header" or code == "START":
                     continue
                 # Пропускаем записи с custom_norm_days (переопределены СДП/ГАП)
-                if entry.get('custom_norm_days'):
+                if entry.get("custom_norm_days"):
                     continue
-                current_nd = entry.get('norm_days', 0) or 0
+                current_nd = entry.get("norm_days", 0) or 0
                 tpl_nd = tpl_map.get(code, 0)
                 if tpl_nd > 0 and current_nd != tpl_nd:
-                    entry['norm_days'] = tpl_nd
+                    entry["norm_days"] = tpl_nd
                     updated.append((code, tpl_nd))
             # Сохранить обновлённые norm_days на сервер
             if updated and self.contract_id:
                 for code, nd in updated:
                     try:
-                        self.data.update_timeline_entry(
-                            self.contract_id, code, {'norm_days': nd}
-                        )
+                        self.data.update_timeline_entry(self.contract_id, code, {"norm_days": nd})
                     except Exception:
                         pass
         except Exception as e:
@@ -474,19 +450,19 @@ class ProjectTimelineWidget(QWidget):
         Также пересчитывает общий дедлайн = start_date + contract_period рабочих дней."""
         dates = []
         # Дата договора
-        cd = self.contract_data.get('contract_date', '')
+        cd = self.contract_data.get("contract_date", "")
         if cd:
             dates.append(cd)
         # Дата замера
-        sd = self.card_data.get('survey_date', '')
+        sd = self.card_data.get("survey_date", "")
         if sd:
             dates.append(sd)
         # Дата получения ТЗ
-        td = self.card_data.get('tech_task_date', '')
+        td = self.card_data.get("tech_task_date", "")
         if td:
             dates.append(td)
         # Дата первого платежа (аванс)
-        apd = self.contract_data.get('advance_payment_paid_date', '')
+        apd = self.contract_data.get("advance_payment_paid_date", "")
         if apd:
             dates.append(apd)
 
@@ -499,33 +475,30 @@ class ProjectTimelineWidget(QWidget):
         # Находим запись START и устанавливаем дату
         start_changed = False
         for entry in self.entries:
-            if entry.get('stage_code') == 'START':
-                old_date = entry.get('actual_date', '')
+            if entry.get("stage_code") == "START":
+                old_date = entry.get("actual_date", "")
                 if old_date != latest:
-                    entry['actual_date'] = latest
+                    entry["actual_date"] = latest
                     start_changed = True
                     # Сохраняем на сервер
                     if self.contract_id:
                         try:
-                            self.data.update_timeline_entry(
-                                self.contract_id, 'START',
-                                {'actual_date': latest}
-                            )
+                            self.data.update_timeline_entry(self.contract_id, "START", {"actual_date": latest})
                         except Exception:
                             pass
                 break
 
         # Пересчитываем дедлайн от даты начала разработки
         if start_changed and latest:
-            contract_period = self.contract_data.get('contract_period', 0)
+            contract_period = self.contract_data.get("contract_period", 0)
             if contract_period and int(contract_period) > 0:
                 new_deadline = add_working_days(latest, int(contract_period))
                 if new_deadline:
-                    card_id = self.card_data.get('id')
+                    card_id = self.card_data.get("id")
                     if card_id:
                         try:
-                            self.data.update_crm_card(card_id, {'deadline': new_deadline})
-                            self.card_data['deadline'] = new_deadline
+                            self.data.update_crm_card(card_id, {"deadline": new_deadline})
+                            self.card_data["deadline"] = new_deadline
                             self.deadline_updated.emit(new_deadline)
                         except Exception:
                             pass
@@ -545,12 +518,12 @@ class ProjectTimelineWidget(QWidget):
 
     def _get_fio(self, role):
         """Получить ФИО исполнителя по роли из card_data"""
-        if role == 'Клиент':
-            return self._client_name or 'Клиент'
-        field = ROLE_TO_CARD_FIELD.get(role, '')
+        if role == "Клиент":
+            return self._client_name or "Клиент"
+        field = ROLE_TO_CARD_FIELD.get(role, "")
         if field:
-            return self.card_data.get(field, '') or ''
-        return ''
+            return self.card_data.get(field, "") or ""
+        return ""
 
     def _build_display_rows(self):
         """Построить массив строк для отображения: entries + итоги этапов + общий итог"""
@@ -560,18 +533,20 @@ class ProjectTimelineWidget(QWidget):
         stage_norm_sum = 0
 
         for idx, entry in enumerate(self.entries):
-            role = entry.get('executor_role', '')
-            is_header = role == 'header'
-            stage_group = entry.get('stage_group', '')
+            role = entry.get("executor_role", "")
+            is_header = role == "header"
+            stage_group = entry.get("stage_group", "")
 
             # Если начался новый этап (основной заголовок) — вставляем итог предыдущего
-            if is_header and stage_group != current_stage_group and current_stage_group and current_stage_group != 'START':
-                display_rows.append({
-                    '_type': 'subtotal',
-                    '_stage_group': current_stage_group,
-                    '_actual_sum': stage_actual_sum,
-                    '_norm_sum': stage_norm_sum,
-                })
+            if is_header and stage_group != current_stage_group and current_stage_group and current_stage_group != "START":
+                display_rows.append(
+                    {
+                        "_type": "subtotal",
+                        "_stage_group": current_stage_group,
+                        "_actual_sum": stage_actual_sum,
+                        "_norm_sum": stage_norm_sum,
+                    }
+                )
                 stage_actual_sum = 0
                 stage_norm_sum = 0
 
@@ -581,91 +556,86 @@ class ProjectTimelineWidget(QWidget):
                 stage_norm_sum = 0
 
             # Обычная строка
-            display_rows.append({
-                '_type': 'entry',
-                '_entry_idx': idx,
-                **entry,
-            })
+            display_rows.append(
+                {
+                    "_type": "entry",
+                    "_entry_idx": idx,
+                    **entry,
+                }
+            )
 
-            # Накапливаем суммы (только рабочие строки в расчёте срока, не заголовки)
-            if role != 'header':
-                is_in_scope = entry.get('is_in_contract_scope', True)
-                stage_actual_sum += (entry.get('actual_days', 0) or 0)
+            # Накапливаем суммы — только строки в объёме договора (не заголовки, не вне объёма)
+            if role != "header":
+                is_in_scope = entry.get("is_in_contract_scope", True)
                 if is_in_scope:
-                    stage_norm_sum += (entry.get('norm_days', 0) or 0)
+                    stage_actual_sum += entry.get("actual_days", 0) or 0
+                    stage_norm_sum += entry.get("norm_days", 0) or 0
 
         # Итог последнего этапа
-        if current_stage_group and current_stage_group != 'START':
-            display_rows.append({
-                '_type': 'subtotal',
-                '_stage_group': current_stage_group,
-                '_actual_sum': stage_actual_sum,
-                '_norm_sum': stage_norm_sum,
-            })
+        if current_stage_group and current_stage_group != "START":
+            display_rows.append(
+                {
+                    "_type": "subtotal",
+                    "_stage_group": current_stage_group,
+                    "_actual_sum": stage_actual_sum,
+                    "_norm_sum": stage_norm_sum,
+                }
+            )
 
-        # Общий итог (только строки в расчёте срока для norm_days)
-        total_actual = sum(
-            (e.get('actual_days', 0) or 0)
-            for e in self.entries
-            if e.get('executor_role', '') != 'header'
-        )
-        total_norm = self._contract_term or sum(
-            (e.get('norm_days', 0) or 0)
-            for e in self.entries
-            if e.get('executor_role', '') != 'header'
-            and e.get('is_in_contract_scope', True)
-        )
+        # Общий итог — только строки в объёме договора (те же фильтры что и для norm_days)
+        total_actual = sum((e.get("actual_days", 0) or 0) for e in self.entries if e.get("executor_role", "") != "header" and e.get("is_in_contract_scope", True))
+        total_norm = self._contract_term or sum((e.get("norm_days", 0) or 0) for e in self.entries if e.get("executor_role", "") != "header" and e.get("is_in_contract_scope", True))
 
         # Рассчитываем отклонение с причинами по подэтапам
         deviation_reasons = []
         for e in self.entries:
-            if e.get('executor_role', '') == 'header':
+            if e.get("executor_role", "") == "header":
                 continue
-            ad = e.get('actual_days', 0) or 0
+            if not e.get("is_in_contract_scope", True):
+                continue  # Строки вне объёма не влияют на отклонение
+            ad = e.get("actual_days", 0) or 0
             if ad <= 0:
                 continue  # Подэтап ещё не завершён
-            effective_norm = e.get('custom_norm_days') or e.get('norm_days', 0) or 0
+            effective_norm = e.get("custom_norm_days") or e.get("norm_days", 0) or 0
             if effective_norm <= 0:
                 continue
             diff = ad - effective_norm
             if diff != 0:
-                name = e.get('stage_name', e.get('stage_code', '?'))
-                deviation_reasons.append({'name': name, 'diff': diff})
+                name = e.get("stage_name", e.get("stage_code", "?"))
+                deviation_reasons.append({"name": name, "diff": diff})
 
         # Дедлайн проекта = START + contract_term
-        deadline_date_str = ''
-        start_date = ''
+        deadline_date_str = ""
+        start_date = ""
         for e in self.entries:
-            if e.get('stage_code') == 'START' and e.get('actual_date'):
-                start_date = e['actual_date']
+            if e.get("stage_code") == "START" and e.get("actual_date"):
+                start_date = e["actual_date"]
                 break
         if start_date and self._contract_term:
             deadline_date_str = add_working_days(start_date, self._contract_term)
 
-        display_rows.append({
-            '_type': 'grandtotal',
-            '_actual_sum': total_actual,
-            '_norm_sum': total_norm,
-            '_deviation_reasons': deviation_reasons,
-            '_deadline_date': deadline_date_str,
-        })
+        display_rows.append(
+            {
+                "_type": "grandtotal",
+                "_actual_sum": total_actual,
+                "_norm_sum": total_norm,
+                "_deviation_reasons": deviation_reasons,
+                "_deadline_date": deadline_date_str,
+            }
+        )
 
         return display_rows
 
     @staticmethod
-    def _make_cell_label(text, bg_color, align='center', bold=False, font_size=12,
-                         color='#333333', extra_style=''):
+    def _make_cell_label(text, bg_color, align="center", bold=False, font_size=12, color="#333333", extra_style=""):
         """Создать QLabel для ячейки таблицы (обход глобального stylesheet)"""
         lbl = QLabel(text)
-        weight = 'bold' if bold else 'normal'
-        has_green = '4CAF50' in extra_style
+        weight = "bold" if bold else "normal"
+        has_green = "4CAF50" in extra_style
         # setShowGrid=False: grid-линии рисуются вручную. Для зелёной рамки — без grid.
-        grid = '' if has_green else 'border-right: 1px solid #E0E0E0; border-bottom: 1px solid #E0E0E0;'
-        lbl.setStyleSheet(
-            f'background-color: {bg_color}; color: {color}; padding: 4px 6px; '
-            f'font-size: {font_size}px; font-weight: {weight}; border-radius: 0; {grid} {extra_style}'
-        )
-        qt_align = Qt.AlignCenter if align == 'center' else (Qt.AlignLeft | Qt.AlignVCenter)
+        grid = "" if has_green else "border-right: 1px solid #E0E0E0; border-bottom: 1px solid #E0E0E0;"
+        lbl.setStyleSheet(f"background-color: {bg_color}; color: {color}; padding: 4px 6px; font-size: {font_size}px; font-weight: {weight}; border-radius: 0; {grid} {extra_style}")
+        qt_align = Qt.AlignCenter if align == "center" else (Qt.AlignLeft | Qt.AlignVCenter)
         lbl.setAlignment(qt_align)
         return lbl
 
@@ -686,102 +656,95 @@ class ProjectTimelineWidget(QWidget):
             num_cols = len(self.COLUMNS)
 
             for row, dr in enumerate(display_rows):
-                row_type = dr.get('_type', 'entry')
+                row_type = dr.get("_type", "entry")
 
                 # --- ИТОГО ЭТАПА ---
-                if row_type == 'subtotal':
+                if row_type == "subtotal":
                     self.table.setRowHeight(row, 32)
-                    stage_label = dr['_stage_group'].replace('STAGE', 'Этап ')
-                    bg = '#E3F2FD'
-                    texts = [f'Итого {stage_label}:', '', str(dr['_actual_sum']),
-                             str(dr['_norm_sum']), '', '', '']
-                    aligns = ['left', 'center', 'center', 'center', 'center', 'center', 'center']
+                    stage_label = dr["_stage_group"].replace("STAGE", "Этап ")
+                    bg = "#E3F2FD"
+                    texts = [f"Итого {stage_label}:", "", str(dr["_actual_sum"]), str(dr["_norm_sum"]), "", "", ""]
+                    aligns = ["left", "center", "center", "center", "center", "center", "center"]
                     for col in range(num_cols):
                         lbl = self._make_cell_label(texts[col], bg, aligns[col], bold=True, font_size=11)
                         self.table.setCellWidget(row, col, lbl)
                     continue
 
                 # --- ОБЩИЙ ИТОГ ---
-                if row_type == 'grandtotal':
+                if row_type == "grandtotal":
                     self.table.setRowHeight(row, 44)
-                    bg = '#FFF8E1'
-                    actual_sum = dr['_actual_sum']
-                    norm_sum = dr['_norm_sum']
+                    bg = "#FFF8E1"
+                    actual_sum = dr["_actual_sum"]
+                    norm_sum = dr["_norm_sum"]
                     deviation = actual_sum - norm_sum if actual_sum > 0 else 0
-                    deadline_str = dr.get('_deadline_date', '')
-                    reasons = dr.get('_deviation_reasons', [])
+                    deadline_str = dr.get("_deadline_date", "")
+                    reasons = dr.get("_deviation_reasons", [])
 
                     # Колонка 0: заголовок + дата дедлайна
-                    title_text = 'Итого всех этапов:'
+                    title_text = "Итого всех этапов:"
                     if deadline_str:
                         try:
                             from datetime import datetime as _dt
-                            dl = _dt.strptime(deadline_str, '%Y-%m-%d')
-                            title_text += f'  Дедлайн: {dl.strftime("%d.%m.%Y")}'
+
+                            dl = _dt.strptime(deadline_str, "%Y-%m-%d")
+                            title_text += f"  Дедлайн: {dl.strftime('%d.%m.%Y')}"
                         except (ValueError, TypeError):
                             pass
-                    title_lbl = self._make_cell_label(title_text, bg, 'left', bold=True, font_size=12)
+                    title_lbl = self._make_cell_label(title_text, bg, "left", bold=True, font_size=12)
                     self.table.setCellWidget(row, 0, title_lbl)
 
                     # Колонка 1: пусто
-                    self.table.setCellWidget(row, 1, self._make_cell_label('', bg))
+                    self.table.setCellWidget(row, 1, self._make_cell_label("", bg))
 
                     # Колонка 2: факт дни
-                    self.table.setCellWidget(row, 2,
-                        self._make_cell_label(str(actual_sum), bg, bold=True, font_size=12))
+                    self.table.setCellWidget(row, 2, self._make_cell_label(str(actual_sum), bg, bold=True, font_size=12))
 
                     # Колонка 3: норма дни
-                    self.table.setCellWidget(row, 3,
-                        self._make_cell_label(str(norm_sum), bg, bold=True, font_size=12))
+                    self.table.setCellWidget(row, 3, self._make_cell_label(str(norm_sum), bg, bold=True, font_size=12))
 
                     # Колонка 4: отклонение с причиной
                     if deviation != 0 and actual_sum > 0:
-                        sign = '+' if deviation > 0 else ''
-                        dev_color = '#C62828' if deviation > 0 else '#2E7D32'
-                        dev_text = f'{sign}{deviation} дн.'
+                        sign = "+" if deviation > 0 else ""
+                        dev_color = "#C62828" if deviation > 0 else "#2E7D32"
+                        dev_text = f"{sign}{deviation} дн."
                         dev_lbl = QLabel()
                         dev_lbl.setTextFormat(Qt.RichText)
                         dev_lbl.setText(f'<b style="color:{dev_color}">{dev_text}</b>')
                         dev_lbl.setAlignment(Qt.AlignCenter)
-                        dev_lbl.setStyleSheet(f'background-color: {bg}; padding: 2px 4px; border-right: 1px solid #E0E0E0; border-bottom: 1px solid #E0E0E0;')
+                        dev_lbl.setStyleSheet(f"background-color: {bg}; padding: 2px 4px; border-right: 1px solid #E0E0E0; border-bottom: 1px solid #E0E0E0;")
                         # Тултип с причинами отклонения
                         if reasons:
                             reason_lines = []
-                            for r in sorted(reasons, key=lambda x: abs(x['diff']), reverse=True):
-                                s = '+' if r['diff'] > 0 else ''
+                            for r in sorted(reasons, key=lambda x: abs(x["diff"]), reverse=True):
+                                s = "+" if r["diff"] > 0 else ""
                                 reason_lines.append(f"{r['name']}: {s}{r['diff']} дн.")
-                            tooltip = 'Причины отклонения:\n' + '\n'.join(reason_lines)
+                            tooltip = "Причины отклонения:\n" + "\n".join(reason_lines)
                             dev_lbl.setToolTip(tooltip)
                         self.table.setCellWidget(row, 4, dev_lbl)
                     else:
-                        status_text = 'В срок' if actual_sum > 0 else ''
-                        self.table.setCellWidget(row, 4,
-                            self._make_cell_label(status_text, bg, bold=True,
-                                                  color='#2E7D32' if status_text else '#333333'))
+                        status_text = "В срок" if actual_sum > 0 else ""
+                        self.table.setCellWidget(row, 4, self._make_cell_label(status_text, bg, bold=True, color="#2E7D32" if status_text else "#333333"))
 
                     # Колонки 5-6: пусто
                     for col in range(5, num_cols):
-                        self.table.setCellWidget(row, col, self._make_cell_label('', bg))
+                        self.table.setCellWidget(row, col, self._make_cell_label("", bg))
                     continue
 
                 # --- ОБЫЧНАЯ СТРОКА (entry) ---
-                entry = self.entries[dr['_entry_idx']]
-                role = entry.get('executor_role', '')
-                stage_code = entry.get('stage_code', '')
-                substage_group = entry.get('substage_group', '')
-                is_header = (role == 'header' and not substage_group)
-                is_subheader = (role == 'header' and bool(substage_group))
-                is_in_scope = entry.get('is_in_contract_scope', True)
+                entry = self.entries[dr["_entry_idx"]]
+                role = entry.get("executor_role", "")
+                stage_code = entry.get("stage_code", "")
+                substage_group = entry.get("substage_group", "")
+                is_header = role == "header" and not substage_group
+                is_subheader = role == "header" and bool(substage_group)
+                is_in_scope = entry.get("is_in_contract_scope", True)
 
                 self.table.setRowHeight(row, 32)
 
                 # --- ЗАГОЛОВОК ЭТАПА (синий) ---
                 if is_header:
-                    bg = '#2F5496'
-                    lbl = self._make_cell_label(
-                        entry.get('stage_name', ''), bg, 'left',
-                        bold=True, font_size=11, color='#FFFFFF'
-                    )
+                    bg = "#2F5496"
+                    lbl = self._make_cell_label(entry.get("stage_name", ""), bg, "left", bold=True, font_size=11, color="#FFFFFF")
                     self.table.setCellWidget(row, 0, lbl)
                     self.table.setSpan(row, 0, 1, num_cols)
                     continue
@@ -789,98 +752,92 @@ class ProjectTimelineWidget(QWidget):
                 # --- ЗАГОЛОВОК ПОДЭТАПА (голубой, зелёный если текущий) ---
                 if is_subheader:
                     # Проверяем, является ли этот подэтап текущим
-                    _cur_code = self.card_data.get('current_substep_code', '')
+                    _cur_code = self.card_data.get("current_substep_code", "")
                     _is_current_substage = False
                     if _cur_code and substage_group:
                         for _e in self.entries:
-                            if _e.get('substage_group') == substage_group and _e.get('stage_code') == _cur_code:
+                            if _e.get("substage_group") == substage_group and _e.get("stage_code") == _cur_code:
                                 _is_current_substage = True
                                 break
-                    bg = '#C8E6C9' if _is_current_substage else '#D6E4F0'
-                    title_color = '#1B5E20' if _is_current_substage else '#333333'
+                    bg = "#C8E6C9" if _is_current_substage else "#D6E4F0"
+                    title_color = "#1B5E20" if _is_current_substage else "#333333"
                     for col in range(num_cols):
-                        lbl = self._make_cell_label(
-                            entry.get('stage_name', '') if col == 0 else '',
-                            bg, 'left' if col == 0 else 'center',
-                            bold=True, font_size=11,
-                            color=title_color
-                        )
+                        lbl = self._make_cell_label(entry.get("stage_name", "") if col == 0 else "", bg, "left" if col == 0 else "center", bold=True, font_size=11, color=title_color)
                         self.table.setCellWidget(row, col, lbl)
                     continue
 
                 # --- РАБОЧАЯ СТРОКА ---
-                actual_days = entry.get('actual_days', 0) or 0
-                norm_days_val = entry.get('norm_days', 0) or 0
-                status_text = ''
-                row_bg = '#FFFFFF'
+                actual_days = entry.get("actual_days", 0) or 0
+                norm_days_val = entry.get("norm_days", 0) or 0
+                status_text = ""
+                row_bg = "#FFFFFF"
                 # Проверяем, является ли эта строка текущим подэтапом
-                _current_code = self.card_data.get('current_substep_code', '')
+                _current_code = self.card_data.get("current_substep_code", "")
                 is_current_step = bool(_current_code and stage_code == _current_code)
 
-                entry_status = entry.get('status', '')
-                has_date = bool(entry.get('actual_date'))
+                entry_status = entry.get("status", "")
+                has_date = bool(entry.get("actual_date"))
                 # Зелёная рамка для текущего активного подэтапа (без фона)
                 _active_border = is_current_step and not has_date
-                if entry_status == 'skipped':
-                    row_bg = '#F5F5F5'
-                    status_text = 'Пропущен'
+                if entry_status == "skipped":
+                    row_bg = "#F5F5F5"
+                    status_text = "Пропущен"
+                    _active_border = False
+                elif not is_in_scope:
+                    # Строки вне объёма договора — всегда серый, никогда не красный
+                    row_bg = "#E0E0E0"
+                    status_text = "Вне объёма"
                     _active_border = False
                 elif has_date and norm_days_val > 0:
                     if actual_days <= norm_days_val:
-                        status_text = 'В срок'
-                        row_bg = '#E8F5E9'
+                        status_text = "В срок"
+                        row_bg = "#E8F5E9"
                     else:
-                        status_text = 'Просрочен'
-                        row_bg = '#FFEBEE'
-                elif not is_in_scope:
-                    row_bg = '#E0E0E0'
+                        status_text = "Просрочен"
+                        row_bg = "#FFEBEE"
 
                 # Запоминаем номер активной строки для overlay
                 if _active_border:
                     self._active_overlay_row = row
 
                 # Кол 0: Название
-                self.table.setCellWidget(row, 0,
-                    self._make_cell_label(entry.get('stage_name', ''), row_bg, 'left'))
+                self.table.setCellWidget(row, 0, self._make_cell_label(entry.get("stage_name", ""), row_bg, "left"))
 
                 # Кол 1: Дата
-                is_start_row = (stage_code == 'START')
-                actual_date = entry.get('actual_date', '')
-                entry_idx = dr['_entry_idx']
+                is_start_row = stage_code == "START"
+                actual_date = entry.get("actual_date", "")
+                entry_idx = dr["_entry_idx"]
 
                 if is_start_row:
                     # START строка — только QLabel (дата заполняется автоматически)
-                    date_text = ''
+                    date_text = ""
                     if actual_date:
                         try:
-                            d = QDate.fromString(actual_date, 'yyyy-MM-dd')
+                            d = QDate.fromString(actual_date, "yyyy-MM-dd")
                             if d.isValid():
-                                date_text = d.toString('dd.MM.yyyy')
+                                date_text = d.toString("dd.MM.yyyy")
                         except Exception:
                             pass
-                    start_label = self._make_cell_label(date_text, '#FCE4EC', 'center', bold=True)
+                    start_label = self._make_cell_label(date_text, "#FCE4EC", "center", bold=True)
+
                     # Tooltip с датами: договор, замер, ТЗ
                     def _fmt(date_str):
                         if not date_str:
-                            return 'не установлена'
-                        qd = QDate.fromString(date_str, 'yyyy-MM-dd')
-                        return qd.toString('dd.MM.yyyy') if qd.isValid() else date_str
-                    cd = self.contract_data.get('contract_date', '')
-                    sd = self.card_data.get('survey_date', '')
-                    td = self.card_data.get('tech_task_date', '')
-                    apd = self.contract_data.get('advance_payment_paid_date', '')
-                    start_label.setToolTip(
-                        f"Дата договора: {_fmt(cd)}\n"
-                        f"Дата замера: {_fmt(sd)}\n"
-                        f"Дата тех. задания: {_fmt(td)}\n"
-                        f"Дата аванса: {_fmt(apd)}"
-                    )
+                            return "не установлена"
+                        qd = QDate.fromString(date_str, "yyyy-MM-dd")
+                        return qd.toString("dd.MM.yyyy") if qd.isValid() else date_str
+
+                    cd = self.contract_data.get("contract_date", "")
+                    sd = self.card_data.get("survey_date", "")
+                    td = self.card_data.get("tech_task_date", "")
+                    apd = self.contract_data.get("advance_payment_paid_date", "")
+                    start_label.setToolTip(f"Дата договора: {_fmt(cd)}\nДата замера: {_fmt(sd)}\nДата тех. задания: {_fmt(td)}\nДата аванса: {_fmt(apd)}")
                     self.table.setCellWidget(row, 1, start_label)
                 else:
                     # Обычная строка — QLabel (read-only) + кнопка-карандаш
-                    planned = entry.get('_planned_date', '')
+                    planned = entry.get("_planned_date", "")
                     date_container = QWidget()
-                    date_container.setStyleSheet('background-color: transparent; border-right: 1px solid #E0E0E0; border-bottom: 1px solid #E0E0E0;')
+                    date_container.setStyleSheet("background-color: transparent; border-right: 1px solid #E0E0E0; border-bottom: 1px solid #E0E0E0;")
                     date_layout = QHBoxLayout(date_container)
                     _dc_m = 2
                     date_layout.setContentsMargins(_dc_m, 0, _dc_m, 0)
@@ -892,109 +849,90 @@ class ProjectTimelineWidget(QWidget):
                     # planned_date — только в tooltip (как подсказка)
                     if actual_date:
                         try:
-                            d = QDate.fromString(actual_date, 'yyyy-MM-dd')
-                            date_text = d.toString('dd.MM.yyyy') if d.isValid() else ''
+                            d = QDate.fromString(actual_date, "yyyy-MM-dd")
+                            date_text = d.toString("dd.MM.yyyy") if d.isValid() else ""
                         except Exception:
-                            date_text = ''
-                        date_bg = '#E8F5E9'  # зелёный фон — факт заполнен
-                        plan_hint = ''
+                            date_text = ""
+                        date_bg = "#E8F5E9"  # зелёный фон — факт заполнен
+                        plan_hint = ""
                         if planned:
                             try:
-                                pd_q = QDate.fromString(planned, 'yyyy-MM-dd')
+                                pd_q = QDate.fromString(planned, "yyyy-MM-dd")
                                 if pd_q.isValid():
-                                    plan_hint = f'\nПланировалось: {pd_q.toString("dd.MM.yyyy")}'
+                                    plan_hint = f"\nПланировалось: {pd_q.toString('dd.MM.yyyy')}"
                             except Exception:
                                 pass
-                        tooltip = f'Фактическая дата{plan_hint}\nНажмите карандаш для изменения'
+                        tooltip = f"Фактическая дата{plan_hint}\nНажмите карандаш для изменения"
                     else:
                         # Стадия НЕ завершена — ячейка ПУСТАЯ
-                        date_text = ''
-                        date_bg = '#FFFFFF'
+                        date_text = ""
+                        date_bg = "#FFFFFF"
                         if planned:
                             try:
-                                pd_q = QDate.fromString(planned, 'yyyy-MM-dd')
-                                plan_fmt = pd_q.toString('dd.MM.yyyy') if pd_q.isValid() else ''
-                                tooltip = f'Планируемая дата: {plan_fmt}\nНажмите карандаш для ввода фактической'
+                                pd_q = QDate.fromString(planned, "yyyy-MM-dd")
+                                plan_fmt = pd_q.toString("dd.MM.yyyy") if pd_q.isValid() else ""
+                                tooltip = f"Планируемая дата: {plan_fmt}\nНажмите карандаш для ввода фактической"
                             except Exception:
-                                tooltip = 'Нажмите карандаш для ввода даты'
+                                tooltip = "Нажмите карандаш для ввода даты"
                         else:
-                            tooltip = 'Нажмите карандаш для ввода даты'
+                            tooltip = "Нажмите карандаш для ввода даты"
 
                     date_label = QLabel(date_text)
                     date_label.setAlignment(Qt.AlignCenter)
-                    date_label.setStyleSheet(
-                        f'background-color: {date_bg}; color: #333333; padding: 2px 4px; '
-                        f'font-size: 12px; border-radius: 0; border: none;'
-                    )
+                    date_label.setStyleSheet(f"background-color: {date_bg}; color: #333333; padding: 2px 4px; font-size: 12px; border-radius: 0; border: none;")
                     date_label.setToolTip(tooltip)
                     date_label.setMinimumWidth(80)
 
                     # Кнопка-карандаш для перехода в режим редактирования
                     pencil_btn = IconLoader.create_action_button(
-                        'edit', tooltip='Редактировать дату',
-                        bg_color='transparent', hover_color='#E3F2FD',
-                        icon_size=14, button_size=22, icon_color='#666666'
+                        "edit", tooltip="Редактировать дату", bg_color="transparent", hover_color="#E3F2FD", icon_size=14, button_size=22, icon_color="#666666"
                     )
-                    # Блокировка редактирования для выполненных/просроченных/пропущенных строк
-                    if status_text in ('В срок', 'Просрочен', 'Пропущен'):
+                    # Блокировка редактирования для выполненных/просроченных/пропущенных/вне объёма строк
+                    if status_text in ("В срок", "Просрочен", "Пропущен", "Вне объёма"):
                         pencil_btn.setEnabled(False)
-                        pencil_btn.setToolTip(f'Редактирование заблокировано (статус: {status_text})')
+                        pencil_btn.setToolTip(f"Редактирование заблокировано (статус: {status_text})")
                     else:
-                        pencil_btn.clicked.connect(
-                            lambda checked, r=row, ei=entry_idx, sc=stage_code, ad=actual_date:
-                                self._enable_date_edit(r, ei, sc, ad)
-                        )
+                        pencil_btn.clicked.connect(lambda checked, r=row, ei=entry_idx, sc=stage_code, ad=actual_date: self._enable_date_edit(r, ei, sc, ad))
 
                     date_layout.addWidget(date_label, 1)
                     date_layout.addWidget(pencil_btn, 0)
                     self.table.setCellWidget(row, 1, date_container)
 
                 # Кол 2: Кол-во дней (показываем "0" если дата заполнена)
-                days_text = str(actual_days) if has_date else ''
-                self.table.setCellWidget(row, 2,
-                    self._make_cell_label(days_text, row_bg))
+                days_text = str(actual_days) if has_date else ""
+                self.table.setCellWidget(row, 2, self._make_cell_label(days_text, row_bg))
 
                 # Кол 3: Норма дней (с отображением превышения)
-                custom_norm = entry.get('custom_norm_days')
-                norm_bg = row_bg if row_bg != '#FFFFFF' else '#F2F2F2'
+                custom_norm = entry.get("custom_norm_days")
+                norm_bg = row_bg if row_bg != "#FFFFFF" else "#F2F2F2"
                 if custom_norm and norm_days_val > 0 and custom_norm != norm_days_val:
                     norm_label = QLabel()
                     norm_label.setTextFormat(Qt.RichText)
-                    norm_label.setText(
-                        f'<s style="color:#999">{norm_days_val}</s> '
-                        f'<b style="color:#C62828">{custom_norm}</b>'
-                    )
+                    norm_label.setText(f'<s style="color:#999">{norm_days_val}</s> <b style="color:#C62828">{custom_norm}</b>')
                     norm_label.setAlignment(Qt.AlignCenter)
-                    norm_label.setStyleSheet(f'background-color: {norm_bg}; padding: 2px 4px; border-right: 1px solid #E0E0E0; border-bottom: 1px solid #E0E0E0;')
-                    norm_label.setToolTip(
-                        f'Превышение стандартного значения нормо-дней '
-                        f'(+{custom_norm - norm_days_val} дн.).\n'
-                        f'Стандарт: {norm_days_val}, Установлено: {custom_norm}'
-                    )
+                    norm_label.setStyleSheet(f"background-color: {norm_bg}; padding: 2px 4px; border-right: 1px solid #E0E0E0; border-bottom: 1px solid #E0E0E0;")
+                    norm_label.setToolTip(f"Превышение стандартного значения нормо-дней (+{custom_norm - norm_days_val} дн.).\nСтандарт: {norm_days_val}, Установлено: {custom_norm}")
                     self.table.setCellWidget(row, 3, norm_label)
                 else:
-                    norm_text = str(norm_days_val) if norm_days_val > 0 else ''
-                    self.table.setCellWidget(row, 3,
-                        self._make_cell_label(norm_text, norm_bg))
+                    norm_text = str(norm_days_val) if norm_days_val > 0 else ""
+                    self.table.setCellWidget(row, 3, self._make_cell_label(norm_text, norm_bg))
 
                 # Кол 4: Статус
-                status_color = '#333333'
-                if status_text == 'В срок':
-                    status_color = '#2E7D32'
-                elif status_text == 'Просрочен':
-                    status_color = '#C62828'
-                self.table.setCellWidget(row, 4,
-                    self._make_cell_label(status_text, row_bg, bold=bool(status_text),
-                                          color=status_color))
+                status_color = "#333333"
+                if status_text == "В срок":
+                    status_color = "#2E7D32"
+                elif status_text == "Просрочен":
+                    status_color = "#C62828"
+                elif status_text == "Вне объёма":
+                    status_color = "#888888"
+                self.table.setCellWidget(row, 4, self._make_cell_label(status_text, row_bg, bold=bool(status_text), color=status_color))
 
                 # Кол 5: Исполнитель
-                self.table.setCellWidget(row, 5,
-                    self._make_cell_label(role, row_bg))
+                self.table.setCellWidget(row, 5, self._make_cell_label(role, row_bg))
 
                 # Кол 6: ФИО
                 fio = self._get_fio(role)
-                self.table.setCellWidget(row, 6,
-                    self._make_cell_label(fio, row_bg))
+                self.table.setCellWidget(row, 6, self._make_cell_label(fio, row_bg))
 
         finally:
             self.table.setUpdatesEnabled(True)
@@ -1007,16 +945,14 @@ class ProjectTimelineWidget(QWidget):
 
     def _show_active_overlay(self):
         """Рисует зелёную рамку поверх строки активного подэтапа (QFrame overlay)"""
-        if not hasattr(self, '_active_overlay_row') or self._active_overlay_row is None:
-            if hasattr(self, '_active_frame'):
+        if not hasattr(self, "_active_overlay_row") or self._active_overlay_row is None:
+            if hasattr(self, "_active_frame"):
                 self._active_frame.hide()
             return
         row = self._active_overlay_row
-        if not hasattr(self, '_active_frame'):
+        if not hasattr(self, "_active_frame"):
             self._active_frame = QFrame(self.table.viewport())
-            self._active_frame.setStyleSheet(
-                'background: transparent; border: 2px solid #4CAF50; border-radius: 0;'
-            )
+            self._active_frame.setStyleSheet("background: transparent; border: 2px solid #4CAF50; border-radius: 0;")
             self._active_frame.setAttribute(Qt.WA_TransparentForMouseEvents)
             # Обновляем позицию при скролле и ресайзе
             self.table.verticalScrollBar().valueChanged.connect(self._update_overlay_pos)
@@ -1030,7 +966,7 @@ class ProjectTimelineWidget(QWidget):
 
     def _update_overlay_pos(self):
         """Обновить позицию overlay при скролле"""
-        if not hasattr(self, '_active_frame') or not hasattr(self, '_active_overlay_row'):
+        if not hasattr(self, "_active_frame") or not hasattr(self, "_active_overlay_row"):
             return
         row = self._active_overlay_row
         if row is None:
@@ -1058,34 +994,34 @@ class ProjectTimelineWidget(QWidget):
         # Собираем подэтапы с увеличенными нормоднями
         exceeded = []
         for e in self.entries:
-            if e.get('executor_role', '') == 'header':
+            if e.get("executor_role", "") == "header":
                 continue
-            custom = e.get('custom_norm_days')
-            norm = e.get('norm_days', 0) or 0
+            custom = e.get("custom_norm_days")
+            norm = e.get("norm_days", 0) or 0
             if custom and norm > 0 and custom > norm:
-                exceeded.append({
-                    'name': e.get('stage_name', '?'),
-                    'diff': custom - norm,
-                })
+                exceeded.append(
+                    {
+                        "name": e.get("stage_name", "?"),
+                        "diff": custom - norm,
+                    }
+                )
 
         if exceeded:
-            total_excess = sum(x['diff'] for x in exceeded)
-            self._deviation_text.setText(
-                f'Превышение нормодней на {total_excess} дн.'
-            )
+            total_excess = sum(x["diff"] for x in exceeded)
+            self._deviation_text.setText(f"Превышение нормодней на {total_excess} дн.")
             # Детали — в tooltip при наведении
             tooltip_lines = [f"• {x['name']} (+{x['diff']} дн.)" for x in exceeded]
-            tooltip_text = '\n'.join(tooltip_lines)
+            tooltip_text = "\n".join(tooltip_lines)
             self._deviation_warning.setToolTip(tooltip_text)
             self._deviation_warning.show()
         else:
             self._deviation_warning.hide()
-            self._deviation_warning.setToolTip('')
+            self._deviation_warning.setToolTip("")
 
     def _enable_date_edit(self, row, entry_idx, stage_code, current_actual_date):
         """Переключить ячейку даты в режим редактирования (QDateEdit)"""
         date_container = QWidget()
-        date_container.setStyleSheet('background-color: transparent; border-right: 1px solid #E0E0E0; border-bottom: 1px solid #E0E0E0;')
+        date_container.setStyleSheet("background-color: transparent; border-right: 1px solid #E0E0E0; border-bottom: 1px solid #E0E0E0;")
         date_layout = QHBoxLayout(date_container)
         date_layout.setContentsMargins(2, 0, 2, 0)
         date_layout.setSpacing(0)
@@ -1093,15 +1029,15 @@ class ProjectTimelineWidget(QWidget):
 
         date_edit = QDateEdit()
         date_edit.setCalendarPopup(True)
-        date_edit.setDisplayFormat('dd.MM.yyyy')
-        date_edit.setSpecialValueText(' ')
+        date_edit.setDisplayFormat("dd.MM.yyyy")
+        date_edit.setSpecialValueText(" ")
         date_edit.setMinimumDate(QDate(2020, 1, 1))
 
         # Блокируем сигнал dateChanged при начальной установке даты
         date_edit.blockSignals(True)
         if current_actual_date:
             try:
-                d = QDate.fromString(current_actual_date, 'yyyy-MM-dd')
+                d = QDate.fromString(current_actual_date, "yyyy-MM-dd")
                 if d.isValid():
                     date_edit.setDate(d)
                 else:
@@ -1111,9 +1047,9 @@ class ProjectTimelineWidget(QWidget):
         else:
             # Предзаполнение планируемой датой (для удобства)
             if entry_idx < len(self.entries):
-                planned = self.entries[entry_idx].get('_planned_date', '')
+                planned = self.entries[entry_idx].get("_planned_date", "")
                 if planned:
-                    pd_q = QDate.fromString(planned, 'yyyy-MM-dd')
+                    pd_q = QDate.fromString(planned, "yyyy-MM-dd")
                     if pd_q.isValid():
                         date_edit.setDate(pd_q)
                     else:
@@ -1124,7 +1060,7 @@ class ProjectTimelineWidget(QWidget):
                 date_edit.setDate(date_edit.minimumDate())
         date_edit.blockSignals(False)
 
-        date_edit.setStyleSheet('''
+        date_edit.setStyleSheet("""
             QDateEdit {
                 background-color: #FFF2CC;
                 border: 1px solid #CCCCCC;
@@ -1155,14 +1091,12 @@ class ProjectTimelineWidget(QWidget):
                 background-color: #ffffff;
                 border-radius: 0px;
             }
-        ''')
+        """)
 
         custom_cal = add_today_button_to_dateedit(date_edit)
-        custom_cal.setStyleSheet('QWidget { background-color: #ffffff; }')
+        custom_cal.setStyleSheet("QWidget { background-color: #ffffff; }")
 
-        date_edit.dateChanged.connect(
-            lambda d, ei=entry_idx, sc=stage_code: self._on_date_changed(ei, sc, d)
-        )
+        date_edit.dateChanged.connect(lambda d, ei=entry_idx, sc=stage_code: self._on_date_changed(ei, sc, d))
 
         date_layout.addWidget(date_edit)
         self.table.setCellWidget(row, 1, date_container)
@@ -1175,18 +1109,18 @@ class ProjectTimelineWidget(QWidget):
         if self._loading:
             return
 
-        date_str = new_date.toString('yyyy-MM-dd') if new_date.isValid() and new_date > QDate(2020, 1, 1) else ''
+        date_str = new_date.toString("yyyy-MM-dd") if new_date.isValid() and new_date > QDate(2020, 1, 1) else ""
 
         # Захватываем старую дату и название этапа для истории
-        old_date = ''
+        old_date = ""
         stage_name = stage_code
         if entry_idx < len(self.entries):
-            old_date = self.entries[entry_idx].get('actual_date', '') or ''
-            stage_name = self.entries[entry_idx].get('stage_name', '') or stage_code
+            old_date = self.entries[entry_idx].get("actual_date", "") or ""
+            stage_name = self.entries[entry_idx].get("stage_name", "") or stage_code
 
         # Обновляем запись
         if entry_idx < len(self.entries):
-            self.entries[entry_idx]['actual_date'] = date_str
+            self.entries[entry_idx]["actual_date"] = date_str
 
         # Пересчёт actual_days
         self._recalculate_days()
@@ -1194,15 +1128,12 @@ class ProjectTimelineWidget(QWidget):
         # Сохранение на сервер
         if self.contract_id and stage_code:
             try:
-                self.data.update_timeline_entry(
-                    self.contract_id, stage_code,
-                    {'actual_date': date_str, 'actual_days': self.entries[entry_idx].get('actual_days', 0)}
-                )
+                self.data.update_timeline_entry(self.contract_id, stage_code, {"actual_date": date_str, "actual_days": self.entries[entry_idx].get("actual_days", 0)})
             except Exception as e:
                 print(f"[TimelineWidget] Ошибка сохранения даты: {e}")
 
         # Записываем в историю действий
-        if old_date != date_str and self.card_data.get('id'):
+        if old_date != date_str and self.card_data.get("id"):
             self._record_date_change(stage_name, old_date, date_str)
 
         # Полная перестройка таблицы (с итогами)
@@ -1211,8 +1142,8 @@ class ProjectTimelineWidget(QWidget):
     def _record_date_change(self, stage_name, old_date, new_date):
         """Записать изменение даты в историю действий"""
         try:
-            card_id = self.card_data['id']
-            user_id = self.employee.get('id') if self.employee else None
+            card_id = self.card_data["id"]
+            user_id = self.employee.get("id") if self.employee else None
 
             if new_date and old_date:
                 description = f"Таблица сроков: {stage_name} — дата изменена с {old_date} на {new_date}"
@@ -1221,13 +1152,7 @@ class ProjectTimelineWidget(QWidget):
             else:
                 description = f"Таблица сроков: {stage_name} — дата очищена (было {old_date})"
 
-            self.data.add_action_history(
-                user_id=user_id,
-                action_type='timeline_date_changed',
-                entity_type='crm_card',
-                entity_id=card_id,
-                description=description
-            )
+            self.data.add_action_history(user_id=user_id, action_type="timeline_date_changed", entity_type="crm_card", entity_id=card_id, description=description)
             print(f"[HISTORY] Записано: timeline_date_changed | {stage_name} | card={card_id}")
         except Exception as e:
             print(f"[HISTORY ERROR] timeline_date_changed: {e}")
@@ -1237,16 +1162,16 @@ class ProjectTimelineWidget(QWidget):
         Ищет ближайшую заполненную дату выше (любое расстояние)."""
         prev_date = None
         for entry in self.entries:
-            role = entry.get('executor_role', '')
-            if role == 'header':
+            role = entry.get("executor_role", "")
+            if role == "header":
                 continue
 
-            actual_date = entry.get('actual_date', '')
+            actual_date = entry.get("actual_date", "")
             if actual_date and prev_date:
                 days = networkdays(prev_date, actual_date)
-                entry['actual_days'] = max(days, 0)
+                entry["actual_days"] = max(days, 0)
             else:
-                entry['actual_days'] = 0
+                entry["actual_days"] = 0
 
             if actual_date:
                 prev_date = actual_date
@@ -1258,12 +1183,9 @@ class ProjectTimelineWidget(QWidget):
         try:
             file_bytes = self.data.export_timeline_excel(self.contract_id)
             if file_bytes:
-                path, _ = QFileDialog.getSaveFileName(
-                    self, 'Сохранить Excel', f'timeline_{self.contract_id}.xlsx',
-                    'Excel (*.xlsx)'
-                )
+                path, _ = QFileDialog.getSaveFileName(self, "Сохранить Excel", f"timeline_{self.contract_id}.xlsx", "Excel (*.xlsx)")
                 if path:
-                    with open(path, 'wb') as f:
+                    with open(path, "wb") as f:
                         f.write(file_bytes)
         except Exception as e:
             logger.error("Ошибка экспорта Excel таймлайна: %s", e, exc_info=True)
@@ -1276,21 +1198,21 @@ class ProjectTimelineWidget(QWidget):
             file_bytes = self.data.export_timeline_pdf(self.contract_id)
             if not file_bytes:
                 from ui.custom_message_box import CustomMessageBox
-                CustomMessageBox(self, 'Предупреждение',
-                                 'Сервер не вернул данные для PDF-экспорта.', 'warning').exec_()
+
+                CustomMessageBox(self, "Предупреждение", "Сервер не вернул данные для PDF-экспорта.", "warning").exec_()
                 return
             path, _ = QFileDialog.getSaveFileName(
-                self, 'Сохранить PDF',
-                f'Отчет Таблица сроков {self.contract_data.get("address", "")} от {QDate.currentDate().toString("dd.MM.yyyy")}.pdf',
-                'PDF (*.pdf)'
+                self, "Сохранить PDF", f"Отчет Таблица сроков {self.contract_data.get('address', '')} от {QDate.currentDate().toString('dd.MM.yyyy')}.pdf", "PDF (*.pdf)"
             )
             if path:
-                with open(path, 'wb') as f:
+                with open(path, "wb") as f:
                     f.write(file_bytes)
                 logger.info("Таймлайн PDF сохранён: %s", path)
                 from utils.pdf_utils import open_file
+
                 open_file(path)
         except Exception as e:
             logger.error("Ошибка экспорта PDF таймлайна: %s", e, exc_info=True)
             from ui.custom_message_box import CustomMessageBox
-            CustomMessageBox(self, 'Ошибка', f'Не удалось экспортировать PDF:\n{e}', 'error').exec_()
+
+            CustomMessageBox(self, "Ошибка", f"Не удалось экспортировать PDF:\n{e}", "error").exec_()

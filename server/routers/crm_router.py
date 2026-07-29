@@ -257,8 +257,8 @@ def _compute_is_client_stage(db, card, wf_status, substep_code):
     if card.column_name == "В ожидании":
         return True
     if substep_code:
-        tle = db.query(ProjectTimelineEntry.executor_role).filter(ProjectTimelineEntry.stage_code == substep_code).first()
-        if tle and tle.executor_role == "Клиент":
+        tle = db.query(ProjectTimelineEntry.executor_role, ProjectTimelineEntry.is_in_contract_scope).filter(ProjectTimelineEntry.stage_code == substep_code).first()
+        if tle and (tle.executor_role == "Клиент" or not tle.is_in_contract_scope):
             return True
     return False
 

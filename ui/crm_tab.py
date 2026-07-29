@@ -2303,7 +2303,7 @@ class CRMCard(QFrame):
 
             # Флаг клиентского/паузного этапа: не показываем красный цвет при просрочке
             is_client_stage = bool(self.card_data.get("is_client_stage", False))
-            is_waiting = current_column == "в ожидании"
+            is_waiting = current_column.lower() == "в ожидании"
 
             if deadline_to_show:
                 try:
