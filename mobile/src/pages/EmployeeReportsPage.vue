@@ -87,16 +87,6 @@
         </div>
       </div>
 
-      <!-- Нагрузка исполнителей (bar chart) -->
-      <q-card v-if="executorLoad.length > 0" class="is-card q-mb-md">
-        <q-card-section>
-          <div class="text-subtitle2 text-weight-bold q-mb-sm" style="color: #333">
-            Нагрузка исполнителей
-          </div>
-          <bar-chart :labels="executorLoad.map(e => e.name.split(' ').slice(0, 2).join(' '))" :datasets="[{ label: 'Стадий', data: executorLoad.map(e => e.active_stages), color: '#ffd93c' }]" />
-        </q-card-section>
-      </q-card>
-
       <!-- Роли (вкладки) -->
       <q-tabs
         v-model="roleTab"
@@ -170,40 +160,59 @@
         </q-card-section>
       </q-card>
 
-      <!-- Сравнительный график KPI -->
-      <q-card v-if="roleEmployees.length > 0" class="is-card q-mb-md">
-        <q-card-section>
-          <div class="text-subtitle2 text-weight-bold q-mb-sm" style="color: #333">
-            Сравнение KPI
-          </div>
-          <bar-chart
-            :labels="roleEmployees.map(e => (e.full_name || e.name || '').split(' ').slice(0, 2).join(' '))"
-            :datasets="[{ label: 'KPI %', data: roleEmployees.map(e => e.completion_rate || e.kpi || 0), color: '#27AE60' }]"
-            horizontal
-          />
-        </q-card-section>
-      </q-card>
-
-      <!-- График пунктуальности по роли -->
-      <q-card v-if="roleEmployees.length > 0" class="is-card q-mb-md">
-        <q-card-section>
-          <div class="text-subtitle2 text-weight-bold q-mb-xs" style="color: #333">
-            Пунктуальность по роли
-          </div>
-          <div class="text-caption q-mb-sm" style="color: #888">
-            Суммарные дни просрочки по сотруднику за выбранный период
-          </div>
-          <div v-if="roleOverdueChartData.labels.length === 0" class="text-caption text-center q-pa-sm" style="color: #27AE60">
-            Все сотрудники сдавали этапы в срок
-          </div>
-          <bar-chart
-            v-else
-            :labels="roleOverdueChartData.labels"
-            :datasets="[{ label: 'Дней просрочки', data: roleOverdueChartData.data, color: '#E53935' }]"
-            horizontal
-          />
-        </q-card-section>
-      </q-card>
+      <!-- Три графика в одну строку: Нагрузка · KPI · Просрочки -->
+      <div v-if="roleEmployees.length > 0" class="row q-col-gutter-xs q-mb-md">
+        <div class="col-4">
+          <q-card class="is-card" style="height: 100%">
+            <q-card-section class="q-pa-sm">
+              <div class="text-caption text-weight-bold q-mb-xs" style="color: #333">
+                Нагрузка
+              </div>
+              <div v-if="roleExecutorLoad.length === 0" class="text-caption text-center q-pt-sm" style="color: #aaa; font-size: 10px">
+                нет данных
+              </div>
+              <bar-chart
+                v-else
+                :labels="roleExecutorLoad.map(e => e.name.split(' ').slice(0, 2).join(' '))"
+                :datasets="[{ label: 'Стадий', data: roleExecutorLoad.map(e => e.active_stages), color: '#ffd93c' }]"
+                horizontal
+              />
+            </q-card-section>
+          </q-card>
+        </div>
+        <div class="col-4">
+          <q-card class="is-card" style="height: 100%">
+            <q-card-section class="q-pa-sm">
+              <div class="text-caption text-weight-bold q-mb-xs" style="color: #333">
+                KPI %
+              </div>
+              <bar-chart
+                :labels="roleEmployees.map(e => (e.full_name || e.name || '').split(' ').slice(0, 2).join(' '))"
+                :datasets="[{ label: 'KPI %', data: roleEmployees.map(e => e.completion_rate || e.kpi || 0), color: '#27AE60' }]"
+                horizontal
+              />
+            </q-card-section>
+          </q-card>
+        </div>
+        <div class="col-4">
+          <q-card class="is-card" style="height: 100%">
+            <q-card-section class="q-pa-sm">
+              <div class="text-caption text-weight-bold q-mb-xs" style="color: #333">
+                Просрочки
+              </div>
+              <div v-if="roleOverdueChartData.labels.length === 0" class="text-caption text-center q-pt-sm" style="color: #27AE60; font-size: 10px">
+                Все в срок
+              </div>
+              <bar-chart
+                v-else
+                :labels="roleOverdueChartData.labels"
+                :datasets="[{ label: 'Дней', data: roleOverdueChartData.data, color: '#E53935' }]"
+                horizontal
+              />
+            </q-card-section>
+          </q-card>
+        </div>
+      </div>
 
       <!-- Опросы клиентов — KPI качества -->
       <q-card v-if="surveyStats" class="is-card q-mb-md">
@@ -510,6 +519,12 @@ const roleRating = computed(() => {
       }
     })
     .sort((a, b) => b.score - a.score)
+})
+
+// Нагрузка отфильтрованная по сотрудникам текущей роли
+const roleExecutorLoad = computed(() => {
+  const names = new Set(roleEmployees.value.map(e => e.full_name || e.name || ''))
+  return executorLoad.value.filter(e => names.has(e.name))
 })
 
 // Данные для графика пунктуальности: сотрудники текущей роли у которых были просрочки
