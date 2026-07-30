@@ -162,6 +162,60 @@
         </q-card-section>
       </q-card>
 
+      <!-- Рейтинг по роли -->
+      <q-card v-if="roleRating.length > 1" class="is-card q-mb-md">
+        <q-card-section class="q-pb-xs">
+          <div class="text-subtitle2 text-weight-bold" style="color: #333">
+            Рейтинг эффективности
+          </div>
+          <div class="text-caption q-mb-sm" style="color: #888">
+            60% KPI выполнения · 40% пунктуальность (просрочки)
+          </div>
+          <div
+            v-for="(emp, idx) in roleRating"
+            :key="emp.name"
+            class="row items-center q-py-xs"
+            style="border-bottom: 1px solid #f0f0f0"
+          >
+            <div
+              class="text-weight-bold q-mr-sm"
+              style="width: 22px; text-align: center; font-size: 13px"
+              :style="{ color: idx === 0 ? '#F5A623' : idx === roleRating.length - 1 && roleRating.length > 2 ? '#E53935' : '#888' }"
+            >
+              {{ idx + 1 }}
+            </div>
+            <div style="flex: 1; min-width: 0">
+              <div class="text-weight-medium" style="font-size: 13px; color: #333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">
+                {{ emp.name.split(' ').slice(0, 2).join(' ') }}
+              </div>
+              <div class="row q-gutter-xs q-mt-xs" style="flex-wrap: nowrap">
+                <div style="font-size: 10px; color: #27AE60">
+                  KPI {{ emp.kpi }}%
+                </div>
+                <div style="font-size: 10px; color: #888">
+                  ·
+                </div>
+                <div style="font-size: 10px" :style="{ color: emp.punctuality >= 80 ? '#27AE60' : emp.punctuality >= 50 ? '#F5A623' : '#E53935' }">
+                  Пункт. {{ emp.punctuality }}%
+                </div>
+              </div>
+            </div>
+            <div class="q-ml-sm" style="text-align: right; min-width: 48px">
+              <div
+                class="text-weight-bold"
+                style="font-size: 18px"
+                :style="{ color: emp.score >= 80 ? '#27AE60' : emp.score >= 50 ? '#F5A623' : '#E53935' }"
+              >
+                {{ emp.score }}
+              </div>
+              <div style="font-size: 10px; color: #aaa">
+                / 100
+              </div>
+            </div>
+          </div>
+        </q-card-section>
+      </q-card>
+
       <!-- График пунктуальности по роли -->
       <q-card v-if="roleEmployees.length > 0" class="is-card q-mb-md">
         <q-card-section>
@@ -440,6 +494,23 @@ const dashboardKpi = computed(() => {
     { label: 'Выполнение', value: avgCompletion !== null ? `${avgCompletion}%` : '—' },
     { label: 'Проектов', value: projectCount },
   ]
+})
+
+// Рейтинг сотрудников по роли: 60% KPI + 40% пунктуальность
+const roleRating = computed(() => {
+  return roleEmployees.value
+    .map(emp => {
+      const name = emp.full_name || emp.name || ''
+      const kpi = emp.completion_rate || 0
+      const completed = Math.max(1, emp.completed_stages || emp.completed || 0)
+      const ovd = overdueByName.value[name]
+      const overdueDays = ovd ? ovd.total_overdue_days : 0
+      const avgOverduePerStage = overdueDays / completed
+      const punctuality = Math.max(0, 1 - avgOverduePerStage / 10) * 100
+      const score = Math.round(kpi * 0.6 + punctuality * 0.4)
+      return { name, position: emp.position, kpi: Math.round(kpi), punctuality: Math.round(punctuality), score, overdueDays, completed }
+    })
+    .sort((a, b) => b.score - a.score)
 })
 
 // Данные для графика пунктуальности: сотрудники текущей роли у которых были просрочки
