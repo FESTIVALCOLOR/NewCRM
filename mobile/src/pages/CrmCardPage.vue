@@ -560,7 +560,9 @@
               </div>
               <div v-if="card.total_pause_days > 0" class="row items-center justify-between q-mt-xs">
                 <span class="text-caption" style="color: #888">
-                  <q-icon name="pause_circle_outline" size="12px" class="q-mr-xs" />Дни приостановки (пока проект был в «В ожидании»)
+                  <q-icon name="pause_circle_outline" size="12px" class="q-mr-xs" />
+                  <template v-if="pauseAddedToDeadline">Дни ожидания (добавлены к дедлайну)</template>
+                  <template v-else>Дни ожидания (до начала разработки)</template>
                 </span>
                 <span class="text-caption text-weight-bold" style="color: #888">+{{ card.total_pause_days }} дн.</span>
               </div>
@@ -2062,7 +2064,14 @@
               </template>
             </div>
             <div v-if="card.total_pause_days > 0" class="text-caption q-mb-sm" style="color: #888">
-              <q-icon name="pause_circle" size="12px" class="q-mr-xs" />Дни ожидания (добавлены к дедлайну): {{ card.total_pause_days }} дн.
+              <q-icon name="pause_circle" size="12px" class="q-mr-xs" />
+              <template v-if="pauseAddedToDeadline">
+                Дни ожидания (добавлены к дедлайну)
+              </template>
+              <template v-else>
+                Дни ожидания (до начала разработки)
+              </template>
+              : {{ card.total_pause_days }} дн.
             </div>
             <q-separator v-if="deadlineDeviations.length || aheadDeviations.length" class="q-mb-sm" />
             <template v-if="deadlineDeviations.length">
@@ -2774,6 +2783,17 @@ const projectStartDate = computed(() =>
 const isProjectClosed = computed(() =>
   card.value?.column_name === 'Выполненный проект' || !!card.value?.is_archived,
 )
+// Определяем, сдвигала ли пауза дедлайн (только пост-стартовые паузы смещают дедлайн).
+// Сравниваем effective_deadline от сервера с чистым расчётом START+период.
+// Если разные — значит, сервер зафиксировал сдвиг из-за паузы после старта.
+const pauseAddedToDeadline = computed(() => {
+  if (!card.value?.total_pause_days || !projectStartDate.value) return false
+  const period = contractData.value?.contract_period || card.value?.contract_period
+  if (!period) return false
+  const pureDeadline = addWorkingDays(projectStartDate.value, period)
+  const serverDeadline = card.value?.effective_deadline || card.value?.deadline
+  return !!serverDeadline && serverDeadline !== pureDeadline
+})
 // Дата фактического закрытия = последняя actual_date в таймлайне (для закрытых проектов)
 const closureDate = computed(() => {
   if (!isProjectClosed.value) return null
