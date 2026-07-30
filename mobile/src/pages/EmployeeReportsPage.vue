@@ -220,8 +220,8 @@
 
     <!-- Диалог деталей сотрудника -->
     <q-dialog v-model="empDialog" position="bottom">
-      <q-card v-if="selectedEmp" style="width: 100%; max-width: 600px; border-radius: 16px 16px 0 0">
-        <q-card-section class="q-pb-none">
+      <q-card v-if="selectedEmp" style="width: 100%; max-width: 600px; border-radius: 16px 16px 0 0; max-height: 85vh; display: flex; flex-direction: column">
+        <q-card-section class="q-pb-none" style="flex-shrink: 0">
           <div class="row items-center q-mb-sm">
             <q-avatar size="48px" color="grey-3" text-color="grey-8" class="q-mr-md">
               {{ selectedEmp.full_name?.[0] || '?' }}
@@ -238,175 +238,148 @@
             <q-btn flat round icon="close" @click="selectedEmp = null" />
           </div>
         </q-card-section>
-        <q-card-section>
-          <div class="row q-col-gutter-sm">
-            <div class="col-6">
-              <q-card flat bordered class="q-pa-sm text-center" style="border-radius: 8px">
-                <div class="text-caption" style="color: #888; font-size: 10px">
-                  KPI выполнения
-                </div>
-                <div class="text-h6 text-weight-bold q-mt-xs" :style="{ color: kpiColor((selectedEmp.completion_rate || 0) / 10) }">
-                  {{ selectedEmp.completion_rate?.toFixed(0) || '—' }}%
-                </div>
-              </q-card>
-            </div>
-            <div class="col-6">
-              <q-card flat bordered class="q-pa-sm text-center" style="border-radius: 8px">
-                <div class="text-caption" style="color: #888; font-size: 10px">
-                  Этапы
-                </div>
-                <div class="text-h6 text-weight-bold q-mt-xs" style="color: #333">
-                  {{ selectedEmp.completed_stages || 0 }}/{{ selectedEmp.total_stages || 0 }}
-                </div>
-              </q-card>
-            </div>
-          </div>
-          <q-linear-progress
-            v-if="selectedEmp.total_stages > 0"
-            :value="(selectedEmp.completed_stages || 0) / selectedEmp.total_stages"
-            color="positive"
-            class="q-mt-sm"
-            rounded
-            style="height: 8px"
-          />
-          <div v-if="empSurveyScores(selectedEmp).length" class="q-mt-sm">
-            <div class="row q-gutter-xs">
-              <div v-for="sc in empSurveyScores(selectedEmp)" :key="sc.label" class="col">
-                <q-card flat bordered class="q-pa-sm text-center" style="border-radius: 8px; min-width: 60px">
-                  <div class="text-caption" style="color: #888; font-size: 10px">
-                    {{ sc.label }}
-                  </div>
-                  <div class="text-weight-bold q-mt-xs" :style="{ color: sc.value != null ? kpiColor(sc.value) : '#ccc', fontSize: '18px' }">
-                    {{ sc.value != null ? sc.value.toFixed(1) : '—' }}
-                  </div>
-                  <div class="text-caption" style="color: #ccc; font-size: 9px">
-                    из {{ sc.scale }}
-                  </div>
-                </q-card>
-              </div>
-            </div>
-          </div>
-          <!-- Выезды на объекты (ДАН и Менеджер) -->
-          <div v-if="showVisitStats(selectedEmp)" class="q-mt-md">
-            <div class="text-caption q-mb-xs" style="color: #666; font-weight: 600; font-size: 11px">
-              Выезды на объекты
-            </div>
-            <div class="row q-gutter-xs">
-              <div class="col">
-                <q-card flat bordered class="q-pa-sm text-center" style="border-radius: 8px">
-                  <div class="text-caption" style="color: #888; font-size: 10px">
-                    На объект
-                  </div>
-                  <div class="text-weight-bold q-mt-xs" style="font-size: 18px; color: #333">
-                    {{ selectedEmp.visits_object ?? 0 }}
-                  </div>
-                </q-card>
-              </div>
-              <div class="col">
-                <q-card flat bordered class="q-pa-sm text-center" style="border-radius: 8px">
-                  <div class="text-caption" style="color: #888; font-size: 10px">
-                    К поставщику
-                  </div>
-                  <div class="text-weight-bold q-mt-xs" style="font-size: 18px; color: #333">
-                    {{ selectedEmp.visits_supplier ?? 0 }}
-                  </div>
-                </q-card>
-              </div>
-              <div class="col">
-                <q-card flat bordered class="q-pa-sm text-center" style="border-radius: 8px">
-                  <div class="text-caption" style="color: #888; font-size: 10px">
-                    Просрочено
-                  </div>
-                  <div
-                    class="text-weight-bold q-mt-xs"
-                    :style="{ fontSize: '18px', color: (selectedEmp.visits_overdue ?? 0) > 0 ? '#E74C3C' : '#27AE60' }"
-                  >
-                    {{ selectedEmp.visits_overdue ?? 0 }}
-                  </div>
-                </q-card>
-              </div>
-            </div>
-          </div>
-
-          <!-- Просрочки этапов -->
-          <div
-            v-if="overdueByName[selectedEmp.full_name || selectedEmp.name]"
-            class="q-mt-md"
-          >
-            <div class="text-caption q-mb-xs" style="color: #666; font-weight: 600; font-size: 11px">
-              Просрочки этапов за период
-            </div>
-            <div
-              class="row items-center justify-between q-pa-sm rounded-borders cursor-pointer"
-              style="background: #FFEBEE; border-radius: 8px"
-              @click="overdueDetailEmp = overdueByName[selectedEmp.full_name || selectedEmp.name]"
-            >
-              <div>
-                <div class="text-weight-bold" style="color: #E53935; font-size: 15px">
-                  {{ overdueByName[selectedEmp.full_name || selectedEmp.name].total_overdue_days }} дн. просрочки
-                </div>
-                <div class="text-caption" style="color: #C07070">
-                  {{ overdueByName[selectedEmp.full_name || selectedEmp.name].total_overdue_count }} этапов сданы с опозданием
-                </div>
-              </div>
-              <q-icon name="chevron_right" color="red-3" size="20px" />
-            </div>
-          </div>
-          <div v-else class="q-mt-md">
-            <div class="text-caption q-mb-xs" style="color: #666; font-weight: 600; font-size: 11px">
-              Просрочки этапов за период
-            </div>
-            <div class="text-caption q-pa-sm rounded-borders" style="background: #E8F5E9; color: #27AE60; border-radius: 8px">
-              Все этапы сданы в срок
-            </div>
-          </div>
-        </q-card-section>
-      </q-card>
-    </q-dialog>
-
-    <!-- Sub-dialog: разбивка просрочек по объектам -->
-    <q-dialog v-model="overdueDetailDialog" position="bottom">
-      <q-card v-if="overdueDetailEmp" style="width: 100%; max-width: 600px; max-height: 70vh; border-radius: 16px 16px 0 0; display: flex; flex-direction: column">
-        <q-card-section class="q-pb-xs" style="flex-shrink: 0">
-          <div class="row items-center">
-            <div>
-              <div class="text-subtitle2 text-weight-bold" style="color: #333">
-                Просрочки: {{ overdueDetailEmp.employee_name }}
-              </div>
-              <div class="text-caption" style="color: #888">
-                {{ overdueDetailEmp.total_overdue_count }} этапов · суммарно {{ overdueDetailEmp.total_overdue_days }} дн.
-              </div>
-            </div>
-            <q-space />
-            <q-btn flat round icon="close" @click="overdueDetailEmp = null" />
-          </div>
-        </q-card-section>
-        <q-separator />
         <q-scroll-area style="flex: 1; min-height: 0">
-          <q-list separator>
-            <q-item
-              v-for="(stage, idx) in overdueDetailEmp.stages"
-              :key="idx"
-            >
-              <q-item-section>
-                <q-item-label class="text-weight-medium" style="color: #333; font-size: 13px">
-                  {{ stage.contract_number }}
-                  <span v-if="stage.address" style="color: #888; font-weight: 400">· {{ stage.address }}</span>
-                </q-item-label>
-                <q-item-label caption style="color: #666">
-                  {{ stage.stage_name }}
-                </q-item-label>
-                <q-item-label caption style="color: #aaa; font-size: 10px">
-                  Дедлайн: {{ stage.deadline || '—' }} → Сдано: {{ stage.completed_date || '—' }}
-                </q-item-label>
-              </q-item-section>
-              <q-item-section side>
-                <span class="text-weight-bold" style="color: #E53935; font-size: 14px">
-                  +{{ stage.overdue_days }} дн.
-                </span>
-              </q-item-section>
-            </q-item>
-          </q-list>
+          <q-card-section>
+            <div class="row q-col-gutter-sm">
+              <div class="col-6">
+                <q-card flat bordered class="q-pa-sm text-center" style="border-radius: 8px">
+                  <div class="text-caption" style="color: #888; font-size: 10px">
+                    KPI выполнения
+                  </div>
+                  <div class="text-h6 text-weight-bold q-mt-xs" :style="{ color: kpiColor((selectedEmp.completion_rate || 0) / 10) }">
+                    {{ selectedEmp.completion_rate?.toFixed(0) || '—' }}%
+                  </div>
+                </q-card>
+              </div>
+              <div class="col-6">
+                <q-card flat bordered class="q-pa-sm text-center" style="border-radius: 8px">
+                  <div class="text-caption" style="color: #888; font-size: 10px">
+                    Этапы
+                  </div>
+                  <div class="text-h6 text-weight-bold q-mt-xs" style="color: #333">
+                    {{ selectedEmp.completed_stages || 0 }}/{{ selectedEmp.total_stages || 0 }}
+                  </div>
+                </q-card>
+              </div>
+            </div>
+            <q-linear-progress
+              v-if="selectedEmp.total_stages > 0"
+              :value="(selectedEmp.completed_stages || 0) / selectedEmp.total_stages"
+              color="positive"
+              class="q-mt-sm"
+              rounded
+              style="height: 8px"
+            />
+            <div v-if="empSurveyScores(selectedEmp).length" class="q-mt-sm">
+              <div class="row q-gutter-xs">
+                <div v-for="sc in empSurveyScores(selectedEmp)" :key="sc.label" class="col">
+                  <q-card flat bordered class="q-pa-sm text-center" style="border-radius: 8px; min-width: 60px">
+                    <div class="text-caption" style="color: #888; font-size: 10px">
+                      {{ sc.label }}
+                    </div>
+                    <div class="text-weight-bold q-mt-xs" :style="{ color: sc.value != null ? kpiColor(sc.value) : '#ccc', fontSize: '18px' }">
+                      {{ sc.value != null ? sc.value.toFixed(1) : '—' }}
+                    </div>
+                    <div class="text-caption" style="color: #ccc; font-size: 9px">
+                      из {{ sc.scale }}
+                    </div>
+                  </q-card>
+                </div>
+              </div>
+            </div>
+            <!-- Выезды на объекты (ДАН и Менеджер) -->
+            <div v-if="showVisitStats(selectedEmp)" class="q-mt-md">
+              <div class="text-caption q-mb-xs" style="color: #666; font-weight: 600; font-size: 11px">
+                Выезды на объекты
+              </div>
+              <div class="row q-gutter-xs">
+                <div class="col">
+                  <q-card flat bordered class="q-pa-sm text-center" style="border-radius: 8px">
+                    <div class="text-caption" style="color: #888; font-size: 10px">
+                      На объект
+                    </div>
+                    <div class="text-weight-bold q-mt-xs" style="font-size: 18px; color: #333">
+                      {{ selectedEmp.visits_object ?? 0 }}
+                    </div>
+                  </q-card>
+                </div>
+                <div class="col">
+                  <q-card flat bordered class="q-pa-sm text-center" style="border-radius: 8px">
+                    <div class="text-caption" style="color: #888; font-size: 10px">
+                      К поставщику
+                    </div>
+                    <div class="text-weight-bold q-mt-xs" style="font-size: 18px; color: #333">
+                      {{ selectedEmp.visits_supplier ?? 0 }}
+                    </div>
+                  </q-card>
+                </div>
+                <div class="col">
+                  <q-card flat bordered class="q-pa-sm text-center" style="border-radius: 8px">
+                    <div class="text-caption" style="color: #888; font-size: 10px">
+                      Просрочено
+                    </div>
+                    <div
+                      class="text-weight-bold q-mt-xs"
+                      :style="{ fontSize: '18px', color: (selectedEmp.visits_overdue ?? 0) > 0 ? '#E74C3C' : '#27AE60' }"
+                    >
+                      {{ selectedEmp.visits_overdue ?? 0 }}
+                    </div>
+                  </q-card>
+                </div>
+              </div>
+            </div>
+
+            <!-- Просрочки этапов — inline, без второго диалога -->
+            <div class="q-mt-md">
+              <div class="text-caption q-mb-xs" style="color: #666; font-weight: 600; font-size: 11px">
+                Просрочки этапов за период
+              </div>
+              <template v-if="overdueByName[selectedEmp.full_name || selectedEmp.name]">
+                <!-- Кликабельная строка summary -->
+                <div
+                  class="row items-center justify-between q-pa-sm cursor-pointer"
+                  style="background: #FFEBEE; border-radius: 8px"
+                  @click="showOverdueDetail = !showOverdueDetail"
+                >
+                  <div>
+                    <div class="text-weight-bold" style="color: #E53935; font-size: 15px">
+                      {{ overdueByName[selectedEmp.full_name || selectedEmp.name].total_overdue_days }} дн. просрочки
+                    </div>
+                    <div class="text-caption" style="color: #C07070">
+                      {{ overdueByName[selectedEmp.full_name || selectedEmp.name].total_overdue_count }} этапов сданы с опозданием
+                    </div>
+                  </div>
+                  <q-icon :name="showOverdueDetail ? 'expand_less' : 'expand_more'" color="red-3" size="20px" />
+                </div>
+                <!-- Инлайн разбивка по этапам -->
+                <div v-if="showOverdueDetail" class="q-mt-xs">
+                  <div
+                    v-for="(stage, idx) in overdueByName[selectedEmp.full_name || selectedEmp.name].stages"
+                    :key="idx"
+                    class="row items-start justify-between q-pa-xs"
+                    :style="{ background: idx % 2 ? '#fff' : '#fafafa', borderRadius: '4px', marginBottom: '2px' }"
+                  >
+                    <div style="flex: 1; min-width: 0">
+                      <div class="text-weight-medium" style="color: #333; font-size: 12px">
+                        {{ stage.contract_number }}
+                        <span v-if="stage.address" style="color: #888; font-weight: 400"> · {{ stage.address }}</span>
+                      </div>
+                      <div style="color: #666; font-size: 11px">
+                        {{ stage.stage_name }}
+                      </div>
+                      <div style="color: #aaa; font-size: 10px">
+                        {{ stage.deadline }} → {{ stage.completed_date }}
+                      </div>
+                    </div>
+                    <span class="text-weight-bold q-ml-sm" style="color: #E53935; font-size: 13px; flex-shrink: 0">+{{ stage.overdue_days }} дн.</span>
+                  </div>
+                </div>
+              </template>
+              <div v-else class="text-caption q-pa-sm" style="background: #E8F5E9; color: #27AE60; border-radius: 8px">
+                Все этапы сданы в срок
+              </div>
+            </div>
+          </q-card-section>
         </q-scroll-area>
       </q-card>
     </q-dialog>
@@ -429,15 +402,11 @@ const loading = ref(false)
 const pdfLoading = ref(false)
 const surveyStats = ref(null)
 const selectedEmp = ref(null)
-const overdueList = ref([])        // [{employee_name, total_overdue_count, total_overdue_days, stages:[]}]
-const overdueDetailEmp = ref(null) // сотрудник для sub-dialog с разбивкой
+const overdueList = ref([])
+const showOverdueDetail = ref(false)
 const empDialog = computed({
   get: () => !!selectedEmp.value,
-  set: (v) => { if (!v) selectedEmp.value = null },
-})
-const overdueDetailDialog = computed({
-  get: () => !!overdueDetailEmp.value,
-  set: (v) => { if (!v) overdueDetailEmp.value = null },
+  set: (v) => { if (!v) { selectedEmp.value = null; showOverdueDetail.value = false } },
 })
 
 const years = Array.from({ length: 7 }, (_, i) => currentYear - i)
@@ -852,6 +821,7 @@ function resetFilters() {
   loadData()
 }
 
+watch(selectedEmp, () => { showOverdueDetail.value = false })
 watch(projectTab, (newTab) => {
   const tabs = ROLE_TABS[newTab] || ROLE_TABS.individual
   if (!tabs.find(t => t.code === roleTab.value)) {
