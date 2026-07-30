@@ -111,57 +111,6 @@
         <q-tab v-for="r in roleTabs" :key="r.code" :name="r.code" :label="r.label" />
       </q-tabs>
 
-      <!-- Список сотрудников по роли -->
-      <q-card v-if="roleEmployees.length > 0" class="is-card q-mb-md">
-        <q-list separator>
-          <q-item
-            v-for="emp in roleEmployees"
-            :key="emp.id || emp.name"
-            v-ripple
-            clickable
-            @click="selectedEmp = emp"
-          >
-            <q-item-section avatar>
-              <q-avatar size="36px" color="grey-3" text-color="grey-8">
-                {{ emp.full_name?.[0] || emp.name?.[0] || '?' }}
-              </q-avatar>
-            </q-item-section>
-            <q-item-section>
-              <q-item-label class="text-weight-medium" style="color: #333">
-                {{ emp.full_name || emp.name }}
-              </q-item-label>
-              <q-item-label caption style="color: #888">
-                {{ emp.position || '' }}
-              </q-item-label>
-            </q-item-section>
-            <q-item-section side>
-              <div class="text-right">
-                <div class="text-weight-bold" style="color: #333">
-                  {{ emp.completion_rate?.toFixed(0) || emp.kpi || '—' }}%
-                </div>
-                <div class="text-caption" style="color: #888">
-                  {{ emp.completed_stages || emp.completed || 0 }}/{{ emp.total_stages || emp.total || 0 }}
-                </div>
-              </div>
-            </q-item-section>
-          </q-item>
-        </q-list>
-      </q-card>
-
-      <!-- Сравнительный график KPI -->
-      <q-card v-if="roleEmployees.length > 0" class="is-card q-mb-md">
-        <q-card-section>
-          <div class="text-subtitle2 text-weight-bold q-mb-sm" style="color: #333">
-            Сравнение KPI
-          </div>
-          <bar-chart
-            :labels="roleEmployees.map(e => (e.full_name || e.name || '').split(' ').slice(0, 2).join(' '))"
-            :datasets="[{ label: 'KPI %', data: roleEmployees.map(e => e.completion_rate || e.kpi || 0), color: '#27AE60' }]"
-            horizontal
-          />
-        </q-card-section>
-      </q-card>
-
       <!-- Рейтинг по роли -->
       <q-card v-if="roleRating.length > 0" class="is-card q-mb-md">
         <q-card-section class="q-pb-xs">
@@ -213,6 +162,57 @@
               </div>
             </div>
           </div>
+        </q-card-section>
+      </q-card>
+
+      <!-- Список сотрудников по роли -->
+      <q-card v-if="roleEmployees.length > 0" class="is-card q-mb-md">
+        <q-list separator>
+          <q-item
+            v-for="emp in roleEmployees"
+            :key="emp.id || emp.name"
+            v-ripple
+            clickable
+            @click="selectedEmp = emp"
+          >
+            <q-item-section avatar>
+              <q-avatar size="36px" color="grey-3" text-color="grey-8">
+                {{ emp.full_name?.[0] || emp.name?.[0] || '?' }}
+              </q-avatar>
+            </q-item-section>
+            <q-item-section>
+              <q-item-label class="text-weight-medium" style="color: #333">
+                {{ emp.full_name || emp.name }}
+              </q-item-label>
+              <q-item-label caption style="color: #888">
+                {{ emp.position || '' }}
+              </q-item-label>
+            </q-item-section>
+            <q-item-section side>
+              <div class="text-right">
+                <div class="text-weight-bold" style="color: #333">
+                  {{ emp.completion_rate?.toFixed(0) || emp.kpi || '—' }}%
+                </div>
+                <div class="text-caption" style="color: #888">
+                  {{ emp.completed_stages || emp.completed || 0 }}/{{ emp.total_stages || emp.total || 0 }}
+                </div>
+              </div>
+            </q-item-section>
+          </q-item>
+        </q-list>
+      </q-card>
+
+      <!-- Сравнительный график KPI -->
+      <q-card v-if="roleEmployees.length > 0" class="is-card q-mb-md">
+        <q-card-section>
+          <div class="text-subtitle2 text-weight-bold q-mb-sm" style="color: #333">
+            Сравнение KPI
+          </div>
+          <bar-chart
+            :labels="roleEmployees.map(e => (e.full_name || e.name || '').split(' ').slice(0, 2).join(' '))"
+            :datasets="[{ label: 'KPI %', data: roleEmployees.map(e => e.completion_rate || e.kpi || 0), color: '#27AE60' }]"
+            horizontal
+          />
         </q-card-section>
       </q-card>
 
