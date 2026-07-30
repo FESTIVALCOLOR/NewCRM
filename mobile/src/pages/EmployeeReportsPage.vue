@@ -124,7 +124,8 @@
             v-for="(emp, idx) in roleRating"
             :key="emp.name"
             class="row items-center q-py-xs"
-            style="border-bottom: 1px solid #f0f0f0"
+            style="border-bottom: 1px solid #f0f0f0; cursor: pointer"
+            @click="selectedEmp = emp._emp"
           >
             <div
               class="text-weight-bold q-mr-sm"
@@ -161,45 +162,9 @@
                 / 100
               </div>
             </div>
+            <q-icon name="chevron_right" size="18px" color="grey-4" class="q-ml-xs" />
           </div>
         </q-card-section>
-      </q-card>
-
-      <!-- Список сотрудников по роли -->
-      <q-card v-if="roleEmployees.length > 0" class="is-card q-mb-md">
-        <q-list separator>
-          <q-item
-            v-for="emp in roleEmployees"
-            :key="emp.id || emp.name"
-            v-ripple
-            clickable
-            @click="selectedEmp = emp"
-          >
-            <q-item-section avatar>
-              <q-avatar size="36px" color="grey-3" text-color="grey-8">
-                {{ emp.full_name?.[0] || emp.name?.[0] || '?' }}
-              </q-avatar>
-            </q-item-section>
-            <q-item-section>
-              <q-item-label class="text-weight-medium" style="color: #333">
-                {{ emp.full_name || emp.name }}
-              </q-item-label>
-              <q-item-label caption style="color: #888">
-                {{ emp.position || '' }}
-              </q-item-label>
-            </q-item-section>
-            <q-item-section side>
-              <div class="text-right">
-                <div class="text-weight-bold" style="color: #333">
-                  {{ emp.completion_rate?.toFixed(0) || emp.kpi || '—' }}%
-                </div>
-                <div class="text-caption" style="color: #888">
-                  {{ emp.completed_stages || emp.completed || 0 }}/{{ emp.total_stages || emp.total || 0 }}
-                </div>
-              </div>
-            </q-item-section>
-          </q-item>
-        </q-list>
       </q-card>
 
       <!-- Сравнительный график KPI -->
@@ -508,7 +473,7 @@ const roleRating = computed(() => {
       const avgOverduePerStage = overdueDays / completed
       const punctuality = Math.max(0, 1 - avgOverduePerStage / 10) * 100
       const score = Math.round(kpi * 0.6 + punctuality * 0.4)
-      return { name, position: emp.position, kpi: Math.round(kpi), punctuality: Math.round(punctuality), score, overdueDays, completed }
+      return { name, position: emp.position, kpi: Math.round(kpi), punctuality: Math.round(punctuality), score, overdueDays, completed, _emp: emp }
     })
     .sort((a, b) => b.score - a.score)
 })
