@@ -9,7 +9,7 @@ from typing import List, Optional
 
 from auth import get_current_user
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import DateTime, cast, func, or_
+from sqlalchemy import Date, DateTime, cast, func, or_
 from sqlalchemy.orm import Session
 
 from database import (
@@ -179,12 +179,18 @@ async def get_employee_report_by_type(
             db.query(
                 Employee.full_name.label("employee_name"),
                 func.count().label("overdue_count"),
-                func.avg(func.extract("epoch", StageExecutor.completed_date - cast(StageExecutor.deadline, DateTime)) / 86400.0).label("avg_overdue_days"),
+                func.avg(cast(StageExecutor.completed_date, Date) - cast(StageExecutor.deadline, Date)).label("avg_overdue_days"),
             )
             .join(StageExecutor, StageExecutor.executor_id == Employee.id)
             .join(CRMCard, StageExecutor.crm_card_id == CRMCard.id)
             .join(Contract, CRMCard.contract_id == Contract.id)
-            .filter(Contract.project_type == project_type, StageExecutor.completed == True, StageExecutor.completed_date > cast(StageExecutor.deadline, DateTime))
+            .filter(
+                Contract.project_type == project_type,
+                StageExecutor.completed == True,
+                StageExecutor.completed_date.isnot(None),
+                StageExecutor.deadline.isnot(None),
+                cast(StageExecutor.completed_date, Date) > cast(StageExecutor.deadline, Date),
+            )
         )
 
         # Добавляем фильтр по периоду
@@ -255,7 +261,7 @@ async def get_employee_overdue_detail(
                 conds.append(extract("month", date_col) == month)
             return and_(*conds) if len(conds) > 1 else conds[0]
 
-        overdue_days_col = (func.extract("epoch", StageExecutor.completed_date - cast(StageExecutor.deadline, DateTime)) / 86400.0).label("overdue_days")
+        overdue_days_col = (cast(StageExecutor.completed_date, Date) - cast(StageExecutor.deadline, Date)).label("overdue_days")
 
         rows = (
             db.query(
@@ -277,7 +283,7 @@ async def get_employee_overdue_detail(
                 StageExecutor.completed == True,
                 StageExecutor.completed_date.isnot(None),
                 StageExecutor.deadline.isnot(None),
-                StageExecutor.completed_date > cast(StageExecutor.deadline, DateTime),
+                cast(StageExecutor.completed_date, Date) > cast(StageExecutor.deadline, Date),
                 build_period_filter(StageExecutor.completed_date),
             )
             .order_by(Employee.full_name, StageExecutor.completed_date)
