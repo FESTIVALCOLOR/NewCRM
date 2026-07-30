@@ -504,7 +504,7 @@
                     </template>
                     <span v-if="e.actual_days"> | Факт: {{ e.actual_days }} дн.</span>
                     <span v-if="e.executor_role"> | {{ e.executor_role }}</span>
-                    <span v-if="e.is_in_contract_scope === false" style="color: #C62828; font-weight: bold"> | Вне объёма</span>
+                    <span v-if="e.is_in_contract_scope === false" style="color: #C62828"> | Вне объёма</span>
                     <span v-else-if="isOverdue(e)" style="color: #E74C3C; font-weight: bold"> | Просрочен</span>
                     <span v-else-if="e.actual_date" style="color: #27AE60"> | В срок</span>
                   </q-item-label>

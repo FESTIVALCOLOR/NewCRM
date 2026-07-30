@@ -178,7 +178,9 @@ class ProjectTimelineWidget(QWidget):
         else:
             pt_code = 1 if project_type == "Индивидуальный" else 2
 
-        contract_term = calc_contract_term(pt_code, float(area)) if area else 0
+        # Приоритет: реальный contract_period из договора; формула — запасной вариант
+        db_period = self.contract_data.get("contract_period")
+        contract_term = int(db_period) if db_period else (calc_contract_term(pt_code, float(area)) if area else 0)
         self._contract_term = contract_term
         K = calc_area_coefficient(float(area)) if area else 0
 
@@ -926,7 +928,8 @@ class ProjectTimelineWidget(QWidget):
                     status_color = "#C62828"
                 elif status_text == "Вне объёма":
                     status_color = "#C62828"
-                self.table.setCellWidget(row, 4, self._make_cell_label(status_text, row_bg, bold=bool(status_text), color=status_color))
+                is_bold_status = bool(status_text) and status_text != "Вне объёма"
+                self.table.setCellWidget(row, 4, self._make_cell_label(status_text, row_bg, bold=is_bold_status, color=status_color))
 
                 # Кол 5: Исполнитель
                 self.table.setCellWidget(row, 5, self._make_cell_label(role, row_bg))
