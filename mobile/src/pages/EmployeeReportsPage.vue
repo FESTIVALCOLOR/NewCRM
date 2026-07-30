@@ -162,7 +162,7 @@
 
       <!-- Три графика в одну строку: Нагрузка · KPI · Просрочки -->
       <div v-if="roleEmployees.length > 0" class="row q-col-gutter-xs q-mb-md">
-        <div class="col-4">
+        <div class="col-12 col-sm-4">
           <q-card class="is-card" style="height: 100%">
             <q-card-section class="q-pa-sm">
               <div class="text-caption text-weight-bold q-mb-xs" style="color: #333">
@@ -180,7 +180,7 @@
             </q-card-section>
           </q-card>
         </div>
-        <div class="col-4">
+        <div class="col-12 col-sm-4">
           <q-card class="is-card" style="height: 100%">
             <q-card-section class="q-pa-sm">
               <div class="text-caption text-weight-bold q-mb-xs" style="color: #333">
@@ -194,7 +194,7 @@
             </q-card-section>
           </q-card>
         </div>
-        <div class="col-4">
+        <div class="col-12 col-sm-4">
           <q-card class="is-card" style="height: 100%">
             <q-card-section class="q-pa-sm">
               <div class="text-caption text-weight-bold q-mb-xs" style="color: #333">
