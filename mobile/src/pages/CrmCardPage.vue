@@ -504,7 +504,7 @@
                     </template>
                     <span v-if="e.actual_days"> | Факт: {{ e.actual_days }} дн.</span>
                     <span v-if="e.executor_role"> | {{ e.executor_role }}</span>
-                    <span v-if="e.is_in_contract_scope === false" style="color: #888888"> | Вне объёма</span>
+                    <span v-if="e.is_in_contract_scope === false" style="color: #C62828; font-weight: bold"> | Вне объёма</span>
                     <span v-else-if="isOverdue(e)" style="color: #E74C3C; font-weight: bold"> | Просрочен</span>
                     <span v-else-if="e.actual_date" style="color: #27AE60"> | В срок</span>
                   </q-item-label>
@@ -2089,6 +2089,27 @@
                 Итого раньше: <b style="color: #27AE60; margin-left: 4px">{{ aheadDeviations.reduce((s, d) => s + d.diff, 0) }} дн.</b>
               </div>
             </template>
+            <!-- Вне объёма — показывается серым, не учитывается в просрочке -->
+            <template v-if="outOfScopeDeviations.length">
+              <q-separator class="q-my-sm" />
+              <div class="text-caption text-weight-bold q-mb-xs" style="color: #888">
+                Вне объёма (не учитывается)
+              </div>
+              <div v-for="d in outOfScopeDeviations" :key="'oos'+d.name" class="q-mb-xs">
+                <div class="row items-center">
+                  <span class="text-caption" style="flex: 1; color: #888">{{ d.name }}</span>
+                  <q-chip
+                    dense
+                    color="grey-2"
+                    text-color="grey-7"
+                    size="xs"
+                    icon="remove"
+                  >
+                    +{{ d.diff }} дн.
+                  </q-chip>
+                </div>
+              </div>
+            </template>
           </q-card-section>
         </q-card>
       </q-dialog>
@@ -2770,6 +2791,21 @@ const netDeadlineDiff = computed(() => {
   const overdue = deadlineDeviations.value.reduce((s, d) => s + d.diff, 0)
   const ahead = aheadDeviations.value.reduce((s, d) => s + d.diff, 0)
   return overdue - ahead
+})
+// Этапы вне объёма с превышением — показываются серым в popup, не влияют на total
+const outOfScopeDeviations = computed(() => {
+  const result = []
+  for (const e of timelineEntries.value) {
+    if (e.executor_role === 'header') continue
+    if (e.is_in_contract_scope !== false) continue
+    const ad = e.actual_days || 0
+    if (ad <= 0) continue
+    const effectiveNorm = e.custom_norm_days || e.norm_days || 0
+    if (effectiveNorm <= 0) continue
+    const diff = ad - effectiveNorm
+    if (diff > 0) result.push({ name: e.stage_name, diff })
+  }
+  return result
 })
 const isProjectOverdue = computed(() => {
   if (!effectiveDeadline.value) return false

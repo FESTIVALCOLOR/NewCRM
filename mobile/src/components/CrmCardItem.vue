@@ -10,6 +10,9 @@
           <div v-if="workStatusText" :style="{ fontSize: '8px', fontWeight: 'bold', color: workStatusColor, border: `1px solid ${workStatusColor}`, borderRadius: '3px', padding: '1px 6px' }">
             {{ workStatusText }}
           </div>
+          <div v-if="isPaused && !isArchived" :style="{ fontSize: '8px', fontWeight: 'bold', color: '#B8860B', border: '1px solid #B8860B', borderRadius: '3px', padding: '1px 6px' }">
+            ПАУЗА
+          </div>
           <button v-if="!isArchived" class="mute-bell-btn" @click.stop="emit('toggle-mute')">
             <span class="material-icons" :style="{ fontSize: '14px', color: isMuted ? '#333' : '#CCC' }">
               {{ isMuted ? 'notifications_off' : 'notifications' }}
@@ -301,6 +304,7 @@ const workStatusColor = computed(() => {
   const m = { pending_review: '#8E44AD', revision: '#E74C3C', client_approval: '#3498DB', act_signing: '#9B59B6', stage_completed: '#27AE60', in_progress: '#F39C12' }
   return m[ws.value] || '#888'
 })
+const isPaused = computed(() => props.card.column_name === 'В ожидании')
 
 // === Подэтап: ВСЕГДА показывается если есть ===
 const substepPrefix = computed(() => {

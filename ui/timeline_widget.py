@@ -565,8 +565,9 @@ class ProjectTimelineWidget(QWidget):
             )
 
             # Накапливаем суммы — только строки в объёме договора (не заголовки, не вне объёма)
+            # is not False: None/отсутствует = включаем, только явный False = исключаем
             if role != "header":
-                is_in_scope = entry.get("is_in_contract_scope", True)
+                is_in_scope = entry.get("is_in_contract_scope") is not False
                 if is_in_scope:
                     stage_actual_sum += entry.get("actual_days", 0) or 0
                     stage_norm_sum += entry.get("norm_days", 0) or 0
@@ -582,17 +583,17 @@ class ProjectTimelineWidget(QWidget):
                 }
             )
 
-        # Общий итог — только строки в объёме договора (те же фильтры что и для norm_days)
-        total_actual = sum((e.get("actual_days", 0) or 0) for e in self.entries if e.get("executor_role", "") != "header" and e.get("is_in_contract_scope", True))
-        total_norm = self._contract_term or sum((e.get("norm_days", 0) or 0) for e in self.entries if e.get("executor_role", "") != "header" and e.get("is_in_contract_scope", True))
+        # Общий итог — только строки в объёме договора (is not False: None = включаем)
+        total_actual = sum((e.get("actual_days", 0) or 0) for e in self.entries if e.get("executor_role", "") != "header" and e.get("is_in_contract_scope") is not False)
+        total_norm = self._contract_term or sum((e.get("norm_days", 0) or 0) for e in self.entries if e.get("executor_role", "") != "header" and e.get("is_in_contract_scope") is not False)
 
         # Рассчитываем отклонение с причинами по подэтапам
         deviation_reasons = []
         for e in self.entries:
             if e.get("executor_role", "") == "header":
                 continue
-            if not e.get("is_in_contract_scope", True):
-                continue  # Строки вне объёма не влияют на отклонение
+            if e.get("is_in_contract_scope") is False:
+                continue  # Строки с явным False — вне объёма, не влияют на отклонение
             ad = e.get("actual_days", 0) or 0
             if ad <= 0:
                 continue  # Подэтап ещё не завершён
@@ -737,7 +738,7 @@ class ProjectTimelineWidget(QWidget):
                 substage_group = entry.get("substage_group", "")
                 is_header = role == "header" and not substage_group
                 is_subheader = role == "header" and bool(substage_group)
-                is_in_scope = entry.get("is_in_contract_scope", True)
+                is_in_scope = entry.get("is_in_contract_scope") is not False
 
                 self.table.setRowHeight(row, 32)
 
@@ -924,7 +925,7 @@ class ProjectTimelineWidget(QWidget):
                 elif status_text == "Просрочен":
                     status_color = "#C62828"
                 elif status_text == "Вне объёма":
-                    status_color = "#888888"
+                    status_color = "#C62828"
                 self.table.setCellWidget(row, 4, self._make_cell_label(status_text, row_bg, bold=bool(status_text), color=status_color))
 
                 # Кол 5: Исполнитель
