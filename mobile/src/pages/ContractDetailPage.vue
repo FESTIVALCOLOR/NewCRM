@@ -1123,10 +1123,11 @@ const isContractClosed = computed(() => {
 })
 
 const timelineActualTotal = computed(() => {
-  // Факт: для открытого проекта — р.д. от START до сегодня; для закрытого — сохранённая сумма
+  // Факт: для открытого проекта — р.д. от START до сегодня минус дни паузы; для закрытого — сумма
   if (contractStartDate.value && !isContractClosed.value) {
     const d = countWorkingDaysUntil(contractStartDate.value)
-    return d < 0 ? Math.abs(d) : 0
+    const pauseDays = contractPauseDays.value || 0
+    return d < 0 ? Math.max(0, Math.abs(d) - pauseDays) : 0
   }
   return timeline.value.filter(isTimelineEntry).reduce((s, e) => s + (e.actual_days || 0), 0)
 })

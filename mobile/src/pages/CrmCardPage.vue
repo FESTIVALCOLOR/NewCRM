@@ -2285,11 +2285,12 @@ const timelineTotals = computed(() => {
     if (e.status !== 'skipped') storedActual += (e.actual_days || 0)
   }
   const normTotal = contractPeriod > 0 ? contractPeriod : normFallback
-  // Факт: для открытого проекта — р.д. от START до сегодня; для закрытого — сохранённая сумма
+  // Факт: для открытого проекта — р.д. от START до сегодня минус дни паузы; для закрытого — сумма
   let actualTotal = storedActual
   if (projectStartDate.value && !isProjectClosed.value) {
     const d = countWorkingDaysUntil(projectStartDate.value)
-    actualTotal = d < 0 ? Math.abs(d) : 0
+    const pauseDays = card.value?.total_pause_days || 0
+    actualTotal = d < 0 ? Math.max(0, Math.abs(d) - pauseDays) : 0
   }
   // Просрочка = та же формула что в popup (per-stage in-scope) — единая система
   const netDiff = netDeadlineDiff.value
