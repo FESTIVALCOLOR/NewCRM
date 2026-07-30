@@ -118,7 +118,7 @@
             Рейтинг эффективности
           </div>
           <div class="text-caption q-mb-sm" style="color: #888">
-            KPI · Объём · Пунктуальность{{ roleRating.some(e => e.clientScore !== null) ? ' · Оценка клиента' : '' }}
+            50% KPI · 25% Объём · 25% Пунктуальность{{ roleRating.some(e => e.clientScore !== null) ? ' · ±10% Клиент' : '' }}
           </div>
           <div
             v-for="(emp, idx) in roleRating"
@@ -497,9 +497,9 @@ const roleRating = computed(() => {
         ? rawScores.reduce((a, b) => a + b, 0) / rawScores.length
         : null
 
-      const score = clientScore !== null
-        ? Math.round(kpi * 0.40 + volume * 0.20 + punctuality * 0.25 + clientScore * 0.15)
-        : Math.round(kpi * 0.50 + volume * 0.25 + punctuality * 0.25)
+      const base = kpi * 0.50 + volume * 0.25 + punctuality * 0.25
+      const modifier = clientScore !== null ? (0.9 + 0.1 * clientScore / 100) : 1
+      const score = Math.round(base * modifier)
 
       return {
         name, position: emp.position,
