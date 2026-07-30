@@ -2262,17 +2262,15 @@ const hasCustomNormDays = computed(() =>
   ),
 )
 const timelineTotals = computed(() => {
-  let normTotal = 0, actualTotal = 0
+  let normFallback = 0, actualTotal = 0
   const contractPeriod = contractData.value?.contract_period || 0
   for (const e of timelineEntries.value) {
     if (e.executor_role === 'header') continue
-    const inScope = e.is_in_contract_scope !== false
-    if (inScope) {
-      normTotal += (e.norm_days || 0)
-      actualTotal += (e.actual_days || 0)
-    }
+    if (e.is_in_contract_scope !== false) normFallback += (e.norm_days || 0)
+    // Факт = все actual_days (in-scope + вне объёма) — реальное время проекта
+    actualTotal += (e.actual_days || 0)
   }
-  if (contractPeriod > 0) normTotal = contractPeriod
+  const normTotal = contractPeriod > 0 ? contractPeriod : normFallback
   const overdueTotal = actualTotal > normTotal && normTotal > 0 ? actualTotal - normTotal : 0
   const aheadTotal = normTotal > actualTotal && actualTotal > 0 ? normTotal - actualTotal : 0
   return { normTotal, actualTotal, overdueTotal, aheadTotal }

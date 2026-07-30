@@ -1089,10 +1089,14 @@ function fmtDateShort(d) { if (!d) return ''; return new Date(d).toLocaleDateStr
 
 const isTimelineEntry = e => e.executor_role !== 'header' && !e.stage_code?.endsWith('_HDR') && e.status !== 'skipped'
 
-const timelineTotalInScope = computed(() =>
-  timeline.value.filter(e => isTimelineEntry(e) && e.is_in_contract_scope)
-    .reduce((s, e) => s + (e.custom_norm_days || e.norm_days || 0), 0),
-)
+const timelineTotalInScope = computed(() => {
+  // Приоритет: срок договора из БД (единая система с CrmCardPage)
+  const period = contract.value?.contract_period
+  if (period > 0) return period
+  // Fallback: сумма norm_days в объёме (is_in_contract_scope !== false учитывает старые null-записи)
+  return timeline.value.filter(e => isTimelineEntry(e) && e.is_in_contract_scope !== false)
+    .reduce((s, e) => s + (e.custom_norm_days || e.norm_days || 0), 0)
+})
 
 const timelineTotalAll = computed(() =>
   timeline.value.filter(isTimelineEntry)
@@ -1100,29 +1104,20 @@ const timelineTotalAll = computed(() =>
 )
 
 const timelineActualTotal = computed(() =>
+  // Факт = все actual_days (in-scope + вне объёма) — реальное время проекта
   timeline.value.filter(isTimelineEntry).reduce((s, e) => s + (e.actual_days || 0), 0),
 )
 
 const timelineOverdueTotal = computed(() => {
-  let total = 0
-  for (const e of timeline.value) {
-    if (!isTimelineEntry(e)) continue
-    const ad = e.actual_days || 0
-    const norm = e.custom_norm_days || e.norm_days || 0
-    if (ad > 0 && norm > 0 && ad > norm) total += ad - norm
-  }
-  return total
+  const act = timelineActualTotal.value
+  const norm = timelineTotalInScope.value
+  return act > norm && norm > 0 ? act - norm : 0
 })
 
 const timelineAheadTotal = computed(() => {
-  let total = 0
-  for (const e of timeline.value) {
-    if (!isTimelineEntry(e)) continue
-    const ad = e.actual_days || 0
-    const norm = e.custom_norm_days || e.norm_days || 0
-    if (ad > 0 && norm > 0 && ad < norm) total += norm - ad
-  }
-  return total
+  const act = timelineActualTotal.value
+  const norm = timelineTotalInScope.value
+  return norm > act && act > 0 ? norm - act : 0
 })
 
 const contractPauseDays = computed(() => contract.value?.crm_card_total_pause_days || 0)
