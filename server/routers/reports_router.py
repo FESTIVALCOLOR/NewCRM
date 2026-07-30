@@ -239,115 +239,154 @@ async def get_employee_report_by_type(
         raise HTTPException(status_code=500, detail="Внутренняя ошибка сервера")
 
 
+import re as _re
+
+
+def _resolve_stage_group_py(stage_name: str) -> str:
+    s = stage_name.lower()
+    m = _re.search(r"стадия\s*(\d+)", s)
+    if m:
+        return f"STAGE{m.group(1)}"
+    if "планировочн" in s:
+        return "STAGE1"
+    if "концепция" in s or "дизайн" in s:
+        return "STAGE2"
+    if "рабоч" in s or "чертеж" in s or "чертёж" in s or "документац" in s:
+        return "STAGE3"
+    if "визуализац" in s or "3д" in s or "3d" in s:
+        return "STAGE3"
+    return ""
+
+
+def _normalize_role(role: str) -> str:
+    return role.replace("Чертежник", "Чертёжник")
+
+
+def _build_se_index(db, card_ids):
+    from collections import defaultdict
+
+    se_rows = db.query(StageExecutor).filter(StageExecutor.crm_card_id.in_(card_ids), StageExecutor.executor_id.isnot(None)).all()
+    executor_ids = list({se.executor_id for se in se_rows if se.executor_id})
+    emp_by_id = {e.id: e for e in db.query(Employee).filter(Employee.id.in_(executor_ids)).all()} if executor_ids else {}
+    index = defaultdict(list)
+    for se in se_rows:
+        sg = _resolve_stage_group_py(se.stage_name)
+        if sg:
+            index[(se.crm_card_id, sg)].append(emp_by_id.get(se.executor_id))
+    return index
+
+
+def _build_position_index(db):
+    from collections import defaultdict
+
+    result = defaultdict(list)
+    for emp in db.query(Employee).filter(Employee.status == "активный").all():
+        if emp.position:
+            result[emp.position].append(emp)
+        if emp.secondary_position:
+            result[emp.secondary_position].append(emp)
+    return result
+
+
+def _find_executor(row, se_index, by_position):
+    role = _normalize_role(row.executor_role or "")
+    if not role or role == "Клиент":
+        return None
+    for emp in se_index.get((row.card_id, row.stage_group), []):
+        if emp and (_normalize_role(emp.position or "") == role or _normalize_role(emp.secondary_position or "") == role):
+            return emp
+    role_emps = [e for e in by_position.get(role, []) if e.status == "активный"]
+    return role_emps[0] if len(role_emps) == 1 else None
+
+
+def _fetch_overdue_rows(db, project_type, period, year, quarter, month):
+    from sqlalchemy import and_, extract
+
+    def period_filter(date_col):
+        conds = [extract("year", date_col) == year]
+        if period == "За квартал" and quarter:
+            sm, em = (quarter - 1) * 3 + 1, quarter * 3
+            conds.append(extract("month", date_col).between(sm, em))
+        elif period == "За месяц" and month:
+            conds.append(extract("month", date_col) == month)
+        return and_(*conds) if len(conds) > 1 else conds[0]
+
+    eff = func.coalesce(ProjectTimelineEntry.custom_norm_days, ProjectTimelineEntry.norm_days)
+    return (
+        db.query(
+            Contract.contract_number,
+            Contract.address,
+            CRMCard.id.label("card_id"),
+            ProjectTimelineEntry.stage_name.label("substep_name"),
+            ProjectTimelineEntry.stage_group,
+            ProjectTimelineEntry.executor_role,
+            ProjectTimelineEntry.actual_date,
+            (ProjectTimelineEntry.actual_days - eff).label("overdue_days"),
+        )
+        .select_from(ProjectTimelineEntry)
+        .join(Contract, Contract.id == ProjectTimelineEntry.contract_id)
+        .join(CRMCard, CRMCard.contract_id == Contract.id)
+        .filter(
+            Contract.project_type == project_type,
+            ProjectTimelineEntry.actual_days > 0,
+            ProjectTimelineEntry.actual_days > eff,
+            ProjectTimelineEntry.executor_role != "header",
+            ProjectTimelineEntry.status != "skipped",
+            ProjectTimelineEntry.actual_date.isnot(None),
+            ProjectTimelineEntry.actual_date != "",
+            period_filter(cast(ProjectTimelineEntry.actual_date, Date)),
+        )
+        .distinct()
+        .all()
+    )
+
+
 @router.get("/employee-overdue")
 async def get_employee_overdue_detail(
     project_type: str, period: str, year: int, quarter: Optional[int] = None, month: Optional[int] = None, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)
 ):
-    """
-    Детальная разбивка просрочек по сотрудникам на основе ProjectTimelineEntry.
-    actual_days > norm_days означает реальную просрочку конкретного подэтапа,
-    в отличие от StageExecutor.deadline который постоянно обновляется при workflow-шагах.
-    """
+    """Детальная разбивка просрочек по сотрудникам через ProjectTimelineEntry."""
     try:
-        from collections import defaultdict
+        overdue_rows = _fetch_overdue_rows(db, project_type, period, year, quarter, month)
+        if not overdue_rows:
+            return []
 
-        from sqlalchemy import and_, case, extract, or_
+        card_ids = list({r.card_id for r in overdue_rows})
+        se_index = _build_se_index(db, card_ids)
+        by_position = _build_position_index(db)
 
-        def build_period_filter(date_col):
-            conds = [extract("year", date_col) == year]
-            if period == "За квартал" and quarter:
-                sm, em = (quarter - 1) * 3 + 1, quarter * 3
-                conds.append(extract("month", date_col).between(sm, em))
-            elif period == "За месяц" and month:
-                conds.append(extract("month", date_col) == month)
-            return and_(*conds) if len(conds) > 1 else conds[0]
+        emp_map: dict = {}
+        seen: set = set()
 
-        # Маппинг stage_name из StageExecutor → stage_group для JOIN с ProjectTimelineEntry
-        se_stage_group = case(
-            (StageExecutor.stage_name.ilike("%стадия 1%"), "STAGE1"),
-            (StageExecutor.stage_name.ilike("%планировочн%"), "STAGE1"),
-            (StageExecutor.stage_name.ilike("%стадия 2%"), "STAGE2"),
-            (StageExecutor.stage_name.ilike("%концепция%"), "STAGE2"),
-            (StageExecutor.stage_name.ilike("%стадия 3%"), "STAGE3"),
-            else_="",
-        )
-
-        effective_norm = func.coalesce(ProjectTimelineEntry.custom_norm_days, ProjectTimelineEntry.norm_days)
-        overdue_days_col = (ProjectTimelineEntry.actual_days - effective_norm).label("overdue_days")
-
-        rows = (
-            db.query(
-                Employee.id.label("employee_id"),
-                Employee.full_name.label("employee_name"),
-                Employee.position,
-                Contract.contract_number,
-                Contract.address,
-                ProjectTimelineEntry.stage_name.label("substep_name"),
-                ProjectTimelineEntry.stage_group,
-                ProjectTimelineEntry.actual_date,
-                ProjectTimelineEntry.actual_days,
-                effective_norm.label("norm_days"),
-                overdue_days_col,
-            )
-            .select_from(ProjectTimelineEntry)
-            .join(Contract, Contract.id == ProjectTimelineEntry.contract_id)
-            .join(CRMCard, CRMCard.contract_id == Contract.id)
-            .join(
-                StageExecutor,
-                and_(
-                    StageExecutor.crm_card_id == CRMCard.id,
-                    se_stage_group == ProjectTimelineEntry.stage_group,
-                    StageExecutor.executor_id.isnot(None),
-                ),
-            )
-            .join(
-                Employee,
-                and_(
-                    Employee.id == StageExecutor.executor_id,
-                    or_(
-                        Employee.position == ProjectTimelineEntry.executor_role,
-                        Employee.secondary_position == ProjectTimelineEntry.executor_role,
-                    ),
-                ),
-            )
-            .filter(
-                Contract.project_type == project_type,
-                ProjectTimelineEntry.actual_days > 0,
-                ProjectTimelineEntry.actual_days > effective_norm,
-                ProjectTimelineEntry.executor_role != "header",
-                ProjectTimelineEntry.status != "skipped",
-                ProjectTimelineEntry.actual_date.isnot(None),
-                ProjectTimelineEntry.actual_date != "",
-                build_period_filter(cast(ProjectTimelineEntry.actual_date, Date)),
-            )
-            .distinct()
-            .order_by(Employee.full_name, ProjectTimelineEntry.actual_date)
-            .all()
-        )
-
-        emp_map = defaultdict(lambda: {"employee_name": "", "position": "", "stages": []})
-        for row in rows:
-            key = row.employee_id
-            d = emp_map[key]
-            d["employee_id"] = row.employee_id
-            d["employee_name"] = row.employee_name
-            d["position"] = row.position
-            d["stages"].append(
+        for row in overdue_rows:
+            overdue_days = max(0, int(row.overdue_days or 0))
+            if overdue_days <= 0:
+                continue
+            assign_to = _find_executor(row, se_index, by_position)
+            if assign_to is None:
+                continue
+            dedup_key = (assign_to.id, row.card_id, row.substep_name)
+            if dedup_key in seen:
+                continue
+            seen.add(dedup_key)
+            if assign_to.id not in emp_map:
+                emp_map[assign_to.id] = {"employee_id": assign_to.id, "employee_name": assign_to.full_name, "position": assign_to.position, "stages": []}
+            emp_map[assign_to.id]["stages"].append(
                 {
                     "contract_number": row.contract_number or "",
                     "address": (row.address or "")[:80],
                     "stage_name": row.substep_name or "",
                     "actual_date": (row.actual_date or "")[:10],
-                    "overdue_days": max(0, int(row.overdue_days or 0)),
+                    "overdue_days": overdue_days,
                 }
             )
 
         result = []
-        for emp_id, d in emp_map.items():
+        for d in emp_map.values():
             stages = sorted(d["stages"], key=lambda s: s["overdue_days"], reverse=True)
             result.append(
                 {
-                    "employee_id": emp_id,
+                    "employee_id": d["employee_id"],
                     "employee_name": d["employee_name"],
                     "position": d["position"],
                     "total_overdue_count": len(stages),
@@ -355,7 +394,6 @@ async def get_employee_overdue_detail(
                     "stages": stages,
                 }
             )
-
         result.sort(key=lambda x: x["total_overdue_days"], reverse=True)
         return result
 
