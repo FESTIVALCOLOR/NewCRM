@@ -2277,14 +2277,20 @@ const hasCustomNormDays = computed(() =>
   ),
 )
 const timelineTotals = computed(() => {
-  let normFallback = 0, actualTotal = 0
+  let normFallback = 0, storedActual = 0
   const contractPeriod = contractData.value?.contract_period || 0
   for (const e of timelineEntries.value) {
     if (e.executor_role === 'header') continue
     if (e.is_in_contract_scope !== false) normFallback += (e.norm_days || 0)
-    if (e.status !== 'skipped') actualTotal += (e.actual_days || 0)
+    if (e.status !== 'skipped') storedActual += (e.actual_days || 0)
   }
   const normTotal = contractPeriod > 0 ? contractPeriod : normFallback
+  // Факт: для открытого проекта — р.д. от START до сегодня; для закрытого — сохранённая сумма
+  let actualTotal = storedActual
+  if (projectStartDate.value && !isProjectClosed.value) {
+    const d = countWorkingDaysUntil(projectStartDate.value)
+    actualTotal = d < 0 ? Math.abs(d) : 0
+  }
   // Просрочка = та же формула что в popup (per-stage in-scope) — единая система
   const netDiff = netDeadlineDiff.value
   const overdueTotal = Math.max(0, netDiff)
@@ -2756,6 +2762,10 @@ function workflowLabel(s) { return { in_progress: 'В работе', pending_rev
 // Дата начала = actual_date записи START в timeline (устанавливается автоматически как max дат)
 const projectStartDate = computed(() =>
   timelineEntries.value.find(e => e.stage_code === 'START')?.actual_date || null,
+)
+// Проект закрыт, если в итоговой колонке или архиве — тогда Факт фиксируется
+const isProjectClosed = computed(() =>
+  card.value?.column_name === 'Выполненный проект' || !!card.value?.is_archived,
 )
 // Дедлайн проекта = START + срок договора в рабочих днях (как в desktop timeline_widget.py:642-643)
 const effectiveDeadline = computed(() => {

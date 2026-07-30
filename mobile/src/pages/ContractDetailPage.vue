@@ -1116,10 +1116,20 @@ const timelineTotalAll = computed(() => {
   return timelineTotalInScope.value + outScope
 })
 
-const timelineActualTotal = computed(() =>
-  // Факт = все actual_days (in-scope + вне объёма) — реальное время проекта
-  timeline.value.filter(isTimelineEntry).reduce((s, e) => s + (e.actual_days || 0), 0),
-)
+// Договор закрыт, если статус СДАН или РАСТОРГНУТ — тогда Факт фиксируется
+const isContractClosed = computed(() => {
+  const s = contract.value?.status || ''
+  return s === 'СДАН' || s === 'РАСТОРГНУТ'
+})
+
+const timelineActualTotal = computed(() => {
+  // Факт: для открытого проекта — р.д. от START до сегодня; для закрытого — сохранённая сумма
+  if (contractStartDate.value && !isContractClosed.value) {
+    const d = countWorkingDaysUntil(contractStartDate.value)
+    return d < 0 ? Math.abs(d) : 0
+  }
+  return timeline.value.filter(isTimelineEntry).reduce((s, e) => s + (e.actual_days || 0), 0)
+})
 
 const timelineOverdueTotal = computed(() => {
   // Та же формула что в дедлайн popup CrmCardPage (per-stage in-scope, единая система)
