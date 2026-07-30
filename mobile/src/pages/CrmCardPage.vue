@@ -2267,7 +2267,7 @@ const timelineTotals = computed(() => {
   for (const e of timelineEntries.value) {
     if (e.executor_role === 'header') continue
     if (e.is_in_contract_scope !== false) normFallback += (e.norm_days || 0)
-    actualTotal += (e.actual_days || 0)
+    if (e.status !== 'skipped') actualTotal += (e.actual_days || 0)
   }
   const normTotal = contractPeriod > 0 ? contractPeriod : normFallback
   // Просрочка = та же формула что в popup (per-stage in-scope) — единая система
@@ -2744,6 +2744,10 @@ const projectStartDate = computed(() =>
 )
 // Дедлайн проекта = START + срок договора в рабочих днях (как в desktop timeline_widget.py:642-643)
 const effectiveDeadline = computed(() => {
+  // Приоритет: effective_deadline от сервера (учитывает паузы «В ожидании» онлайн),
+  // затем deadline из БД (накопленные паузы), затем вычисленный из START+период.
+  if (card.value?.effective_deadline) return card.value.effective_deadline
+  if (card.value?.deadline) return card.value.deadline
   const startDate = projectStartDate.value
   if (!startDate) return null
   const period = contractData.value?.contract_period || card.value?.contract_period

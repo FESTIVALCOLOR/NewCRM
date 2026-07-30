@@ -450,6 +450,7 @@ async def get_crm_cards(project_type: Optional[str] = None, archived: bool = Fal
                 "column_name": card.column_name,
                 "deadline": str(card.deadline) if card.deadline else None,
                 "effective_deadline": _effective_deadline,
+                "total_pause_days": card.total_pause_days or 0,
                 "is_client_stage": _is_client_stage,
                 "tags": card.tags,
                 "tag_color": card.tag_color,
@@ -558,6 +559,7 @@ async def get_crm_card(card_id: int, current_user: Employee = Depends(get_curren
             "column_name": card.column_name,
             "deadline": str(card.deadline) if card.deadline else None,
             "effective_deadline": _eff_dl_single,
+            "total_pause_days": card.total_pause_days or 0,
             "tags": card.tags,
             "tag_color": card.tag_color,
             "is_approved": card.is_approved,
@@ -934,25 +936,45 @@ async def move_crm_card_to_column(card_id: int, move_request: ColumnMoveRequest,
 
         # === ПРАВИЛО: При возврате из "В ожидании" — пересчитываем дедлайн ===
         if old_column == "В ожидании" and new_column != "В ожидании":
-            # K1: Считаем дни паузы и сдвигаем дедлайн
+            # K1+: Пауза до старта проекта поглощается сдвигом START-даты (замер/ТЗ).
+            # Дедлайн сдвигаем ТОЛЬКО если пауза началась ПОСЛЕ даты начала разработки.
             if card.paused_at:
                 pause_days = _count_business_days(card.paused_at, datetime.utcnow())
                 card.total_pause_days = (card.total_pause_days or 0) + pause_days
-                # Сдвигаем дедлайн карточки
-                if card.deadline:
-                    try:
-                        card.deadline = _add_working_days_to_date(card.deadline, pause_days)
-                    except (ValueError, TypeError):
-                        pass
-                # Сдвигаем дедлайны исполнителей стадий
-                executors = db.query(StageExecutor).filter(StageExecutor.crm_card_id == card_id).all()
-                for ex in executors:
-                    if ex.deadline:
+                # Проверяем: пауза после старта проекта?
+                _should_shift = True
+                try:
+                    _start_entry = (
+                        db.query(ProjectTimelineEntry)
+                        .filter(
+                            ProjectTimelineEntry.contract_id == card.contract_id,
+                            ProjectTimelineEntry.stage_code == "START",
+                        )
+                        .first()
+                    )
+                    if _start_entry and _start_entry.actual_date:
+                        from datetime import date as _date_cls
+
+                        _start_d = _date_cls.fromisoformat(str(_start_entry.actual_date))
+                        _should_shift = card.paused_at.date() >= _start_d
+                except Exception:
+                    pass  # fallback: всегда сдвигаем
+                if _should_shift:
+                    if card.deadline:
                         try:
-                            ex.deadline = _add_working_days_to_date(str(ex.deadline), pause_days)
+                            card.deadline = _add_working_days_to_date(card.deadline, pause_days)
                         except (ValueError, TypeError):
                             pass
-                logger.info(f"K1: CRM card {card_id} resumed, pause_days={pause_days}, total={card.total_pause_days}")
+                    executors = db.query(StageExecutor).filter(StageExecutor.crm_card_id == card_id).all()
+                    for ex in executors:
+                        if ex.deadline:
+                            try:
+                                ex.deadline = _add_working_days_to_date(str(ex.deadline), pause_days)
+                            except (ValueError, TypeError):
+                                pass
+                    logger.info(f"K1: card {card_id} resumed (post-start pause), days={pause_days}, total={card.total_pause_days}")
+                else:
+                    logger.info(f"K1: card {card_id} resumed (pre-start pause, no deadline shift), days={pause_days}")
             card.paused_at = None
             card.previous_column = None
 

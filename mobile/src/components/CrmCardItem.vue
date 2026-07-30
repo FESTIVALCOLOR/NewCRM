@@ -380,8 +380,11 @@ function _deadlineDaysBg(days) {
   return '#F5F5F5'
 }
 
-// Левый блок: Общий дедлайн заказа — из card.deadline или вычисленный из contract_period
+// Левый блок: Общий дедлайн заказа.
+// Приоритет: effective_deadline от сервера (с учётом паузы «В ожидании»),
+// затем deadline из БД, затем вычисленный из START+период.
 const effectiveDeadline = computed(() => {
+  if (props.card.effective_deadline) return props.card.effective_deadline
   if (props.card.deadline) return props.card.deadline
   const period = props.card.contract_period
   if (!period || period <= 0) return null
@@ -401,7 +404,7 @@ const generalDeadlineText = computed(() => {
   if (generalDeadlineDays.value === null) return null
   const d = new Date(effectiveDeadline.value).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit' })
   const days = generalDeadlineDays.value
-  if (days < 0) return `${d} (−${Math.abs(days)}р.д.)`
+  if (days < 0) return d  // просрочено — только дата красным (детали внутри карточки)
   if (days === 0) return `${d} Сегодня!`
   return `${d} (${days}р.д.)`
 })
