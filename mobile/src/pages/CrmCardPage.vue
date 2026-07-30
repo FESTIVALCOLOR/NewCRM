@@ -516,7 +516,7 @@
                     </q-tooltip>
                   </q-icon>
                 </q-item-section>
-                <q-item-section v-if="e.status === 'skipped'" side>
+                <q-item-section v-if="e.status === 'skipped' && !e.actual_date" side>
                   <div class="text-caption" style="color: #999; font-style: italic">
                     Пропущено
                   </div>
@@ -3032,9 +3032,11 @@ async function saveTimelineEntry() {
     if (!isNaN(days) && days >= 0) update.custom_norm_days = days
     const ad = timelineEditActualDate.value
     update.actual_date = ad || null
+    if (entry.status === 'skipped' && ad) update.status = null
     await ax.put(`/api/v1/timeline/${card.value.contract_id}/entry/${encodeURIComponent(entry.stage_code)}`, update)
     if ('custom_norm_days' in update) entry.custom_norm_days = update.custom_norm_days
     entry.actual_date = update.actual_date || null
+    if ('status' in update) entry.status = update.status ?? ''
     timelineEditVisible.value = false
     $q.notify({ type: 'positive', message: 'Сохранено' })
   } catch (err) {
