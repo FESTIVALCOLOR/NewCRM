@@ -2262,25 +2262,19 @@ const hasCustomNormDays = computed(() =>
   ),
 )
 const timelineTotals = computed(() => {
-  let normTotal = 0, actualTotal = 0, overdueTotal = 0, aheadTotal = 0
+  let normTotal = 0, actualTotal = 0
   const contractPeriod = contractData.value?.contract_period || 0
   for (const e of timelineEntries.value) {
     if (e.executor_role === 'header') continue
-    if (e.is_in_contract_scope !== false) {
+    const inScope = e.is_in_contract_scope !== false
+    if (inScope) {
       normTotal += (e.norm_days || 0)
-    }
-    const ad = e.actual_days || 0
-    actualTotal += ad
-    if (ad > 0) {
-      const norm = e.custom_norm_days || e.norm_days || 0
-      if (norm > 0) {
-        const diff = ad - norm
-        if (diff > 0) overdueTotal += diff
-        else if (diff < 0) aheadTotal += -diff
-      }
+      actualTotal += (e.actual_days || 0)
     }
   }
   if (contractPeriod > 0) normTotal = contractPeriod
+  const overdueTotal = actualTotal > normTotal && normTotal > 0 ? actualTotal - normTotal : 0
+  const aheadTotal = normTotal > actualTotal && actualTotal > 0 ? normTotal - actualTotal : 0
   return { normTotal, actualTotal, overdueTotal, aheadTotal }
 })
 const workflowStates = ref([])
