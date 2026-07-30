@@ -367,7 +367,7 @@
                       {{ stage.stage_name }}
                     </div>
                     <div style="color: #aaa; font-size: 10px">
-                      {{ stage.deadline }} → {{ stage.completed_date }}
+                      Факт: {{ stage.actual_date }}
                     </div>
                   </div>
                   <span class="text-weight-bold q-ml-sm" style="color: #E53935; font-size: 13px; flex-shrink: 0">+{{ stage.overdue_days }} дн.</span>

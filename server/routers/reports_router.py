@@ -17,6 +17,7 @@ from database import (
     CRMCard,
     Employee,
     Payment,
+    ProjectTimelineEntry,
     Salary,
     StageExecutor,
     SupervisionCard,
@@ -243,14 +244,14 @@ async def get_employee_overdue_detail(
     project_type: str, period: str, year: int, quarter: Optional[int] = None, month: Optional[int] = None, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """
-    Детальная разбивка просрочек по сотрудникам.
-    Возвращает список сотрудников у которых были просроченные этапы за период,
-    с раскладкой по каждому объекту и подэтапу.
+    Детальная разбивка просрочек по сотрудникам на основе ProjectTimelineEntry.
+    actual_days > norm_days означает реальную просрочку конкретного подэтапа,
+    в отличие от StageExecutor.deadline который постоянно обновляется при workflow-шагах.
     """
     try:
         from collections import defaultdict
 
-        from sqlalchemy import and_, extract
+        from sqlalchemy import and_, case, extract, or_
 
         def build_period_filter(date_col):
             conds = [extract("year", date_col) == year]
@@ -261,7 +262,18 @@ async def get_employee_overdue_detail(
                 conds.append(extract("month", date_col) == month)
             return and_(*conds) if len(conds) > 1 else conds[0]
 
-        overdue_days_col = (cast(StageExecutor.completed_date, Date) - cast(StageExecutor.deadline, Date)).label("overdue_days")
+        # Маппинг stage_name из StageExecutor → stage_group для JOIN с ProjectTimelineEntry
+        se_stage_group = case(
+            (StageExecutor.stage_name.ilike("%стадия 1%"), "STAGE1"),
+            (StageExecutor.stage_name.ilike("%планировочн%"), "STAGE1"),
+            (StageExecutor.stage_name.ilike("%стадия 2%"), "STAGE2"),
+            (StageExecutor.stage_name.ilike("%концепция%"), "STAGE2"),
+            (StageExecutor.stage_name.ilike("%стадия 3%"), "STAGE3"),
+            else_="",
+        )
+
+        effective_norm = func.coalesce(ProjectTimelineEntry.custom_norm_days, ProjectTimelineEntry.norm_days)
+        overdue_days_col = (ProjectTimelineEntry.actual_days - effective_norm).label("overdue_days")
 
         rows = (
             db.query(
@@ -270,23 +282,46 @@ async def get_employee_overdue_detail(
                 Employee.position,
                 Contract.contract_number,
                 Contract.address,
-                StageExecutor.stage_name,
-                StageExecutor.deadline,
-                StageExecutor.completed_date,
+                ProjectTimelineEntry.stage_name.label("substep_name"),
+                ProjectTimelineEntry.stage_group,
+                ProjectTimelineEntry.actual_date,
+                ProjectTimelineEntry.actual_days,
+                effective_norm.label("norm_days"),
                 overdue_days_col,
             )
-            .join(StageExecutor, StageExecutor.executor_id == Employee.id)
-            .join(CRMCard, StageExecutor.crm_card_id == CRMCard.id)
-            .join(Contract, CRMCard.contract_id == Contract.id)
+            .select_from(ProjectTimelineEntry)
+            .join(Contract, Contract.id == ProjectTimelineEntry.contract_id)
+            .join(CRMCard, CRMCard.contract_id == Contract.id)
+            .join(
+                StageExecutor,
+                and_(
+                    StageExecutor.crm_card_id == CRMCard.id,
+                    se_stage_group == ProjectTimelineEntry.stage_group,
+                    StageExecutor.executor_id.isnot(None),
+                ),
+            )
+            .join(
+                Employee,
+                and_(
+                    Employee.id == StageExecutor.executor_id,
+                    or_(
+                        Employee.position == ProjectTimelineEntry.executor_role,
+                        Employee.secondary_position == ProjectTimelineEntry.executor_role,
+                    ),
+                ),
+            )
             .filter(
                 Contract.project_type == project_type,
-                StageExecutor.completed == True,
-                StageExecutor.completed_date.isnot(None),
-                StageExecutor.deadline.isnot(None),
-                cast(StageExecutor.completed_date, Date) > cast(StageExecutor.deadline, Date),
-                build_period_filter(StageExecutor.completed_date),
+                ProjectTimelineEntry.actual_days > 0,
+                ProjectTimelineEntry.actual_days > effective_norm,
+                ProjectTimelineEntry.executor_role != "header",
+                ProjectTimelineEntry.status != "skipped",
+                ProjectTimelineEntry.actual_date.isnot(None),
+                ProjectTimelineEntry.actual_date != "",
+                build_period_filter(cast(ProjectTimelineEntry.actual_date, Date)),
             )
-            .order_by(Employee.full_name, StageExecutor.completed_date)
+            .distinct()
+            .order_by(Employee.full_name, ProjectTimelineEntry.actual_date)
             .all()
         )
 
@@ -301,10 +336,9 @@ async def get_employee_overdue_detail(
                 {
                     "contract_number": row.contract_number or "",
                     "address": (row.address or "")[:80],
-                    "stage_name": row.stage_name or "",
-                    "deadline": str(row.deadline)[:10] if row.deadline else None,
-                    "completed_date": row.completed_date.strftime("%Y-%m-%d") if row.completed_date else None,
-                    "overdue_days": max(0, round(float(row.overdue_days or 0))),
+                    "stage_name": row.substep_name or "",
+                    "actual_date": (row.actual_date or "")[:10],
+                    "overdue_days": max(0, int(row.overdue_days or 0)),
                 }
             )
 
