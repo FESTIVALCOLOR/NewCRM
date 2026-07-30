@@ -1,1 +1,0 @@
-import{_t as e,hn as t}from"./index-DmuFANST.js";function n(){let n=e(),r=t(()=>n.isSuperuser);function i(e){return n.has(e)}function a(...e){return e.some(e=>n.has(e))}return{can:i,canAny:a,isSuperuser:r}}export{n as t};
