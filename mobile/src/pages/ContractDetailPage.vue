@@ -839,7 +839,7 @@
               </div>
               <div v-if="contractPauseDays > 0" class="row items-center justify-between">
                 <div class="text-caption" style="color: #888">
-                  <q-icon name="pause_circle_outline" size="12px" class="q-mr-xs" />Дни ожидания (учтены в дедлайне)
+                  <q-icon name="pause_circle_outline" size="12px" class="q-mr-xs" />Дни приостановки (пока проект был в «В ожидании»)
                 </div>
                 <div class="text-caption text-weight-bold" style="color: #888">
                   +{{ contractPauseDays }} дн.
@@ -1098,10 +1098,12 @@ const timelineTotalInScope = computed(() => {
     .reduce((s, e) => s + (e.custom_norm_days || e.norm_days || 0), 0)
 })
 
-const timelineTotalAll = computed(() =>
-  timeline.value.filter(isTimelineEntry)
-    .reduce((s, e) => s + (e.custom_norm_days || e.norm_days || 0), 0),
-)
+const timelineTotalAll = computed(() => {
+  // contract_period + сумма norm_days вне объёма (единая база с timelineTotalInScope)
+  const outScope = timeline.value.filter(e => isTimelineEntry(e) && e.is_in_contract_scope === false)
+    .reduce((s, e) => s + (e.custom_norm_days || e.norm_days || 0), 0)
+  return timelineTotalInScope.value + outScope
+})
 
 const timelineActualTotal = computed(() =>
   // Факт = все actual_days (in-scope + вне объёма) — реальное время проекта
@@ -1109,15 +1111,34 @@ const timelineActualTotal = computed(() =>
 )
 
 const timelineOverdueTotal = computed(() => {
-  const act = timelineActualTotal.value
-  const norm = timelineTotalInScope.value
-  return act > norm && norm > 0 ? act - norm : 0
+  // Та же формула что в дедлайн popup CrmCardPage (per-stage in-scope, единая система)
+  let ov = 0, ah = 0
+  for (const e of timeline.value) {
+    if (!isTimelineEntry(e)) continue
+    if (e.is_in_contract_scope === false) continue
+    const ad = e.actual_days || 0
+    const norm = e.custom_norm_days || e.norm_days || 0
+    if (ad > 0 && norm > 0) {
+      const d = ad - norm
+      if (d > 0) ov += d; else if (d < 0) ah += -d
+    }
+  }
+  return Math.max(0, ov - ah)
 })
 
 const timelineAheadTotal = computed(() => {
-  const act = timelineActualTotal.value
-  const norm = timelineTotalInScope.value
-  return norm > act && act > 0 ? norm - act : 0
+  let ov = 0, ah = 0
+  for (const e of timeline.value) {
+    if (!isTimelineEntry(e)) continue
+    if (e.is_in_contract_scope === false) continue
+    const ad = e.actual_days || 0
+    const norm = e.custom_norm_days || e.norm_days || 0
+    if (ad > 0 && norm > 0) {
+      const d = ad - norm
+      if (d > 0) ov += d; else if (d < 0) ah += -d
+    }
+  }
+  return Math.max(0, ah - ov)
 })
 
 const contractPauseDays = computed(() => contract.value?.crm_card_total_pause_days || 0)

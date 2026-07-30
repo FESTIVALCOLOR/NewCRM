@@ -551,7 +551,7 @@
               </div>
               <div v-if="card.total_pause_days > 0" class="row items-center justify-between q-mt-xs">
                 <span class="text-caption" style="color: #888">
-                  <q-icon name="pause_circle_outline" size="12px" class="q-mr-xs" />Дни ожидания (учтены в дедлайне)
+                  <q-icon name="pause_circle_outline" size="12px" class="q-mr-xs" />Дни приостановки (пока проект был в «В ожидании»)
                 </span>
                 <span class="text-caption text-weight-bold" style="color: #888">+{{ card.total_pause_days }} дн.</span>
               </div>
@@ -2267,12 +2267,13 @@ const timelineTotals = computed(() => {
   for (const e of timelineEntries.value) {
     if (e.executor_role === 'header') continue
     if (e.is_in_contract_scope !== false) normFallback += (e.norm_days || 0)
-    // Факт = все actual_days (in-scope + вне объёма) — реальное время проекта
     actualTotal += (e.actual_days || 0)
   }
   const normTotal = contractPeriod > 0 ? contractPeriod : normFallback
-  const overdueTotal = actualTotal > normTotal && normTotal > 0 ? actualTotal - normTotal : 0
-  const aheadTotal = normTotal > actualTotal && actualTotal > 0 ? normTotal - actualTotal : 0
+  // Просрочка = та же формула что в popup (per-stage in-scope) — единая система
+  const netDiff = netDeadlineDiff.value
+  const overdueTotal = Math.max(0, netDiff)
+  const aheadTotal = Math.max(0, -netDiff)
   return { normTotal, actualTotal, overdueTotal, aheadTotal }
 })
 const workflowStates = ref([])
