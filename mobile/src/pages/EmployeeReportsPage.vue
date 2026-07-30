@@ -118,7 +118,7 @@
             Рейтинг эффективности
           </div>
           <div class="text-caption q-mb-sm" style="color: #888">
-            60% KPI выполнения · 40% пунктуальность (просрочки)
+            KPI · Объём · Пунктуальность{{ roleRating.some(e => e.clientScore !== null) ? ' · Оценка клиента' : '' }}
           </div>
           <div
             v-for="(emp, idx) in roleRating"
@@ -138,15 +138,18 @@
               <div class="text-weight-medium" style="font-size: 13px; color: #333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">
                 {{ emp.name.split(' ').slice(0, 2).join(' ') }}
               </div>
-              <div class="row q-gutter-xs q-mt-xs" style="flex-wrap: nowrap">
+              <div class="row q-gutter-xs q-mt-xs" style="flex-wrap: wrap; gap: 2px 6px">
                 <div style="font-size: 10px; color: #27AE60">
                   KPI {{ emp.kpi }}%
                 </div>
-                <div style="font-size: 10px; color: #888">
-                  ·
+                <div style="font-size: 10px; color: #2196F3">
+                  Объём {{ emp.volume }}%
                 </div>
                 <div style="font-size: 10px" :style="{ color: emp.punctuality >= 80 ? '#27AE60' : emp.punctuality >= 50 ? '#F5A623' : '#E53935' }">
                   Пункт. {{ emp.punctuality }}%
+                </div>
+                <div v-if="emp.clientScore !== null" style="font-size: 10px; color: #9C27B0">
+                  Клиент {{ emp.clientScore }}%
                 </div>
               </div>
             </div>
@@ -461,19 +464,50 @@ const dashboardKpi = computed(() => {
   ]
 })
 
-// Рейтинг сотрудников по роли: 60% KPI + 40% пунктуальность
+// Рейтинг сотрудников по роли: KPI + объём + пунктуальность + оценка клиента
 const roleRating = computed(() => {
-  return roleEmployees.value
+  const emps = roleEmployees.value
+  if (!emps.length) return []
+  const maxCompleted = Math.max(1, ...emps.map(e => e.completed_stages || e.completed || 0))
+  return emps
     .map(emp => {
       const name = emp.full_name || emp.name || ''
       const kpi = emp.completion_rate || 0
-      const completed = Math.max(1, emp.completed_stages || emp.completed || 0)
+      const completed = emp.completed_stages || emp.completed || 0
+      const total = emp.total_stages || emp.total || 0
+
+      // Объём: нормализован внутри роли (0-100)
+      const volume = maxCompleted > 0 ? (completed / maxCompleted * 100) : 0
+
+      // Пунктуальность: штраф за просрочки
       const ovd = overdueByName.value[name]
       const overdueDays = ovd ? ovd.total_overdue_days : 0
-      const avgOverduePerStage = overdueDays / completed
+      const avgOverduePerStage = overdueDays / Math.max(1, completed)
       const punctuality = Math.max(0, 1 - avgOverduePerStage / 10) * 100
-      const score = Math.round(kpi * 0.6 + punctuality * 0.4)
-      return { name, position: emp.position, kpi: Math.round(kpi), punctuality: Math.round(punctuality), score, overdueDays, completed, _emp: emp }
+
+      // Оценка клиента: NPS (0-10→0-100), остальные (1-5→0-100)
+      const rawScores = []
+      if (emp.avg_nps != null) rawScores.push(emp.avg_nps * 10)
+      if (emp.avg_csat != null) rawScores.push((emp.avg_csat - 1) / 4 * 100)
+      if (emp.avg_design != null) rawScores.push((emp.avg_design - 1) / 4 * 100)
+      if (emp.avg_deadline != null) rawScores.push((emp.avg_deadline - 1) / 4 * 100)
+      if (emp.avg_communication != null) rawScores.push((emp.avg_communication - 1) / 4 * 100)
+      if (emp.avg_expectations != null) rawScores.push((emp.avg_expectations - 1) / 4 * 100)
+      const clientScore = rawScores.length > 0
+        ? rawScores.reduce((a, b) => a + b, 0) / rawScores.length
+        : null
+
+      const score = clientScore !== null
+        ? Math.round(kpi * 0.40 + volume * 0.20 + punctuality * 0.25 + clientScore * 0.15)
+        : Math.round(kpi * 0.50 + volume * 0.25 + punctuality * 0.25)
+
+      return {
+        name, position: emp.position,
+        kpi: Math.round(kpi), volume: Math.round(volume),
+        punctuality: Math.round(punctuality),
+        clientScore: clientScore !== null ? Math.round(clientScore) : null,
+        score, overdueDays, completed, total, _emp: emp,
+      }
     })
     .sort((a, b) => b.score - a.score)
 })
