@@ -162,6 +162,27 @@
         </q-card-section>
       </q-card>
 
+      <!-- График пунктуальности по роли -->
+      <q-card v-if="roleEmployees.length > 0" class="is-card q-mb-md">
+        <q-card-section>
+          <div class="text-subtitle2 text-weight-bold q-mb-xs" style="color: #333">
+            Пунктуальность по роли
+          </div>
+          <div class="text-caption q-mb-sm" style="color: #888">
+            Суммарные дни просрочки по сотруднику за выбранный период
+          </div>
+          <div v-if="roleOverdueChartData.labels.length === 0" class="text-caption text-center q-pa-sm" style="color: #27AE60">
+            Все сотрудники сдавали этапы в срок
+          </div>
+          <bar-chart
+            v-else
+            :labels="roleOverdueChartData.labels"
+            :datasets="[{ label: 'Дней просрочки', data: roleOverdueChartData.data, color: '#E53935' }]"
+            horizontal
+          />
+        </q-card-section>
+      </q-card>
+
       <!-- Опросы клиентов — KPI качества -->
       <q-card v-if="surveyStats" class="is-card q-mb-md">
         <q-card-section class="q-pb-none">
@@ -306,7 +327,87 @@
               </div>
             </div>
           </div>
+
+          <!-- Просрочки этапов -->
+          <div
+            v-if="overdueByName[selectedEmp.full_name || selectedEmp.name]"
+            class="q-mt-md"
+          >
+            <div class="text-caption q-mb-xs" style="color: #666; font-weight: 600; font-size: 11px">
+              Просрочки этапов за период
+            </div>
+            <div
+              class="row items-center justify-between q-pa-sm rounded-borders cursor-pointer"
+              style="background: #FFEBEE; border-radius: 8px"
+              @click="overdueDetailEmp = overdueByName[selectedEmp.full_name || selectedEmp.name]"
+            >
+              <div>
+                <div class="text-weight-bold" style="color: #E53935; font-size: 15px">
+                  {{ overdueByName[selectedEmp.full_name || selectedEmp.name].total_overdue_days }} дн. просрочки
+                </div>
+                <div class="text-caption" style="color: #C07070">
+                  {{ overdueByName[selectedEmp.full_name || selectedEmp.name].total_overdue_count }} этапов сданы с опозданием
+                </div>
+              </div>
+              <q-icon name="chevron_right" color="red-3" size="20px" />
+            </div>
+          </div>
+          <div v-else class="q-mt-md">
+            <div class="text-caption q-mb-xs" style="color: #666; font-weight: 600; font-size: 11px">
+              Просрочки этапов за период
+            </div>
+            <div class="text-caption q-pa-sm rounded-borders" style="background: #E8F5E9; color: #27AE60; border-radius: 8px">
+              Все этапы сданы в срок
+            </div>
+          </div>
         </q-card-section>
+      </q-card>
+    </q-dialog>
+
+    <!-- Sub-dialog: разбивка просрочек по объектам -->
+    <q-dialog v-model="overdueDetailDialog" position="bottom">
+      <q-card v-if="overdueDetailEmp" style="width: 100%; max-width: 600px; max-height: 70vh; border-radius: 16px 16px 0 0; display: flex; flex-direction: column">
+        <q-card-section class="q-pb-xs" style="flex-shrink: 0">
+          <div class="row items-center">
+            <div>
+              <div class="text-subtitle2 text-weight-bold" style="color: #333">
+                Просрочки: {{ overdueDetailEmp.employee_name }}
+              </div>
+              <div class="text-caption" style="color: #888">
+                {{ overdueDetailEmp.total_overdue_count }} этапов · суммарно {{ overdueDetailEmp.total_overdue_days }} дн.
+              </div>
+            </div>
+            <q-space />
+            <q-btn flat round icon="close" @click="overdueDetailEmp = null" />
+          </div>
+        </q-card-section>
+        <q-separator />
+        <q-scroll-area style="flex: 1; min-height: 0">
+          <q-list separator>
+            <q-item
+              v-for="(stage, idx) in overdueDetailEmp.stages"
+              :key="idx"
+            >
+              <q-item-section>
+                <q-item-label class="text-weight-medium" style="color: #333; font-size: 13px">
+                  {{ stage.contract_number }}
+                  <span v-if="stage.address" style="color: #888; font-weight: 400">· {{ stage.address }}</span>
+                </q-item-label>
+                <q-item-label caption style="color: #666">
+                  {{ stage.stage_name }}
+                </q-item-label>
+                <q-item-label caption style="color: #aaa; font-size: 10px">
+                  Дедлайн: {{ stage.deadline || '—' }} → Сдано: {{ stage.completed_date || '—' }}
+                </q-item-label>
+              </q-item-section>
+              <q-item-section side>
+                <span class="text-weight-bold" style="color: #E53935; font-size: 14px">
+                  +{{ stage.overdue_days }} дн.
+                </span>
+              </q-item-section>
+            </q-item>
+          </q-list>
+        </q-scroll-area>
       </q-card>
     </q-dialog>
   </q-page>
@@ -314,7 +415,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
-import { statisticsApi, surveyApi } from 'src/services/api'
+import { statisticsApi, surveyApi, reportsApi } from 'src/services/api'
 import BarChart from 'src/components/charts/BarChart.vue'
 
 const currentYear = new Date().getFullYear()
@@ -328,9 +429,15 @@ const loading = ref(false)
 const pdfLoading = ref(false)
 const surveyStats = ref(null)
 const selectedEmp = ref(null)
+const overdueList = ref([])        // [{employee_name, total_overdue_count, total_overdue_days, stages:[]}]
+const overdueDetailEmp = ref(null) // сотрудник для sub-dialog с разбивкой
 const empDialog = computed({
   get: () => !!selectedEmp.value,
   set: (v) => { if (!v) selectedEmp.value = null },
+})
+const overdueDetailDialog = computed({
+  get: () => !!overdueDetailEmp.value,
+  set: (v) => { if (!v) overdueDetailEmp.value = null },
 })
 
 const years = Array.from({ length: 7 }, (_, i) => currentYear - i)
@@ -344,6 +451,13 @@ const ROLE_TABS = {
 }
 
 const roleTabs = computed(() => ROLE_TABS[projectTab.value] || ROLE_TABS.individual)
+
+// Быстрый lookup просрочек по имени сотрудника
+const overdueByName = computed(() => {
+  const m = {}
+  for (const o of overdueList.value) m[o.employee_name] = o
+  return m
+})
 
 const dashboardKpi = computed(() => {
   const d = dashboard.value || {}
@@ -361,6 +475,19 @@ const dashboardKpi = computed(() => {
   ]
 })
 
+// Данные для графика пунктуальности: сотрудники текущей роли у которых были просрочки
+const roleOverdueChartData = computed(() => {
+  const emps = roleEmployees.value
+  const items = emps
+    .map(e => {
+      const ovd = overdueByName.value[e.full_name || e.name]
+      return { name: (e.full_name || e.name || '').split(' ').slice(0, 2).join(' '), days: ovd ? ovd.total_overdue_days : 0 }
+    })
+    .filter(x => x.days > 0)
+    .sort((a, b) => b.days - a.days)
+  return { labels: items.map(x => x.name), data: items.map(x => x.days) }
+})
+
 async function loadData() {
   loading.value = true
   const params = { year: filters.value.year }
@@ -370,16 +497,20 @@ async function loadData() {
   const pt = projectTab.value === 'template' ? 'Шаблонный' : projectTab.value === 'supervision' ? 'Авторский надзор' : 'Индивидуальный'
   const PT_ENG = { 'Индивидуальный': 'individual', 'Шаблонный': 'template', 'Авторский надзор': 'supervision' }
 
-  const [dashR, empR, projR, survR] = await Promise.allSettled([
+  const periodLabel = filters.value.quarter ? 'За квартал' : filters.value.month ? 'За месяц' : 'За год'
+
+  const [dashR, empR, projR, survR, ovdR] = await Promise.allSettled([
     statisticsApi.getDashboard({ ...params, project_type: projectTab.value }),
     statisticsApi.getEmployees({ ...params, project_type: projectTab.value }),
     statisticsApi.getProjects({ ...params, project_type: pt }),
     surveyApi.getStats({ project_type: PT_ENG[pt] || 'individual' }),
+    reportsApi.getEmployeeOverdue({ ...params, project_type: pt, period: periodLabel }),
   ])
 
   if (dashR.status === 'fulfilled') dashboard.value = dashR.value.data
   if (survR.status === 'fulfilled') surveyStats.value = survR.value.data || null
   else surveyStats.value = null
+  overdueList.value = ovdR.status === 'fulfilled' && Array.isArray(ovdR.value.data) ? ovdR.value.data : []
 
   // Сотрудники — фильтрация по roleTab
   if (empR.status === 'fulfilled' && Array.isArray(empR.value.data)) {

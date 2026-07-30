@@ -385,6 +385,9 @@ export const reportsApi = {
 
   getDistribution: (params = {}) =>
     api.get('/api/v1/dashboard/reports/distribution', { params }),
+
+  getEmployeeOverdue: (params = {}) =>
+    api.get('/api/v1/reports/employee-overdue', { params }),
 }
 
 // === Supervision ===
