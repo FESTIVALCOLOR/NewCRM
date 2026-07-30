@@ -821,11 +821,21 @@
                   {{ timelineActualTotal }} дн.
                 </div>
               </div>
-              <div v-if="timelineOverdueTotal > 0" class="row items-center justify-between q-mb-xs">
-                <div class="text-caption" style="color: #E53935">
+              <!-- Фактическая просрочка по дате — PRIMARY -->
+              <div v-if="timelineCalendarOverdue > 0" class="row items-center justify-between q-mb-xs">
+                <div class="text-caption text-weight-bold" style="color: #E53935">
                   Просрочка
                 </div>
-                <div class="text-caption text-weight-bold" style="color: #E53935">
+                <div class="text-weight-bold" style="color: #E53935; font-size: 13px">
+                  {{ timelineCalendarOverdue }} р.д.
+                </div>
+              </div>
+              <!-- Отклонение по этапам — SECONDARY -->
+              <div v-if="timelineOverdueTotal > 0" class="row items-center justify-between q-mb-xs">
+                <div class="text-caption" style="color: #C07070">
+                  откл. по этапам
+                </div>
+                <div class="text-caption" style="color: #C07070">
                   +{{ timelineOverdueTotal }} дн.
                 </div>
               </div>
@@ -954,6 +964,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { addWorkingDays, countWorkingDaysUntil } from 'src/composables/useDeadline'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { contractsApi, filesApi, crmApi, clientsApi, timelineApi, surveyApi } from 'src/services/api'
@@ -1142,6 +1153,21 @@ const timelineAheadTotal = computed(() => {
 })
 
 const contractPauseDays = computed(() => contract.value?.crm_card_total_pause_days || 0)
+
+const contractStartDate = computed(() =>
+  timeline.value.find(e => e.stage_code === 'START')?.actual_date || null,
+)
+const contractDeadline = computed(() => {
+  if (!contractStartDate.value) return null
+  const period = contract.value?.contract_period
+  if (!period || period <= 0) return null
+  return addWorkingDays(contractStartDate.value, period)
+})
+const timelineCalendarOverdue = computed(() => {
+  if (!contractDeadline.value) return 0
+  const d = countWorkingDaysUntil(contractDeadline.value)
+  return d < 0 ? Math.abs(d) : 0
+})
 
 async function exportTimelineExcel() {
   const { utils, writeFile } = await import('xlsx')

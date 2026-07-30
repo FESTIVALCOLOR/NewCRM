@@ -541,13 +541,22 @@
                   <span v-if="timelineTotals.actualTotal > 0"> | Факт: {{ timelineTotals.actualTotal }} дн.</span>
                 </span>
               </div>
-              <div v-if="timelineTotals.overdueTotal > 0 || timelineTotals.aheadTotal > 0" class="row items-center justify-end q-mt-xs" style="gap: 8px">
-                <span v-if="timelineTotals.overdueTotal > 0" class="text-caption text-weight-bold" style="color: #E53935">
-                  Просрочка: +{{ timelineTotals.overdueTotal }} дн.
-                </span>
-                <span v-if="timelineTotals.aheadTotal > 0" class="text-caption text-weight-bold" style="color: #27AE60">
-                  Раньше срока: -{{ timelineTotals.aheadTotal }} дн.
-                </span>
+              <div v-if="calendarOverdueDays > 0 || timelineTotals.overdueTotal > 0 || timelineTotals.aheadTotal > 0" class="q-mt-xs">
+                <!-- Фактическая просрочка по дате — PRIMARY -->
+                <div v-if="calendarOverdueDays > 0" class="row items-center justify-end">
+                  <span class="text-caption text-weight-bold" style="color: #E53935; font-size: 13px">
+                    Просрочка: {{ calendarOverdueDays }} р.д.
+                  </span>
+                </div>
+                <!-- Отклонение по этапам — SECONDARY -->
+                <div class="row items-center justify-end q-mt-xs" style="gap: 8px">
+                  <span v-if="timelineTotals.overdueTotal > 0" class="text-caption" style="color: #C07070">
+                    откл. по этапам: +{{ timelineTotals.overdueTotal }} дн.
+                  </span>
+                  <span v-if="timelineTotals.aheadTotal > 0" class="text-caption text-weight-bold" style="color: #27AE60">
+                    раньше срока: -{{ timelineTotals.aheadTotal }} дн.
+                  </span>
+                </div>
               </div>
               <div v-if="card.total_pause_days > 0" class="row items-center justify-between q-mt-xs">
                 <span class="text-caption" style="color: #888">
@@ -2025,19 +2034,25 @@
           </q-card-section>
           <q-separator />
           <q-card-section class="q-pt-sm q-pb-md">
-            <!-- Нетто итог (общий результат) -->
+            <!-- Фактическая просрочка по дате — PRIMARY -->
             <div
-              class="q-mb-sm q-pa-sm rounded-borders text-body2 text-weight-bold"
-              :style="{ background: netDeadlineDiff > 0 ? '#FFEBEE' : netDeadlineDiff < 0 ? '#E8F5E9' : '#F5F5F5', color: netDeadlineDiff > 0 ? '#E53935' : netDeadlineDiff < 0 ? '#27AE60' : '#555' }"
+              class="q-mb-xs q-pa-sm rounded-borders text-body2 text-weight-bold"
+              :style="{ background: calendarOverdueDays > 0 ? '#FFEBEE' : '#E8F5E9', color: calendarOverdueDays > 0 ? '#E53935' : '#27AE60' }"
             >
-              <template v-if="netDeadlineDiff > 0">
-                Итого просрочка: +{{ netDeadlineDiff }} дн.
-              </template>
-              <template v-else-if="netDeadlineDiff < 0">
-                Итого раньше срока: {{ -netDeadlineDiff }} дн.
+              <template v-if="calendarOverdueDays > 0">
+                Просрочка: {{ calendarOverdueDays }} р.д. с дедлайна
               </template>
               <template v-else>
                 В срок
+              </template>
+            </div>
+            <!-- Отклонение по этапам — SECONDARY -->
+            <div v-if="netDeadlineDiff !== 0" class="q-mb-sm" style="font-size: 12px; color: #999; padding-left: 4px">
+              <template v-if="netDeadlineDiff > 0">
+                Откл. по этапам: +{{ netDeadlineDiff }} дн.
+              </template>
+              <template v-else>
+                Опережение по этапам: {{ Math.abs(netDeadlineDiff) }} дн.
               </template>
             </div>
             <div v-if="card.total_pause_days > 0" class="text-caption q-mb-sm" style="color: #888">
@@ -2138,7 +2153,7 @@ import { useAuthStore } from 'src/stores/auth'
 import { useReferencesStore } from 'src/stores/references'
 import { useChatUnreadStore } from 'src/stores/chatUnread'
 import { usePermission } from 'src/composables/usePermission'
-import { addWorkingDays, calcDeadlineFromTimeline } from 'src/composables/useDeadline'
+import { addWorkingDays, calcDeadlineFromTimeline, countWorkingDaysUntil } from 'src/composables/useDeadline'
 import { crmApi, employeesApi, filesApi, contractsApi, paymentsApi, locksApi, messengerApi } from 'src/services/api'
 import MeasurementDialog from 'src/components/MeasurementDialog.vue'
 import InlineChatRoom from 'src/components/InlineChatRoom.vue'
@@ -2753,6 +2768,12 @@ const effectiveDeadline = computed(() => {
   const period = contractData.value?.contract_period || card.value?.contract_period
   if (!period || period <= 0) return null
   return addWorkingDays(startDate, period)
+})
+// Фактическая просрочка: рабочие дни с дедлайна до сегодня (PRIMARY для отображения)
+const calendarOverdueDays = computed(() => {
+  if (!effectiveDeadline.value) return 0
+  const d = countWorkingDaysUntil(effectiveDeadline.value)
+  return d < 0 ? Math.abs(d) : 0
 })
 // Просрочки по завершённым подэтапам (как в desktop _recalculate_days deviation_reasons)
 // Этапы вне объёма договора (is_in_contract_scope=false) исключаются из расчёта просрочки

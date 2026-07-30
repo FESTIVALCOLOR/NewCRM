@@ -404,7 +404,7 @@ const generalDeadlineText = computed(() => {
   if (generalDeadlineDays.value === null) return null
   const d = new Date(effectiveDeadline.value).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit' })
   const days = generalDeadlineDays.value
-  if (days < 0) return d  // просрочено — только дата красным (детали внутри карточки)
+  if (days < 0) return `${d} (−${Math.abs(days)}р.д.)`
   if (days === 0) return `${d} Сегодня!`
   return `${d} (${days}р.д.)`
 })
