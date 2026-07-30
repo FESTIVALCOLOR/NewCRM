@@ -871,12 +871,20 @@
                   -{{ timelineAheadTotal }} дн.
                 </div>
               </div>
-              <div v-if="contractPauseDays > 0" class="row items-center justify-between">
+              <div v-if="contractPauseInfo.postStart > 0" class="row items-center justify-between">
                 <div class="text-caption" style="color: #888">
-                  <q-icon name="pause_circle_outline" size="12px" class="q-mr-xs" />Дни приостановки (пока проект был в «В ожидании»)
+                  <q-icon name="pause_circle_outline" size="12px" class="q-mr-xs" />Дни ожидания (добавлены к дедлайну)
                 </div>
                 <div class="text-caption text-weight-bold" style="color: #888">
-                  +{{ contractPauseDays }} дн.
+                  +{{ contractPauseInfo.postStart }} дн.
+                </div>
+              </div>
+              <div v-if="contractPauseInfo.preStart > 0" class="row items-center justify-between">
+                <div class="text-caption" style="color: #888">
+                  <q-icon name="pause_circle_outline" size="12px" class="q-mr-xs" />Дни ожидания (до начала разработки)
+                </div>
+                <div class="text-caption text-weight-bold" style="color: #888">
+                  +{{ contractPauseInfo.preStart }} дн.
                 </div>
               </div>
             </q-card-section>
@@ -1188,6 +1196,19 @@ const timelineAheadTotal = computed(() => {
 })
 
 const contractPauseDays = computed(() => contract.value?.crm_card_total_pause_days || 0)
+const contractPauseInfo = computed(() => {
+  const totalPause = contractPauseDays.value
+  if (!totalPause) return { preStart: 0, postStart: 0 }
+  if (!contractStartDate.value) return { preStart: totalPause, postStart: 0 }
+  const period = contract.value?.contract_period
+  if (!period || period <= 0) return { preStart: totalPause, postStart: 0 }
+  const pureDeadline = addWorkingDays(contractStartDate.value, period)
+  const storedDeadline = contract.value?.crm_card_deadline
+  if (!storedDeadline || storedDeadline === pureDeadline) return { preStart: totalPause, postStart: 0 }
+  const postStart = Math.max(0, countWorkingDaysBetween(pureDeadline, storedDeadline))
+  const preStart = Math.max(0, totalPause - postStart)
+  return { preStart, postStart }
+})
 
 const contractStartDate = computed(() =>
   timeline.value.find(e => e.stage_code === 'START')?.actual_date || null,

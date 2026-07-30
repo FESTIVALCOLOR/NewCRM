@@ -1,0 +1,1 @@
+import{ht as e,pn as t}from"./index-D-hNsLVu.js";function n(){let n=e(),r=t(()=>n.isSuperuser);function i(e){return n.has(e)}function a(...e){return e.some(e=>n.has(e))}return{can:i,canAny:a,isSuperuser:r}}export{n as t};

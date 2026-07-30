@@ -558,13 +558,19 @@
                   </span>
                 </div>
               </div>
-              <div v-if="card.total_pause_days > 0" class="row items-center justify-between q-mt-xs">
+              <div v-if="pauseInfo.postStart > 0" class="row items-center justify-between q-mt-xs">
                 <span class="text-caption" style="color: #888">
                   <q-icon name="pause_circle_outline" size="12px" class="q-mr-xs" />
-                  <template v-if="pauseAddedToDeadline">Дни ожидания (добавлены к дедлайну)</template>
-                  <template v-else>Дни ожидания (до начала разработки)</template>
+                  Дни ожидания (добавлены к дедлайну)
                 </span>
-                <span class="text-caption text-weight-bold" style="color: #888">+{{ card.total_pause_days }} дн.</span>
+                <span class="text-caption text-weight-bold" style="color: #888">+{{ pauseInfo.postStart }} дн.</span>
+              </div>
+              <div v-if="pauseInfo.preStart > 0" class="row items-center justify-between q-mt-xs">
+                <span class="text-caption" style="color: #888">
+                  <q-icon name="pause_circle_outline" size="12px" class="q-mr-xs" />
+                  Дни ожидания (до начала разработки)
+                </span>
+                <span class="text-caption text-weight-bold" style="color: #888">+{{ pauseInfo.preStart }} дн.</span>
               </div>
               <div v-if="hasCustomNormDays" style="color: #E53935; font-size: 11px; margin-top: 4px">
                 ⚠ Норма-дни изменены. Требуется учёт в расчёте последующих стадий.
@@ -2063,15 +2069,13 @@
                 Опережение по этапам: {{ Math.abs(netDeadlineDiff) }} дн.
               </template>
             </div>
-            <div v-if="card.total_pause_days > 0" class="text-caption q-mb-sm" style="color: #888">
+            <div v-if="pauseInfo.postStart > 0" class="text-caption q-mb-xs" style="color: #888">
               <q-icon name="pause_circle" size="12px" class="q-mr-xs" />
-              <template v-if="pauseAddedToDeadline">
-                Дни ожидания (добавлены к дедлайну)
-              </template>
-              <template v-else>
-                Дни ожидания (до начала разработки)
-              </template>
-              : {{ card.total_pause_days }} дн.
+              Дни ожидания (добавлены к дедлайну): {{ pauseInfo.postStart }} дн.
+            </div>
+            <div v-if="pauseInfo.preStart > 0" class="text-caption q-mb-sm" style="color: #888">
+              <q-icon name="pause_circle" size="12px" class="q-mr-xs" />
+              Дни ожидания (до начала разработки): {{ pauseInfo.preStart }} дн.
             </div>
             <q-separator v-if="deadlineDeviations.length || aheadDeviations.length" class="q-mb-sm" />
             <template v-if="deadlineDeviations.length">
@@ -2783,16 +2787,24 @@ const projectStartDate = computed(() =>
 const isProjectClosed = computed(() =>
   card.value?.column_name === 'Выполненный проект' || !!card.value?.is_archived,
 )
-// Определяем, сдвигала ли пауза дедлайн (только пост-стартовые паузы смещают дедлайн).
-// Сравниваем effective_deadline от сервера с чистым расчётом START+период.
-// Если разные — значит, сервер зафиксировал сдвиг из-за паузы после старта.
-const pauseAddedToDeadline = computed(() => {
-  if (!card.value?.total_pause_days || !projectStartDate.value) return false
+// Разбиваем total_pause_days на до-стартовые и пост-стартовые.
+// postStart = рабочие дни на которые сдвинулся effective_deadline vs чистый START+период.
+// preStart = остаток (были до начала разработки и не сдвигают дедлайн).
+// Используем card.deadline (не effective_deadline) — оба поля обновляются синхронно при resume.
+// effective_deadline включает текущую активную паузу, а total_pause_days — нет.
+// Сравниваем stored deadline vs чистый START+период чтобы получить накопленные пост-старт паузы.
+const pauseInfo = computed(() => {
+  const totalPause = card.value?.total_pause_days || 0
+  if (!totalPause) return { preStart: 0, postStart: 0 }
+  if (!projectStartDate.value) return { preStart: totalPause, postStart: 0 }
   const period = contractData.value?.contract_period || card.value?.contract_period
-  if (!period) return false
+  if (!period) return { preStart: totalPause, postStart: 0 }
   const pureDeadline = addWorkingDays(projectStartDate.value, period)
-  const serverDeadline = card.value?.effective_deadline || card.value?.deadline
-  return !!serverDeadline && serverDeadline !== pureDeadline
+  const storedDeadline = card.value?.deadline
+  if (!storedDeadline || storedDeadline === pureDeadline) return { preStart: totalPause, postStart: 0 }
+  const postStart = Math.max(0, countWorkingDaysBetween(pureDeadline, storedDeadline))
+  const preStart = Math.max(0, totalPause - postStart)
+  return { preStart, postStart }
 })
 // Дата фактического закрытия = последняя actual_date в таймлайне (для закрытых проектов)
 const closureDate = computed(() => {

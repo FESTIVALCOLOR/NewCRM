@@ -87,10 +87,11 @@ async def get_contract(contract_id: int, current_user: Employee = Depends(get_cu
     contract = db.query(Contract).filter(Contract.id == contract_id).first()
     if not contract:
         raise HTTPException(status_code=404, detail="Договор не найден")
-    # Обогащаем ответ данными CRM карточки (total_pause_days)
+    # Обогащаем ответ данными CRM карточки (total_pause_days + deadline для определения пост-старт пауз)
     crm_card = db.query(CRMCard).filter(CRMCard.contract_id == contract_id).order_by(CRMCard.id.desc()).first()
     data = ContractResponse.model_validate(contract).model_dump()
     data["crm_card_total_pause_days"] = crm_card.total_pause_days if crm_card else 0
+    data["crm_card_deadline"] = str(crm_card.deadline) if crm_card and crm_card.deadline else None
     return data
 
 
