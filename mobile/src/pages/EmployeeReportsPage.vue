@@ -163,7 +163,7 @@
       </q-card>
 
       <!-- Рейтинг по роли -->
-      <q-card v-if="roleRating.length > 1" class="is-card q-mb-md">
+      <q-card v-if="roleRating.length > 0" class="is-card q-mb-md">
         <q-card-section class="q-pb-xs">
           <div class="text-subtitle2 text-weight-bold" style="color: #333">
             Рейтинг эффективности
