@@ -782,7 +782,7 @@ class ProjectTimelineWidget(QWidget):
                 has_date = bool(entry.get("actual_date"))
                 # Зелёная рамка для текущего активного подэтапа (без фона)
                 _active_border = is_current_step and not has_date
-                if entry_status == "skipped":
+                if entry_status == "skipped" and not has_date:
                     row_bg = "#F5F5F5"
                     status_text = "Пропущен"
                     _active_border = False
@@ -891,7 +891,7 @@ class ProjectTimelineWidget(QWidget):
                         "edit", tooltip="Редактировать дату", bg_color="transparent", hover_color="#E3F2FD", icon_size=14, button_size=22, icon_color="#666666"
                     )
                     # Блокировка редактирования для выполненных/просроченных/пропущенных/вне объёма строк
-                    if status_text in ("В срок", "Просрочен", "Пропущен", "Вне объёма"):
+                    if status_text in ("В срок", "Просрочен", "Вне объёма"):
                         pencil_btn.setEnabled(False)
                         pencil_btn.setToolTip(f"Редактирование заблокировано (статус: {status_text})")
                     else:
@@ -1122,9 +1122,13 @@ class ProjectTimelineWidget(QWidget):
             old_date = self.entries[entry_idx].get("actual_date", "") or ""
             stage_name = self.entries[entry_idx].get("stage_name", "") or stage_code
 
-        # Обновляем запись
+        # Обновляем запись; если этап был помечен "skipped" — снимаем этот статус
+        was_skipped = False
         if entry_idx < len(self.entries):
             self.entries[entry_idx]["actual_date"] = date_str
+            if self.entries[entry_idx].get("status") == "skipped" and date_str:
+                self.entries[entry_idx]["status"] = ""
+                was_skipped = True
 
         # Пересчёт actual_days
         self._recalculate_days()
@@ -1132,7 +1136,10 @@ class ProjectTimelineWidget(QWidget):
         # Сохранение на сервер
         if self.contract_id and stage_code:
             try:
-                self.data.update_timeline_entry(self.contract_id, stage_code, {"actual_date": date_str, "actual_days": self.entries[entry_idx].get("actual_days", 0)})
+                update_data = {"actual_date": date_str, "actual_days": self.entries[entry_idx].get("actual_days", 0)}
+                if was_skipped:
+                    update_data["status"] = None  # сброс "skipped" на сервере
+                self.data.update_timeline_entry(self.contract_id, stage_code, update_data)
             except Exception as e:
                 print(f"[TimelineWidget] Ошибка сохранения даты: {e}")
 
