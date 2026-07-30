@@ -2022,6 +2022,12 @@
               <div class="text-caption" style="color: #888">
                 Дедлайн: {{ fmtDateShort(effectiveDeadline) }}
               </div>
+              <div v-if="closureDate" class="text-caption" style="color: #27AE60">
+                Закрыт: {{ fmtDateShort(closureDate) }}
+              </div>
+              <div v-else class="text-caption" style="color: #F39C12">
+                В работе
+              </div>
             </div>
             <q-space />
             <q-btn
@@ -2153,7 +2159,7 @@ import { useAuthStore } from 'src/stores/auth'
 import { useReferencesStore } from 'src/stores/references'
 import { useChatUnreadStore } from 'src/stores/chatUnread'
 import { usePermission } from 'src/composables/usePermission'
-import { addWorkingDays, calcDeadlineFromTimeline, countWorkingDaysUntil } from 'src/composables/useDeadline'
+import { addWorkingDays, calcDeadlineFromTimeline, countWorkingDaysUntil, countWorkingDaysBetween } from 'src/composables/useDeadline'
 import { crmApi, employeesApi, filesApi, contractsApi, paymentsApi, locksApi, messengerApi } from 'src/services/api'
 import MeasurementDialog from 'src/components/MeasurementDialog.vue'
 import InlineChatRoom from 'src/components/InlineChatRoom.vue'
@@ -2768,6 +2774,14 @@ const projectStartDate = computed(() =>
 const isProjectClosed = computed(() =>
   card.value?.column_name === 'Выполненный проект' || !!card.value?.is_archived,
 )
+// Дата фактического закрытия = последняя actual_date в таймлайне (для закрытых проектов)
+const closureDate = computed(() => {
+  if (!isProjectClosed.value) return null
+  const dates = timelineEntries.value
+    .filter(e => e.executor_role !== 'header' && e.actual_date)
+    .map(e => e.actual_date)
+  return dates.length ? [...dates].sort().at(-1) : null
+})
 // Дедлайн проекта = START + срок договора в рабочих днях (как в desktop timeline_widget.py:642-643)
 const effectiveDeadline = computed(() => {
   // Приоритет: effective_deadline от сервера (учитывает паузы «В ожидании» онлайн),
@@ -2780,9 +2794,15 @@ const effectiveDeadline = computed(() => {
   if (!period || period <= 0) return null
   return addWorkingDays(startDate, period)
 })
-// Фактическая просрочка: рабочие дни с дедлайна до сегодня (PRIMARY для отображения)
+// Фактическая просрочка:
+//  - открытый проект: р.д. от дедлайна до сегодня (растёт)
+//  - закрытый проект: р.д. от дедлайна до даты закрытия (фиксировано)
 const calendarOverdueDays = computed(() => {
   if (!effectiveDeadline.value) return 0
+  if (isProjectClosed.value && closureDate.value) {
+    const d = countWorkingDaysBetween(effectiveDeadline.value, closureDate.value)
+    return d > 0 ? d : 0
+  }
   const d = countWorkingDaysUntil(effectiveDeadline.value)
   return d < 0 ? Math.abs(d) : 0
 })

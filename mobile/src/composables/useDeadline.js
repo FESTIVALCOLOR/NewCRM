@@ -56,6 +56,33 @@ export function countWorkingDaysUntil(deadlineDateStr) {
 }
 
 /**
+ * Подсчитать рабочие дни между двумя произвольными датами.
+ * Положительное = toDate позже fromDate.
+ * @param {string} fromDateStr - 'YYYY-MM-DD'
+ * @param {string} toDateStr   - 'YYYY-MM-DD'
+ * @returns {number}
+ */
+export function countWorkingDaysBetween(fromDateStr, toDateStr) {
+  if (!fromDateStr || !toDateStr) return 0
+  const parse = s => { const p = s.split('-'); return new Date(+p[0], +p[1] - 1, +p[2]) }
+  const from = parse(fromDateStr)
+  const to = parse(toDateStr)
+  from.setHours(0, 0, 0, 0); to.setHours(0, 0, 0, 0)
+  if (from.getTime() === to.getTime()) return 0
+  const forward = to > from
+  const start = forward ? new Date(from) : new Date(to)
+  const end = forward ? to : from
+  let count = 0
+  const cur = new Date(start)
+  cur.setDate(cur.getDate() + 1)
+  while (cur <= end) {
+    if (isWorkingDay(cur)) count++
+    cur.setDate(cur.getDate() + 1)
+  }
+  return forward ? count : -count
+}
+
+/**
  * Добавить рабочие дни к дате (пропуская выходные и праздники РФ).
  * @param {string} startDateStr - 'YYYY-MM-DD'
  * @param {number} workingDays - количество рабочих дней

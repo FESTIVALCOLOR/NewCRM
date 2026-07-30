@@ -805,6 +805,30 @@
                   {{ timelineTotalInScope }} дн.
                 </div>
               </div>
+              <div v-if="contractDeadline" class="row items-center justify-between q-mb-xs">
+                <div class="text-caption" style="color: #777">
+                  Дедлайн
+                </div>
+                <div class="text-caption text-weight-bold" style="color: #777">
+                  {{ fmtDateShort(contractDeadline) }}
+                </div>
+              </div>
+              <div v-if="contractClosureDate" class="row items-center justify-between q-mb-xs">
+                <div class="text-caption" style="color: #27AE60">
+                  Закрыт
+                </div>
+                <div class="text-caption text-weight-bold" style="color: #27AE60">
+                  {{ fmtDateShort(contractClosureDate) }}
+                </div>
+              </div>
+              <div v-else-if="contractDeadline" class="row items-center justify-between q-mb-xs">
+                <div class="text-caption" style="color: #F39C12">
+                  Статус
+                </div>
+                <div class="text-caption text-weight-bold" style="color: #F39C12">
+                  В работе
+                </div>
+              </div>
               <div class="row items-center justify-between q-mb-xs">
                 <div class="text-caption" style="color: #777">
                   Итого с учётом вне объёма
@@ -964,7 +988,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { addWorkingDays, countWorkingDaysUntil } from 'src/composables/useDeadline'
+import { addWorkingDays, countWorkingDaysUntil, countWorkingDaysBetween } from 'src/composables/useDeadline'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { contractsApi, filesApi, crmApi, clientsApi, timelineApi, surveyApi } from 'src/services/api'
@@ -1174,8 +1198,22 @@ const contractDeadline = computed(() => {
   if (!period || period <= 0) return null
   return addWorkingDays(contractStartDate.value, period)
 })
+// Дата фактического закрытия = последняя actual_date в таймлайне (для закрытых договоров)
+const contractClosureDate = computed(() => {
+  if (!isContractClosed.value) return null
+  const dates = timeline.value
+    .filter(e => isTimelineEntry(e) && e.actual_date)
+    .map(e => e.actual_date)
+  return dates.length ? [...dates].sort().at(-1) : null
+})
 const timelineCalendarOverdue = computed(() => {
   if (!contractDeadline.value) return 0
+  if (isContractClosed.value && contractClosureDate.value) {
+    // Закрытый: р.д. от дедлайна до даты закрытия (фиксировано)
+    const d = countWorkingDaysBetween(contractDeadline.value, contractClosureDate.value)
+    return d > 0 ? d : 0
+  }
+  // Открытый: р.д. от дедлайна до сегодня (растёт)
   const d = countWorkingDaysUntil(contractDeadline.value)
   return d < 0 ? Math.abs(d) : 0
 })
