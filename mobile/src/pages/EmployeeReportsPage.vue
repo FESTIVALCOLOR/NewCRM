@@ -567,18 +567,25 @@ async function loadData() {
   // Сотрудники — фильтрация по roleTab
   if (empR.status === 'fulfilled' && Array.isArray(empR.value.data)) {
     const allEmps = empR.value.data
-    // Фильтруем по роли
+    // Фильтруем по роли (учитываем position и secondary_position)
+    const _pos = (e) => e.position || ''
+    const _sec = (e) => e.secondary_position || ''
+    const _hasPos = (e, s) => _pos(e).includes(s) || _sec(e).includes(s)
+    const _hasPosLc = (e, s) => _pos(e).toLowerCase().includes(s) || _sec(e).toLowerCase().includes(s)
     const rt = roleTab.value
     let filtered = allEmps
-    if (rt === 'sdp') filtered = allEmps.filter(e => e.position?.includes('СДП'))
-    else if (rt === 'gap') filtered = allEmps.filter(e => e.position?.includes('ГАП'))
-    else if (rt === 'manager') filtered = allEmps.filter(e => e.position?.toLowerCase().includes('менеджер'))
-    else if (rt === 'dan') filtered = allEmps.filter(e => e.position === 'ДАН' || e.position === 'Дизайнер авторского надзора')
-    else if (rt === 'designer') filtered = allEmps.filter(e => e.position === 'Дизайнер')
-    else if (rt === 'draftsman') filtered = allEmps.filter(e => e.position?.includes('Чертёжник'))
-    else if (rt === 'visualization') filtered = allEmps.filter(e => e.position === 'Дизайнер')
+    if (rt === 'sdp') filtered = allEmps.filter(e => _hasPos(e, 'СДП'))
+    else if (rt === 'gap') filtered = allEmps.filter(e => _hasPos(e, 'ГАП'))
+    else if (rt === 'manager') filtered = allEmps.filter(e => _hasPosLc(e, 'менеджер'))
+    else if (rt === 'dan') filtered = allEmps.filter(e => _hasPos(e, 'ДАН') || _hasPos(e, 'Дизайнер авторского надзора'))
+    else if (rt === 'designer') filtered = allEmps.filter(e => _pos(e) === 'Дизайнер' || _sec(e) === 'Дизайнер')
+    else if (rt === 'draftsman') filtered = allEmps.filter(e => _hasPos(e, 'Чертёжник') || _hasPos(e, 'Чертежник'))
+    else if (rt === 'visualization') filtered = allEmps.filter(e => _pos(e) === 'Дизайнер' || _sec(e) === 'Дизайнер')
     else if (rt === 'executor') {
-      filtered = allEmps.filter(e => ['Дизайнер', 'Чертёжник', 'Замерщик'].some(p => e.position?.includes(p)) && e.position !== 'ДАН' && e.position !== 'Дизайнер авторского надзора')
+      filtered = allEmps.filter(e => {
+        const p = _pos(e); const s = _sec(e)
+        return ['Дизайнер', 'Чертёжник', 'Чертежник', 'Замерщик'].some(r => p.includes(r) || s.includes(r)) && p !== 'ДАН' && p !== 'Дизайнер авторского надзора'
+      })
     }
 
     roleEmployees.value = filtered.sort((a, b) => b.completion_rate - a.completion_rate)
@@ -609,12 +616,14 @@ const surveyKpis = computed(() => {
 function empSurveyScores(emp) {
   if (!emp) return []
   const pos = emp.position || ''
-  const isDan = pos === 'ДАН' || pos === 'Дизайнер авторского надзора'
-  const isDesigner = pos === 'Дизайнер'
-  const isDraftsman = pos === 'Чертёжник'
-  const isSdp = pos === 'СДП'
-  const isGap = pos === 'ГАП'
-  const isManager = pos.toLowerCase().includes('менеджер')
+  const sec = emp.secondary_position || ''
+  const _h = (v) => pos.includes(v) || sec.includes(v)
+  const isDan = _h('ДАН') || _h('Дизайнер авторского надзора')
+  const isDesigner = pos === 'Дизайнер' || sec === 'Дизайнер'
+  const isDraftsman = _h('Чертёжник') || _h('Чертежник')
+  const isSdp = _h('СДП')
+  const isGap = _h('ГАП')
+  const isManager = pos.toLowerCase().includes('менеджер') || sec.toLowerCase().includes('менеджер')
   const scores = []
   // NPS и CSAT — для всех ролей
   scores.push({ label: 'NPS', value: emp.avg_nps ?? null, scale: 10 })
@@ -685,13 +694,19 @@ async function exportPDF() {
     function kHex(v) { if (v === null || v === undefined) return '#888'; if (v >= 8) return '#27AE60'; if (v >= 6) return '#F39C12'; return '#E74C3C' }
 
     function filterRole(emps, rt) {
-      if (rt === 'sdp') return emps.filter(e => e.position?.includes('СДП'))
-      if (rt === 'gap') return emps.filter(e => e.position?.includes('ГАП'))
-      if (rt === 'manager') return emps.filter(e => e.position?.toLowerCase().includes('менеджер'))
-      if (rt === 'dan') return emps.filter(e => e.position === 'ДАН' || e.position === 'Дизайнер авторского надзора')
-      if (rt === 'designer' || rt === 'visualization') return emps.filter(e => e.position === 'Дизайнер')
-      if (rt === 'draftsman') return emps.filter(e => e.position?.includes('Чертёжник'))
-      if (rt === 'executor') return emps.filter(e => ['Дизайнер','Чертёжник','Замерщик'].some(p => e.position?.includes(p)) && e.position !== 'ДАН' && e.position !== 'Дизайнер авторского надзора')
+      const _p = (e) => e.position || ''; const _s = (e) => e.secondary_position || ''
+      const _h = (e, v) => _p(e).includes(v) || _s(e).includes(v)
+      const _hl = (e, v) => _p(e).toLowerCase().includes(v) || _s(e).toLowerCase().includes(v)
+      if (rt === 'sdp') return emps.filter(e => _h(e, 'СДП'))
+      if (rt === 'gap') return emps.filter(e => _h(e, 'ГАП'))
+      if (rt === 'manager') return emps.filter(e => _hl(e, 'менеджер'))
+      if (rt === 'dan') return emps.filter(e => _h(e, 'ДАН') || _h(e, 'Дизайнер авторского надзора'))
+      if (rt === 'designer' || rt === 'visualization') return emps.filter(e => _p(e) === 'Дизайнер' || _s(e) === 'Дизайнер')
+      if (rt === 'draftsman') return emps.filter(e => _h(e, 'Чертёжник') || _h(e, 'Чертежник'))
+      if (rt === 'executor') return emps.filter(e => {
+        const p = _p(e); const s = _s(e)
+        return ['Дизайнер','Чертёжник','Чертежник','Замерщик'].some(r => p.includes(r) || s.includes(r)) && p !== 'ДАН' && p !== 'Дизайнер авторского надзора'
+      })
       return []
     }
 

@@ -334,7 +334,7 @@ async def get_employee_statistics(
         # Подсчёт карточек для управленческих ролей (ГАП, СДП, Менеджер, Старший менеджер).
         # Эти роли хранятся как FK-поля на CRMCard, а не в StageExecutor.
         # Факт выполнения = карточка в "Выполненный проект" или договор в архивном статусе.
-        # Период НЕ применяется — управленческие роли назначаются на весь срок проекта.
+        # Период фильтруется по CRMCard.created_at (дата назначения = дата создания карточки).
         emp_id_set = set(emp_ids)
         card_role_map: dict = {}
 
@@ -350,6 +350,15 @@ async def get_employee_statistics(
 
             if project_type in _CRM_PT:
                 card_q = card_q.filter(Contract.project_type == _CRM_PT[project_type])
+
+            if year:
+                card_q = card_q.filter(extract("year", CRMCard.created_at) == year)
+            if quarter:
+                _cq_start = (quarter - 1) * 3 + 1
+                _cq_end = quarter * 3
+                card_q = card_q.filter(extract("month", CRMCard.created_at).between(_cq_start, _cq_end))
+            if month:
+                card_q = card_q.filter(extract("month", CRMCard.created_at) == month)
 
             for row in card_q.all():
                 is_done = row.column_name == "Выполненный проект" or (row.contract_status and row.contract_status in ARCHIVE_STATUSES)
@@ -367,6 +376,15 @@ async def get_employee_statistics(
                 SupervisionCard.senior_manager_id,
                 SupervisionCard.dan_completed,
             ).join(Contract, SupervisionCard.contract_id == Contract.id)
+
+            if year:
+                sup_q = sup_q.filter(extract("year", SupervisionCard.created_at) == year)
+            if quarter:
+                _sq_start = (quarter - 1) * 3 + 1
+                _sq_end = quarter * 3
+                sup_q = sup_q.filter(extract("month", SupervisionCard.created_at).between(_sq_start, _sq_end))
+            if month:
+                sup_q = sup_q.filter(extract("month", SupervisionCard.created_at) == month)
 
             for row in sup_q.all():
                 is_done = bool(row.dan_completed)
@@ -392,6 +410,7 @@ async def get_employee_statistics(
                     "id": emp.id,
                     "full_name": emp.full_name,
                     "position": emp.position,
+                    "secondary_position": emp.secondary_position,
                     "total_stages": total_stages,
                     "completed_stages": completed_stages,
                     "completion_rate": (completed_stages / total_stages * 100) if total_stages > 0 else 0,
