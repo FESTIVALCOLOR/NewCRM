@@ -461,6 +461,19 @@
                 :loading="actionLoading"
                 @click="transferToSupervision"
               />
+              <!-- Шаблонный в "Выполненный проект" без статуса СДАН — завершить без актов/оплаты -->
+              <q-btn
+                v-if="card.project_type === 'Шаблонный' && card.column_name === 'Выполненный проект' && !['СДАН', 'РАСТОРГНУТ', 'АВТОРСКИЙ НАДЗОР'].includes(contractData?.status)"
+                unelevated
+                dense
+                no-caps
+                icon="check_circle"
+                label="Отметить СДАН"
+                class="full-width q-mb-sm"
+                style="background: #27AE60; color: white; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px"
+                :loading="actionLoading"
+                @click="markTemplateSdan"
+              />
               <div class="text-center" style="color: #999; font-size: 12px; padding: 4px 0">
                 Карточка в архиве
               </div>
@@ -3909,6 +3922,17 @@ async function transferToSupervision() {
       $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
     } finally { actionLoading.value = false }
   })
+}
+
+async function markTemplateSdan() {
+  actionLoading.value = true
+  try {
+    await contractsApi.update(contractData.value.id, { status: 'СДАН' })
+    $q.notify({ type: 'positive', message: 'Договор помечен как СДАН' })
+    await reloadCard()
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
+  } finally { actionLoading.value = false }
 }
 
 async function doAdvanceRound() {

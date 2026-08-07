@@ -254,33 +254,6 @@
                     {{ contract.advance_payment_paid_date ? `Оплачено ${fmtDate(contract.advance_payment_paid_date)}` : 'Не оплачено' }}
                   </q-item-label>
                 </q-item-section>
-                <q-item-section side style="min-width: 110px">
-                  <q-btn
-                    v-if="!contract.advance_payment_paid_date"
-                    outline
-                    dense
-                    size="sm"
-                    icon="check_circle"
-                    label="Оплатить"
-                    color="positive"
-                    no-caps
-                    style="border-radius: 4px; min-width: 105px"
-                    @click="pickPayDate('advance')"
-                  />
-                  <q-badge v-else color="positive" style="padding: 5px 12px; font-size: 11px; border-radius: 4px; min-width: 105px; justify-content: center">
-                    Оплачено
-                    <q-btn
-                      flat
-                      round
-                      dense
-                      size="xs"
-                      icon="close"
-                      color="white"
-                      class="q-ml-xs"
-                      @click.stop="cancelPayment('advance')"
-                    />
-                  </q-badge>
-                </q-item-section>
               </q-item>
             </q-list>
           </q-card>
