@@ -509,7 +509,7 @@
             </div>
             <q-card-section class="q-pt-xs">
               <div class="row q-col-gutter-xs">
-                <div class="col-4">
+                <div :class="contract.project_type === 'Шаблонный' ? 'col-6' : 'col-4'">
                   <q-btn
                     outline
                     color="grey-7"
@@ -520,7 +520,7 @@
                     @click="uploadFor('act_pr')"
                   />
                 </div>
-                <div class="col-4">
+                <div v-if="contract.project_type !== 'Шаблонный'" class="col-4">
                   <q-btn
                     outline
                     color="grey-7"
@@ -531,7 +531,7 @@
                     @click="uploadFor('act_kd')"
                   />
                 </div>
-                <div class="col-4">
+                <div :class="contract.project_type === 'Шаблонный' ? 'col-6' : 'col-4'">
                   <q-btn
                     outline
                     color="grey-7"
@@ -590,7 +590,7 @@
             </div>
             <q-card-section class="q-pt-xs">
               <div class="row q-col-gutter-xs">
-                <div class="col-4">
+                <div :class="contract.project_type === 'Шаблонный' ? 'col-6' : 'col-4'">
                   <q-btn
                     outline
                     color="grey-7"
@@ -601,7 +601,7 @@
                     @click="uploadFor('act_pr_signed')"
                   />
                 </div>
-                <div class="col-4">
+                <div v-if="contract.project_type !== 'Шаблонный'" class="col-4">
                   <q-btn
                     outline
                     color="grey-7"
@@ -612,7 +612,7 @@
                     @click="uploadFor('act_kd_signed')"
                   />
                 </div>
-                <div class="col-4">
+                <div :class="contract.project_type === 'Шаблонный' ? 'col-6' : 'col-4'">
                   <q-btn
                     outline
                     color="grey-7"

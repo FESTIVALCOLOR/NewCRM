@@ -997,35 +997,31 @@ async function doMoveWithAssign() {
       deadline: moveDeadline.value || null,
     })
 
-    // 3. Создаём оплату при перемещении (как десктоп ExecutorSelectionDialog)
+    // 3. Создаём оплату при перемещении (только для Индивидуальных проектов)
+    // Шаблонные: оплата производится позже, не создаём автоматически
     try {
       const roleName = getStageRole(moveTargetCol.value) || 'Чертёжник'
       const stageName = moveTargetCol.value
       const isTemplate = moveCard.value.project_type === 'Шаблонный'
-      const isStage1 = stageName.includes('Стадия 1')
 
-      // Проверяем нет ли уже оплаты для этого исполнителя на этой роли+стадии
-      const { data: existingPayments } = await crmApi.getPayments(moveCard.value.contract_id)
-      const alreadyPaid = (existingPayments || []).some(p =>
-        p.employee_id === moveExecutorId.value && p.role === roleName &&
-        (p.stage_name === stageName || !p.stage_name) && !p.reassigned,
-      )
+      if (!isTemplate) {
+        // Проверяем нет ли уже оплаты для этого исполнителя на этой роли+стадии
+        const { data: existingPayments } = await crmApi.getPayments(moveCard.value.contract_id)
+        const alreadyPaid = (existingPayments || []).some(p =>
+          p.employee_id === moveExecutorId.value && p.role === roleName &&
+          (p.stage_name === stageName || !p.stage_name) && !p.reassigned,
+        )
 
-      if (!alreadyPaid) {
-        const calcRes = await paymentsApi.calculate({
-          contract_id: moveCard.value.contract_id,
-          employee_id: moveExecutorId.value,
-          role: roleName,
-          stage_name: stageName,
-          project_subtype: moveCard.value.project_subtype || undefined,
-        })
-        const fullAmount = calcRes.data?.amount || calcRes.data?.full_amount || 0
+        if (!alreadyPaid) {
+          const calcRes = await paymentsApi.calculate({
+            contract_id: moveCard.value.contract_id,
+            employee_id: moveExecutorId.value,
+            role: roleName,
+            stage_name: stageName,
+            project_subtype: moveCard.value.project_subtype || undefined,
+          })
+          const fullAmount = calcRes.data?.amount || calcRes.data?.full_amount || 0
 
-        if (isTemplate) {
-          // Шаблонный: Полная оплата (Стадия 1 = 0)
-          const amount = isStage1 ? 0 : fullAmount
-          await paymentsApi.create({ contract_id: moveCard.value.contract_id, employee_id: moveExecutorId.value, role: roleName, stage_name: stageName, payment_type: 'Полная оплата', crm_card_id: moveCard.value.id, calculated_amount: amount, final_amount: amount, report_month: '' })
-        } else {
           // Индивидуальный: Аванс 50% + Доплата 50%
           if (fullAmount > 0) {
             const advance = Math.round(fullAmount / 2)

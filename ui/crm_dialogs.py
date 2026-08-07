@@ -1123,14 +1123,12 @@ class ProjectCompletionDialog(QDialog):
             today_str = QDate.currentDate().toString("yyyy-MM-dd")
 
             # === ПРОВЕРКА ФИНАЛЬНОГО ПЛАТЕЖА ДЛЯ СТАТУСА "СДАН" ===
-            if "СДАН" in contract_status and "РАСТОРГНУТ" not in contract_status:
+            # Шаблонные проекты: оплата производится позже — не блокируем архивацию
+            if "СДАН" in contract_status and "РАСТОРГНУТ" not in contract_status and self.project_type == "Индивидуальный":
                 contract = self.data.get_contract(contract_id) if contract_id else None
                 payment_ok = True
                 if contract:
-                    if self.project_type == "Индивидуальный":
-                        payment_ok = bool(contract.get("third_payment_paid_date"))
-                    else:  # Шаблонный
-                        payment_ok = bool(contract.get("advance_payment_paid_date"))
+                    payment_ok = bool(contract.get("third_payment_paid_date"))
 
                 if not payment_ok:
                     # Финальный платёж не проведён — ставим статус "Выполненный проект" (ожидание оплаты)

@@ -995,7 +995,11 @@ async def move_crm_card_to_column(card_id: int, move_request: ColumnMoveRequest,
                         # FIX Баг 3: Запрет перемещения назад для обычных пользователей
                         raise HTTPException(status_code=422, detail=f"Нельзя переместить карточку назад: {old_column} → {new_column}. Используйте 'В ожидании'.")
                     if new_idx - old_idx > 1:
-                        raise HTTPException(status_code=422, detail=f"Нельзя перескакивать стадии: {old_column} → {new_column}")
+                        # Шаблонный: Стадия 3 (3д визуализация) — опциональная,
+                        # разрешаем прыжок "Стадия 2: рабочие чертежи" → "Выполненный проект"
+                        is_template_skip_stage3 = project_type == "Шаблонный" and old_column == "Стадия 2: рабочие чертежи" and new_column == "Выполненный проект"
+                        if not is_template_skip_stage3:
+                            raise HTTPException(status_code=422, detail=f"Нельзя перескакивать стадии: {old_column} → {new_column}")
 
         card.column_name = new_column
 
