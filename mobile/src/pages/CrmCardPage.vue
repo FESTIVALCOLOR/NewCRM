@@ -461,14 +461,14 @@
                 :loading="actionLoading"
                 @click="transferToSupervision"
               />
-              <!-- Шаблонный в "Выполненный проект" без статуса СДАН — завершить без актов/оплаты -->
+              <!-- Шаблонный в "Выполненный проект" — архивировать (без проверки актов/оплаты) -->
               <q-btn
-                v-if="card.project_type === 'Шаблонный' && card.column_name === 'Выполненный проект' && !['СДАН', 'РАСТОРГНУТ', 'АВТОРСКИЙ НАДЗОР'].includes(contractData?.status)"
+                v-if="card.project_type === 'Шаблонный' && card.column_name === 'Выполненный проект' && !card.is_archived"
                 unelevated
                 dense
                 no-caps
-                icon="check_circle"
-                label="Отметить СДАН"
+                icon="archive"
+                label="В архив"
                 class="full-width q-mb-sm"
                 style="background: #27AE60; color: white; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px"
                 :loading="actionLoading"
@@ -3927,8 +3927,11 @@ async function transferToSupervision() {
 async function markTemplateSdan() {
   actionLoading.value = true
   try {
-    await contractsApi.update(contractData.value.id, { status: 'СДАН' })
-    $q.notify({ type: 'positive', message: 'Договор помечен как СДАН' })
+    await crmApi.updateCard(card.value.id, { is_archived: true })
+    if (contractData.value?.id && !['СДАН', 'РАСТОРГНУТ', 'АВТОРСКИЙ НАДЗОР'].includes(contractData.value?.status)) {
+      await contractsApi.update(contractData.value.id, { status: 'СДАН' })
+    }
+    $q.notify({ type: 'positive', message: 'Проект завершён и перемещён в архив' })
     await reloadCard()
   } catch (err) {
     $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
