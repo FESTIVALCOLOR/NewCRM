@@ -508,10 +508,10 @@ class TestFieldFiltering:
     def _filter_payments(self, payments, f_address=None, f_employee=None,
                          f_position=None, f_agent_type=None, f_subtype=None,
                          f_project_type='Все', f_status='Все'):
-        """Логика фильтрации из _render_all_payments (строки 1481-1507)."""
+        """Логика фильтрации из _render_all_payments — substring match по адресу."""
         filtered = []
         for payment in payments:
-            if f_address and payment.get('address') != f_address:
+            if f_address and f_address.lower() not in (payment.get('address') or '').lower():
                 continue
             if f_employee and payment.get('employee_name') != f_employee:
                 continue
@@ -538,14 +538,42 @@ class TestFieldFiltering:
         return filtered
 
     def test_filter_by_address(self):
-        """Фильтрация по адресу."""
+        """Фильтрация по адресу — substring match."""
         payments = [
             _make_payment(payment_id=1, address='ул. Тестовая'),
             _make_payment(payment_id=2, address='ул. Другая'),
         ]
-        result = self._filter_payments(payments, f_address='ул. Тестовая')
+        result = self._filter_payments(payments, f_address='Тестовая')
         assert len(result) == 1
         assert result[0]['address'] == 'ул. Тестовая'
+
+    def test_filter_by_address_substring(self):
+        """Баг #2: Адрес ищется по подстроке, а не точному совпадению."""
+        payments = [
+            _make_payment(payment_id=1, address='г. СПб, ул. Тестовая, д.1'),
+            _make_payment(payment_id=2, address='г. Москва, ул. Тестовая, д.5'),
+            _make_payment(payment_id=3, address='г. СПб, пр. Невский, д.10'),
+        ]
+        # Поиск по подстроке "Тестовая" — найдёт оба
+        result = self._filter_payments(payments, f_address='Тестовая')
+        assert len(result) == 2
+
+    def test_filter_by_address_case_insensitive(self):
+        """Баг #2: Поиск по адресу — регистронезависимый."""
+        payments = [
+            _make_payment(payment_id=1, address='ул. ТЕСТОВАЯ, д.1'),
+        ]
+        result = self._filter_payments(payments, f_address='тестовая')
+        assert len(result) == 1
+
+    def test_filter_by_address_none_address(self):
+        """Баг #2: Платёж без адреса (None) не ломает фильтрацию."""
+        payments = [
+            _make_payment(payment_id=1, address=None),
+            _make_payment(payment_id=2, address='ул. Тестовая'),
+        ]
+        result = self._filter_payments(payments, f_address='Тестовая')
+        assert len(result) == 1
 
     def test_filter_by_employee(self):
         """Фильтрация по сотруднику."""

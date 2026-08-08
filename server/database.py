@@ -2,10 +2,13 @@
 База данных - SQLAlchemy модели
 Многопользовательская структура
 """
-from sqlalchemy import create_engine, Column, Integer, BigInteger, String, Boolean, DateTime, Float, Text, ForeignKey, JSON, UniqueConstraint
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, relationship
+
 from datetime import datetime
+
+from sqlalchemy import JSON, BigInteger, Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship, sessionmaker
+
 from config import get_settings
 
 settings = get_settings()
@@ -21,12 +24,14 @@ if _is_sqlite:
     _engine_kwargs["connect_args"] = {"check_same_thread": False}
 else:
     # PostgreSQL: настройка connection pool
-    _engine_kwargs.update({
-        "pool_size": 10,          # Постоянных соединений на worker
-        "max_overflow": 20,       # Дополнительных при пиковой нагрузке
-        "pool_timeout": 30,       # Ожидание свободного соединения (сек)
-        "pool_recycle": 1800,     # Пересоздание соединений каждые 30 мин
-    })
+    _engine_kwargs.update(
+        {
+            "pool_size": 10,  # Постоянных соединений на worker
+            "max_overflow": 20,  # Дополнительных при пиковой нагрузке
+            "pool_timeout": 30,  # Ожидание свободного соединения (сек)
+            "pool_recycle": 1800,  # Пересоздание соединений каждые 30 мин
+        }
+    )
 
 engine = create_engine(settings.database_url, **_engine_kwargs)
 
@@ -38,8 +43,10 @@ Base = declarative_base()
 # МНОГОПОЛЬЗОВАТЕЛЬСКИЕ ТАБЛИЦЫ
 # =========================
 
+
 class Employee(Base):
     """Сотрудники (пользователи системы)"""
+
     __tablename__ = "employees"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -71,13 +78,27 @@ class Employee(Base):
     # Цвет агента (для сотрудников с position='Агент')
     agent_color = Column(String)
 
+    # Платёжные реквизиты
+    payment_type = Column(String, nullable=True)  # наличными / переводом на карту / переводом по реквизитам
+    payment_phone = Column(String, nullable=True)  # Номер телефона (для перевода на карту)
+    payment_account = Column(String, nullable=True)  # Номер счёта
+    payment_bank_name = Column(String, nullable=True)  # Наименование банка
+    payment_bik = Column(String, nullable=True)  # БИК
+    payment_corr_account = Column(String, nullable=True)  # Корреспондентский счёт
+
     # Telegram личное подключение (для уведомлений)
     telegram_user_id = Column(BigInteger, nullable=True)
     telegram_link_token = Column(String(32), nullable=True, index=True)
     telegram_link_token_expires = Column(DateTime, nullable=True)
 
+    # Telegram username (для @упоминаний в групповых чатах)
+    telegram_username = Column(String(100), nullable=True)
+
     # Временный пароль для invite-письма (plaintext, очищается после первого входа)
     invite_temp_password = Column(String, nullable=True)
+
+    # Аватар (публичная ссылка с Яндекс.Диска)
+    photo_url = Column(String, nullable=True)
 
     # Даты
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -87,12 +108,12 @@ class Employee(Base):
     sessions = relationship("UserSession", back_populates="employee", cascade="all, delete-orphan")
     permissions = relationship("UserPermission", back_populates="employee", foreign_keys="[UserPermission.employee_id]", cascade="all, delete-orphan")
     notifications = relationship("Notification", back_populates="employee", cascade="all, delete-orphan")
-    notification_settings = relationship("NotificationSettings",
-        back_populates="employee", uselist=False, cascade="all, delete-orphan")
+    notification_settings = relationship("NotificationSettings", back_populates="employee", uselist=False, cascade="all, delete-orphan")
 
 
 class UserSession(Base):
     """Сессии пользователей"""
+
     __tablename__ = "user_sessions"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -117,10 +138,9 @@ class UserSession(Base):
 
 class UserPermission(Base):
     """Именованные права доступа (granular permissions)"""
+
     __tablename__ = "user_permissions"
-    __table_args__ = (
-        UniqueConstraint('employee_id', 'permission_name', name='uq_employee_permission'),
-    )
+    __table_args__ = (UniqueConstraint("employee_id", "permission_name", name="uq_employee_permission"),)
 
     id = Column(Integer, primary_key=True, index=True)
     employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False, index=True)
@@ -136,10 +156,9 @@ class UserPermission(Base):
 
 class RoleDefaultPermission(Base):
     """Дефолтные права по ролям (настраиваемая матрица)"""
+
     __tablename__ = "role_default_permissions"
-    __table_args__ = (
-        UniqueConstraint('role', 'permission_name', name='uq_role_perm'),
-    )
+    __table_args__ = (UniqueConstraint("role", "permission_name", name="uq_role_perm"),)
 
     id = Column(Integer, primary_key=True, index=True)
     role = Column(String, nullable=False, index=True)
@@ -150,52 +169,54 @@ class RoleDefaultPermission(Base):
 
 class NormDaysTemplate(Base):
     """Шаблоны нормо-дней по типам проектов"""
+
     __tablename__ = "norm_days_templates"
 
     id = Column(Integer, primary_key=True, index=True)
-    project_type = Column(String, nullable=False)       # 'Индивидуальный' / 'Шаблонный'
-    project_subtype = Column(String, nullable=False)     # 'Полный', 'Эскизный', etc.
-    stage_code = Column(String, nullable=False)          # S1_1_01, T1_1_01
+    project_type = Column(String, nullable=False)  # 'Индивидуальный' / 'Шаблонный'
+    project_subtype = Column(String, nullable=False)  # 'Полный', 'Эскизный', etc.
+    stage_code = Column(String, nullable=False)  # S1_1_01, T1_1_01
     stage_name = Column(String, nullable=False)
-    stage_group = Column(String, nullable=False)         # STAGE1, STAGE2, STAGE3
+    stage_group = Column(String, nullable=False)  # STAGE1, STAGE2, STAGE3
     substage_group = Column(String, nullable=True)
-    base_norm_days = Column(Float, nullable=False)       # базовое значение
-    k_multiplier = Column(Float, default=0)              # множитель K (площади)
+    base_norm_days = Column(Float, nullable=False)  # базовое значение
+    k_multiplier = Column(Float, default=0)  # множитель K (площади)
     executor_role = Column(String, nullable=False)
     is_in_contract_scope = Column(Boolean, default=True)
     sort_order = Column(Integer, nullable=False)
-    agent_type = Column(String, default='Все агенты')  # 'Все агенты' / имя агента
+    agent_type = Column(String, default="Все агенты")  # 'Все агенты' / имя агента
     updated_at = Column(DateTime, default=datetime.utcnow)
     updated_by = Column(Integer, ForeignKey("employees.id"), nullable=True)
 
-    __table_args__ = (
-        UniqueConstraint('project_type', 'project_subtype', 'stage_code', 'agent_type', name='uq_norm_template'),
-    )
+    __table_args__ = (UniqueConstraint("project_type", "project_subtype", "stage_code", "agent_type", name="uq_norm_template"),)
 
 
 class Agent(Base):
     """Агенты (типы агентов: ПЕТРОВИЧ, ФЕСТИВАЛЬ и т.д.)"""
+
     __tablename__ = "agents"
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, nullable=False)
-    color = Column(String, nullable=False, default='#FFFFFF')
-    status = Column(String, default='активный')
+    color = Column(String, nullable=False, default="#FFFFFF")
+    status = Column(String, default="активный")
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
 class City(Base):
     """Города"""
+
     __tablename__ = "cities"
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, nullable=False)
-    status = Column(String, default='активный')
+    status = Column(String, default="активный")
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
 class ActivityLog(Base):
     """Расширенный лог действий"""
+
     __tablename__ = "activity_log"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -215,6 +236,7 @@ class ActivityLog(Base):
 
 class ConcurrentEdit(Base):
     """Блокировка записей при редактировании"""
+
     __tablename__ = "concurrent_edits"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -230,6 +252,7 @@ class ConcurrentEdit(Base):
 
 class Notification(Base):
     """Уведомления для пользователей"""
+
     __tablename__ = "notifications"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -249,8 +272,10 @@ class Notification(Base):
     # Связи
     employee = relationship("Employee", back_populates="notifications")
 
+
 class NotificationSettings(Base):
     """Настройки уведомлений для сотрудника"""
+
     __tablename__ = "notification_settings"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -267,6 +292,22 @@ class NotificationSettings(Base):
     notify_payment = Column(Boolean, default=False)
     notify_supervision = Column(Boolean, default=False)
 
+    # Фильтры по типу проекта
+    notify_individual = Column(Boolean, default=True)
+    notify_template = Column(Boolean, default=True)
+
+    # Дублирование уведомлений (для ст. менеджера)
+    notify_duplicate_info = Column(Boolean, default=False)
+    notify_revision_info = Column(Boolean, default=False)
+
+    # Чаты
+    notify_chat = Column(Boolean, default=True)  # Уведомления о новых сообщениях в чатах
+
+    # Web Push уведомления
+    push_enabled = Column(Boolean, default=False)
+    push_subscription = Column(Text, nullable=True)  # JSON Web Push subscription
+    notification_channel = Column(String(20), default="telegram")  # 'telegram', 'push', 'both'
+
     # Временные метки
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -275,9 +316,9 @@ class NotificationSettings(Base):
     employee = relationship("Employee", back_populates="notification_settings")
 
 
-
 class FileStorage(Base):
     """Хранилище файлов"""
+
     __tablename__ = "file_storage"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -312,8 +353,10 @@ class FileStorage(Base):
 # ОСНОВНЫЕ ТАБЛИЦЫ (из текущей системы)
 # =========================
 
+
 class Client(Base):
     """Клиенты"""
+
     __tablename__ = "clients"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -329,6 +372,9 @@ class Client(Base):
     passport_issued_date = Column(String)
     registration_address = Column(String)
 
+    # Telegram аккаунт клиента
+    telegram_account = Column(String(100), nullable=True)
+
     # Для организаций
     organization_type = Column(String)
     organization_name = Column(String)
@@ -337,12 +383,16 @@ class Client(Base):
     account_details = Column(Text)
     responsible_person = Column(String)
 
+    # Аватар (публичная ссылка с Яндекс.Диска)
+    photo_url = Column(String, nullable=True)
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class Contract(Base):
     """Договоры"""
+
     __tablename__ = "contracts"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -383,6 +433,8 @@ class Contract(Base):
     measurement_file_name = Column(String)
     measurement_yandex_path = Column(String)
     measurement_date = Column(String)
+    measurement_folder_public_link = Column(String)
+    photo_folder_public_link = Column(String)
 
     status = Column(String, default="Новый заказ")
     status_changed_date = Column(String)
@@ -422,6 +474,14 @@ class Contract(Base):
     act_final_signed_yandex_path = Column(String)
     act_final_signed_file_name = Column(String)
 
+    # Доп. соглашения
+    additional_agreement_link = Column(String)
+    additional_agreement_yandex_path = Column(String)
+    additional_agreement_file_name = Column(String)
+    additional_agreement_signed_link = Column(String)
+    additional_agreement_signed_yandex_path = Column(String)
+    additional_agreement_signed_file_name = Column(String)
+
     # Отслеживание платежей (даты оплат + чеки)
     advance_payment_paid_date = Column(String)
     additional_payment_paid_date = Column(String)
@@ -448,19 +508,22 @@ class Contract(Base):
 # CRM КАРТОЧКИ
 # =========================
 
+
 class CRMCard(Base):
     """CRM карточки проектов"""
+
     __tablename__ = "crm_cards"
 
     id = Column(Integer, primary_key=True, index=True)
     contract_id = Column(Integer, ForeignKey("contracts.id"), nullable=False, index=True)
 
-    column_name = Column(String, nullable=False, default="Новый заказ")
+    column_name = Column(String, nullable=False, default="Новый заказ", index=True)
     previous_column = Column(String)  # Предыдущий столбец (для возврата из "В ожидании")
     deadline = Column(String)
     paused_at = Column(DateTime)  # K1: Время постановки на паузу (для пересчёта дедлайна)
     total_pause_days = Column(Integer, default=0)  # K1: Суммарные дни паузы
     tags = Column(String)
+    tag_color = Column(String)
 
     is_approved = Column(Boolean, default=False)
     approval_deadline = Column(String)
@@ -495,6 +558,7 @@ class CRMCard(Base):
 
 class StageExecutor(Base):
     """Исполнители по стадиям"""
+
     __tablename__ = "stage_executors"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -522,18 +586,21 @@ class StageExecutor(Base):
 # SUPERVISION (Авторский надзор)
 # =========================
 
+
 class SupervisionCard(Base):
     """Карточки авторского надзора"""
+
     __tablename__ = "supervision_cards"
 
     id = Column(Integer, primary_key=True, index=True)
     contract_id = Column(Integer, ForeignKey("contracts.id"), nullable=False)
 
-    column_name = Column(String, nullable=False, default="Новый заказ")
+    column_name = Column(String, nullable=False, default="Новый заказ", index=True)
     previous_column = Column(String)  # Предыдущий столбец (для возврата из "В ожидании")
     start_date = Column(String)  # Дата начала надзора
     deadline = Column(String)
     tags = Column(String)
+    tag_color = Column(String)
 
     senior_manager_id = Column(Integer, ForeignKey("employees.id"))
     dan_id = Column(Integer, ForeignKey("employees.id"))  # Дежурный по авторскому надзору
@@ -544,6 +611,7 @@ class SupervisionCard(Base):
     pause_reason = Column(Text)
     paused_at = Column(DateTime)
     total_pause_days = Column(Integer, default=0)
+    min_visits_per_month = Column(Integer, nullable=True)  # Минимальное количество выездов в месяц
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -558,6 +626,7 @@ class SupervisionCard(Base):
 
 class SupervisionProjectHistory(Base):
     """История проектов надзора"""
+
     __tablename__ = "supervision_project_history"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -577,12 +646,12 @@ class SupervisionProjectHistory(Base):
 # ТАБЛИЦЫ СРОКОВ (TIMELINE)
 # =========================
 
+
 class ProjectTimelineEntry(Base):
     """Записи таблицы сроков проекта"""
+
     __tablename__ = "project_timeline_entries"
-    __table_args__ = (
-        UniqueConstraint('contract_id', 'stage_code', name='uq_timeline_contract_stage'),
-    )
+    __table_args__ = (UniqueConstraint("contract_id", "stage_code", name="uq_timeline_contract_stage"),)
 
     id = Column(Integer, primary_key=True, index=True)
     contract_id = Column(Integer, ForeignKey("contracts.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -594,7 +663,7 @@ class ProjectTimelineEntry(Base):
     actual_days = Column(Integer, default=0)
     norm_days = Column(Integer, default=0)
     custom_norm_days = Column(Integer, nullable=True)  # Кастомная норма (если СДП изменил)
-    status = Column(String(20), default='')
+    status = Column(String(20), default="")
     executor_role = Column(String(50), nullable=False)
     is_in_contract_scope = Column(Boolean, default=True)
     sort_order = Column(Integer, nullable=False)
@@ -606,10 +675,9 @@ class ProjectTimelineEntry(Base):
 
 class SupervisionTimelineEntry(Base):
     """Записи таблицы сроков надзора"""
+
     __tablename__ = "supervision_timeline_entries"
-    __table_args__ = (
-        UniqueConstraint('supervision_card_id', 'stage_code', name='uq_sv_timeline_card_stage'),
-    )
+    __table_args__ = (UniqueConstraint("supervision_card_id", "stage_code", name="uq_sv_timeline_card_stage"),)
 
     id = Column(Integer, primary_key=True, index=True)
     supervision_card_id = Column(Integer, ForeignKey("supervision_cards.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -624,7 +692,7 @@ class SupervisionTimelineEntry(Base):
     budget_savings = Column(Float, default=0)
     supplier = Column(String(255))
     commission = Column(Float, default=0)
-    status = Column(String(20), default='Не начато')
+    status = Column(String(20), default="Не начато")
     notes = Column(Text)
     executor = Column(String(100))
     defects_found = Column(Integer, default=0)
@@ -634,8 +702,33 @@ class SupervisionTimelineEntry(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class SupervisionBudgetExtra(Base):
+    """Строительные работы и черновые материалы надзора"""
+
+    __tablename__ = "supervision_budget_extra"
+
+    id = Column(Integer, primary_key=True, index=True)
+    supervision_card_id = Column(Integer, ForeignKey("supervision_cards.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+
+    construction_planned = Column(Float, nullable=True)
+    construction_contractor = Column(String(500), nullable=True)
+    construction_notes = Column(Text, nullable=True)
+    construction_payments = Column(Text, nullable=True)  # JSON: [{date, amount, commission}]
+
+    materials_planned = Column(Float, nullable=True)
+    materials_supplier = Column(String(500), nullable=True)
+    materials_notes = Column(Text, nullable=True)
+    materials_payments = Column(Text, nullable=True)  # JSON: [{date, amount, supplier, commission}]
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    supervision_card = relationship("SupervisionCard", backref="budget_extra")
+
+
 class SupervisionVisit(Base):
     """Записи выездов на объект авторского надзора"""
+
     __tablename__ = "supervision_visits"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -645,7 +738,12 @@ class SupervisionVisit(Base):
     visit_date = Column(String, nullable=False)  # YYYY-MM-DD
     executor_name = Column(String(255))  # ФИО исполнителя (ДАН)
     notes = Column(Text)
+    actual_date = Column(String(30), nullable=True)  # Фактическая дата выезда
+    visit_type = Column(String(50), default="На объект")  # Тип: 'На объект' / 'К поставщику'
+    is_additional = Column(Boolean, default=False)  # Дополнительный выезд (сверх нормы)
+    executor_role = Column(String(100), nullable=True)  # Роль исполнителя: 'ДАН' / 'Старший менеджер проектов'
     sort_order = Column(Integer, default=0)
+    visit_yandex_folder = Column(String(500), nullable=True)  # Путь к папке выезда на ЯД
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -656,17 +754,21 @@ class SupervisionVisit(Base):
 # РАБОЧИЙ ПРОЦЕСС (WORKFLOW)
 # =========================
 
+
 class StageWorkflowState(Base):
     """Состояние рабочего процесса стадии CRM карточки"""
+
     __tablename__ = "stage_workflow_state"
 
     id = Column(Integer, primary_key=True, index=True)
     crm_card_id = Column(Integer, ForeignKey("crm_cards.id", ondelete="CASCADE"), nullable=False, index=True)
     stage_name = Column(String(255), nullable=False)
     current_substep_code = Column(String(30))
-    status = Column(String(30), default='in_progress')  # in_progress, revision, client_approval, completed
+    current_substage_group = Column(String(100), nullable=True)  # текущая substage_group (Подэтап 1.2 и т.д.)
+    status = Column(String(30), default="in_progress")  # in_progress, pending_review, revision, client_approval, pending_decision, act_signing, stage_completed
     revision_count = Column(Integer, default=0)
     revision_file_path = Column(Text)
+    revision_history = Column(Text)  # JSON: [{"num": 1, "file_path": "...", "reason": "...", "date": "..."}]
     client_approval_started_at = Column(DateTime)
     client_approval_deadline_paused = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -677,8 +779,10 @@ class StageWorkflowState(Base):
 # ПЛАТЕЖИ И ТАРИФЫ
 # =========================
 
+
 class Payment(Base):
     """Платежи/выплаты"""
+
     __tablename__ = "payments"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -709,6 +813,9 @@ class Payment(Base):
     reassigned = Column(Boolean, default=False)
     old_employee_id = Column(Integer)
 
+    # Ссылка на конкретный выезд (для автоудаления при удалении выезда)
+    visit_id = Column(Integer, ForeignKey("supervision_visits.id", ondelete="SET NULL"), nullable=True)
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -716,12 +823,35 @@ class Payment(Base):
     employee = relationship("Employee", foreign_keys=[employee_id])
 
 
+class SupervisionMonthlyAssignment(Base):
+    """Назначение ежемесячной фиксированной ставки сотруднику в надзоре"""
+
+    __tablename__ = "supervision_monthly_assignments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    supervision_card_id = Column(Integer, ForeignKey("supervision_cards.id", ondelete="CASCADE"), nullable=False, index=True)
+    employee_id = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    employee_name = Column(String, nullable=False)
+    role = Column(String, nullable=False)
+    monthly_amount = Column(Float, nullable=False)
+    city = Column(String, nullable=True)  # NULL = для всех городов
+    start_date = Column(String, nullable=False)  # YYYY-MM-DD
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    supervision_card = relationship("SupervisionCard", backref="monthly_assignments")
+    employee = relationship("Employee", foreign_keys=[employee_id])
+
+
 class Rate(Base):
     """Тарифы"""
+
     __tablename__ = "rates"
 
     id = Column(Integer, primary_key=True, index=True)
     project_type = Column(String)  # Индивидуальный, Шаблонный, Авторский надзор
+    project_subtype = Column(String)  # Полный, Эскизный, Планировочный (NULL = для всех подтипов)
     role = Column(String)
     stage_name = Column(String)
 
@@ -744,6 +874,7 @@ class Rate(Base):
 
 class Salary(Base):
     """Зарплаты/оклады"""
+
     __tablename__ = "salaries"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -774,14 +905,17 @@ class Salary(Base):
 # ФАЙЛЫ ПРОЕКТА
 # =========================
 
+
 class ProjectFile(Base):
     """Файлы проекта"""
+
     __tablename__ = "project_files"
 
     id = Column(Integer, primary_key=True, index=True)
     contract_id = Column(Integer, ForeignKey("contracts.id"), nullable=False)
 
     stage = Column(String, nullable=False)
+    stage_code = Column(String, nullable=True)  # Код стадии закупки (для надзора)
     file_type = Column(String, nullable=False)  # image, pdf, excel
 
     public_link = Column(String)
@@ -798,8 +932,10 @@ class ProjectFile(Base):
 # ИСТОРИЯ ДЕЙСТВИЙ
 # =========================
 
+
 class ActionHistory(Base):
     """История действий (для локальной совместимости)"""
+
     __tablename__ = "action_history"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -815,6 +951,7 @@ class ActionHistory(Base):
 
 class ApprovalStageDeadline(Base):
     """Дедлайны стадий согласования"""
+
     __tablename__ = "approval_stage_deadlines"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -833,8 +970,10 @@ class ApprovalStageDeadline(Base):
 # МЕССЕНДЖЕР-ЧАТЫ
 # =========================
 
+
 class MessengerChat(Base):
     """Чаты проектов в мессенджерах"""
+
     __tablename__ = "messenger_chats"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -856,6 +995,7 @@ class MessengerChat(Base):
 
 class MessengerChatMember(Base):
     """Участники чата"""
+
     __tablename__ = "messenger_chat_members"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -877,9 +1017,11 @@ class MessengerChatMember(Base):
 
 class MessengerScript(Base):
     """Скрипты автоматических сообщений"""
+
     __tablename__ = "messenger_scripts"
 
     id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=True)  # Пользовательское название скрипта
     script_type = Column(String, nullable=False)  # project_start/stage_complete/project_end
     project_type = Column(String, nullable=True)  # Индивидуальный/Шаблонный/Авторский надзор/NULL
     stage_name = Column(String, nullable=True)
@@ -887,6 +1029,7 @@ class MessengerScript(Base):
     message_template = Column(Text, nullable=False)
     memo_file_path = Column(String, nullable=True)  # Путь к PDF-памятке на Яндекс.Диске
     use_auto_deadline = Column(Boolean, default=True)
+    attach_stage_files = Column(Boolean, default=True)
     is_enabled = Column(Boolean, default=True)
     sort_order = Column(Integer, default=0)
 
@@ -896,6 +1039,7 @@ class MessengerScript(Base):
 
 class MessengerSetting(Base):
     """Настройки мессенджера"""
+
     __tablename__ = "messenger_settings"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -907,6 +1051,7 @@ class MessengerSetting(Base):
 
 class MessengerMessageLog(Base):
     """Лог отправленных сообщений"""
+
     __tablename__ = "messenger_message_log"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -922,6 +1067,278 @@ class MessengerMessageLog(Base):
     delivery_status = Column(String, default="sent")  # sent/failed/pending
 
 
+# =========================
+# АНАЛИТИКА ПО СОТРУДНИКАМ
+# =========================
+
+
+class ClientSurvey(Base):
+    """Результаты опросов клиентов (из Яндекс Форм)"""
+
+    __tablename__ = "client_surveys"
+
+    id = Column(Integer, primary_key=True, index=True)
+    contract_id = Column(Integer, ForeignKey("contracts.id", ondelete="CASCADE"), nullable=False, index=True)
+    project_type = Column(String(30), nullable=False)  # individual / template / supervision
+
+    access_token = Column(String(64), unique=True, nullable=False, index=True)
+    status = Column(String(20), nullable=False, default="pending")  # pending / sent / completed / expired
+    yandex_answer_id = Column(String(50))
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    sent_at = Column(DateTime)
+    completed_at = Column(DateTime)
+    expires_at = Column(DateTime)
+
+    # Результаты (денормализованные для быстрого доступа)
+    nps_score = Column(Integer)  # 0-10
+    csat_score = Column(Integer)  # 1-5
+    design_score = Column(Integer)  # 1-5
+    deadline_score = Column(Integer)  # 1-5
+    communication_score = Column(Integer)  # 1-5
+    expectations_score = Column(Integer)  # 1-5
+    supervision_score = Column(Integer)  # 1-5 (nullable, только для надзора)
+    comment = Column(Text)
+
+    contract = relationship("Contract")
+
+
+class EmployeeKpiSnapshot(Base):
+    """Снимки KPI для трендов (ежедневный расчёт)"""
+
+    __tablename__ = "employee_kpi_snapshots"
+    __table_args__ = (UniqueConstraint("employee_id", "report_month", "project_type", name="uq_kpi_snapshot_emp_month_type"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    employee_id = Column(Integer, ForeignKey("employees.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    report_month = Column(String(7), nullable=False, index=True)  # YYYY-MM
+    project_type = Column(String(30), nullable=False, index=True)  # individual / template / supervision
+
+    # Компоненты KPI
+    k_deadline = Column(Float)
+    k_quality = Column(Float)
+    k_speed = Column(Float)
+    k_nps = Column(Float)
+    kpi_total = Column(Float)
+
+    # Дополнительные метрики
+    stages_completed = Column(Integer, default=0)
+    stages_on_time = Column(Integer, default=0)
+    stages_overdue = Column(Integer, default=0)
+    avg_overdue_days = Column(Float, default=0)
+    concurrent_projects = Column(Integer, default=0)
+    total_area = Column(Float, default=0)
+    total_salary = Column(Float, default=0)
+    revision_count = Column(Integer, default=0)
+
+    # Метрики надзора
+    defects_found = Column(Integer, default=0)
+    defects_resolved = Column(Integer, default=0)
+    site_visits = Column(Integer, default=0)
+    budget_savings = Column(Float, default=0)
+
+    calculated_at = Column(DateTime, default=datetime.utcnow)
+
+    employee = relationship("Employee")
+
+
+# =========================
+# РЕЖИМ ТИШИНЫ КАРТОЧКИ
+# =========================
+
+
+class CardMuteSetting(Base):
+    """Режим тишины уведомлений для карточки — per-user, per-card"""
+
+    __tablename__ = "card_mute_settings"
+    __table_args__ = (UniqueConstraint("employee_id", "entity_type", "entity_id", name="uq_card_mute_per_user"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    employee_id = Column(Integer, ForeignKey("employees.id", ondelete="CASCADE"), nullable=False, index=True)
+    entity_type = Column(String(20), nullable=False)  # 'crm_card' | 'supervision_card'
+    entity_id = Column(Integer, nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    employee = relationship("Employee")
+
+
+# =========================
+# ВНУТРЕННИЙ ЧАТ
+# =========================
+
+
+class InternalChat(Base):
+    """Внутренние чаты проектов (сотрудники и клиенты)"""
+
+    __tablename__ = "internal_chats"
+
+    id = Column(Integer, primary_key=True, index=True)
+    # employee — чат сотрудников по заказу, client — чат с клиентом
+    chat_type = Column(String(20), nullable=False)  # 'employee' / 'client'
+
+    # Административные общие чаты (не привязаны к заказу)
+    is_admin_chat = Column(Boolean, default=False, nullable=False, server_default="false")
+    admin_chat_type = Column(String(10), nullable=True)  # 'ip' | 'shp' | 'an'
+
+    crm_card_id = Column(Integer, ForeignKey("crm_cards.id", ondelete="CASCADE"), nullable=True, index=True)
+    supervision_card_id = Column(Integer, nullable=True)
+    contract_id = Column(Integer, ForeignKey("contracts.id", ondelete="CASCADE"), nullable=True, index=True)
+
+    title = Column(String(255), nullable=True)  # Адрес объекта — заполняется автоматически
+
+    # Подпапка ВНУТРИ папки карточки:
+    # employee: {contract.yandex_folder_path}/Чат сотрудников
+    # client:   {contract.yandex_folder_path}/Чат с клиентом
+    yandex_folder_path = Column(String, nullable=True)
+
+    # UUID-токен для доступа клиента по ссылке (только chat_type='client')
+    client_access_token = Column(String(36), nullable=True, unique=True, index=True)
+
+    created_by = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    is_active = Column(Boolean, default=True)
+
+    members = relationship("InternalChatMember", back_populates="chat", cascade="all, delete-orphan")
+    messages = relationship("InternalChatMessage", back_populates="chat", cascade="all, delete-orphan")
+
+
+class InternalChatMember(Base):
+    """Участники внутреннего чата"""
+
+    __tablename__ = "internal_chat_members"
+
+    id = Column(Integer, primary_key=True, index=True)
+    chat_id = Column(Integer, ForeignKey("internal_chats.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # Тип участника: employee (сотрудник) или client_guest (представитель заказчика)
+    member_type = Column(String(20), nullable=False)  # 'employee' / 'client_guest'
+
+    # Для сотрудников
+    employee_id = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+
+    # Для клиентов/гостей (заполняются при регистрации по ссылке)
+    guest_name = Column(String(100), nullable=True)
+    guest_phone = Column(String(20), nullable=True)
+    # Каждый представитель имеет свой уникальный токен доступа
+    guest_access_token = Column(String(36), nullable=True, unique=True, index=True)
+
+    # ID последнего прочитанного сообщения (для подсчёта непрочитанных)
+    last_read_message_id = Column(Integer, nullable=True)
+
+    # Последняя активность гостя (обновляется при WS-подключении и пинге)
+    last_guest_activity = Column(DateTime, nullable=True)
+
+    # Web Push подписка гостя (JSON)
+    guest_push_subscription = Column(Text, nullable=True)
+
+    joined_at = Column(DateTime, default=datetime.utcnow)
+    is_active = Column(Boolean, default=True)
+
+    chat = relationship("InternalChat", back_populates="members")
+    employee = relationship("Employee")
+
+
+class InternalChatMessage(Base):
+    """Сообщения внутреннего чата"""
+
+    __tablename__ = "internal_chat_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    chat_id = Column(Integer, ForeignKey("internal_chats.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # Отправитель: либо сотрудник, либо гость-клиент
+    sender_employee_id = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    sender_guest_token = Column(String(36), nullable=True)  # guest_access_token участника-гостя
+    sender_display_name = Column(String(100), nullable=False)  # Имя для отображения
+
+    # Тип: text / voice / image / file / system
+    message_type = Column(String(20), nullable=False, default="text")
+
+    content = Column(Text, nullable=True)  # Текст сообщения
+
+    # Файл/медиа (голос, изображение, документ)
+    file_url = Column(String, nullable=True)  # Публичная ссылка ЯД
+    file_name = Column(String(255), nullable=True)
+    file_size = Column(Integer, nullable=True)  # Байты
+    # Путь внутри папки карточки: {contract.yandex_folder_path}/Чат сотрудников/...
+    yandex_path = Column(String, nullable=True)
+
+    # Ответ на сообщение
+    reply_to_id = Column(Integer, ForeignKey("internal_chat_messages.id", ondelete="SET NULL"), nullable=True)
+
+    # Группировка медиа (несколько изображений одной отправкой)
+    group_id = Column(String(36), nullable=True, index=True)
+    # Закреплённое сообщение
+    is_pinned = Column(Boolean, default=False)
+
+    is_deleted = Column(Boolean, default=False)
+    is_edited = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    chat = relationship("InternalChat", back_populates="messages")
+    sender = relationship("Employee", foreign_keys=[sender_employee_id])
+
+
+class InternalChatMessageReaction(Base):
+    """Emoji-реакции на сообщения чата"""
+
+    __tablename__ = "internal_chat_message_reactions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    message_id = Column(Integer, ForeignKey("internal_chat_messages.id", ondelete="CASCADE"), nullable=False, index=True)
+    employee_id = Column(Integer, ForeignKey("employees.id", ondelete="CASCADE"), nullable=True)
+    guest_token = Column(String(36), nullable=True)
+    emoji = Column(String(10), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class UserChatPin(Base):
+    """Закреплённые чаты пользователя (персональный порядок)"""
+
+    __tablename__ = "user_chat_pins"
+
+    id = Column(Integer, primary_key=True, index=True)
+    employee_id = Column(Integer, ForeignKey("employees.id", ondelete="CASCADE"), nullable=False, index=True)
+    chat_id = Column(Integer, ForeignKey("internal_chats.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    from sqlalchemy import UniqueConstraint
+
+    __table_args__ = (UniqueConstraint("employee_id", "chat_id", name="uq_user_chat_pin"),)
+
+
+class DeletedContract(Base):
+    """Снимок удалённого договора для возможности восстановления"""
+
+    __tablename__ = "deleted_contracts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    original_contract_id = Column(Integer, nullable=False)
+    contract_number = Column(String)
+    client_name = Column(String)
+    address = Column(String)
+    project_type = Column(String)
+    project_subtype = Column(String, nullable=True)
+    yandex_folder_path = Column(String, nullable=True)
+    snapshot = Column(JSON, nullable=False)
+    deleted_by_id = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    deleted_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
+class FilePreviewCache(Base):
+    """Кэш превью файлов из Яндекс.Диска (изображения + PDF → WebP)"""
+
+    __tablename__ = "file_preview_cache"
+
+    path_hash = Column(String(32), primary_key=True)
+    yandex_path = Column(Text, nullable=False)
+    preview_filename = Column(String(100), nullable=False)
+    file_size_bytes = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_accessed_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
 def _auto_migrate_columns():
     """Автоматически добавляет недостающие столбцы в существующие таблицы.
 
@@ -929,7 +1346,9 @@ def _auto_migrate_columns():
     Эта функция сравнивает модель с БД и выполняет ALTER TABLE ADD COLUMN.
     """
     import logging
+
     from sqlalchemy import inspect, text
+
     logger = logging.getLogger(__name__)
     try:
         inspector = inspect(engine)
@@ -939,7 +1358,7 @@ def _auto_migrate_columns():
             if table.name not in existing_tables:
                 continue  # create_all() создаст таблицу целиком
 
-            db_columns = {col['name'] for col in inspector.get_columns(table.name)}
+            db_columns = {col["name"] for col in inspector.get_columns(table.name)}
             for col in table.columns:
                 if col.name not in db_columns:
                     col_type = col.type.compile(engine.dialect)
@@ -947,7 +1366,7 @@ def _auto_migrate_columns():
                     default = ""
                     if col.default is not None:
                         default = f" DEFAULT {col.default.arg!r}"
-                    sql = f'ALTER TABLE {table.name} ADD COLUMN {col.name} {col_type} {nullable}{default}'
+                    sql = f"ALTER TABLE {table.name} ADD COLUMN {col.name} {col_type} {nullable}{default}"
                     with engine.begin() as conn:
                         conn.execute(text(sql))
                     logger.info(f"auto-migrate: добавлен столбец {table.name}.{col.name} ({col_type})")
@@ -955,14 +1374,47 @@ def _auto_migrate_columns():
         logger.warning(f"auto-migrate warning: {e}")
 
 
+def _ensure_chat_indexes():
+    """Создать составные индексы для таблиц чата если не существуют."""
+    if engine.dialect.name != "postgresql":
+        return
+    import logging
+
+    from sqlalchemy import text as _text
+
+    logger = logging.getLogger(__name__)
+    indexes = [
+        (
+            "idx_internal_chat_messages_chat_id_desc",
+            "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_internal_chat_messages_chat_id_desc ON internal_chat_messages(chat_id, id DESC) WHERE is_deleted = FALSE",
+        ),
+        (
+            "idx_internal_chat_members_chat_employee",
+            "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_internal_chat_members_chat_employee ON internal_chat_members(chat_id, employee_id) WHERE is_active = TRUE",
+        ),
+    ]
+    try:
+        with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
+            for name, sql in indexes:
+                try:
+                    conn.execute(_text(sql))
+                    logger.debug(f"index ensured: {name}")
+                except Exception as e:
+                    logger.debug(f"index hint ({name}): {e}")
+    except Exception as e:
+        logger.warning(f"_ensure_chat_indexes warning: {e}")
+
+
 def init_db():
     """Инициализация базы данных"""
     try:
         Base.metadata.create_all(bind=engine)
         _auto_migrate_columns()
+        _ensure_chat_indexes()
     except Exception as e:
         # Race condition при 2+ workers: один уже создал таблицы
         import logging
+
         logging.getLogger(__name__).warning(f"init_db warning (likely race condition): {e}")
 
 

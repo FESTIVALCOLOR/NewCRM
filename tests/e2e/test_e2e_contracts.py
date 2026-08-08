@@ -4,13 +4,14 @@ E2E Tests: CRUD договоров
 16 тестов — создание, чтение, обновление, удаление, фильтрация, пагинация, ключи ответа.
 """
 
-import pytest
-import sys
 import os
+import sys
+
+import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from tests.e2e.conftest import TEST_PREFIX, api_get, api_post, api_put, api_patch, api_delete
+from tests.e2e.conftest import TEST_PREFIX, api_delete, api_get, api_patch, api_post, api_put
 
 
 @pytest.mark.e2e
@@ -57,10 +58,15 @@ class TestContractsCRUD:
         """Обновление договора"""
         client = module_factory.create_client()
         contract = module_factory.create_contract(client["id"])
-        resp = api_put(api_base, f"/api/contracts/{contract['id']}", admin_headers, json={
-            "status": "СДАН",
-            "area": 120.5,
-        })
+        resp = api_put(
+            api_base,
+            f"/api/contracts/{contract['id']}",
+            admin_headers,
+            json={
+                "status": "СДАН",
+                "area": 120.5,
+            },
+        )
         assert resp.status_code == 200
         updated = resp.json()
         assert updated["status"] == "СДАН"
@@ -70,14 +76,24 @@ class TestContractsCRUD:
         """Удаление договора"""
         client = module_factory.create_client()
         # Создаём вручную (не отслеживаем, удалим сами)
-        resp = api_post(api_base, "/api/contracts", admin_headers, json={
-            "client_id": client["id"],
-            "project_type": "Индивидуальный",
-            "contract_number": f"{TEST_PREFIX}DEL_001",
-            "status": "Новый заказ",
-        })
+        resp = api_post(
+            api_base,
+            "/api/contracts",
+            admin_headers,
+            json={
+                "client_id": client["id"],
+                "project_type": "Индивидуальный",
+                "contract_number": f"{TEST_PREFIX}DEL_001",
+                "status": "Новый заказ",
+                "area": 50.0,
+            },
+        )
         assert resp.status_code == 200
         cid = resp.json()["id"]
+
+        # Перед удалением переводим в архивный статус (РАСТОРГНУТ)
+        resp = api_patch(api_base, f"/api/contracts/{cid}", admin_headers, json={"status": "РАСТОРГНУТ"})
+        assert resp.status_code == 200
 
         resp = api_delete(api_base, f"/api/contracts/{cid}", admin_headers)
         assert resp.status_code == 200
@@ -105,14 +121,14 @@ class TestContractsCRUD:
             json={
                 "tech_task_link": "https://disk.yandex.ru/test_link",
                 "measurement_date": "2026-01-15",
-            }
+            },
         )
         assert resp.status_code == 200
 
     def test_contract_with_all_cities(self, api_base, admin_headers, module_factory):
         """Создание договоров для каждого города"""
         client = module_factory.create_client()
-        for city in ['СПБ', 'МСК', 'ВН']:
+        for city in ["СПБ", "МСК", "ВН"]:
             contract = module_factory.create_contract(client["id"], city=city)
             assert contract["city"] == city
 
@@ -121,8 +137,7 @@ class TestContractsCRUD:
         client = module_factory.create_client()
         contract = module_factory.create_contract(client["id"])
         # Проверяем обязательные ключи
-        for key in ("id", "client_id", "project_type", "contract_number",
-                    "status", "created_at", "updated_at"):
+        for key in ("id", "client_id", "project_type", "contract_number", "status", "created_at", "updated_at"):
             assert key in contract, f"Ожидается ключ '{key}' в ответе договора"
         assert contract["client_id"] == client["id"]
         assert contract["id"] > 0
@@ -155,8 +170,7 @@ class TestContractsCRUD:
         client = module_factory.create_client()
         for i in range(3):
             module_factory.create_contract(client["id"])
-        resp = api_get(api_base, "/api/contracts", admin_headers,
-                       params={"skip": 0, "limit": 2})
+        resp = api_get(api_base, "/api/contracts", admin_headers, params={"skip": 0, "limit": 2})
         assert resp.status_code == 200
         data = resp.json()
         assert isinstance(data, list)
@@ -175,8 +189,7 @@ class TestContractsCRUD:
         """GET /count с фильтром project_type возвращает корректное число"""
         client = module_factory.create_client()
         module_factory.create_contract(client["id"], project_type="Индивидуальный")
-        resp = api_get(api_base, "/api/contracts/count", admin_headers,
-                       params={"project_type": "Индивидуальный"})
+        resp = api_get(api_base, "/api/contracts/count", admin_headers, params={"project_type": "Индивидуальный"})
         assert resp.status_code == 200
         data = resp.json()
         assert "count" in data
@@ -188,10 +201,15 @@ class TestContractsCRUD:
         contract = module_factory.create_contract(client["id"])
         new_area = 250.0
         new_status = "В РАБОТЕ"
-        resp = api_put(api_base, f"/api/contracts/{contract['id']}", admin_headers, json={
-            "area": new_area,
-            "status": new_status,
-        })
+        resp = api_put(
+            api_base,
+            f"/api/contracts/{contract['id']}",
+            admin_headers,
+            json={
+                "area": new_area,
+                "status": new_status,
+            },
+        )
         assert resp.status_code == 200
         # Повторно получаем — проверяем сохранение
         resp2 = api_get(api_base, f"/api/contracts/{contract['id']}", admin_headers)
@@ -214,5 +232,4 @@ class TestContractsCRUD:
     def test_contracts_require_auth(self, api_base):
         """GET /api/contracts без токена — 401"""
         resp = api_get(api_base, "/api/contracts", {})
-        assert resp.status_code in (401, 403), \
-            f"Ожидается 401/403 без авторизации, получено {resp.status_code}"
+        assert resp.status_code in (401, 403), f"Ожидается 401/403 без авторизации, получено {resp.status_code}"

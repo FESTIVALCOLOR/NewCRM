@@ -12,7 +12,7 @@ from PyQt5.QtCore import Qt, QTimer
 
 from ui.custom_message_box import CustomMessageBox
 
-SUPERUSER_ROLES = {'Руководитель студии', 'Директор', 'Администратор'}
+SUPERUSER_ROLES = {'Руководитель студии', 'Директор', 'Администратор', 'admin', 'director'}
 
 
 class NotificationSettingsWidget(QWidget):
@@ -24,15 +24,9 @@ class NotificationSettingsWidget(QWidget):
         self.data_access = data_access
         self.employee = employee or {}
         self._current_employee_id = None
+        self._target_employee = None
         self._employees = []
         self._settings = {}
-
-        # Проверяем права текущего пользователя на оплаты
-        from utils.permissions import _has_perm
-        self._viewer_has_payment_perm = (
-            _has_perm(self.employee, self.api_client, 'payments.create') or
-            _has_perm(self.employee, self.api_client, 'payments.update')
-        )
 
         self._setup_ui()
         QTimer.singleShot(100, self._load_employees)
@@ -111,11 +105,7 @@ class NotificationSettingsWidget(QWidget):
         self._chk_assigned = QCheckBox("Назначение исполнителем")
         self._chk_deadline = QCheckBox("Предупреждение о дедлайне")
         self._chk_payment = QCheckBox("Создание оплаты")
-        self._chk_supervision = QCheckBox("Новый надзор")
-
-        # Чекбокс оплаты виден только если у просматривающего есть права на оплаты
-        if not self._viewer_has_payment_perm:
-            self._chk_payment.setVisible(False)
+        self._chk_supervision = QCheckBox("Авторский надзор")
 
         for chk in [self._chk_crm_stage, self._chk_assigned, self._chk_deadline,
                     self._chk_payment, self._chk_supervision]:
@@ -123,6 +113,34 @@ class NotificationSettingsWidget(QWidget):
             events_layout.addWidget(chk)
 
         layout.addWidget(events_group)
+
+        # Секция фильтра по типам проектов
+        self._projects_group = QGroupBox("Типы проектов (каналы)")
+        self._projects_group.setStyleSheet(tg_group.styleSheet())
+        projects_layout = QVBoxLayout(self._projects_group)
+
+        self._chk_individual = QCheckBox("Индивидуальные проекты")
+        self._chk_template = QCheckBox("Шаблонные проекты")
+
+        for chk in [self._chk_individual, self._chk_template]:
+            chk.setStyleSheet("font-size: 13px; padding: 2px 0;")
+            projects_layout.addWidget(chk)
+
+        layout.addWidget(self._projects_group)
+
+        # Секция дублирования уведомлений
+        self._duplication_group = QGroupBox("Дублирование уведомлений")
+        self._duplication_group.setStyleSheet(tg_group.styleSheet())
+        dup_layout = QVBoxLayout(self._duplication_group)
+
+        self._chk_duplicate_info = QCheckBox("Получать информационные дубли (уведомления подчинённых)")
+        self._chk_revision_info = QCheckBox("Получать уведомления об исправлениях подчинённых")
+
+        for chk in [self._chk_duplicate_info, self._chk_revision_info]:
+            chk.setStyleSheet("font-size: 13px; padding: 2px 0;")
+            dup_layout.addWidget(chk)
+
+        layout.addWidget(self._duplication_group)
 
         # Кнопки
         btn_layout = QHBoxLayout()
@@ -206,12 +224,41 @@ class NotificationSettingsWidget(QWidget):
             return
         self._current_employee_id = emp_id
 
+        # Найти целевого сотрудника для проверки его прав
+        self._target_employee = self.employee  # по умолчанию — текущий пользователь
+        for emp in self._employees:
+            if emp.get('id') == emp_id:
+                self._target_employee = emp
+                break
+
+        # Видимость секций — по правам ЦЕЛЕВОГО сотрудника
+        self._update_section_visibility()
+
         if self.data_access:
             try:
                 settings = self.data_access.get_notification_settings(emp_id) or {}
                 self._apply_settings(settings)
             except Exception as e:
                 print(f"[NotificationSettings] Ошибка загрузки: {e}")
+
+    def _update_section_visibility(self):
+        """Показать/скрыть секции настроек по правам ЦЕЛЕВОГО сотрудника.
+
+        Директор, просматривая Чертёжника, видит только те секции,
+        которые доступны Чертёжнику. Это совпадает с тем, что видит
+        сам Чертёжник в своих настройках.
+        """
+        from utils.permissions import _has_perm
+        target = self._target_employee or self.employee
+
+        self._projects_group.setVisible(
+            _has_perm(target, self.api_client, 'notifications.settings_projects'))
+        self._duplication_group.setVisible(
+            _has_perm(target, self.api_client, 'notifications.settings_duplication'))
+        self._chk_supervision.setVisible(
+            _has_perm(target, self.api_client, 'notifications.settings_supervision'))
+        self._chk_payment.setVisible(
+            _has_perm(target, self.api_client, 'notifications.settings_payment'))
 
     def _apply_settings(self, settings: dict):
         """Применить настройки к чекбоксам"""
@@ -221,6 +268,10 @@ class NotificationSettingsWidget(QWidget):
         self._chk_deadline.setChecked(settings.get('notify_deadline', True))
         self._chk_payment.setChecked(settings.get('notify_payment', False))
         self._chk_supervision.setChecked(settings.get('notify_supervision', False))
+        self._chk_individual.setChecked(settings.get('notify_individual', True))
+        self._chk_template.setChecked(settings.get('notify_template', True))
+        self._chk_duplicate_info.setChecked(settings.get('notify_duplicate_info', False))
+        self._chk_revision_info.setChecked(settings.get('notify_revision_info', False))
 
         connected = settings.get('telegram_connected', False)
         if connected:
@@ -243,6 +294,10 @@ class NotificationSettingsWidget(QWidget):
             'notify_deadline': self._chk_deadline.isChecked(),
             'notify_payment': self._chk_payment.isChecked(),
             'notify_supervision': self._chk_supervision.isChecked(),
+            'notify_individual': self._chk_individual.isChecked(),
+            'notify_template': self._chk_template.isChecked(),
+            'notify_duplicate_info': self._chk_duplicate_info.isChecked(),
+            'notify_revision_info': self._chk_revision_info.isChecked(),
         }
 
         if self.data_access:

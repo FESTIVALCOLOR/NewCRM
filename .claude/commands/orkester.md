@@ -9,6 +9,37 @@ $ARGUMENTS
 
 ---
 
+## ШАГ -1: КОНТЕКСТ ПРОЕКТА (выполнить ПЕРВЫМ, до всего остального)
+
+Перед запуском конвейера — извлеки контекст из `.claude/CLAUDE.md` (он уже загружен в сессию).
+НЕ запускай Grep/Glob для этого — вся карта уже есть в CLAUDE.md.
+
+**Что взять из CLAUDE.md:**
+
+| Нужно для задачи | Раздел CLAUDE.md |
+|-----------------|-----------------|
+| Какие файлы затронуты | "Карта ключевых файлов" |
+| Методы DataAccess | "Атрибуты: utils/data_access.py" |
+| HTTP endpoints | "Атрибуты: server/routers/" |
+| Значения статусов / колонок | "Бизнес-словарь" |
+| Ключи прав | "Полный список ключей прав" |
+| Mobile stores / API | "Mobile PWA — Pinia Stores / API клиент" |
+| SQLAlchemy модели | "Модели базы данных" |
+
+**Результат ШАГа -1:** Список затронутых файлов и ключевых атрибутов — передаётся в контекст всем последующим субагентам в их промптах, чтобы они НЕ тратили tool calls на повторное открытие CLAUDE.md.
+
+**Формат передачи контекста субагентам:**
+```
+Контекст из CLAUDE.md:
+- Затронутые файлы: [список]
+- DataAccess методы: [список]
+- Endpoints: [список]
+- Модели БД: [список]
+- Права: [список ключей]
+```
+
+---
+
 ## ШАГ 0: Определение режима
 
 Проанализируй текст задачи и определи режим работы:
@@ -38,7 +69,8 @@ $ARGUMENTS
 Вызови субагент `.claude/agents/research-agent.md` через Task tool.
 
 **Задание для Research:**
-1. Определить место задачи в проекте
+0. Контекст из ШАГа -1: {передать список затронутых файлов и атрибутов из CLAUDE.md}
+1. Определить место задачи в проекте (файлы уже известны из контекста — углубиться в детали)
 2. Проанализировать 3 направления: архитектура, паттерны, интеграции
 3. ТОЛЬКО описание текущего состояния — БЕЗ рекомендаций
 4. Создать папку `docs/plan/{task-slug}/`
@@ -48,7 +80,7 @@ $ARGUMENTS
 
 ---
 
-## ШАГ 0.7: DESIGN (модель: opus) — УСЛОВНЫЙ
+## ШАГ 0.7: DESIGN (модель: sonnet) — УСЛОВНЫЙ
 
 Активируется в режимах: **full**, **refactor**.
 Пропустить в: **fix**, **test**, **security**, **deploy**, **docker**, **qa**.
@@ -66,14 +98,15 @@ $ARGUMENTS
 
 ---
 
-## ШАГ 1: PLANNER (модель: opus)
+## ШАГ 1: PLANNER (модель: sonnet)
 
 Вызови субагент `.claude/agents/planner-agent.md` через Task tool.
 
 **Задание для Planner:**
+0. Контекст из ШАГа -1: {передать список затронутых файлов и атрибутов из CLAUDE.md}
 1. Прочитать описание задачи (+ research.md и design.md если есть)
-2. Определить затронутые слои (server / client / db / ui)
-3. Определить затронутые файлы (Grep/Glob)
+2. Определить затронутые слои (server / client / db / ui) — из контекста, НЕ grep
+3. Уточнить затронутые файлы (Grep/Glob только для трассировки, пути уже известны)
 4. Разбить на подзадачи с зависимостями
 5. Определить какие специализированные агенты нужны
 6. Определить какие категории тестов запускать
@@ -101,7 +134,7 @@ $ARGUMENTS
 
 ---
 
-## ШАГ 2: WORKER (модель: opus) + специализированные агенты
+## ШАГ 2: WORKER (модель: sonnet) + специализированные агенты
 
 Вызови субагент `.claude/agents/worker-agent.md` через Task tool.
 
@@ -211,10 +244,15 @@ CRM КРАШНУЛСЯ:
 1. Получить список изменённых файлов
 2. Определить категории тестов по маппингу:
    - `server/` → `tests/e2e/`, `tests/backend/`
+   - `server/` (API валидация) → `tests/fuzz/` (если сервер доступен)
    - `ui/` → `tests/ui/`, `tests/frontend/`
+   - `ui/` + `utils/data_access.py` → `tests/ui_real/` (если сервер доступен)
+   - `ui/` (визуальные изменения) → `tests/visual/`
    - `database/` → `tests/db/`
    - `utils/api_client.py` → `tests/api_client/`, `tests/client/`
+   - `utils/` (расчёты) → `tests/property/`
    - Всегда → `tests/ -m critical`
+   - НЕ запускать `tests/integration/` (только ручной) и `tests/fuzz/` (долго) автоматически
 3. Написать недостающие тесты для непокрытых участков
 4. Запустить тесты: `.venv\Scripts\python.exe -m pytest [путь] -v --timeout=60`
 
@@ -288,8 +326,6 @@ git add <список_изменённых_файлов>
 # Коммит (HEREDOC формат)
 git commit -m "$(cat <<'EOF'
 описание изменений
-
-Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 EOF
 )"
 
@@ -317,9 +353,6 @@ gh pr create --title "{краткий заголовок до 70 символо�
 - Локальные тесты: {N} passed, 0 failed
 - Gate Checks: 5/5 passed
 - Категории: {e2e, db, ui, client, critical}
-
-Сгенерировано Claude Code
-Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -453,7 +486,7 @@ MISMATCH → Worker исправляет → Checker перепроверяет
 
 ---
 
-## ШАГ 10: SENIOR REVIEWER (модель: opus) — УСЛОВНЫЙ
+## ШАГ 10: SENIOR REVIEWER (модель: sonnet) — УСЛОВНЫЙ
 
 Активировать если:
 - Изменено 3+ файлов в разных модулях
@@ -484,7 +517,7 @@ MISMATCH → Worker исправляет → Checker перепроверяет
 
 ---
 
-## ШАГ 12: DEPLOY (модель: opus) — ТОЛЬКО ПО ЗАПРОСУ
+## ШАГ 12: DEPLOY (модель: sonnet) — ТОЛЬКО ПО ЗАПРОСУ
 
 **НИКОГДА** не запускать автоматически!
 Только если пользователь явно запросил деплой или режим **deploy**.
@@ -718,8 +751,8 @@ send_task_notification(
 
 ## КОНТЕКСТНОЕ ОКНО СУБАГЕНТОВ
 
-Оркестратор работает с моделью `opus[1m]` (1M токенов контекста).
-Субагенты через Task tool ограничены стандартным контекстом (~200K), т.к. параметр `model` принимает только `"sonnet"`, `"opus"`, `"haiku"` без `[1m]` суффикса. Это допустимо — каждый субагент решает узкую задачу и не нуждается в 1M контексте.
+Оркестратор и субагенты работают с моделью `sonnet` (тариф Pro, ~200K контекста).
+Параметр `model` в Task tool принимает `"sonnet"` или `"haiku"`. Каждый субагент решает узкую задачу и 200K контекста достаточно.
 
 ---
 
@@ -760,6 +793,21 @@ send_task_notification(
 
 # Клиентские unit-тесты
 .venv\Scripts\python.exe -m pytest tests/client/ -v
+
+# API Fuzzing (Schemathesis, нужен сервер)
+FUZZ_BASE_URL=https://crm.festivalcolor.ru .venv\Scripts\python.exe -m pytest tests/fuzz/ -v -m fuzz
+
+# Property-based (Hypothesis, без сервера)
+.venv\Scripts\python.exe -m pytest tests/property/ -v -m property
+
+# Реальные UI тесты (pytest-qt + DataAccess, нужен сервер)
+QT_QPA_PLATFORM=offscreen .venv\Scripts\python.exe -m pytest tests/ui_real/ -v -m ui_real
+
+# Visual regression (offscreen)
+QT_QPA_PLATFORM=offscreen .venv\Scripts\python.exe -m pytest tests/visual/ -v -m visual
+
+# Integration (pywinauto, ТОЛЬКО ручной, < 10 мин)
+.venv\Scripts\python.exe -m pytest tests/integration/ -v --timeout=600
 
 # ВАЖНО: UI логи НЕ читать через Read!
 .venv/Scripts/python.exe tests/ui/parse_results.py <файл_логов>

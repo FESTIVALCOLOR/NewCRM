@@ -2,19 +2,43 @@
 """
 Генератор превью для изображений и PDF файлов
 """
-from PyQt5.QtGui import QPixmap, QImage
-from PyQt5.QtCore import Qt
+
 import os
 import tempfile
+
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QImage, QPixmap
 
 # Проверяем наличие PyMuPDF
 try:
     import fitz
+
     HAS_PYMUPDF = True
 except ImportError:
     HAS_PYMUPDF = False
     print("[WARN] PyMuPDF не установлен. Превью PDF недоступно.")
     print("[WARN] Установите: pip install PyMuPDF")
+
+
+def _get_cache_dir():
+    """Персистентная директория для кэша превью.
+
+    В dev-режиме: preview_cache/ рядом с проектом.
+    В PyInstaller exe: %LOCALAPPDATA%/InteriorStudio/preview_cache/
+    (временная папка _MEI удаляется при закрытии — нельзя использовать).
+    """
+    import sys
+
+    if getattr(sys, "frozen", False):
+        # PyInstaller — используем AppData (персистентный)
+        local_appdata = os.environ.get("LOCALAPPDATA", os.path.expanduser("~"))
+        base = os.path.join(local_appdata, "InteriorStudio")
+    else:
+        # Dev — рядом с корнем проекта
+        base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    cache_dir = os.path.join(base, "preview_cache")
+    os.makedirs(cache_dir, exist_ok=True)
+    return cache_dir
 
 
 class PreviewGenerator:
@@ -39,18 +63,46 @@ class PreviewGenerator:
                 return None
 
             # Масштабируем с сохранением пропорций
-            scaled = pixmap.scaled(
-                PreviewGenerator.PREVIEW_WIDTH,
-                PreviewGenerator.PREVIEW_HEIGHT,
-                Qt.KeepAspectRatio,
-                Qt.SmoothTransformation
-            )
+            scaled = pixmap.scaled(PreviewGenerator.PREVIEW_WIDTH, PreviewGenerator.PREVIEW_HEIGHT, Qt.KeepAspectRatio, Qt.SmoothTransformation)
 
             return scaled
 
         except Exception as e:
             print(f"[ERROR] Ошибка генерации превью изображения: {e}")
             return None
+
+    @staticmethod
+    def generate_image_preview_threadsafe(image_path):
+        """Генерация превью через QImage (потокобезопасно, для фоновых потоков).
+
+        QPixmap нельзя создавать вне главного потока Qt — может вернуть null.
+        QImage безопасен для использования в любом потоке.
+
+        Returns:
+            QImage или None
+        """
+        try:
+            image = QImage(image_path)
+            if image.isNull():
+                return None
+
+            scaled = image.scaled(PreviewGenerator.PREVIEW_WIDTH, PreviewGenerator.PREVIEW_HEIGHT, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+
+            return scaled
+
+        except Exception as e:
+            print(f"[ERROR] Ошибка генерации превью (threadsafe): {e}")
+            return None
+
+    @staticmethod
+    def save_image_to_cache(image, cache_path):
+        """Сохранение QImage в кэш (потокобезопасно)"""
+        try:
+            os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+            return image.save(cache_path, "PNG")
+        except Exception as e:
+            print(f"[ERROR] Ошибка сохранения QImage в кэш: {e}")
+            return False
 
     @staticmethod
     def generate_pdf_preview(pdf_path):
@@ -90,12 +142,7 @@ class PreviewGenerator:
             pixmap = QPixmap.fromImage(qimage)
 
             # Масштабируем
-            scaled = pixmap.scaled(
-                PreviewGenerator.PREVIEW_WIDTH,
-                PreviewGenerator.PREVIEW_HEIGHT,
-                Qt.KeepAspectRatio,
-                Qt.SmoothTransformation
-            )
+            scaled = pixmap.scaled(PreviewGenerator.PREVIEW_WIDTH, PreviewGenerator.PREVIEW_HEIGHT, Qt.KeepAspectRatio, Qt.SmoothTransformation)
 
             doc.close()
             return scaled
@@ -117,7 +164,7 @@ class PreviewGenerator:
         """
         try:
             os.makedirs(os.path.dirname(cache_path), exist_ok=True)
-            return pixmap.save(cache_path, 'PNG')
+            return pixmap.save(cache_path, "PNG")
         except Exception as e:
             print(f"[ERROR] Ошибка сохранения превью в кэш: {e}")
             return False
@@ -155,14 +202,11 @@ class PreviewGenerator:
             Путь к файлу кэша
         """
         import hashlib
-        # Используем постоянную директорию рядом с приложением
-        # Получаем путь к директории скрипта (корень приложения)
-        app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        cache_dir = os.path.join(app_dir, 'preview_cache')
-        os.makedirs(cache_dir, exist_ok=True)
+
+        cache_dir = _get_cache_dir()
 
         # Use hash to handle any filename characters (including Cyrillic)
-        name_hash = hashlib.md5(file_name.encode('utf-8')).hexdigest()[:12]
+        name_hash = hashlib.md5(file_name.encode("utf-8"), usedforsecurity=False).hexdigest()[:12]  # nosec B324
         # Keep extension for readability
         _, ext = os.path.splitext(file_name)
         preview_name = f"{contract_id}_{stage}_{name_hash}{ext or '.png'}"
@@ -173,8 +217,8 @@ class PreviewGenerator:
     def cleanup_cache(max_size_mb=500, max_age_days=30):
         """Clean up preview cache: remove old files and limit total size"""
         import time
-        app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        cache_dir = os.path.join(app_dir, 'preview_cache')
+
+        cache_dir = _get_cache_dir()
         if not os.path.exists(cache_dir):
             return
 
@@ -213,9 +257,9 @@ class PreviewGenerator:
         Returns:
             QPixmap или None
         """
-        if file_type == 'image':
+        if file_type == "image":
             return PreviewGenerator.generate_image_preview(file_path)
-        elif file_type == 'pdf':
+        elif file_type == "pdf":
             return PreviewGenerator.generate_pdf_preview(file_path)
         else:
             # Для Excel и других типов файлов возвращаем None

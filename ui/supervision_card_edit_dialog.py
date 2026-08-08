@@ -34,6 +34,7 @@ class SupervisionCardEditDialog(QDialog):
     _report_upload_error = pyqtSignal(str)  # error_msg
     _reload_files_signal = pyqtSignal()  # потокобезопасный сигнал для перезагрузки списка файлов
     _sync_ended = pyqtSignal()  # Сигнал завершения фоновой синхронизации
+    _delete_chat_finished = pyqtSignal(object)  # Сигнал завершения удаления чата (error_str или None)
 
     def __init__(self, parent, card_data, employee, api_client=None):
         super().__init__(parent)
@@ -69,6 +70,7 @@ class SupervisionCardEditDialog(QDialog):
         # Синхронизация (до init_ui, т.к. init_ui вызывает load_supervision_files -> validate)
         self._active_sync_count = 0
         self._sync_ended.connect(self._on_sync_ended)
+        self._delete_chat_finished.connect(self._on_delete_chat_finished)
 
         self.init_ui()
         self.load_data()
@@ -112,7 +114,7 @@ class SupervisionCardEditDialog(QDialog):
             return None
 
     def init_ui(self):
-        title = 'История проекта' if self.is_dan_role else 'Редактирование карточки надзора'
+        title = 'История проекта' if self.is_dan_role else 'Данные карточки надзора'
 
         # ========== ГЛАВНЫЙ LAYOUT ==========
         main_layout = QVBoxLayout()
@@ -165,13 +167,84 @@ class SupervisionCardEditDialog(QDialog):
             QTabWidget::tab-bar {
                 left: 20px;
             }
+            QTabWidget::pane {
+                border-top: 1px solid #E0E0E0;
+                margin-left: 20px;
+                margin-right: 20px;
+            }
         """)
 
         # ВКЛАДКА 1: РЕДАКТИРОВАНИЕ (только для менеджеров)
         if not self.is_dan_role:
             edit_widget = QWidget()
-            edit_layout = QVBoxLayout()
-            edit_layout.setContentsMargins(20, 15, 20, 20)
+            edit_main_layout = QVBoxLayout(edit_widget)
+            edit_main_layout.setContentsMargins(0, 0, 0, 0)
+            edit_main_layout.setSpacing(0)
+
+            # Scroll area для контента
+            sv_scroll = QScrollArea()
+            sv_scroll.setWidgetResizable(True)
+            sv_scroll.setFrameShape(QFrame.NoFrame)
+            sv_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            sv_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+
+            sv_scroll_content = QWidget()
+            edit_layout = QVBoxLayout(sv_scroll_content)
+            edit_layout.setSpacing(15)
+            edit_layout.setContentsMargins(0, 15, 0, 20)
+
+            # Стили для групп и полей
+            GROUP_BOX_STYLE = """
+                QGroupBox {
+                    font-weight: bold; font-size: 11px; color: #2C3E50;
+                    border: 1px solid #E0E0E0; border-radius: 5px;
+                    margin-top: 8px; padding-top: 15px;
+                }
+                QGroupBox::title { left: 10px; padding: 0 5px; }
+            """
+            LABEL_STYLE = 'font-weight: bold; color: #555; min-width: 120px;'
+            VALUE_STYLE = '''
+                QLabel {
+                    background-color: #F8F9FA; padding: 4px 8px;
+                    border: 1px solid #E0E0E0; border-radius: 4px; font-size: 11px;
+                }
+            '''
+
+            # ========== БЛОК 1: ИНФОРМАЦИЯ ПРОЕКТА ==========
+            info_group = QGroupBox("Информация проекта")
+            info_group.setStyleSheet(GROUP_BOX_STYLE)
+            info_layout = QVBoxLayout()
+            info_layout.setSpacing(8)
+
+            info_fields = [
+                ('Договор:', self.card_data.get('contract_number', 'N/A')),
+                ('Адрес:', self.card_data.get('address', 'N/A')),
+                ('Площадь:', f"{self.card_data.get('area', 'N/A')} м2"),
+                ('Тип проекта:', self.card_data.get('project_type', 'N/A')),
+                ('Подтип:', self.card_data.get('project_subtype', 'N/A')),
+                ('Агент:', self.card_data.get('agent_type', 'N/A')),
+                ('Город:', self.card_data.get('city', 'N/A')),
+            ]
+            for lbl_text, val_text in info_fields:
+                row = QHBoxLayout()
+                row.setSpacing(8)
+                lbl = QLabel(lbl_text)
+                lbl.setStyleSheet(LABEL_STYLE)
+                lbl.setFixedWidth(120)
+                row.addWidget(lbl)
+                val = QLabel(str(val_text) if val_text else 'N/A')
+                val.setStyleSheet(VALUE_STYLE)
+                row.addWidget(val, 1)
+                info_layout.addLayout(row)
+
+            info_group.setLayout(info_layout)
+            edit_layout.addWidget(info_group)
+
+            # ========== БЛОК 2: КОМАНДА ==========
+            team_group = QGroupBox("Команда")
+            team_group.setStyleSheet(GROUP_BOX_STYLE)
+            team_layout = QVBoxLayout()
+            team_layout.setSpacing(8)
 
             form_layout = QFormLayout()
 
@@ -214,14 +287,16 @@ class SupervisionCardEditDialog(QDialog):
                 'Выбрать другого ДАН',
                 icon_size=12
             )
+            reassign_dan_btn.setFixedHeight(28)
             reassign_dan_btn.setStyleSheet("""
                 QPushButton {
                     background-color: #E0E0E0;
                     color: #333;
-                    padding: 4px 8px;
-                    border: none;
+                    padding: 0px 14px;
+                    border: 1px solid #d9d9d9;
                     border-radius: 4px;
-                    font-size: 10px;
+                    font-size: 12px;
+                    max-height: 26px;
                 }
                 QPushButton:hover { background-color: #BDBDBD; }
             """)
@@ -329,9 +404,14 @@ class SupervisionCardEditDialog(QDialog):
             self.tags.setPlaceholderText('Срочный, VIP...')
             form_layout.addRow('Теги:', self.tags)
 
-            edit_layout.addLayout(form_layout)
+            team_layout.addLayout(form_layout)
+            team_group.setLayout(team_layout)
+            edit_layout.addWidget(team_group)
+
             edit_layout.addStretch()
-            edit_widget.setLayout(edit_layout)
+
+            sv_scroll.setWidget(sv_scroll_content)
+            edit_main_layout.addWidget(sv_scroll)
 
             self.tabs.addTab(edit_widget, 'Редактирование')
 
@@ -340,7 +420,7 @@ class SupervisionCardEditDialog(QDialog):
         self.sv_timeline_widget = None
         self.sv_visits_widget = None
         self._timeline_placeholder = QWidget()
-        self._timeline_tab_index = self.tabs.addTab(self._timeline_placeholder, 'Таблица сроков')
+        self._timeline_tab_index = self.tabs.addTab(self._timeline_placeholder, 'Таблица закупок')
 
         self._visits_placeholder = QWidget()
         self._visits_tab_index = self.tabs.addTab(self._visits_placeholder, 'Таблица выездов и дефектов')
@@ -371,13 +451,15 @@ class SupervisionCardEditDialog(QDialog):
         # Кнопка удаления заказа (по праву supervision.delete_order)
         if _has_perm(self.employee, self.api_client, 'supervision.delete_order'):
             delete_btn = IconLoader.create_icon_button('delete', 'Удалить заказ', 'Полностью удалить заказ', icon_size=12)
+            delete_btn.setFixedHeight(36)
             delete_btn.setStyleSheet("""
                 QPushButton {
                     background-color: #E74C3C;
                     color: white;
-                    padding: 10px 20px;
+                    padding: 0px 16px;
                     border-radius: 4px;
                     font-weight: bold;
+                    min-height: 36px; max-height: 36px;
                 }
                 QPushButton:hover { background-color: #C0392B; }
             """)
@@ -392,7 +474,7 @@ class SupervisionCardEditDialog(QDialog):
         )
         self.sv_create_chat_btn.setStyleSheet("""
             QPushButton {
-                background-color: #ffd93c; color: #ffffff;
+                background-color: #ffd93c; color: #333333;
                 padding: 0px 16px; border-radius: 4px; border: 1px solid #e6c236;
                 font-weight: bold; max-height: 36px; min-height: 36px;
             }
@@ -481,17 +563,38 @@ class SupervisionCardEditDialog(QDialog):
 
         if not self.is_dan_role:
             save_btn = QPushButton('Сохранить')
-            save_btn.setStyleSheet('padding: 10px 20px; font-weight: bold;')
+            save_btn.setFixedHeight(36)
+            save_btn.setStyleSheet("""
+                QPushButton {
+                    padding: 0px 16px; font-weight: bold;
+                    min-height: 36px; max-height: 36px;
+                    border-radius: 4px; border: 1px solid #d9d9d9;
+                }
+            """)
             save_btn.clicked.connect(self.save_changes)
             buttons_layout.addWidget(save_btn)
 
         close_btn = QPushButton('Закрыть')
-        close_btn.setStyleSheet('padding: 10px 20px;')
+        close_btn.setFixedHeight(36)
+        close_btn.setStyleSheet("""
+            QPushButton {
+                padding: 0px 16px;
+                min-height: 36px; max-height: 36px;
+                border-radius: 4px; border: 1px solid #d9d9d9;
+            }
+        """)
         close_btn.clicked.connect(self.accept)
         buttons_layout.addWidget(close_btn)
-        
+
+        # Линия-разделитель над кнопками
+        bottom_separator = QFrame()
+        bottom_separator.setFrameShape(QFrame.HLine)
+        bottom_separator.setStyleSheet("background-color: #E0E0E0;")
+        bottom_separator.setFixedHeight(1)
+        layout.addWidget(bottom_separator)
+
         layout.addLayout(buttons_layout)
-        
+
         content_widget.setLayout(layout)
         border_layout.addWidget(content_widget)
         
@@ -524,16 +627,18 @@ class SupervisionCardEditDialog(QDialog):
         layout.addWidget(header)
         
         # Кнопка добавления записи
-        add_btn = IconLoader.create_icon_button('note', 'Добавить запись', 'Добавить запись в историю', icon_size=12)
+        add_btn = IconLoader.create_icon_button('note', 'Добавить запись', 'Добавить запись в историю', icon_size=12, icon_color='#27AE60')
         add_btn.setStyleSheet("""
             QPushButton {
-                background-color: #27AE60;
-                color: white;
+                background-color: #ffffff;
+                color: #27AE60;
                 padding: 8px 16px;
                 border-radius: 4px;
+                border: 1px solid #27AE60;
                 font-weight: bold;
             }
-            QPushButton:hover { background-color: #229954; }
+            QPushButton:hover { background-color: #F0FFF4; border-color: #229954; }
+            QPushButton:pressed { background-color: #E8F5E9; }
         """)
         add_btn.clicked.connect(self.add_history_entry)
         layout.addWidget(add_btn)
@@ -740,6 +845,8 @@ class SupervisionCardEditDialog(QDialog):
         """Удалить чат надзора"""
         if not self._sv_chat_data or not self.data.is_multi_user:
             return
+        if getattr(self, '_deleting_chat', False):
+            return
         chat = self._sv_chat_data.get('chat', {})
         chat_id = chat.get('id')
         if not chat_id:
@@ -753,13 +860,53 @@ class SupervisionCardEditDialog(QDialog):
         ).exec_()
 
         if reply == QDialog.Accepted:
-            try:
-                self.data.delete_messenger_chat(chat_id)
-                self._sv_chat_data = None
-                self._update_supervision_chat_buttons()
-                CustomMessageBox(self, 'Успех', 'Чат удалён', 'success').exec_()
-            except Exception as e:
-                CustomMessageBox(self, 'Ошибка', f'Не удалось удалить чат:\n{str(e)}', 'error').exec_()
+            # Блокируем кнопки + показываем прогресс
+            self._deleting_chat = True
+            self.sv_delete_chat_btn.setEnabled(False)
+            self.sv_delete_chat_btn.setText("Удаление...")
+            self._show_sv_chat_progress(True)
+
+            def _worker():
+                error = None
+                try:
+                    self.data.delete_messenger_chat(chat_id)
+                except Exception as e:
+                    error = str(e)
+                self._delete_chat_finished.emit(error)
+
+            threading.Thread(target=_worker, daemon=True).start()
+
+    def _on_delete_chat_finished(self, error):
+        """Callback завершения удаления чата из фонового потока."""
+        self._deleting_chat = False
+        self._show_sv_chat_progress(False)
+        self.sv_delete_chat_btn.setText("Удалить чат")
+
+        if error:
+            self._update_supervision_chat_buttons()
+            CustomMessageBox(self, 'Ошибка', f'Не удалось удалить чат:\n{error}', 'error').exec_()
+        else:
+            self._sv_chat_data = None
+            self._update_supervision_chat_buttons()
+            CustomMessageBox(self, 'Успех', 'Чат удалён', 'success').exec_()
+
+    def _show_sv_chat_progress(self, show: bool):
+        """Показать/скрыть прогрессбар удаления чата надзора."""
+        if not hasattr(self, '_sv_chat_progress_bar'):
+            from PyQt5.QtWidgets import QProgressBar
+            self._sv_chat_progress_bar = QProgressBar(self)
+            self._sv_chat_progress_bar.setRange(0, 0)
+            self._sv_chat_progress_bar.setFixedHeight(4)
+            self._sv_chat_progress_bar.setTextVisible(False)
+            self._sv_chat_progress_bar.setStyleSheet("""
+                QProgressBar { border: none; background: transparent; }
+                QProgressBar::chunk { background-color: #ffd93c; }
+            """)
+            if hasattr(self, 'sv_delete_chat_btn') and self.sv_delete_chat_btn.parent():
+                parent_layout = self.sv_delete_chat_btn.parent().layout()
+                if parent_layout:
+                    parent_layout.addWidget(self._sv_chat_progress_bar)
+        self._sv_chat_progress_bar.setVisible(show)
 
     def _on_send_supervision_start_script(self):
         """Отправить начальный скрипт в чат надзора"""
@@ -879,7 +1026,7 @@ class SupervisionCardEditDialog(QDialog):
         widget = QWidget()
         layout = QVBoxLayout()
         layout.setSpacing(15)
-        layout.setContentsMargins(20, 15, 20, 20)
+        layout.setContentsMargins(0, 15, 0, 20)
 
         contract_id = self.card_data.get('contract_id')
 
@@ -1441,6 +1588,12 @@ class SupervisionCardEditDialog(QDialog):
         buttons_layout.addWidget(save_btn)
         buttons_layout.addWidget(cancel_btn)
 
+        # Линия-разделитель над кнопками
+        separator = QFrame()
+        separator.setFrameShape(QFrame.HLine)
+        separator.setStyleSheet("color: #E0E0E0; background-color: #E0E0E0; max-height: 1px;")
+        layout.addWidget(separator)
+
         layout.addLayout(buttons_layout)
 
         content_widget.setLayout(layout)
@@ -1560,7 +1713,7 @@ class SupervisionCardEditDialog(QDialog):
         widget = QWidget()
         main_layout = QVBoxLayout()
         main_layout.setSpacing(15)
-        main_layout.setContentsMargins(20, 15, 20, 20)
+        main_layout.setContentsMargins(0, 15, 0, 20)
 
         # ИСПРАВЛЕНИЕ 06.02.2026: Используем GroupBox как в основном CRM
         info_group = QGroupBox("Информация о проекте")
@@ -2036,7 +2189,7 @@ class SupervisionCardEditDialog(QDialog):
         widget = QWidget()
         main_layout = QVBoxLayout()
         main_layout.setSpacing(15)
-        main_layout.setContentsMargins(20, 15, 20, 20)
+        main_layout.setContentsMargins(0, 15, 0, 20)
 
         # ИСПРАВЛЕНИЕ 06.02.2026: Используем GroupBox как в основном CRM
         files_group = QGroupBox("Файлы авторского надзора")
@@ -2419,13 +2572,15 @@ class SupervisionCardEditDialog(QDialog):
             try:
                 yd = YandexDiskManager(YANDEX_DISK_TOKEN)
 
-                # Создаем подпапку "Авторский надзор"
+                # Создаем подпапку "Авторский надзор" (рекурсивно, если родительские папки не существуют)
                 supervision_folder = f"{contract_folder}/Авторский надзор"
-                yd.create_folder(supervision_folder)
+                if not yd.ensure_folder_exists(supervision_folder):
+                    raise Exception(f"Не удалось создать папку: {supervision_folder}")
 
                 # Создаем подпапку для стадии
                 stage_folder = f"{supervision_folder}/{stage}"
-                yd.create_folder(stage_folder)
+                if not yd.ensure_folder_exists(stage_folder):
+                    raise Exception(f"Не удалось создать папку стадии: {stage_folder}")
 
                 QMetaObject.invokeMethod(progress, "setValue", Qt.QueuedConnection, Q_ARG(int, 30))
                 QMetaObject.invokeMethod(progress, "setLabelText", Qt.QueuedConnection,
@@ -2501,9 +2656,8 @@ class SupervisionCardEditDialog(QDialog):
             try:
                 yd = YandexDiskManager(YANDEX_DISK_TOKEN)
                 report_folder = f"{contract_folder}/Авторский надзор/Отчёты/{stage}"
-                yd.create_folder(f"{contract_folder}/Авторский надзор")
-                yd.create_folder(f"{contract_folder}/Авторский надзор/Отчёты")
-                yd.create_folder(report_folder)
+                if not yd.ensure_folder_exists(report_folder):
+                    raise Exception(f"Не удалось создать папку: {report_folder}")
 
                 QMetaObject.invokeMethod(progress, "setValue", Qt.QueuedConnection, Q_ARG(int, 30))
 
@@ -3476,7 +3630,7 @@ class SupervisionCardEditDialog(QDialog):
                 parent=self
             )
             self.tabs.removeTab(self._timeline_tab_index)
-            self.tabs.insertTab(self._timeline_tab_index, self.sv_timeline_widget, 'Таблица сроков')
+            self.tabs.insertTab(self._timeline_tab_index, self.sv_timeline_widget, 'Таблица закупок')
             # Загрузить файлы в блок файлов timeline widget
             if hasattr(self.sv_timeline_widget, 'load_files'):
                 self.sv_timeline_widget.load_files()

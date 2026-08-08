@@ -271,14 +271,17 @@ class TestDownloadUpdate:
     def test_successful_download(self, um, tmp_path):
         version_data = {
             'latest_version': '2.0.0',
-            'versions': {'2.0.0': {'download_url': 'http://dl/file.exe'}}
+            'versions': {'2.0.0': {'file_name': 'InteriorStudio_2.0.0.exe', 'size_mb': '50'}}
         }
+        # Генерируем данные больше 1 МБ для прохождения проверки целостности
+        chunk_data = b'x' * (1024 * 1024 + 100)
         mock_resp = MagicMock()
-        mock_resp.headers = {'content-length': '100'}
-        mock_resp.iter_content.return_value = [b'x' * 50, b'y' * 50]
+        mock_resp.headers = {'content-length': str(len(chunk_data))}
+        mock_resp.iter_content.return_value = [chunk_data]
         mock_resp.raise_for_status = MagicMock()
 
         with patch.object(um, '_fetch_version_json', return_value=version_data), \
+             patch.object(um, '_get_public_file_url', return_value='http://dl/file.exe'), \
              patch('utils.update_manager.requests.get', return_value=mock_resp), \
              patch('utils.update_manager.tempfile.gettempdir', return_value=str(tmp_path)):
             result = um.download_update('2.0.0')
@@ -288,15 +291,17 @@ class TestDownloadUpdate:
     def test_download_calls_progress_callback(self, um, tmp_path):
         version_data = {
             'latest_version': '2.0.0',
-            'versions': {'2.0.0': {'download_url': 'http://dl/file.exe'}}
+            'versions': {'2.0.0': {'file_name': 'InteriorStudio_2.0.0.exe', 'size_mb': '50'}}
         }
+        chunk_data = b'x' * (1024 * 1024 + 100)
         mock_resp = MagicMock()
-        mock_resp.headers = {'content-length': '100'}
-        mock_resp.iter_content.return_value = [b'x' * 50, b'y' * 50]
+        mock_resp.headers = {'content-length': str(len(chunk_data))}
+        mock_resp.iter_content.return_value = [chunk_data]
         mock_resp.raise_for_status = MagicMock()
 
         callback = MagicMock()
         with patch.object(um, '_fetch_version_json', return_value=version_data), \
+             patch.object(um, '_get_public_file_url', return_value='http://dl/file.exe'), \
              patch('utils.update_manager.requests.get', return_value=mock_resp), \
              patch('utils.update_manager.tempfile.gettempdir', return_value=str(tmp_path)):
             um.download_update('2.0.0', progress_callback=callback)
@@ -316,9 +321,10 @@ class TestDownloadUpdate:
     def test_no_download_url_returns_none(self, um):
         version_data = {
             'latest_version': '2.0.0',
-            'versions': {'2.0.0': {'changelog': 'test'}}  # Нет download_url
+            'versions': {'2.0.0': {'changelog': 'test'}}  # Нет file_name
         }
-        with patch.object(um, '_fetch_version_json', return_value=version_data):
+        with patch.object(um, '_fetch_version_json', return_value=version_data), \
+             patch.object(um, '_get_public_file_url', return_value=None):
             result = um.download_update('2.0.0')
             assert result is None
 

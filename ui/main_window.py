@@ -1,80 +1,101 @@
 # -*- coding: utf-8 -*-
-import sys
 import os
-from PyQt5.QtWidgets import (QMainWindow, QTabWidget, QWidget, QVBoxLayout,
-                             QHBoxLayout, QMenuBar, QAction, QMessageBox, QDialog,
-                             QLabel, QStatusBar, QGridLayout, QGroupBox, QSizePolicy, QApplication)
-from PyQt5.QtCore import Qt, QTimer, QRect, QSize, QEvent
-from PyQt5.QtGui import QFont, QPixmap, QColor, QPalette
+import sys
+
+from PyQt5.QtCore import QEvent, QRect, QSize, Qt, QTimer, pyqtSignal
+from PyQt5.QtGui import QColor, QFont, QPalette, QPixmap
 from PyQt5.QtSvg import QSvgWidget
-from PyQt5.QtWidgets import QTabWidget
+from PyQt5.QtWidgets import QAction, QApplication, QDialog, QGridLayout, QGroupBox, QHBoxLayout, QLabel, QMainWindow, QMenuBar, QMessageBox, QSizePolicy, QStatusBar, QTabWidget, QVBoxLayout, QWidget
+
 from config import ROLES
-from utils.permissions import get_allowed_tabs, _has_perm
-from ui.dashboard_tab import DashboardTab
 from ui.clients_tab import ClientsTab
 from ui.contracts_tab import ContractsTab
-from ui.crm_tab import CRMTab
 from ui.crm_supervision_tab import CRMSupervisionTab
-from ui.reports_tab import ReportsTab
-from ui.employees_tab import EmployeesTab
-from ui.salaries_tab import SalariesTab
+from ui.crm_tab import CRMTab
+from ui.dashboard_tab import DashboardTab
 from ui.employee_reports_tab import EmployeeReportsTab
-from ui.global_search_widget import GlobalSearchWidget
+from ui.employees_tab import EmployeesTab
+from ui.reports_tab import ReportsTab
+from ui.salaries_tab import SalariesTab
+from utils.permissions import _has_perm, get_allowed_tabs
+
+# EmployeeAnalyticsTab интегрирована в EmployeeReportsTab
+try:
+    from ui.employee_chats_tab import EmployeeChatsTab
+except ImportError:
+    EmployeeChatsTab = None
+try:
+    from ui.client_chats_tab import ClientChatsTab
+except ImportError:
+    ClientChatsTab = None
 from ui.custom_message_box import CustomMessageBox
+from ui.global_search_widget import GlobalSearchWidget
 from utils.tab_helpers import disable_wheel_on_tabwidget
 
 # Структуры Windows API для корректной работы Snap Assist
-if sys.platform == 'win32':
+if sys.platform == "win32":
     import ctypes
     from ctypes import wintypes
 
     class POINT(ctypes.Structure):
-        _fields_ = [('x', ctypes.c_long), ('y', ctypes.c_long)]
+        _fields_ = [("x", ctypes.c_long), ("y", ctypes.c_long)]
 
     class MINMAXINFO(ctypes.Structure):
         _fields_ = [
-            ('ptReserved', POINT),
-            ('ptMaxSize', POINT),
-            ('ptMaxPosition', POINT),
-            ('ptMinTrackSize', POINT),
-            ('ptMaxTrackSize', POINT),
+            ("ptReserved", POINT),
+            ("ptMaxSize", POINT),
+            ("ptMaxPosition", POINT),
+            ("ptMinTrackSize", POINT),
+            ("ptMaxTrackSize", POINT),
         ]
 
     class RECT(ctypes.Structure):
         _fields_ = [
-            ('left', ctypes.c_long), ('top', ctypes.c_long),
-            ('right', ctypes.c_long), ('bottom', ctypes.c_long),
+            ("left", ctypes.c_long),
+            ("top", ctypes.c_long),
+            ("right", ctypes.c_long),
+            ("bottom", ctypes.c_long),
         ]
 
     class MONITORINFO(ctypes.Structure):
         _fields_ = [
-            ('cbSize', wintypes.DWORD),
-            ('rcMonitor', RECT),
-            ('rcWork', RECT),
-            ('dwFlags', wintypes.DWORD),
+            ("cbSize", wintypes.DWORD),
+            ("rcMonitor", RECT),
+            ("rcWork", RECT),
+            ("dwFlags", wintypes.DWORD),
         ]
 
 
 class MainWindow(QMainWindow):
+    # Сигналы для межпоточного обновления UI
+    _sig_update_available = pyqtSignal(dict)
+    _sig_update_disabled = pyqtSignal()
+    _sig_update_error = pyqtSignal(str)
+    _sig_no_updates = pyqtSignal()
+
     def __init__(self, employee_data, api_client=None):
         super().__init__()
         self.employee = employee_data
         self.api_client = api_client  # API
         from database.db_manager import DatabaseManager
+
         self.db = DatabaseManager()
 
+        # Сигналы обновлений
+        self._sig_update_available.connect(self._show_update_dialog)
+        self._sig_update_disabled.connect(self._show_updates_disabled)
+        self._sig_update_error.connect(self._show_update_error)
+        self._sig_no_updates.connect(self._show_no_updates)
+
         # Проверяем offline режим
-        self.is_offline_mode = self.employee.get('offline_mode', False)
+        self.is_offline_mode = self.employee.get("offline_mode", False)
 
         # SyncManager для real-time синхронизации (только если НЕ в offline режиме)
         self.sync_manager = None
         if self.api_client and not self.is_offline_mode:
             from utils.sync_manager import SyncManager
-            self.sync_manager = SyncManager(
-                api_client=self.api_client,
-                employee_id=self.employee.get('id', 0),
-                parent=self
-            )
+
+            self.sync_manager = SyncManager(api_client=self.api_client, employee_id=self.employee.get("id", 0), parent=self)
             # Подключаем сигналы
             self.sync_manager.online_users_updated.connect(self._on_online_users_updated)
             self.sync_manager.connection_status_changed.connect(self._on_connection_status_changed)
@@ -83,8 +104,9 @@ class MainWindow(QMainWindow):
         self.offline_manager = None
         if self.api_client:
             try:
-                from utils.offline_manager import init_offline_manager
                 from config import DATABASE_PATH
+                from utils.offline_manager import init_offline_manager
+
                 self.offline_manager = init_offline_manager(DATABASE_PATH, self.api_client)
                 # Подключаем сигналы
                 self.offline_manager.connection_status_changed.connect(self._on_offline_status_changed)
@@ -94,6 +116,7 @@ class MainWindow(QMainWindow):
                 # Если в offline режиме - устанавливаем статус сразу
                 if self.is_offline_mode:
                     from utils.offline_manager import ConnectionStatus
+
                     self.offline_manager.status = ConnectionStatus.OFFLINE
             except Exception as e:
                 print(f"[MainWindow] Ошибка инициализации OfflineManager: {e}")
@@ -132,9 +155,9 @@ class MainWindow(QMainWindow):
             self.offline_manager.start_monitoring()
 
     def init_ui(self):
-        self.setWindowTitle(f'FESTIVAL COLOR - {self.employee["full_name"]}')
-        # Минимальный размер окна — 1400x800
-        self.setMinimumSize(1400, 800)
+        self.setWindowTitle(f"FESTIVAL COLOR - {self.employee['full_name']}")
+        # Минимальный размер окна — 1280x720, рекомендуемый — 1400x800
+        self.setMinimumSize(1280, 720)
         self.resize(1400, 800)
 
         #   TITLE BAR
@@ -143,7 +166,8 @@ class MainWindow(QMainWindow):
         # Windows: DWM скругляет углы на GPU (плавный resize)
         # macOS/Linux: fallback на WA_TranslucentBackground (CSS border-radius)
         import sys
-        if sys.platform == 'win32':
+
+        if sys.platform == "win32":
             self._enable_windows_snap()
         else:
             self.setAttribute(Qt.WA_TranslucentBackground, True)
@@ -161,10 +185,10 @@ class MainWindow(QMainWindow):
         # ==========   ==========
         main_container = QWidget()
         main_container.setObjectName("mainContainer")
-        _radius = '10px' if sys.platform != 'win32' else '0px'
+        _radius = "10px" if sys.platform != "win32" else "0px"
         main_container.setStyleSheet(f"""
             QWidget#mainContainer {{
-                background-color: {'transparent' if sys.platform != 'win32' else '#FFFFFF'};
+                background-color: {"transparent" if sys.platform != "win32" else "#FFFFFF"};
                 border-radius: {_radius};
             }}
         """)
@@ -178,6 +202,7 @@ class MainWindow(QMainWindow):
 
         # ==========      ==========
         from PyQt5.QtWidgets import QFrame
+
         border_frame = QFrame()
         border_frame.setObjectName("mainBorderFrame")
         border_frame.setStyleSheet(f"""
@@ -201,11 +226,8 @@ class MainWindow(QMainWindow):
         border_frame.setLayout(layout)
         # ==========  TITLE BAR ==========
         from ui.custom_title_bar import CustomTitleBar
-        self.title_bar = CustomTitleBar(
-            self,
-            "FESTIVAL COLOR - Приложение управления заказами",
-            simple_mode=False
-        )
+
+        self.title_bar = CustomTitleBar(self, "FESTIVAL COLOR - Приложение управления заказами", simple_mode=False)
         # ==========    TITLE BAR ==========
         self.title_bar.setStyleSheet("""
             CustomTitleBar {
@@ -218,33 +240,56 @@ class MainWindow(QMainWindow):
         # ======================================================
         layout.addWidget(self.title_bar)
         # =========================================
-        
+
         #   ()
         position_text = self.employee.get("position", "")
         secondary = self.employee.get("secondary_position", "")
         if secondary and secondary != position_text:
-            position_text = f'{position_text}/{secondary}'
+            position_text = f"{position_text}/{secondary}"
         # Панель информации с поиском
         info_bar = QWidget()
-        info_bar.setStyleSheet('background-color: #F8F9FA; border-bottom: 0px solid #E0E0E0;')
+        info_bar.setStyleSheet("background-color: #F8F9FA; border-bottom: 0px solid #E0E0E0;")
         info_bar_layout = QHBoxLayout()
         info_bar_layout.setContentsMargins(15, 4, 15, 4)
         info_bar_layout.setSpacing(10)
         info_bar.setLayout(info_bar_layout)
 
         from PyQt5.QtWidgets import QLabel as _QLabel
+
         from utils.icon_loader import IconLoader as _IconLoader
+
         # Текст с именем пользователя (не кликабельный)
-        info_label = _QLabel(
-            f'Пользователь: {self.employee["full_name"]} - должность: {position_text}'
-        )
+        info_label = _QLabel(f"Пользователь: {self.employee['full_name']} - должность: {position_text}")
         info_label.setStyleSheet("font-size: 11px; color: #999; font-weight: 400;")
         info_bar_layout.addWidget(info_label)
 
+        _btn_css = """
+            QPushButton {
+                background: transparent; border: 1px solid transparent;
+                border-radius: 4px; padding: 0;
+            }
+            QPushButton:hover { background: #f0f0f0; border-color: #d9d9d9; }
+        """
+
+        # Кнопки чатов — первыми, перед настройками
+        if EmployeeChatsTab and _has_perm(self.employee, self.api_client, "chat.employee.view"):
+            emp_chat_btn = _IconLoader.create_icon_button("message-circle", "", "Чат сотрудников", icon_size=12)
+            emp_chat_btn.setFixedSize(22, 22)
+            emp_chat_btn.setStyleSheet(_btn_css)
+            emp_chat_btn.setCursor(Qt.PointingHandCursor)
+            emp_chat_btn.clicked.connect(self._open_employee_chat_window)
+            info_bar_layout.addWidget(emp_chat_btn)
+
+        if ClientChatsTab and _has_perm(self.employee, self.api_client, "chat.client.view"):
+            cli_chat_btn = _IconLoader.create_icon_button("message-circle", "", "Чат с клиентами", icon_size=12)
+            cli_chat_btn.setFixedSize(22, 22)
+            cli_chat_btn.setStyleSheet(_btn_css)
+            cli_chat_btn.setCursor(Qt.PointingHandCursor)
+            cli_chat_btn.clicked.connect(self._open_client_chat_window)
+            info_bar_layout.addWidget(cli_chat_btn)
+
         # Маленькая квадратная кнопка настроек уведомлений — после имени
-        notif_btn = _IconLoader.create_icon_button(
-            'settings', '', 'Настройки уведомлений', icon_size=12
-        )
+        notif_btn = _IconLoader.create_icon_button("settings", "", "Настройки уведомлений", icon_size=12)
         notif_btn.setFixedSize(22, 22)
         notif_btn.setStyleSheet("""
             QPushButton {
@@ -259,8 +304,56 @@ class MainWindow(QMainWindow):
         notif_btn.clicked.connect(self._open_notification_settings)
         info_bar_layout.addWidget(notif_btn)
 
+        # Кнопка «Список уведомлений» — колокольчик рядом с настройками
+        notif_list_btn = _IconLoader.create_icon_button("message-circle", "", "Список уведомлений", icon_size=12)
+        notif_list_btn.setFixedSize(22, 22)
+        notif_list_btn.setStyleSheet("""
+            QPushButton {
+                background: transparent; border: 1px solid transparent;
+                border-radius: 4px; padding: 0;
+            }
+            QPushButton:hover {
+                background: #f0f0f0; border-color: #d9d9d9;
+            }
+        """)
+        notif_list_btn.setCursor(Qt.PointingHandCursor)
+        notif_list_btn.clicked.connect(self._open_notifications_list)
+        info_bar_layout.addWidget(notif_list_btn)
+
+        # Кнопка «Инструкция» — открывает PDF-инструкцию для текущей роли с Яндекс.Диска
+        manual_btn = _IconLoader.create_icon_button("file-text", "", "Открыть инструкцию по использованию программы", icon_size=12)
+        manual_btn.setFixedSize(22, 22)
+        manual_btn.setStyleSheet("""
+            QPushButton {
+                background: transparent; border: 1px solid transparent;
+                border-radius: 4px; padding: 0;
+            }
+            QPushButton:hover {
+                background: #f0f0f0; border-color: #d9d9d9;
+            }
+        """)
+        manual_btn.setCursor(Qt.PointingHandCursor)
+        manual_btn.clicked.connect(self._open_user_manual)
+        info_bar_layout.addWidget(manual_btn)
+
+        # Кнопка «Выйти» — логаут и возврат к экрану входа
+        logout_btn = _IconLoader.create_icon_button("log-out", "", "Выйти из учётной записи", icon_size=12)
+        logout_btn.setFixedSize(22, 22)
+        logout_btn.setStyleSheet("""
+            QPushButton {
+                background: transparent; border: 1px solid transparent;
+                border-radius: 4px; padding: 0;
+            }
+            QPushButton:hover {
+                background: #FFF0F0; border-color: #e74c3c;
+            }
+        """)
+        logout_btn.setCursor(Qt.PointingHandCursor)
+        logout_btn.clicked.connect(self._logout_to_login)
+        info_bar_layout.addWidget(logout_btn)
+
         layout.addWidget(info_bar)
-        
+
         #
         self.tabs = QTabWidget()
         self.tabs.setStyleSheet("""
@@ -293,6 +386,7 @@ class MainWindow(QMainWindow):
 
         # Глобальный поиск — размещаем в правом углу строки вкладок
         from utils.data_access import DataAccess
+
         self._search_data_access = DataAccess(api_client=self.api_client, db=self.db)
         self.search_widget = GlobalSearchWidget(self._search_data_access, parent=self.tabs)
         self.search_widget.result_selected.connect(self._on_search_result_selected)
@@ -303,7 +397,7 @@ class MainWindow(QMainWindow):
         from PyQt5.QtWidgets import QStackedWidget
 
         self.dashboard_stack = QStackedWidget(border_frame)
-        self.dashboard_stack.setObjectName('dashboard_stack')
+        self.dashboard_stack.setObjectName("dashboard_stack")
         self.dashboards = {}
         self.dashboard_indices = {}
         self.current_dashboard_key = None
@@ -327,8 +421,9 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.dashboard_stack, 0)  # stretch=0 - дашборд не растягивается
 
         # ==========  -   ==========
-        from PyQt5.QtWidgets import QPushButton
         from PyQt5.QtGui import QIcon
+        from PyQt5.QtWidgets import QPushButton
+
         from config import APP_VERSION
 
         status_bar_container = QWidget()
@@ -338,7 +433,7 @@ class MainWindow(QMainWindow):
         status_bar_container.setLayout(status_bar_layout)
 
         #   -
-        self.status_label = QLabel('Готов к работе')
+        self.status_label = QLabel("Готов к работе")
         self.status_label.setStyleSheet("color: #555; font-size: 11px; border: none;")
         status_bar_layout.addWidget(self.status_label)
 
@@ -352,7 +447,10 @@ class MainWindow(QMainWindow):
                 padding-left: 10px;
             }
         """)
-        self.online_indicator.setToolTip("Пользователи онлайн")
+        self.online_indicator.setCursor(Qt.PointingHandCursor)
+        self.online_indicator.mousePressEvent = self._show_online_popup
+        self._online_popup = None
+        self._online_users_list = []
         self._update_online_indicator(0)
         status_bar_layout.addWidget(self.online_indicator)
 
@@ -373,16 +471,40 @@ class MainWindow(QMainWindow):
         status_bar_layout.addStretch()
 
         # Версия приложения с пробелом для отступа
-        self.version_label = QLabel(f'Версия: {APP_VERSION}')
+        self.version_label = QLabel(f"Версия: {APP_VERSION}")
         self.version_label.setStyleSheet("color: #555; font-size: 11px; border: none;")
         status_bar_layout.addWidget(self.version_label)
 
+        # Индикатор состояния сервера (только для администраторов)
+        self._server_status_data = None
+        self._admin_positions = ["Руководитель студии", "Старший менеджер проектов", "СДП", "ГАП"]
+        _pos = self.employee.get("position", "")
+        _role = self.employee.get("role", "")
+        self._is_admin_user = _pos in self._admin_positions or _role in {"admin", "director"}
+
+        self.server_status_label = QLabel()
+        self.server_status_label.setStyleSheet("color: #999; font-size: 11px; border: none; padding-right: 6px;")
+        self.server_status_label.setCursor(Qt.PointingHandCursor)
+        self.server_status_label.setToolTip("Состояние сервера (нажмите для подробностей)")
+        self.server_status_label.mousePressEvent = self._show_server_status_popup
+
+        if self._is_admin_user:
+            self.server_status_label.setText("Диск: ...")
+            status_bar_layout.addWidget(self.server_status_label)
+
+            # Первая проверка через 5 секунд после открытия, затем каждые 5 минут
+            self._disk_timer = QTimer(self)
+            self._disk_timer.timeout.connect(self._refresh_server_status)
+            self._disk_timer.start(5 * 60 * 1000)
+            QTimer.singleShot(5000, self._refresh_server_status)
+
         # Кнопка "Обновить" (доступна для всех ролей)
         from utils.resource_path import resource_path
+
         self.update_btn = QPushButton()
 
         # Загружаем иконку с помощью resource_path
-        icon_path = resource_path('resources/icons/refresh.svg')
+        icon_path = resource_path("resources/icons/refresh.svg")
 
         if os.path.exists(icon_path):
             self.update_btn.setIcon(QIcon(icon_path))
@@ -390,7 +512,7 @@ class MainWindow(QMainWindow):
 
         self.update_btn.setFixedSize(16, 16)
         self.update_btn.setToolTip("Проверить обновления")
-        self.update_btn.setProperty('icon-only', True)  # Для применения стилей без padding
+        self.update_btn.setProperty("icon-only", True)  # Для применения стилей без padding
         self.update_btn.setStyleSheet("""
             QPushButton {
                 background-color: transparent;
@@ -423,67 +545,67 @@ class MainWindow(QMainWindow):
         # ====================================================
 
     def get_resize_edge(self, pos):
-        """ /   """
+        """/"""
         rect = self.rect()
         margin = self.resize_margin
-        
+
         on_left = pos.x() <= margin
         on_right = pos.x() >= rect.width() - margin
         on_top = pos.y() <= margin
         on_bottom = pos.y() >= rect.height() - margin
-        
+
         #  ()
         if on_top and on_left:
-            return 'top-left'
+            return "top-left"
         elif on_top and on_right:
-            return 'top-right'
+            return "top-right"
         elif on_bottom and on_left:
-            return 'bottom-left'
+            return "bottom-left"
         elif on_bottom and on_right:
-            return 'bottom-right'
-        
-        # 
+            return "bottom-right"
+
+        #
         elif on_top:
-            return 'top'
+            return "top"
         elif on_bottom:
-            return 'bottom'
+            return "bottom"
         elif on_left:
-            return 'left'
+            return "left"
         elif on_right:
-            return 'right'
-        
+            return "right"
+
         return None
 
     def set_cursor_shape(self, edge):
-        """  """
-        if edge == 'top-left' or edge == 'bottom-right':
+        """ """
+        if edge == "top-left" or edge == "bottom-right":
             self.setCursor(Qt.SizeFDiagCursor)
-        elif edge == 'top-right' or edge == 'bottom-left':
+        elif edge == "top-right" or edge == "bottom-left":
             self.setCursor(Qt.SizeBDiagCursor)
-        elif edge == 'left' or edge == 'right':
+        elif edge == "left" or edge == "right":
             self.setCursor(Qt.SizeHorCursor)
-        elif edge == 'top' or edge == 'bottom':
+        elif edge == "top" or edge == "bottom":
             self.setCursor(Qt.SizeVerCursor)
         else:
             self.setCursor(Qt.ArrowCursor)
 
     def snap_to_edge(self, pos):
-        """      """
+        """ """
         screen = QApplication.desktop().availableGeometry(self)
 
-        #           - 
-        restore_threshold = 50  #    
+        #           -
+        restore_threshold = 50  #
         should_restore = False
 
         if self.is_snapped:
-            if self.snap_position == 'maximized':
+            if self.snap_position == "maximized":
                 # Восстановление из maximized при перетаскивании
                 if pos.y() > screen.y() + restore_threshold:
                     should_restore = True
                     # При maximized: восстанавливаем сохраненную геометрию
                     if self.restore_geometry:
                         # Восстанавливаем минимальный размер
-                        self.setMinimumSize(1400, 800)
+                        self.setMinimumSize(1280, 720)
 
                         # Центрируем окно относительно курсора в области title bar
                         new_x = pos.x() - self.restore_geometry.width() // 2
@@ -496,20 +618,20 @@ class MainWindow(QMainWindow):
                         self.snap_position = None
                         self.restore_geometry = None
                         return
-            elif self.snap_position == 'left':
+            elif self.snap_position == "left":
                 # Восстановление из левого snap
                 if pos.x() > screen.x() + restore_threshold:
                     should_restore = True
-            elif self.snap_position == 'right':
+            elif self.snap_position == "right":
                 # Восстановление из правого snap
                 if pos.x() < screen.x() + screen.width() - restore_threshold:
                     should_restore = True
 
             # Восстановление из snap - возвращаем геометрию
-            if should_restore and self.restore_geometry and self.snap_position in ['left', 'right']:
+            if should_restore and self.restore_geometry and self.snap_position in ["left", "right"]:
                 self.setGeometry(self.restore_geometry)
                 # Восстанавливаем минимальный размер
-                self.setMinimumSize(1400, 800)
+                self.setMinimumSize(1280, 720)
                 self.is_snapped = False
                 self.snap_position = None
                 self.restore_geometry = None
@@ -517,25 +639,25 @@ class MainWindow(QMainWindow):
 
         #      ()
         if pos.y() <= screen.y() + self.snap_threshold:
-            if not self.is_snapped or self.snap_position != 'maximized':
+            if not self.is_snapped or self.snap_position != "maximized":
                 self.restore_geometry = self.geometry()
                 self.is_snapped = True
-                self.snap_position = 'maximized'
+                self.snap_position = "maximized"
                 #    ,  mouseReleaseEvent
 
-        #     
+        #
         elif pos.x() <= screen.x() + self.snap_threshold:
-            if not self.is_snapped or self.snap_position != 'left':
+            if not self.is_snapped or self.snap_position != "left":
                 self.restore_geometry = self.geometry()
                 self.is_snapped = True
-                self.snap_position = 'left'
+                self.snap_position = "left"
 
         #      (:  screen.x())
         elif pos.x() >= screen.x() + screen.width() - self.snap_threshold:
-            if not self.is_snapped or self.snap_position != 'right':
+            if not self.is_snapped or self.snap_position != "right":
                 self.restore_geometry = self.geometry()
                 self.is_snapped = True
-                self.snap_position = 'right'
+                self.snap_position = "right"
         else:
             #     -  snap
             if self.is_snapped:
@@ -546,7 +668,7 @@ class MainWindow(QMainWindow):
         """Применение snap позиции"""
         if not self.is_snapped or not self.snap_position:
             # Не в режиме snap - восстанавливаем минимальный размер
-            self.setMinimumSize(1400, 800)
+            self.setMinimumSize(1280, 720)
             self.setCursor(Qt.ArrowCursor)
             return
 
@@ -556,16 +678,16 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(1, 1)
         self.setMaximumSize(16777215, 16777215)  # Максимум Qt
 
-        if self.snap_position == 'maximized':
+        if self.snap_position == "maximized":
             # Развернуть на весь экран
             self.setGeometry(screen)
 
-        elif self.snap_position == 'left':
+        elif self.snap_position == "left":
             # Левая половина экрана
             half_width = screen.width() // 2
             self.setGeometry(screen.x(), screen.y(), half_width, screen.height())
 
-        elif self.snap_position == 'right':
+        elif self.snap_position == "right":
             # Правая половина экрана
             half_width = screen.width() // 2
             self.setGeometry(screen.x() + half_width, screen.y(), half_width, screen.height())
@@ -589,7 +711,7 @@ class MainWindow(QMainWindow):
                     self.snap_position = None
                     self.restore_geometry = None
                 # Восстанавливаем минимальный размер перед resize
-                self.setMinimumSize(1400, 800)
+                self.setMinimumSize(1280, 720)
 
                 self.resizing = True
                 self.resize_edge = edge
@@ -606,6 +728,7 @@ class MainWindow(QMainWindow):
         try:
             # Проверяем, что obj является QWidget (не QWindow или другой объект)
             from PyQt5.QtWidgets import QWidget
+
             if not isinstance(obj, QWidget):
                 return super().eventFilter(obj, event)
 
@@ -663,17 +786,19 @@ class MainWindow(QMainWindow):
     def _enable_windows_snap(self):
         """Добавить нативные стили WS_THICKFRAME + DWM скругления для Windows 11"""
         import sys
-        if sys.platform != 'win32':
+
+        if sys.platform != "win32":
             return
         try:
             import ctypes
             from ctypes import wintypes
+
             hwnd = int(self.winId())
             GWL_STYLE = -16
-            WS_THICKFRAME = 0x00040000   # Рамка с изменением размера (нужна для Snap)
+            WS_THICKFRAME = 0x00040000  # Рамка с изменением размера (нужна для Snap)
             WS_MAXIMIZEBOX = 0x00010000  # Кнопка maximize (нужна для Snap Layouts)
             WS_MINIMIZEBOX = 0x00020000  # Кнопка minimize
-            WS_CAPTION = 0x00C00000      # Заголовок (WS_BORDER | WS_DLGFRAME)
+            WS_CAPTION = 0x00C00000  # Заголовок (WS_BORDER | WS_DLGFRAME)
 
             style = ctypes.windll.user32.GetWindowLongPtrW(hwnd, GWL_STYLE)
             style |= WS_THICKFRAME | WS_MAXIMIZEBOX | WS_MINIMIZEBOX | WS_CAPTION
@@ -682,31 +807,26 @@ class MainWindow(QMainWindow):
             # DWM: расширяем фрейм в клиентскую область — даёт тень и скругление
             class MARGINS(ctypes.Structure):
                 _fields_ = [
-                    ('cxLeftWidth', ctypes.c_int),
-                    ('cxRightWidth', ctypes.c_int),
-                    ('cyTopHeight', ctypes.c_int),
-                    ('cyBottomHeight', ctypes.c_int),
+                    ("cxLeftWidth", ctypes.c_int),
+                    ("cxRightWidth", ctypes.c_int),
+                    ("cyTopHeight", ctypes.c_int),
+                    ("cyBottomHeight", ctypes.c_int),
                 ]
+
             margins = MARGINS(0, 0, 1, 0)  # 1px top — включает DWM-фрейм
             ctypes.windll.dwmapi.DwmExtendFrameIntoClientArea(hwnd, ctypes.byref(margins))
 
             # DWM: явно запросить скруглённые углы (Windows 11)
             DWMWA_WINDOW_CORNER_PREFERENCE = 33
             DWMWCP_ROUND = ctypes.c_int(2)
-            ctypes.windll.dwmapi.DwmSetWindowAttribute(
-                hwnd, DWMWA_WINDOW_CORNER_PREFERENCE,
-                ctypes.byref(DWMWCP_ROUND), ctypes.sizeof(DWMWCP_ROUND)
-            )
+            ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, ctypes.byref(DWMWCP_ROUND), ctypes.sizeof(DWMWCP_ROUND))
 
             # Уведомляем Windows об изменении стилей
             SWP_FRAMECHANGED = 0x0020
             SWP_NOMOVE = 0x0002
             SWP_NOSIZE = 0x0001
             SWP_NOZORDER = 0x0004
-            ctypes.windll.user32.SetWindowPos(
-                hwnd, 0, 0, 0, 0, 0,
-                SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER
-            )
+            ctypes.windll.user32.SetWindowPos(hwnd, 0, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER)
         except Exception:
             pass
 
@@ -714,10 +834,12 @@ class MainWindow(QMainWindow):
         """Установка иконки в панели задач Windows через Win32 API.
         Использует WM_SETICON + SetClassLongPtrW для надежности с frameless окнами."""
         import sys
-        if sys.platform != 'win32':
+
+        if sys.platform != "win32":
             return
         try:
             import ctypes
+
             from utils.resource_path import resource_path
 
             hwnd = int(self.winId())
@@ -731,23 +853,19 @@ class MainWindow(QMainWindow):
             IMAGE_ICON = 1
 
             # Загружаем .ico через Win32 API LoadImage
-            ico_path = resource_path('resources/icon256.ico')
+            ico_path = resource_path("resources/icon256.ico")
             if not os.path.exists(ico_path):
-                ico_path = resource_path('resources/icon.ico')
+                ico_path = resource_path("resources/icon.ico")
 
-            ico_small_path = resource_path('resources/icon32.ico')
+            ico_small_path = resource_path("resources/icon32.ico")
             if not os.path.exists(ico_small_path):
                 ico_small_path = ico_path
 
             # Большая иконка (для Alt+Tab, панели задач) — LR_SHARED предотвращает утечку GDI
-            hicon_big = ctypes.windll.user32.LoadImageW(
-                0, ico_path, IMAGE_ICON, 256, 256, LR_LOADFROMFILE | LR_SHARED
-            )
+            hicon_big = ctypes.windll.user32.LoadImageW(0, ico_path, IMAGE_ICON, 256, 256, LR_LOADFROMFILE | LR_SHARED)
 
             # Маленькая иконка (для заголовка окна, панели задач)
-            hicon_small = ctypes.windll.user32.LoadImageW(
-                0, ico_small_path, IMAGE_ICON, 32, 32, LR_LOADFROMFILE | LR_SHARED
-            )
+            hicon_small = ctypes.windll.user32.LoadImageW(0, ico_small_path, IMAGE_ICON, 32, 32, LR_LOADFROMFILE | LR_SHARED)
 
             if hicon_big:
                 # Устанавливаем через WM_SETICON (окно)
@@ -761,18 +879,20 @@ class MainWindow(QMainWindow):
 
             # Также устанавливаем через Qt для согласованности
             from PyQt5.QtWidgets import QApplication
+
             if QApplication.instance():
                 self.setWindowIcon(QApplication.instance().windowIcon())
         except Exception as e:
             # Fallback на Qt метод
             from PyQt5.QtWidgets import QApplication
+
             if QApplication.instance():
                 self.setWindowIcon(QApplication.instance().windowIcon())
 
     def _restore_taskbar_icon(self):
         """Повторная установка иконки при показе окна (Windows сбрасывает после WS_CAPTION)"""
         self._set_taskbar_icon()
-        if not hasattr(self, '_icon_timer_done'):
+        if not hasattr(self, "_icon_timer_done"):
             self._icon_timer_done = True
             QTimer.singleShot(500, self._set_taskbar_icon)
             QTimer.singleShot(2000, self._set_taskbar_icon)
@@ -781,7 +901,8 @@ class MainWindow(QMainWindow):
         """Обработка нативных Windows событий для Windows Snap и Snap Layouts"""
         try:
             import sys
-            if sys.platform == 'win32':
+
+            if sys.platform == "win32":
                 import ctypes
                 from ctypes import wintypes
 
@@ -793,7 +914,7 @@ class MainWindow(QMainWindow):
                 # Константы зон NCHITTEST
                 HTCLIENT = 1
                 HTCAPTION = 2
-                HTMAXBUTTON = 9   # Для Snap Layouts (Windows 11)
+                HTMAXBUTTON = 9  # Для Snap Layouts (Windows 11)
                 HTLEFT = 10
                 HTRIGHT = 11
                 HTTOP = 12
@@ -811,6 +932,7 @@ class MainWindow(QMainWindow):
                     y = ctypes.c_short((msg.lParam >> 16) & 0xFFFF).value
 
                     from PyQt5.QtCore import QPoint
+
                     local_pos = self.mapFromGlobal(QPoint(x, y))
                     lx, ly = local_pos.x(), local_pos.y()
 
@@ -838,16 +960,14 @@ class MainWindow(QMainWindow):
 
                     # Title bar zone (верхние 45px)
                     if ly < 45:
-                        # Кнопка maximize: ~56-96px от правого края (между minimize и close)
-                        # Layout: ... [minimize 40px] [10px gap] [maximize 40px] [10px gap] [close 40px] [6px margin]
-                        # Close: w-6-40 = w-46 to w-6
-                        # Maximize: w-46-10-40 = w-96 to w-56
-                        if w - 96 <= lx <= w - 56:
-                            return True, HTMAXBUTTON
+                        # Зона кнопок (minimize, maximize, close) — HTCLIENT,
+                        # чтобы клики шли в Qt-кнопки CustomTitleBar,
+                        # а не вызывали Windows Snap Layout popup (HTMAXBUTTON)
+                        if lx >= w - 146:
+                            return True, HTCLIENT
 
-                        # Остальная часть title bar (кроме кнопок) = HTCAPTION
-                        if lx < w - 146:
-                            return True, HTCAPTION
+                        # Остальная часть title bar = HTCAPTION (перетаскивание окна)
+                        return True, HTCAPTION
 
                     return True, HTCLIENT
 
@@ -864,13 +984,13 @@ class MainWindow(QMainWindow):
 
                     class WINDOWPOS(ctypes.Structure):
                         _fields_ = [
-                            ('hwnd', wintypes.HWND),
-                            ('hwndInsertAfter', wintypes.HWND),
-                            ('x', ctypes.c_int),
-                            ('y', ctypes.c_int),
-                            ('cx', ctypes.c_int),
-                            ('cy', ctypes.c_int),
-                            ('flags', wintypes.UINT),
+                            ("hwnd", wintypes.HWND),
+                            ("hwndInsertAfter", wintypes.HWND),
+                            ("x", ctypes.c_int),
+                            ("y", ctypes.c_int),
+                            ("cx", ctypes.c_int),
+                            ("cy", ctypes.c_int),
+                            ("flags", wintypes.UINT),
                         ]
 
                     wp = ctypes.cast(msg.lParam, ctypes.POINTER(WINDOWPOS)).contents
@@ -884,12 +1004,12 @@ class MainWindow(QMainWindow):
                     # Корректные размеры при maximize (учитываем taskbar)
                     info = ctypes.cast(msg.lParam, ctypes.POINTER(MINMAXINFO)).contents
                     # Минимальный размер окна — Windows будет его принудительно соблюдать
-                    info.ptMinTrackSize.x = 1400
-                    info.ptMinTrackSize.y = 800
+                    info.ptMinTrackSize.x = 1280
+                    info.ptMinTrackSize.y = 720
                     # Получаем монитор для текущего окна
                     monitor = ctypes.windll.user32.MonitorFromWindow(
                         int(self.winId()),
-                        0x00000002  # MONITOR_DEFAULTTONEAREST
+                        0x00000002,  # MONITOR_DEFAULTTONEAREST
                     )
                     if monitor:
                         mi = MONITORINFO()
@@ -913,6 +1033,12 @@ class MainWindow(QMainWindow):
             self.setCursor(Qt.ArrowCursor)
         super().leaveEvent(event)
 
+    def resizeEvent(self, event):
+        """Адаптация UI элементов при изменении размера окна"""
+        super().resizeEvent(event)
+        if hasattr(self, "search_widget"):
+            self.search_widget.adapt_width(event.size().width())
+
     def changeEvent(self, event):
         """Обработка изменения состояния окна (maximize/restore)"""
         if event.type() == QEvent.WindowStateChange:
@@ -925,55 +1051,55 @@ class MainWindow(QMainWindow):
                 self.is_snapped = False
                 self.snap_position = None
                 # Восстанавливаем минимальный размер (абсолютный минимум)
-                self.setMinimumSize(1400, 800)
+                self.setMinimumSize(1280, 720)
                 # Сбрасываем флаги resize на всякий случай
                 self.resizing = False
                 self.resize_edge = None
         super().changeEvent(event)
 
     def mouseMoveEvent(self, event):
-        """  """
+        """ """
         if self.resizing and self.resize_edge:
             delta = event.globalPos() - self.resize_start_pos
-            
+
             old_geometry = self.resize_start_geometry
             x = old_geometry.x()
             y = old_geometry.y()
             w = old_geometry.width()
             h = old_geometry.height()
-            
+
             edge = self.resize_edge
-            min_w, min_h = 1400, 800
-            
-            if 'left' in edge:
+            min_w, min_h = 1280, 720
+
+            if "left" in edge:
                 new_x = x + delta.x()
                 new_w = w - delta.x()
                 if new_w >= min_w:
                     x = new_x
                     w = new_w
-            
-            elif 'right' in edge:
+
+            elif "right" in edge:
                 new_w = w + delta.x()
                 if new_w >= min_w:
                     w = new_w
-            
-            if 'top' in edge:
+
+            if "top" in edge:
                 new_y = y + delta.y()
                 new_h = h - delta.y()
                 if new_h >= min_h:
                     y = new_y
                     h = new_h
-            
-            elif 'bottom' in edge:
+
+            elif "bottom" in edge:
                 new_h = h + delta.y()
                 if new_h >= min_h:
                     h = new_h
-            
+
             self.setGeometry(x, y, w, h)
             event.accept()
         else:
             super().mouseMoveEvent(event)
-            
+
     def mouseReleaseEvent(self, event):
         """Завершение изменения размера"""
         if event.button() == Qt.LeftButton and self.resizing:
@@ -993,15 +1119,12 @@ class MainWindow(QMainWindow):
         super().mouseReleaseEvent(event)
 
     def mouseDoubleClickEvent(self, event):
-        """  -      (1400x800)"""
+        """Восстановление окна до рекомендуемого размера (1400x800)"""
         if event.button() == Qt.LeftButton:
-            #      ,   
-            #   snap
             self.is_snapped = False
             self.snap_position = None
             self.restore_geometry = None
 
-            #      
             self.showNormal()
             self.resize(1400, 800)
 
@@ -1050,8 +1173,8 @@ class MainWindow(QMainWindow):
             layout.addWidget(icon_widget)
         else:
             # Fallback - текстовый символ
-            icon_label = QLabel('--')
-            icon_label.setStyleSheet(f'font-size: 24px; font-weight: bold; color: {border_color}; background-color: transparent;')
+            icon_label = QLabel("--")
+            icon_label.setStyleSheet(f"font-size: 24px; font-weight: bold; color: {border_color}; background-color: transparent;")
             icon_label.setAlignment(Qt.AlignCenter)
             icon_label.setFixedWidth(40)
             layout.addWidget(icon_label)
@@ -1063,25 +1186,25 @@ class MainWindow(QMainWindow):
 
         # Название карточки
         title_label = QLabel(title)
-        title_label.setStyleSheet(f'''
+        title_label.setStyleSheet(f"""
             font-size: 10px;
             color: {border_color};
             font-weight: 600;
             background-color: transparent;
-        ''')
+        """)
         title_label.setWordWrap(True)
         title_label.setMinimumWidth(50)
         data_layout.addWidget(title_label)
 
         # Значение
         value_label = QLabel(value)
-        value_label.setObjectName('value')
-        value_label.setStyleSheet(f'''
+        value_label.setObjectName("value")
+        value_label.setStyleSheet(f"""
             font-size: 20px;
             font-weight: bold;
             color: {border_color};
             background-color: transparent;
-        ''')
+        """)
         value_label.setWordWrap(False)
         value_label.setMinimumWidth(100)
         data_layout.addWidget(value_label)
@@ -1092,7 +1215,7 @@ class MainWindow(QMainWindow):
         return card
 
     def create_compact_stat_card(self, object_name, title, orders_value, area_value, icon, bg_color, border_color):
-        """    ( )"""
+        """( )"""
 
         card = QGroupBox()
         card.setObjectName(object_name)
@@ -1116,7 +1239,7 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(8, 4, 8, 4)
 
         icon_label = QLabel(icon)
-        icon_label.setStyleSheet('font-size: 32px; background-color: transparent;')
+        icon_label.setStyleSheet("font-size: 32px; background-color: transparent;")
         icon_label.setAlignment(Qt.AlignCenter)
         icon_label.setFixedWidth(40)
         layout.addWidget(icon_label)
@@ -1126,34 +1249,34 @@ class MainWindow(QMainWindow):
         data_layout.setAlignment(Qt.AlignVCenter)
 
         title_label = QLabel(title)
-        title_label.setStyleSheet(f'''
+        title_label.setStyleSheet(f"""
             font-size: 10px;
             color: {border_color};
             font-weight: bold;
             background-color: transparent;
-        ''')
+        """)
         title_label.setWordWrap(False)
         data_layout.addWidget(title_label)
 
-        orders_label = QLabel(f': {orders_value}')
-        orders_label.setObjectName('orders_value')
-        orders_label.setStyleSheet('''
+        orders_label = QLabel(f": {orders_value}")
+        orders_label.setObjectName("orders_value")
+        orders_label.setStyleSheet("""
             font-size: 16px;
             font-weight: bold;
             color: #2C3E50;
             background-color: transparent;
-        ''')
+        """)
         orders_label.setWordWrap(False)
         data_layout.addWidget(orders_label)
 
-        area_label = QLabel(f': {area_value}')
-        area_label.setObjectName('area_value')
-        area_label.setStyleSheet('''
+        area_label = QLabel(f": {area_value}")
+        area_label.setObjectName("area_value")
+        area_label.setStyleSheet("""
             font-size: 11px;
             color: #7F8C8D;
             font-weight: 500;
             background-color: transparent;
-        ''')
+        """)
         area_label.setWordWrap(False)
         data_layout.addWidget(area_label)
 
@@ -1161,19 +1284,19 @@ class MainWindow(QMainWindow):
 
         card.setLayout(layout)
         return card
-    
+
     def setup_tabs(self):
-        """    """
+        """ """
 
         # ========== Определение прав доступа ==========
-        position = self.employee.get('position', '')
-        secondary_position = self.employee.get('secondary_position', '')
+        position = self.employee.get("position", "")
+        secondary_position = self.employee.get("secondary_position", "")
 
         # Получаем доступные вкладки из permissions (access.*) с fallback на config.py
         allowed_tabs = get_allowed_tabs(self.employee, self.api_client)
 
         # can_edit для CRM — определяем через permissions
-        can_edit = _has_perm(self.employee, self.api_client, 'crm_cards.update')
+        can_edit = _has_perm(self.employee, self.api_client, "crm_cards.update")
         # ================================================================
 
         print(f"\n  :")
@@ -1195,45 +1318,35 @@ class MainWindow(QMainWindow):
         # sync_info = (signal_name, slot_name) или None
         tab_configs = []
 
-        if 'Клиенты' in allowed_tabs:
-            tab_configs.append(('  Клиенты  ', 'clients_tab',
-                lambda: ClientsTab(self.employee, api_client=self.api_client, parent=self),
-                ('clients_updated', 'on_sync_update')))
+        if "Клиенты" in allowed_tabs:
+            tab_configs.append(("  Клиенты  ", "clients_tab", lambda: ClientsTab(self.employee, api_client=self.api_client, parent=self), ("clients_updated", "on_sync_update")))
 
-        if 'Договора' in allowed_tabs:
-            tab_configs.append(('  Договора  ', 'contracts_tab',
-                lambda: ContractsTab(self.employee, api_client=self.api_client, parent=self),
-                ('contracts_updated', 'on_sync_update')))
+        if "Договора" in allowed_tabs:
+            tab_configs.append(("  Договора  ", "contracts_tab", lambda: ContractsTab(self.employee, api_client=self.api_client, parent=self), ("contracts_updated", "on_sync_update")))
 
-        if 'СРМ' in allowed_tabs:
-            tab_configs.append(('  СРМ  ', 'crm_tab',
-                lambda _ce=can_edit: CRMTab(self.employee, _ce, api_client=self.api_client, parent=self),
-                ('crm_cards_updated', 'on_sync_update')))
+        if "СРМ" in allowed_tabs:
+            tab_configs.append(("  СРМ  ", "crm_tab", lambda _ce=can_edit: CRMTab(self.employee, _ce, api_client=self.api_client, parent=self), ("crm_cards_updated", "on_sync_update")))
 
-        if 'СРМ надзора' in allowed_tabs:
-            tab_configs.append(('  СРМ надзора  ', 'crm_supervision_tab',
-                lambda: CRMSupervisionTab(self.employee, api_client=self.api_client, parent=self),
-                ('supervision_cards_updated', 'on_sync_update')))
+        if "СРМ надзора" in allowed_tabs:
+            tab_configs.append(
+                ("  СРМ надзора  ", "crm_supervision_tab", lambda: CRMSupervisionTab(self.employee, api_client=self.api_client, parent=self), ("supervision_cards_updated", "on_sync_update"))
+            )
 
-        if 'Отчеты и Статистика' in allowed_tabs:
-            tab_configs.append(('  Отчеты и Статистика  ', None,
-                lambda: ReportsTab(self.employee, api_client=self.api_client),
-                None))
+        if "Отчеты и Статистика" in allowed_tabs:
+            tab_configs.append(("  Отчеты и Статистика  ", None, lambda: ReportsTab(self.employee, api_client=self.api_client), None))
 
-        if 'Сотрудники' in allowed_tabs:
-            tab_configs.append(('  Сотрудники  ', 'employees_tab',
-                lambda: EmployeesTab(self.employee, api_client=self.api_client, parent=self),
-                ('employees_updated', 'on_sync_update')))
+        if "Сотрудники" in allowed_tabs:
+            tab_configs.append(("  Сотрудники  ", "employees_tab", lambda: EmployeesTab(self.employee, api_client=self.api_client, parent=self), ("employees_updated", "on_sync_update")))
 
-        if 'Зарплаты' in allowed_tabs:
-            tab_configs.append(('  Зарплаты  ', None,
-                lambda: SalariesTab(self.employee, api_client=self.api_client, parent=self),
-                None))
+        if "Зарплаты" in allowed_tabs:
+            tab_configs.append(("  Зарплаты  ", None, lambda: SalariesTab(self.employee, api_client=self.api_client, parent=self), None))
 
-        if 'Отчеты по сотрудникам' in allowed_tabs:
-            tab_configs.append(('  Отчеты по сотрудникам  ', None,
-                lambda: EmployeeReportsTab(self.employee, api_client=self.api_client),
-                None))
+        if "Отчеты по сотрудникам" in allowed_tabs:
+            tab_configs.append(("  Отчеты по сотрудникам  ", None, lambda: EmployeeReportsTab(self.employee, api_client=self.api_client), None))
+
+        # Аналитика сотрудников интегрирована в «Отчеты по сотрудникам»
+
+        # Чаты вынесены в кнопки info_bar (открываются отдельными окнами)
 
         # Первую вкладку создаём сразу, остальные — lazy placeholder
         for i, (tab_label, attr_name, factory, sync_info) in enumerate(tab_configs):
@@ -1265,7 +1378,7 @@ class MainWindow(QMainWindow):
             tab_name = self.tabs.tabText(index).strip()
 
             # Lazy tab materialization: заменяем placeholder реальной вкладкой
-            if getattr(current_widget, '_is_lazy_placeholder', False):
+            if getattr(current_widget, "_is_lazy_placeholder", False):
                 factory = current_widget._lazy_factory
                 attr_name = current_widget._lazy_attr
                 sync_info = current_widget._lazy_sync
@@ -1294,42 +1407,36 @@ class MainWindow(QMainWindow):
             # Определяем, какой дашборд показывать
             dashboard_key = None
 
-            if 'Клиенты' in tab_name:
-                dashboard_key = 'Клиенты'
-            elif 'Договора' in tab_name:
-                dashboard_key = 'Договора'
-            elif 'СРМ' in tab_name:
-                if 'надзора' in tab_name:
-                    dashboard_key = 'СРМ надзора'
+            if "Клиенты" in tab_name:
+                dashboard_key = "Клиенты"
+            elif "Договора" in tab_name:
+                dashboard_key = "Договора"
+            elif "СРМ" in tab_name:
+                if "надзора" in tab_name:
+                    dashboard_key = "СРМ надзора"
                 else:
                     # Для основной вкладки СРМ определяем по внутренней вкладке
-                    if hasattr(current_widget, 'project_tabs'):
+                    if hasattr(current_widget, "project_tabs"):
                         inner_index = current_widget.project_tabs.currentIndex()
                         inner_tab_name = current_widget.project_tabs.tabText(inner_index)
-                        if 'Индивидуальн' in inner_tab_name:
-                            dashboard_key = 'СРМ (Индивидуальные)'
-                        elif 'Шаблонн' in inner_tab_name:
-                            dashboard_key = 'СРМ (Шаблонные)'
+                        if "Индивидуальн" in inner_tab_name:
+                            dashboard_key = "СРМ (Индивидуальные)"
+                        elif "Шаблонн" in inner_tab_name:
+                            dashboard_key = "СРМ (Шаблонные)"
                         else:
-                            dashboard_key = 'СРМ (Индивидуальные)'  # По умолчанию
+                            dashboard_key = "СРМ (Индивидуальные)"  # По умолчанию
                     else:
-                        dashboard_key = 'СРМ (Индивидуальные)'  # По умолчанию
-            elif 'Сотрудники' in tab_name:
-                dashboard_key = 'Сотрудники'
-            elif 'Зарплаты' in tab_name:
+                        dashboard_key = "СРМ (Индивидуальные)"  # По умолчанию
+            elif "Сотрудники" in tab_name:
+                dashboard_key = "Сотрудники"
+            elif "Зарплаты" in tab_name:
                 # Определяем дашборд по внутренней вкладке SalariesTab
-                if hasattr(current_widget, 'tabs'):
+                if hasattr(current_widget, "tabs"):
                     inner_index = current_widget.tabs.currentIndex()
-                    salaries_dashboard_map = {
-                        0: 'Зарплаты (Все)',
-                        1: 'Зарплаты (Индивидуальные)',
-                        2: 'Зарплаты (Шаблонные)',
-                        3: 'Зарплаты (Оклады)',
-                        4: 'Зарплаты (Надзор)'
-                    }
-                    dashboard_key = salaries_dashboard_map.get(inner_index, 'Зарплаты (Все)')
+                    salaries_dashboard_map = {0: "Зарплаты (Все)", 1: "Зарплаты (Индивидуальные)", 2: "Зарплаты (Шаблонные)", 3: "Зарплаты (Оклады)", 4: "Зарплаты (Надзор)"}
+                    dashboard_key = salaries_dashboard_map.get(inner_index, "Зарплаты (Все)")
                 else:
-                    dashboard_key = 'Зарплаты (Все)'
+                    dashboard_key = "Зарплаты (Все)"
             # Дашборды для "Отчеты и Статистика" и "Отчеты по сотрудникам" отключены
             # elif 'Отчеты и Статистика' in tab_name:
             #     dashboard_key = 'Отчеты и Статистика'
@@ -1342,27 +1449,44 @@ class MainWindow(QMainWindow):
             # Отложенная загрузка данных — не блокирует переключение вкладки
             def _deferred_load(widget=current_widget):
                 try:
-                    if hasattr(widget, 'ensure_data_loaded'):
+                    if hasattr(widget, "ensure_data_loaded"):
                         widget.ensure_data_loaded()
-                    elif hasattr(widget, 'load_all_statistics'):
+                    elif hasattr(widget, "load_all_statistics"):
                         widget.load_all_statistics()
-                    elif hasattr(widget, 'refresh_current_tab'):
+                    elif hasattr(widget, "refresh_current_tab"):
                         widget.refresh_current_tab()
                 except Exception as e:
                     print(f"Ошибка загрузки данных таба: {e}")
+
             QTimer.singleShot(0, _deferred_load)
 
         except Exception as e:
             print(f"Ошибка обновления данных: {e}")
             import traceback
+
             traceback.print_exc()
 
-    def _on_search_result_selected(self, entity_type, entity_id):
+    def _on_search_result_selected(self, entity_type, entity_id, metadata=None):
         """Навигация к результату глобального поиска с выбором конкретной строки"""
+        if metadata is None:
+            metadata = {}
+
+        # Проверяем право доступа к типу сущности (защита от edge-cases)
+        perm_map = {
+            "client": "access.clients",
+            "contract": "access.contracts",
+            "crm_card": "access.crm",
+            "supervision_card": "access.supervision",
+        }
+        required_perm = perm_map.get(entity_type)
+        if required_perm and not _has_perm(self.employee, getattr(self, "api_client", None), required_perm):
+            return
+
         tab_map = {
             "client": "Клиенты",
             "contract": "Договора",
             "crm_card": "СРМ",
+            "supervision_card": "СРМ надзора",
         }
         target = tab_map.get(entity_type)
         if not target:
@@ -1373,19 +1497,21 @@ class MainWindow(QMainWindow):
                 tab_widget = self.tabs.widget(i)
 
                 # Отложенный выбор строки — даём вкладке время на загрузку данных
-                def _select_row(tw=tab_widget, etype=entity_type, eid=entity_id):
+                def _select_row(tw=tab_widget, etype=entity_type, eid=entity_id, meta=metadata):
                     try:
                         table = None
                         id_column = 0  # колонка с идентификатором
 
-                        if etype == "client" and hasattr(tw, 'clients_table'):
+                        if etype == "client" and hasattr(tw, "clients_table"):
                             table = tw.clients_table
-                            # В клиентах ID хранится как текст в колонке 0
-                        elif etype == "contract" and hasattr(tw, 'contracts_table'):
+                        elif etype == "contract" and hasattr(tw, "contracts_table"):
                             table = tw.contracts_table
-                            # В договорах колонка 0 — номер договора, ищем по ID через все колонки
                         elif etype == "crm_card":
-                            # CRM — Kanban-доска, навигация к карточке не через таблицу
+                            # CRM Kanban — переключаем на нужный sub-tab (активные/архив, индивидуальные/шаблонные)
+                            self._navigate_to_crm_card(tw, eid, meta)
+                            return
+                        elif etype == "supervision_card":
+                            # СРМ надзора — вкладка уже переключена, ничего больше не нужно
                             return
 
                         if not table:
@@ -1400,7 +1526,7 @@ class MainWindow(QMainWindow):
                             item_data = item.data(Qt.UserRole)
                             if item_data is not None:
                                 if isinstance(item_data, dict):
-                                    if item_data.get('id') == eid:
+                                    if item_data.get("id") == eid:
                                         table.selectRow(row)
                                         table.scrollToItem(item)
                                         return
@@ -1420,13 +1546,39 @@ class MainWindow(QMainWindow):
                 QTimer.singleShot(200, _select_row)
                 break
 
+    def _navigate_to_crm_card(self, crm_tab, card_id, metadata):
+        """Навигация к CRM карточке с переключением на нужный sub-tab (активные/архив)"""
+        try:
+            is_archive = metadata.get("is_archive", False)
+            project_type = metadata.get("project_type", "Индивидуальный")
+
+            # Определяем какой project_tab (0=Индивидуальные, 1=Шаблонные)
+            if hasattr(crm_tab, "project_tabs"):
+                if project_type == "Шаблонный" and crm_tab.project_tabs.count() > 1:
+                    crm_tab.project_tabs.setCurrentIndex(1)
+                    # Переключаем sub-tab (активные/архив)
+                    if is_archive and hasattr(crm_tab, "template_subtabs"):
+                        crm_tab.template_subtabs.setCurrentIndex(1)
+                    elif hasattr(crm_tab, "template_subtabs"):
+                        crm_tab.template_subtabs.setCurrentIndex(0)
+                else:
+                    crm_tab.project_tabs.setCurrentIndex(0)
+                    # Переключаем sub-tab (активные/архив)
+                    if is_archive and hasattr(crm_tab, "individual_subtabs"):
+                        crm_tab.individual_subtabs.setCurrentIndex(1)
+                    elif hasattr(crm_tab, "individual_subtabs"):
+                        crm_tab.individual_subtabs.setCurrentIndex(0)
+        except Exception as e:
+            print(f"[SEARCH] Ошибка навигации к CRM карточке: {e}")
+
     def switch_dashboard(self, dashboard_key):
         """Переключение дашборда через QStackedWidget (lazy creation)"""
         try:
             # Проверка права access.dashboards
-            if dashboard_key and hasattr(self, 'employee') and self.employee:
+            if dashboard_key and hasattr(self, "employee") and self.employee:
                 from utils.permissions import _has_perm
-                if not _has_perm(self.employee, getattr(self, 'api_client', None), 'access.dashboards'):
+
+                if not _has_perm(self.employee, getattr(self, "api_client", None), "access.dashboards"):
                     self.dashboard_stack.hide()
                     self.current_dashboard_key = None
                     return
@@ -1453,6 +1605,7 @@ class MainWindow(QMainWindow):
                                 self.dashboards[key].refresh()
                         except Exception as e:
                             print(f"[ERROR] Ошибка обновления дашборда: {e}")
+
                     QTimer.singleShot(50, _refresh_dashboard)
                 else:
                     self.dashboard_stack.hide()
@@ -1465,6 +1618,7 @@ class MainWindow(QMainWindow):
         except Exception as e:
             print(f"[ERROR] Ошибка переключения дашборда: {e}")
             import traceback
+
             traceback.print_exc()
 
     def refresh_current_dashboard(self):
@@ -1476,7 +1630,7 @@ class MainWindow(QMainWindow):
         """Отложенная инициализация тяжёлых компонентов + установка иконки"""
         super().showEvent(event)
         self._restore_taskbar_icon()
-        if not hasattr(self, '_shown_deferred'):
+        if not hasattr(self, "_shown_deferred"):
             self._shown_deferred = True
             QTimer.singleShot(0, self._init_deferred)
 
@@ -1491,35 +1645,78 @@ class MainWindow(QMainWindow):
         QApplication.processEvents()
 
         # Шаг 2: Настраиваем фабрики дашбордов (lazy - создаются по требованию)
-        from ui.dashboards import (ClientsDashboard, ContractsDashboard, CRMDashboard,
-                                   EmployeesDashboard,
-                                   SalariesAllPaymentsDashboard, SalariesIndividualDashboard,
-                                   SalariesTemplateDashboard, SalariesSalaryDashboard,
-                                   SalariesSupervisionDashboard)
+        from ui.dashboards import (
+            ClientsDashboard,
+            ContractsDashboard,
+            CRMDashboard,
+            EmployeesDashboard,
+            SalariesAllPaymentsDashboard,
+            SalariesIndividualDashboard,
+            SalariesSalaryDashboard,
+            SalariesSupervisionDashboard,
+            SalariesTemplateDashboard,
+        )
 
         self._dashboard_factories = {
-            'Клиенты': lambda: ClientsDashboard(self.db, self.api_client, parent=self.dashboard_stack),
-            'Договора': lambda: ContractsDashboard(self.db, self.api_client, parent=self.dashboard_stack),
-            'СРМ (Индивидуальные)': lambda: CRMDashboard(self.db, 'Индивидуальный', self.api_client, parent=self.dashboard_stack),
-            'СРМ (Шаблонные)': lambda: CRMDashboard(self.db, 'Шаблонный', self.api_client, parent=self.dashboard_stack),
-            'СРМ надзора': lambda: CRMDashboard(self.db, 'Авторский надзор', self.api_client, parent=self.dashboard_stack),
-            'Сотрудники': lambda: EmployeesDashboard(self.db, self.api_client, parent=self.dashboard_stack),
-            'Зарплаты (Все)': lambda: SalariesAllPaymentsDashboard(self.db, self.api_client, parent=self.dashboard_stack),
-            'Зарплаты (Индивидуальные)': lambda: SalariesIndividualDashboard(self.db, self.api_client, parent=self.dashboard_stack),
-            'Зарплаты (Шаблонные)': lambda: SalariesTemplateDashboard(self.db, self.api_client, parent=self.dashboard_stack),
-            'Зарплаты (Оклады)': lambda: SalariesSalaryDashboard(self.db, self.api_client, parent=self.dashboard_stack),
-            'Зарплаты (Надзор)': lambda: SalariesSupervisionDashboard(self.db, self.api_client, parent=self.dashboard_stack),
+            "Клиенты": lambda: ClientsDashboard(self.db, self.api_client, parent=self.dashboard_stack),
+            "Договора": lambda: ContractsDashboard(self.db, self.api_client, parent=self.dashboard_stack),
+            "СРМ (Индивидуальные)": lambda: CRMDashboard(self.db, "Индивидуальный", self.api_client, parent=self.dashboard_stack),
+            "СРМ (Шаблонные)": lambda: CRMDashboard(self.db, "Шаблонный", self.api_client, parent=self.dashboard_stack),
+            "СРМ надзора": lambda: CRMDashboard(self.db, "Авторский надзор", self.api_client, parent=self.dashboard_stack),
+            "Сотрудники": lambda: EmployeesDashboard(self.db, self.api_client, parent=self.dashboard_stack),
+            "Зарплаты (Все)": lambda: SalariesAllPaymentsDashboard(self.db, self.api_client, parent=self.dashboard_stack),
+            "Зарплаты (Индивидуальные)": lambda: SalariesIndividualDashboard(self.db, self.api_client, parent=self.dashboard_stack),
+            "Зарплаты (Шаблонные)": lambda: SalariesTemplateDashboard(self.db, self.api_client, parent=self.dashboard_stack),
+            "Зарплаты (Оклады)": lambda: SalariesSalaryDashboard(self.db, self.api_client, parent=self.dashboard_stack),
+            "Зарплаты (Надзор)": lambda: SalariesSupervisionDashboard(self.db, self.api_client, parent=self.dashboard_stack),
         }
 
         # Загрузка данных первой вкладки + показ дашборда (дашборд создастся по требованию)
         self.on_tab_changed(self.tabs.currentIndex())
 
+    # ========== ИНСТРУКЦИЯ ПОЛЬЗОВАТЕЛЯ ==========
+    def _open_user_manual(self):
+        """Открыть PDF-инструкцию для текущей роли с Яндекс.Диска."""
+        import webbrowser
+
+        # Маппинг должностей на публичные ссылки инструкций на Яндекс.Диске
+        MANUAL_URLS = {
+            "Руководитель студии": "https://yadi.sk/i/ri0ccGzd1hixUg",
+            "Старший менеджер проектов": "https://yadi.sk/i/jc_MLORFQJYw8g",
+            "Менеджер": "https://yadi.sk/i/_b3QKB0cxD1RIQ",
+            "СДП": "https://yadi.sk/i/VWlLjErSrnk_Kw",
+            "ГАП": "https://yadi.sk/i/lAhXe7-DNrtcuw",
+            "Дизайнер": "https://yadi.sk/i/FuD7OjI9qGpThg",
+            "Чертёжник": "https://yadi.sk/i/ByeUw6h0erkLuQ",
+            "Замерщик": "https://yadi.sk/i/H4MJFHmKIu0zdQ",
+            "ДАН": "https://yadi.sk/i/LAkkj1h3f5Bv7g",
+        }
+
+        position = self.employee.get("position", "")
+        # Проверяем основную должность (может быть совмещённая через «/»: «Дизайнер/Чертёжник»)
+        url = MANUAL_URLS.get(position)
+        if not url and "/" in position:
+            # Совмещённая должность — берём первую часть
+            url = MANUAL_URLS.get(position.split("/")[0].strip())
+        if not url:
+            secondary = self.employee.get("secondary_position", "")
+            url = MANUAL_URLS.get(secondary)
+
+        if url:
+            webbrowser.open(url)
+        else:
+            from ui.custom_message_box import CustomMessageBox
+
+            CustomMessageBox.info(self, "Инструкция", f"Инструкция для должности «{position}» пока не доступна.\nОбратитесь к руководителю студии.")
+
     # ========== НАСТРОЙКИ УВЕДОМЛЕНИЙ ==========
     def _open_notification_settings(self):
         """Открыть диалог настроек уведомлений для текущего пользователя"""
-        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QFrame
         from PyQt5.QtCore import Qt as _Qt
+        from PyQt5.QtWidgets import QDialog, QFrame, QVBoxLayout
+
         from ui.custom_title_bar import CustomTitleBar
+
         try:
             from ui.notification_settings_widget import NotificationSettingsWidget
         except ImportError:
@@ -1527,10 +1724,11 @@ class MainWindow(QMainWindow):
 
         # Создаём DataAccess напрямую — не ищем через вкладки
         from utils.data_access import DataAccess
+
         data_access = DataAccess(api_client=self.api_client, db=self.db)
 
         dlg = QDialog(self)
-        dlg.setWindowTitle('Настройки уведомлений')
+        dlg.setWindowTitle("Настройки уведомлений")
         dlg.setWindowFlags(_Qt.FramelessWindowHint | _Qt.Dialog)
         dlg.setAttribute(_Qt.WA_TranslucentBackground, True)
         dlg.setMinimumWidth(500)
@@ -1554,7 +1752,7 @@ class MainWindow(QMainWindow):
         border_layout.setContentsMargins(0, 0, 0, 0)
         border_layout.setSpacing(0)
 
-        title_bar = CustomTitleBar(dlg, 'Настройки уведомлений', simple_mode=True)
+        title_bar = CustomTitleBar(dlg, "Настройки уведомлений", simple_mode=True)
         title_bar.setStyleSheet("""
             CustomTitleBar {
                 background-color: #FFFFFF;
@@ -1575,21 +1773,192 @@ class MainWindow(QMainWindow):
 
         dlg.exec_()
 
+    # ========== СПИСОК УВЕДОМЛЕНИЙ ==========
+    def _open_notifications_list(self):
+        """Открыть диалог со списком уведомлений"""
+        from PyQt5.QtCore import Qt as _Qt
+        from PyQt5.QtWidgets import QDialog, QFrame, QVBoxLayout
+
+        from ui.custom_title_bar import CustomTitleBar
+
+        try:
+            from ui.notifications_list_widget import NotificationsListWidget
+        except ImportError:
+            return
+
+        from utils.data_access import DataAccess
+
+        data_access = DataAccess(api_client=self.api_client, db=self.db)
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Уведомления")
+        dlg.setWindowFlags(_Qt.FramelessWindowHint | _Qt.Dialog)
+        dlg.setAttribute(_Qt.WA_TranslucentBackground, True)
+        dlg.setMinimumSize(700, 500)
+
+        outer_layout = QVBoxLayout(dlg)
+        outer_layout.setContentsMargins(1, 1, 1, 1)
+        outer_layout.setSpacing(0)
+
+        border_frame = QFrame()
+        border_frame.setObjectName("borderFrame")
+        border_frame.setStyleSheet("""
+            QFrame#borderFrame {
+                background-color: #FFFFFF;
+                border: 1px solid #E0E0E0;
+                border-radius: 10px;
+            }
+        """)
+        outer_layout.addWidget(border_frame)
+
+        border_layout = QVBoxLayout(border_frame)
+        border_layout.setContentsMargins(0, 0, 0, 0)
+        border_layout.setSpacing(0)
+
+        title_bar = CustomTitleBar(dlg, "Уведомления", simple_mode=True)
+        title_bar.setStyleSheet("""
+            CustomTitleBar {
+                background-color: #FFFFFF;
+                border-bottom: 1px solid #E0E0E0;
+                border-top-left-radius: 10px;
+                border-top-right-radius: 10px;
+            }
+        """)
+        border_layout.addWidget(title_bar)
+
+        widget = NotificationsListWidget(
+            data_access=data_access,
+            parent=dlg,
+        )
+        widget.setStyleSheet("""
+            NotificationsListWidget {
+                border-bottom-left-radius: 10px;
+                border-bottom-right-radius: 10px;
+            }
+        """)
+        border_layout.addWidget(widget)
+
+        dlg.exec_()
+
+    # ========== ОКНА ЧАТОВ ==========
+    def _open_employee_chat_window(self):
+        """Открыть окно чата сотрудников (singleton, немодальный)."""
+        if not getattr(self, "_employee_chat_win", None):
+            try:
+                from ui.employee_chats_tab import EmployeeChatsTab
+            except ImportError:
+                return
+            from PyQt5.QtCore import Qt as _Qt
+            from PyQt5.QtWidgets import QDialog, QFrame, QVBoxLayout
+
+            from ui.custom_title_bar import CustomTitleBar
+
+            dlg = QDialog(self)
+            dlg.setWindowTitle("Чат сотрудников")
+            dlg.setWindowFlags(_Qt.FramelessWindowHint | _Qt.Dialog)
+            dlg.setAttribute(_Qt.WA_TranslucentBackground, True)
+            dlg.setMinimumSize(1120, 728)
+            dlg.resize(1248, 832)
+
+            outer = QVBoxLayout(dlg)
+            outer.setContentsMargins(1, 1, 1, 1)
+            outer.setSpacing(0)
+            frame = QFrame()
+            frame.setObjectName("borderFrame")
+            frame.setStyleSheet("""
+                QFrame#borderFrame {
+                    background: #FFFFFF; border: 1px solid #E0E0E0; border-radius: 10px;
+                }
+            """)
+            outer.addWidget(frame)
+            fl = QVBoxLayout(frame)
+            fl.setContentsMargins(0, 0, 0, 0)
+            fl.setSpacing(0)
+            title_bar = CustomTitleBar(dlg, "Чат сотрудников", simple_mode=True)
+            title_bar.setStyleSheet("""
+                CustomTitleBar {
+                    background: #FFFFFF; border-bottom: 1px solid #E0E0E0;
+                    border-top-left-radius: 10px; border-top-right-radius: 10px;
+                }
+            """)
+            fl.addWidget(title_bar)
+            tab = EmployeeChatsTab(self.employee, api_client=self.api_client, parent=dlg)
+            fl.addWidget(tab)
+            dlg.destroyed.connect(lambda: setattr(self, "_employee_chat_win", None))
+            self._employee_chat_win = dlg
+
+        self._employee_chat_win.show()
+        self._employee_chat_win.raise_()
+        self._employee_chat_win.activateWindow()
+
+    def _open_client_chat_window(self):
+        """Открыть окно чата с клиентами (singleton, немодальный)."""
+        if not getattr(self, "_client_chat_win", None):
+            try:
+                from ui.client_chats_tab import ClientChatsTab
+            except ImportError:
+                return
+            from PyQt5.QtCore import Qt as _Qt
+            from PyQt5.QtWidgets import QDialog, QFrame, QVBoxLayout
+
+            from ui.custom_title_bar import CustomTitleBar
+
+            dlg = QDialog(self)
+            dlg.setWindowTitle("Чат с клиентами")
+            dlg.setWindowFlags(_Qt.FramelessWindowHint | _Qt.Dialog)
+            dlg.setAttribute(_Qt.WA_TranslucentBackground, True)
+            dlg.setMinimumSize(1120, 728)
+            dlg.resize(1248, 832)
+
+            outer = QVBoxLayout(dlg)
+            outer.setContentsMargins(1, 1, 1, 1)
+            outer.setSpacing(0)
+            frame = QFrame()
+            frame.setObjectName("borderFrame")
+            frame.setStyleSheet("""
+                QFrame#borderFrame {
+                    background: #FFFFFF; border: 1px solid #E0E0E0; border-radius: 10px;
+                }
+            """)
+            outer.addWidget(frame)
+            fl = QVBoxLayout(frame)
+            fl.setContentsMargins(0, 0, 0, 0)
+            fl.setSpacing(0)
+            title_bar = CustomTitleBar(dlg, "Чат с клиентами", simple_mode=True)
+            title_bar.setStyleSheet("""
+                CustomTitleBar {
+                    background: #FFFFFF; border-bottom: 1px solid #E0E0E0;
+                    border-top-left-radius: 10px; border-top-right-radius: 10px;
+                }
+            """)
+            fl.addWidget(title_bar)
+            tab = ClientChatsTab(self.employee, api_client=self.api_client, parent=dlg)
+            fl.addWidget(tab)
+            dlg.destroyed.connect(lambda: setattr(self, "_client_chat_win", None))
+            self._client_chat_win = dlg
+
+        self._client_chat_win.show()
+        self._client_chat_win.raise_()
+        self._client_chat_win.activateWindow()
+
     # ========== СИСТЕМА ОБНОВЛЕНИЯ ПРОГРАММЫ ==========
     def check_for_updates_manual(self):
         """Ручная проверка обновлений (по нажатию кнопки)"""
-        from utils.update_manager import UpdateManager
-        from ui.update_dialogs import UpdateDialog, VersionDialog
         import threading
 
         # Проверяем, нажата ли Shift для управления версией (только для Руководителя студии)
         from PyQt5.QtWidgets import QApplication
+
+        from ui.update_dialogs import UpdateDialog, VersionDialog
+        from utils.update_manager import UpdateManager
+
         modifiers = QApplication.keyboardModifiers()
         from PyQt5.QtCore import Qt
 
         if modifiers == Qt.ShiftModifier:
             from utils.permissions import _has_perm
-            if _has_perm(self.employee, getattr(self, 'api_client', None), 'access.admin'):
+
+            if _has_perm(self.employee, getattr(self, "api_client", None), "access.admin"):
                 # Shift + клик = управление версией и загрузка обновлений
                 dialog = VersionDialog(self)
                 dialog.exec_()
@@ -1603,14 +1972,13 @@ class MainWindow(QMainWindow):
             update_info = manager.check_for_updates()
 
             if update_info.get("available"):
-                # Есть обновление
-                QTimer.singleShot(0, lambda: self._show_update_dialog(update_info))
+                self._sig_update_available.emit(update_info)
             elif update_info.get("disabled"):
-                QTimer.singleShot(0, lambda: self._show_updates_disabled())
+                self._sig_update_disabled.emit()
             elif update_info.get("error"):
-                QTimer.singleShot(0, lambda: self._show_update_error(update_info.get("error")))
+                self._sig_update_error.emit(update_info.get("error"))
             else:
-                QTimer.singleShot(0, lambda: self._show_no_updates())
+                self._sig_no_updates.emit()
 
         thread = threading.Thread(target=check_thread, daemon=True)
         thread.start()
@@ -1630,21 +1998,22 @@ class MainWindow(QMainWindow):
         self.status_label.setText("Обновлений нет")
         self.update_btn.setEnabled(True)
 
-        CustomMessageBox(self, "Обновления", "У вас установлена последняя версия программы.", 'success').exec_()
+        CustomMessageBox(self, "Обновления", "У вас установлена последняя версия программы.", "success").exec_()
 
     def _show_updates_disabled(self):
         """Показать сообщение о выключенных обновлениях"""
         self.status_label.setText("Обновления отключены")
         self.update_btn.setEnabled(True)
 
-        CustomMessageBox(self, "Обновления", "Проверка обновлений отключена в настройках.", 'info').exec_()
+        CustomMessageBox(self, "Обновления", "Проверка обновлений отключена в настройках.", "info").exec_()
 
     def _show_update_error(self, error):
         """Показать ошибку обновления"""
         self.status_label.setText("Ошибка обновления")
         self.update_btn.setEnabled(True)
 
-        CustomMessageBox(self, "Ошибка обновления", f"Не удалось проверить обновления:\n{error}", 'error').exec_()
+        CustomMessageBox(self, "Ошибка обновления", f"Не удалось проверить обновления:\n{error}", "error").exec_()
+
     # ===================================================
 
     # ==========================================
@@ -1653,6 +2022,7 @@ class MainWindow(QMainWindow):
 
     def _update_online_indicator(self, count: int, users: list = None):
         """Обновить индикатор онлайн пользователей"""
+        self._online_users_list = users or []
         if count == 0:
             self.online_indicator.setText("")
         elif count == 1:
@@ -1660,11 +2030,169 @@ class MainWindow(QMainWindow):
         else:
             self.online_indicator.setText(f"{count} онлайн")
 
-        # Формируем tooltip со списком пользователей
-        if users:
-            user_names = [u.get('full_name', 'Неизвестный') for u in users]
-            tooltip = "Пользователи онлайн:\n" + "\n".join(f"- {name}" for name in user_names)
-            self.online_indicator.setToolTip(tooltip)
+    def _show_online_popup(self, event=None):
+        """Показать popup со списком онлайн пользователей"""
+        from PyQt5.QtWidgets import QFrame
+
+        users = self._online_users_list
+        if not users:
+            return
+
+        # Исполнители видят только количество
+        position = self.employee.get("position", "")
+        hidden_roles = {"Дизайнер", "Чертёжник", "Замерщик", "ДАН"}
+        if position in hidden_roles:
+            return
+
+        # Закрываем предыдущий popup
+        if self._online_popup:
+            self._online_popup.close()
+
+        popup = QFrame(self, Qt.Popup | Qt.FramelessWindowHint)
+        popup.setStyleSheet("""
+            QFrame {
+                background-color: #FFFFFF;
+                border: 1px solid #E0E0E0;
+                border-radius: 6px;
+                padding: 6px;
+            }
+            QLabel { border: none; }
+        """)
+        layout = QVBoxLayout(popup)
+        layout.setContentsMargins(8, 6, 8, 6)
+        layout.setSpacing(2)
+
+        title = QLabel("Пользователи онлайн:")
+        title.setStyleSheet("font-weight: bold; font-size: 11px; color: #333; padding-bottom: 4px;")
+        layout.addWidget(title)
+
+        for u in users:
+            name = u.get("full_name", "Неизвестный")
+            lbl = QLabel(f"  - {name}")
+            lbl.setStyleSheet("font-size: 11px; color: #555;")
+            layout.addWidget(lbl)
+
+        popup.adjustSize()
+
+        # Позиционируем popup над индикатором
+        pos = self.online_indicator.mapToGlobal(self.online_indicator.rect().topLeft())
+        popup.move(pos.x(), pos.y() - popup.height() - 4)
+        popup.show()
+        self._online_popup = popup
+
+    def _refresh_server_status(self):
+        """Обновить данные о состоянии диска/RAM в фоне (только для администраторов)."""
+        if not self.api_client or not self._is_admin_user:
+            return
+
+        import threading
+
+        def _fetch():
+            try:
+                data = self.data_access.get_server_disk_status()
+                QTimer.singleShot(0, lambda: self._apply_server_status(data))
+            except Exception:
+                pass
+
+        threading.Thread(target=_fetch, daemon=True).start()
+
+    def _apply_server_status(self, data):
+        """Применить данные о состоянии сервера к метке в статус-баре."""
+        if not data:
+            self.server_status_label.setText("Сервер: ?")
+            self.server_status_label.setStyleSheet("color: #aaa; font-size: 11px; border: none; padding-right: 6px;")
+            return
+
+        self._server_status_data = data
+        disk = data.get("disk_percent", 0)
+        ram = data.get("ram_percent", 0)
+
+        if data.get("disk_critical") or disk >= 95:
+            color = "#c0392b"
+            text = f"Диск: {disk}%!"
+        elif data.get("disk_warning") or disk >= 80:
+            color = "#e67e22"
+            text = f"Диск: {disk}%"
+        else:
+            color = "#27ae60"
+            text = f"Диск: {disk}%"
+
+        self.server_status_label.setText(text)
+        self.server_status_label.setStyleSheet(f"color: {color}; font-size: 11px; border: none; padding-right: 6px;")
+        self.server_status_label.setToolTip(
+            f"Сервер — нажмите для подробностей\n"
+            f"Диск: {data.get('disk_used_gb', 0)} / {data.get('disk_total_gb', 0)} ГБ ({disk}%)\n"
+            f"RAM:  {data.get('ram_used_gb', 0)} / {data.get('ram_total_gb', 0)} ГБ ({ram}%)"
+        )
+
+        # Показываем всплывающее предупреждение один раз за сессию при критичности
+        if data.get("disk_warning") and not getattr(self, "_disk_warn_shown", False):
+            self._disk_warn_shown = True
+            level = "critical" if data.get("disk_critical") else "warning"
+            free = data.get("disk_free_gb", 0)
+            total = data.get("disk_total_gb", 0)
+            CustomMessageBox(
+                self,
+                "Внимание: диск сервера заполнен",
+                f"Диск заполнен на {disk}%.\nСвободно: {free} ГБ из {total} ГБ.\n\nОчистите логи или Docker-кэш на сервере,\nиначе сервер прекратит работу.",
+                level,
+            ).exec_()
+
+    def _show_server_status_popup(self, event=None):
+        """Показать popup с подробным состоянием сервера."""
+        data = self._server_status_data
+        if not data:
+            self._refresh_server_status()
+            return
+
+        from PyQt5.QtWidgets import QFrame
+
+        if getattr(self, "_server_popup", None):
+            try:
+                self._server_popup.close()
+            except Exception:
+                pass
+
+        popup = QFrame(self, Qt.Popup | Qt.FramelessWindowHint)
+        popup.setStyleSheet("""
+            QFrame {
+                background-color: #FFFFFF;
+                border: 1px solid #E0E0E0;
+                border-radius: 6px;
+            }
+            QLabel { border: none; }
+        """)
+        layout = QVBoxLayout(popup)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(4)
+
+        title = QLabel("Состояние сервера")
+        title.setStyleSheet("font-weight: bold; font-size: 12px; color: #333; padding-bottom: 4px;")
+        layout.addWidget(title)
+
+        disk = data.get("disk_percent", 0)
+        disk_color = "#c0392b" if disk >= 95 else "#e67e22" if disk >= 80 else "#27ae60"
+        layout.addWidget(QLabel(f"Диск:  {data.get('disk_used_gb', 0)} / {data.get('disk_total_gb', 0)} ГБ"))
+        disk_pct_lbl = QLabel(f"         {disk}%  (свободно {data.get('disk_free_gb', 0)} ГБ)")
+        disk_pct_lbl.setStyleSheet(f"color: {disk_color}; font-size: 11px;")
+        layout.addWidget(disk_pct_lbl)
+
+        ram = data.get("ram_percent", 0)
+        ram_color = "#c0392b" if ram >= 90 else "#e67e22" if ram >= 75 else "#27ae60"
+        layout.addWidget(QLabel(f"RAM:   {data.get('ram_used_gb', 0)} / {data.get('ram_total_gb', 0)} ГБ"))
+        ram_pct_lbl = QLabel(f"         {ram}%")
+        ram_pct_lbl.setStyleSheet(f"color: {ram_color}; font-size: 11px;")
+        layout.addWidget(ram_pct_lbl)
+
+        for lbl in popup.findChildren(QLabel):
+            if not lbl.styleSheet():
+                lbl.setStyleSheet("font-size: 11px; color: #555;")
+
+        popup.adjustSize()
+        pos = self.server_status_label.mapToGlobal(self.server_status_label.rect().topLeft())
+        popup.move(pos.x(), pos.y() - popup.height() - 4)
+        popup.show()
+        self._server_popup = popup
 
     def _on_online_users_updated(self, users: list):
         """Обработчик обновления списка онлайн пользователей"""
@@ -1685,17 +2213,17 @@ class MainWindow(QMainWindow):
 
     def _on_offline_status_changed(self, status: str):
         """Обработчик изменения статуса offline-режима"""
-        if status == 'online':
+        if status == "online":
             self.offline_indicator.hide()
             self.status_label.setText("Готов к работе")
             self.status_label.setStyleSheet("color: #555; font-size: 11px; border: none;")
-        elif status == 'offline':
+        elif status == "offline":
             self.offline_indicator.setText("OFFLINE")
             self.offline_indicator.setToolTip("Нет подключения к серверу. Изменения будут синхронизированы при восстановлении связи.")
             self.offline_indicator.show()
             self.status_label.setText("Работа в автономном режиме")
             self.status_label.setStyleSheet("color: #e67e22; font-size: 11px; border: none;")
-        elif status == 'syncing':
+        elif status == "syncing":
             self.offline_indicator.setText("Синхронизация...")
             self.offline_indicator.setStyleSheet("""
                 QLabel {
@@ -1742,19 +2270,72 @@ class MainWindow(QMainWindow):
 
     # ==========================================
 
-    def closeEvent(self, event):
-        """Подтверждение выхода из программы"""
+    def _logout_to_login(self):
+        """Выход из учётной записи — возврат к экрану входа"""
         from ui.custom_message_box import CustomQuestionBox
 
         dialog = CustomQuestionBox(
             self,
-            'Выход из программы',
-            'Вы уверены, что хотите выйти из программы?'
+            "Выход из учётной записи",
+            "Вы уверены, что хотите выйти? Потребуется повторный вход.",
         )
+        if dialog.exec_() != QDialog.Accepted:
+            return
+
+        # Logout на сервере
+        try:
+            if hasattr(self, "api_client") and self.api_client:
+                self.api_client.logout()
+        except Exception:
+            pass
+
+        # Очищаем сессию автологина
+        try:
+            from utils.session_storage import clear_session
+
+            clear_session()
+        except Exception:
+            pass
+
+        # Останавливаем фоновые процессы
+        if self.sync_manager:
+            self.sync_manager.stop()
+        if self.offline_manager:
+            self.offline_manager.stop_monitoring()
+
+        # Открываем окно логина и закрываем текущее окно
+        from ui.login_window import LoginWindow
+
+        self._login_window = LoginWindow()
+        self._login_window.show()
+        self._logging_out = True  # Флаг: closeEvent не показывает диалог
+        self.close()
+
+    def closeEvent(self, event):
+        """Подтверждение выхода из программы"""
+        # Если logout через кнопку «Выйти» — подтверждение уже было
+        if getattr(self, "_logging_out", False):
+            event.accept()
+            return
+
+        from ui.custom_message_box import CustomQuestionBox
+
+        dialog = CustomQuestionBox(self, "Выход из программы", "Вы уверены, что хотите выйти из программы?")
 
         if dialog.exec_() == QDialog.Accepted:
             # Удаляем eventFilter перед выходом
             QApplication.instance().removeEventFilter(self)
+            # Если есть сохранённая сессия ("Запомнить меня") — НЕ делаем logout,
+            # чтобы серверная сессия осталась активной для автологина.
+            # Heartbeat перестанет приходить → сервер сам снимет is_online через ~2 мин.
+            from utils.session_storage import has_saved_session
+
+            if not has_saved_session():
+                try:
+                    if hasattr(self, "api_client") and self.api_client:
+                        self.api_client.logout()
+                except Exception as e:
+                    print(f"[WARNING] Ошибка logout при закрытии: {e}")
             # Останавливаем sync_manager перед выходом
             if self.sync_manager:
                 self.sync_manager.stop()
@@ -1764,10 +2345,10 @@ class MainWindow(QMainWindow):
             # Закрываем все matplotlib figures (предотвращает crash при выходе)
             try:
                 import matplotlib.pyplot as plt
-                plt.close('all')
+
+                plt.close("all")
             except Exception:
                 pass
             event.accept()
         else:
             event.ignore()
-            

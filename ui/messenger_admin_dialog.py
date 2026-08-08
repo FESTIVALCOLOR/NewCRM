@@ -99,26 +99,56 @@ _TAB_STYLE = """
 """
 
 # Плейсхолдеры для скриптов
+# Переменные шаблонов (согласно руководству §11 notifications-scripts-guide.md)
 SCRIPT_PLACEHOLDERS = {
-    "{client_name}": "Имя клиента",
-    "{project_name}": "Название проекта (номер договора)",
+    # Основные
+    "{client_first_name}": "Имя клиента (только имя)",
+    "{client_name}": "Полное ФИО клиента",
+    "{address}": "Адрес объекта (включая город)",
+    "{contract_number}": "Номер договора",
+    "{area}": "Площадь (м²)",
     "{stage_name}": "Название стадии",
-    "{substage_name}": "Название подэтапа",
-    "{deadline}": "Дата дедлайна (ДД.ММ.ГГГГ)",
-    "{manager_name}": "Имя менеджера",
-    "{senior_manager}": "Старший менеджер (СДП)",
-    "{director}": "Директор",
-    "{address}": "Адрес объекта",
-    "{city}": "Город",
+    "{deadline}": "Дедлайн / срок на рассмотрение",
+    "{deadline_date}": "Дата дедлайна",
+    "{stage_files}": "Ссылки на файлы стадии",
+    "{revision_count}": "Номер правки",
+    "{review_link}": "Ссылка на отзывы",
+    "{amount}": "Сумма оплаты",
+    "{visit_date}": "Дата выезда надзора",
+    "{pause_reason}": "Причина приостановки",
+    # Команда проекта
+    "{senior_manager}": "ФИО старшего менеджера",
+    "{senior_manager_username}": "Telegram username ст. менеджера",
+    "{manager_name}": "ФИО менеджера",
+    "{manager_username}": "Telegram username менеджера",
+    "{sdp}": "ФИО СДП",
+    "{sdp_username}": "Telegram username СДП",
+    "{director}": "ФИО руководителя студии",
+    "{director_username}": "Telegram username руководителя",
+    "{dan}": "ФИО ДАН",
+    "{dan_username}": "Telegram username ДАН",
+    # Дательный падеж
+    "{client_name_dat}": "Клиент (дат. падеж)",
+    "{manager_name_dat}": "Менеджер (дат. падеж)",
+    "{senior_manager_dat}": "Ст. менеджер (дат. падеж)",
 }
 
 SCRIPT_TYPES = {
     "project_start": "Начало проекта",
     "stage_complete": "Завершение стадии",
     "project_end": "Завершение проекта",
-    "project_paused": "Приостановка проекта",
-    "custom": "Пользовательский",
+    "supervision_start": "Начало надзора",
+    "supervision_stage_complete": "Завершение стадии надзора",
+    "supervision_visit": "Выезд надзора",
+    "supervision_end": "Завершение надзора",
+    "personal_assigned": "Личное: назначение",
+    "personal_crm_stage": "Личное: смена стадии",
+    "personal_deadline": "Личное: дедлайн",
+    "personal_payment": "Личное: оплата",
+    "personal_supervision": "Личное: надзор",
 }
+
+PROJECT_TYPES = ["", "Индивидуальный", "Шаблонный", "Авторский надзор"]
 
 # Стадии CRM для уведомлений, сгруппированные по типу проекта
 CRM_STAGE_GROUPS = {
@@ -183,8 +213,8 @@ class MessengerAdminDialog(QDialog):
 
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
-        self.setMinimumSize(680, 560)
-        self.setMaximumSize(780, 700)
+        self.setMinimumSize(780, 620)
+        self.setMaximumSize(900, 780)
 
         self._init_ui()
         self._load_data()
@@ -519,6 +549,11 @@ class MessengerAdminDialog(QDialog):
         self._app_download_url.setStyleSheet(_INPUT_STYLE)
         form.addRow("Ссылка на скачивание:", self._app_download_url)
 
+        self._review_link = QLineEdit()
+        self._review_link.setPlaceholderText("https://yandex.ru/maps/... или другая ссылка на отзывы")
+        self._review_link.setStyleSheet(_INPUT_STYLE)
+        form.addRow("Ссылка на отзывы:", self._review_link)
+
         layout.addLayout(form)
 
         # Статус Email
@@ -593,7 +628,7 @@ class MessengerAdminDialog(QDialog):
 
         left_w = QWidget()
         left_w.setLayout(left)
-        left_w.setFixedWidth(200)
+        left_w.setFixedWidth(240)
         layout.addWidget(left_w)
 
         # Правая панель: редактор скрипта
@@ -619,6 +654,20 @@ class MessengerAdminDialog(QDialog):
         ed_layout.setContentsMargins(0, 0, 0, 0)
         ed_layout.setSpacing(8)
 
+        # Название скрипта
+        name_row = QHBoxLayout()
+        name_row.setSpacing(8)
+        name_row.addWidget(QLabel("Название:"))
+        self._script_name_edit = QLineEdit()
+        self._script_name_edit.setPlaceholderText("Название скрипта (необязательно)")
+        self._script_name_edit.setStyleSheet(
+            "QLineEdit { border: 1px solid #d9d9d9; border-radius: 4px; "
+            "padding: 4px 8px; font-size: 12px; } "
+            "QLineEdit:focus { border-color: #1677FF; }"
+        )
+        name_row.addWidget(self._script_name_edit)
+        ed_layout.addLayout(name_row)
+
         # Тип скрипта
         type_row = QHBoxLayout()
         type_row.setSpacing(8)
@@ -630,10 +679,24 @@ class MessengerAdminDialog(QDialog):
         type_row.addWidget(self._script_type_combo)
         ed_layout.addLayout(type_row)
 
+        # Тип проекта
+        pt_row = QHBoxLayout()
+        pt_row.setSpacing(8)
+        pt_lbl = QLabel("Проект:")
+        pt_row.addWidget(pt_lbl)
+        self._script_project_type_combo = QComboBox()
+        self._script_project_type_combo.setStyleSheet(_COMBO_STYLE)
+        self._script_project_type_combo.addItem("(все типы)", "")
+        for pt in ["Индивидуальный", "Шаблонный", "Авторский надзор"]:
+            self._script_project_type_combo.addItem(pt, pt)
+        pt_row.addWidget(self._script_project_type_combo)
+        ed_layout.addLayout(pt_row)
+
         # Стадия (для stage_complete и других типов с привязкой к стадии)
         stage_row = QHBoxLayout()
         stage_row.setSpacing(8)
-        stage_row.addWidget(QLabel("Стадия:"))
+        self._stage_label = QLabel("Стадия:")
+        stage_row.addWidget(self._stage_label)
         self._script_stage_combo = QComboBox()
         self._script_stage_combo.setStyleSheet(_COMBO_STYLE)
         self._populate_stage_combo()
@@ -646,8 +709,8 @@ class MessengerAdminDialog(QDialog):
         ed_layout.addWidget(QLabel("Текст сообщения (HTML):"))
         self._script_text = QTextEdit()
         self._script_text.setStyleSheet(_TEXTEDIT_STYLE)
-        self._script_text.setMinimumHeight(120)
-        ed_layout.addWidget(self._script_text)
+        self._script_text.setMinimumHeight(200)
+        ed_layout.addWidget(self._script_text, 1)  # stretch=1 — занимает свободное место
 
         # Плейсхолдеры
         ph_label = QLabel("Доступные переменные (кликните для вставки):")
@@ -684,7 +747,7 @@ class MessengerAdminDialog(QDialog):
             btn.clicked.connect(lambda _, p=placeholder: self._insert_placeholder(p))
             ph_layout.addWidget(btn, row, col)
             col += 1
-            if col >= 4:
+            if col >= 5:
                 col = 0
                 row += 1
 
@@ -696,9 +759,14 @@ class MessengerAdminDialog(QDialog):
         self._script_enabled_cb.setChecked(True)
         opts_row.addWidget(self._script_enabled_cb)
 
-        self._script_auto_deadline_cb = QCheckBox("Подставлять дедлайн автоматически")
+        self._script_auto_deadline_cb = QCheckBox("Авто-дедлайн")
         self._script_auto_deadline_cb.setChecked(True)
         opts_row.addWidget(self._script_auto_deadline_cb)
+
+        self._script_attach_files_cb = QCheckBox("Прикрепить файлы стадии")
+        self._script_attach_files_cb.setChecked(True)
+        opts_row.addWidget(self._script_attach_files_cb)
+
         opts_row.addStretch()
         ed_layout.addLayout(opts_row)
 
@@ -789,10 +857,16 @@ class MessengerAdminDialog(QDialog):
         script_btns.addStretch()
         ed_layout.addLayout(script_btns)
 
-        self._script_editor_stack.addWidget(editor_page)
+        # Оборачиваем редактор в QScrollArea для длинных скриптов
+        editor_scroll = QScrollArea()
+        editor_scroll.setWidgetResizable(True)
+        editor_scroll.setWidget(editor_page)
+        editor_scroll.setFrameShape(QFrame.NoFrame)
+        editor_scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
+        self._script_editor_stack.addWidget(editor_scroll)
 
         right.addWidget(self._script_editor_stack)
-        layout.addLayout(right)
+        layout.addLayout(right, 1)  # stretch=1 для правой панели
 
         return tab
 
@@ -839,6 +913,9 @@ class MessengerAdminDialog(QDialog):
             )
             self._app_download_url.setText(
                 self._settings.get("app_download_url", "")
+            )
+            self._review_link.setText(
+                self._settings.get("review_link", "")
             )
         except Exception as e:
             logger.error(f"Ошибка загрузки настроек: {e}")
@@ -1090,45 +1167,105 @@ class MessengerAdminDialog(QDialog):
     # ================================================================
 
     def _refresh_script_list(self):
-        """Обновить список скриптов"""
+        """Обновить список скриптов с группировкой"""
         self._script_list.clear()
-        for script in self._scripts:
-            script_type = script.get("script_type", "")
-            stage = script.get("stage_name", "")
-            is_enabled = script.get("is_enabled", True)
 
-            type_label = SCRIPT_TYPES.get(script_type, script_type)
-            display = type_label
-            if stage:
-                display += f" ({stage})"
-            if not is_enabled:
-                display += " [ВЫКЛ]"
+        # Группировка по категориям
+        groups = {
+            "group_crm": ("Групповые — CRM", []),
+            "group_supervision": ("Групповые — Надзор", []),
+            "personal": ("Личные уведомления", []),
+        }
+        for i, script in enumerate(self._scripts):
+            st = script.get("script_type", "")
+            if st.startswith("personal_"):
+                groups["personal"][1].append((i, script))
+            elif st.startswith("supervision"):
+                groups["group_supervision"][1].append((i, script))
+            else:
+                groups["group_crm"][1].append((i, script))
 
-            item = QListWidgetItem(display)
-            item.setData(Qt.UserRole, script.get("id"))
-            if not is_enabled:
-                item.setForeground(QColor("#999999"))
-            self._script_list.addItem(item)
+        for group_key, (group_title, items) in groups.items():
+            if not items:
+                continue
+            # Заголовок группы
+            header = QListWidgetItem(f"── {group_title} ──")
+            header.setFlags(Qt.NoItemFlags)
+            header.setForeground(QColor("#999999"))
+            f = header.font()
+            f.setBold(True)
+            f.setPointSize(f.pointSize() - 1)
+            header.setFont(f)
+            self._script_list.addItem(header)
+
+            for idx, script in items:
+                script_type = script.get("script_type", "")
+                stage = script.get("stage_name", "")
+                is_enabled = script.get("is_enabled", True)
+                project_type = script.get("project_type", "")
+
+                type_label = SCRIPT_TYPES.get(script_type, script_type)
+                name = script.get("name", "")
+                display = name if name else type_label
+                if stage and not name:
+                    display += f" ({stage})"
+                if project_type and not name:
+                    display += f" [{project_type[:3]}.]"
+                if not is_enabled:
+                    display += " [ВЫКЛ]"
+
+                item = QListWidgetItem(f"  {display}")
+                item.setData(Qt.UserRole, script.get("id"))
+                item.setData(Qt.UserRole + 1, idx)  # Индекс в self._scripts
+                if not is_enabled:
+                    item.setForeground(QColor("#999999"))
+                elif script_type.startswith("personal_"):
+                    item.setForeground(QColor("#1976D2"))
+                self._script_list.addItem(item)
 
         self._script_editor_stack.setCurrentIndex(0)
         self._current_script_id = None
 
     def _on_script_selected(self, row: int):
         """Выбран скрипт из списка"""
-        if row < 0 or row >= len(self._scripts):
+        if row < 0:
             self._script_editor_stack.setCurrentIndex(0)
             self._current_script_id = None
             return
 
-        script = self._scripts[row]
+        item = self._script_list.item(row)
+        if not item or not (item.flags() & Qt.ItemIsEnabled):
+            # Заголовок группы — не выбираем
+            self._script_editor_stack.setCurrentIndex(0)
+            self._current_script_id = None
+            return
+
+        script_idx = item.data(Qt.UserRole + 1)
+        if script_idx is None or script_idx < 0 or script_idx >= len(self._scripts):
+            self._script_editor_stack.setCurrentIndex(0)
+            self._current_script_id = None
+            return
+
+        script = self._scripts[script_idx]
         self._current_script_id = script.get("id")
         self._script_editor_stack.setCurrentIndex(1)
+
+        # Название
+        self._script_name_edit.setText(script.get("name", "") or "")
 
         # Тип
         script_type = script.get("script_type", "project_start")
         idx = self._script_type_combo.findData(script_type)
         if idx >= 0:
             self._script_type_combo.setCurrentIndex(idx)
+
+        # Тип проекта
+        pt = script.get("project_type", "") or ""
+        pt_idx = self._script_project_type_combo.findData(pt)
+        if pt_idx >= 0:
+            self._script_project_type_combo.setCurrentIndex(pt_idx)
+        else:
+            self._script_project_type_combo.setCurrentIndex(0)
 
         # Стадия — ищем по data, а если не нашли — по тексту (подэтапы имеют отступ)
         stage = script.get("stage_name", "") or ""
@@ -1150,6 +1287,7 @@ class MessengerAdminDialog(QDialog):
         # Опции
         self._script_enabled_cb.setChecked(script.get("is_enabled", True))
         self._script_auto_deadline_cb.setChecked(script.get("use_auto_deadline", True))
+        self._script_attach_files_cb.setChecked(script.get("attach_stage_files", True))
 
         # PDF-памятка
         memo = script.get("memo_file_path") or None
@@ -1199,18 +1337,11 @@ class MessengerAdminDialog(QDialog):
 
     def _on_script_type_changed(self):
         """Показать/скрыть выбор стадии в зависимости от типа"""
-        current_type = self._script_type_combo.currentData()
-        # Стадию показываем для всех типов кроме project_start и project_end
-        show_stage = current_type not in ("project_start", "project_end")
+        current_type = self._script_type_combo.currentData() or ""
+        # Стадию показываем только для stage_complete / supervision_stage_complete
+        show_stage = current_type in ("stage_complete", "supervision_stage_complete")
         self._script_stage_combo.setVisible(show_stage)
-        # Найти label "Стадия:" — он в parent layout
-        for i in range(self._script_stage_combo.parent().layout().count()):
-            item = self._script_stage_combo.parent().layout().itemAt(i)
-            if item and item.layout():
-                for j in range(item.layout().count()):
-                    w = item.layout().itemAt(j).widget()
-                    if isinstance(w, QLabel) and w.text() == "Стадия:":
-                        w.setVisible(show_stage)
+        self._stage_label.setVisible(show_stage)
 
     def _insert_placeholder(self, placeholder: str):
         """Вставить плейсхолдер в редактор скрипта"""
@@ -1296,11 +1427,13 @@ class MessengerAdminDialog(QDialog):
 
         # Шаблоны по умолчанию для разных типов
         default_templates = {
-            "project_start": "Здравствуйте, {client_name}!\n\nДобро пожаловать в проект. Ваш менеджер — {manager_name}.\nАдрес объекта: {address}, {city}.",
+            "project_start": "Здравствуйте, {client_name}!\n\nДобро пожаловать в проект. Ваш менеджер — {manager_name}.\nАдрес объекта: {address}.",
             "stage_complete": "Здравствуйте, {client_name}!\n\nЭтап «{stage_name}» готов к согласованию.\nПросим ознакомиться с материалами.",
             "project_end": "Здравствуйте, {client_name}!\n\nПроект завершён. Благодарим за сотрудничество!",
-            "project_paused": "Здравствуйте, {client_name}!\n\nПроект временно приостановлен.\nМенеджер {manager_name} свяжется с вами для уточнения деталей.",
-            "custom": "Здравствуйте, {client_name}!\n\n",
+            "supervision_start": "Здравствуйте, {client_name}!\n\nАвторский надзор по объекту {address} начат.\nВаш ДАН — {dan_name}.",
+            "supervision_stage_complete": "Здравствуйте, {client_name}!\n\nСтадия «{stage_name}» надзора по {address} завершена.",
+            "supervision_visit": "Здравствуйте, {client_name}!\n\nЗапланирован выезд по надзору {address} на {visit_date}.",
+            "supervision_end": "Здравствуйте, {client_name}!\n\nАвторский надзор по объекту {address} завершён. Благодарим за сотрудничество!",
         }
 
         try:
@@ -1338,26 +1471,38 @@ class MessengerAdminDialog(QDialog):
         memo_path = getattr(self, '_memo_file_path', None)
         memo_server_path = None
         if memo_path and not memo_path.startswith('/'):
-            # Локальный файл — нужно загрузить на сервер
+            # Локальный файл — загружаем на ЯД через YandexDiskManager
             import os
+            from utils.yandex_disk import YandexDiskManager
+            from config import YANDEX_DISK_TOKEN
             file_name = os.path.basename(memo_path)
             yandex_path = f"/CRM/memo/{file_name}"
             try:
-                if self.data_access:
-                    self.data_access.upload_file(memo_path, yandex_path)
-                    memo_server_path = yandex_path
-            except Exception:
-                memo_server_path = memo_path  # fallback — сохраняем локальный путь
+                yd = YandexDiskManager(YANDEX_DISK_TOKEN)
+                # Создаём директории на ЯД если не существуют
+                yd.create_folder("/CRM")
+                yd.create_folder("/CRM/memo")
+                yd.upload_file(memo_path, yandex_path)
+                memo_server_path = yandex_path
+                logger.info(f"PDF-памятка загружена на ЯД: {yandex_path}")
+            except Exception as e:
+                logger.warning(f"Ошибка загрузки PDF-памятки на ЯД: {e}")
+                CustomMessageBox(self, "Предупреждение",
+                    f"Не удалось загрузить PDF на Яндекс.Диск:\n{e}",
+                    "warning").exec_()
         elif memo_path:
             memo_server_path = memo_path
 
         data = {
+            "name": self._script_name_edit.text().strip() or None,
             "script_type": self._script_type_combo.currentData(),
+            "project_type": self._script_project_type_combo.currentData() or None,
             "stage_name": self._script_stage_combo.currentData() or None,
             "message_template": text,
             "memo_file_path": memo_server_path,
             "is_enabled": self._script_enabled_cb.isChecked(),
             "use_auto_deadline": self._script_auto_deadline_cb.isChecked(),
+            "attach_stage_files": self._script_attach_files_cb.isChecked(),
         }
 
         try:
@@ -1439,6 +1584,7 @@ class MessengerAdminDialog(QDialog):
             {"setting_key": "smtp_use_tls", "setting_value": "true" if self._smtp_tls.isChecked() else "false"},
             {"setting_key": "smtp_from_name", "setting_value": self._smtp_from_name.text().strip() or "Festival Color CRM"},
             {"setting_key": "app_download_url", "setting_value": self._app_download_url.text().strip()},
+            {"setting_key": "review_link", "setting_value": self._review_link.text().strip()},
         ]
 
         try:
