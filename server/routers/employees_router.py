@@ -14,7 +14,16 @@ import logging
 from typing import List, Optional
 
 from auth import get_current_user, get_password_hash
-from constants import POSITION_SENIOR_MANAGER, POSITION_STUDIO_DIRECTOR, ROLE_ADMIN, ROLE_DIRECTOR
+from constants import (
+    ADMIN_POSITIONS,
+    EXEC_POSITIONS,
+    POSITION_DESIGNER,
+    POSITION_DRAFTSMAN,
+    POSITION_SENIOR_MANAGER,
+    POSITION_STUDIO_DIRECTOR,
+    ROLE_ADMIN,
+    ROLE_DIRECTOR,
+)
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from fastapi.responses import FileResponse
 from permissions import (
@@ -143,6 +152,17 @@ async def create_telegram_token(employee_id: int, current_user: Employee = Depen
     }
 
 
+def _department_by_position(position: str) -> str:
+    """Автоназначение отдела по должности."""
+    if position in ADMIN_POSITIONS:
+        return "Административный отдел"
+    if position in [POSITION_DESIGNER, POSITION_DRAFTSMAN]:
+        return "Проектный отдел"
+    if position in EXEC_POSITIONS:
+        return "Исполнительный отдел"
+    return "Другое"
+
+
 @router.post("/employees", response_model=EmployeeResponse, status_code=201)
 async def create_employee(employee_data: EmployeeCreate, current_user: Employee = Depends(require_permission("employees.create")), db: Session = Depends(get_db)):
     """Создать нового сотрудника"""
@@ -160,8 +180,10 @@ async def create_employee(employee_data: EmployeeCreate, current_user: Employee 
         raise HTTPException(status_code=409, detail=f"Сотрудник с именем «{dup_name.full_name}» уже существует (id={dup_name.id})")
 
     # Создание
+    employee_dict = employee_data.model_dump(exclude={"password"})
+    employee_dict["department"] = _department_by_position(employee_data.position)
     employee = Employee(
-        **employee_data.model_dump(exclude={"password"}),
+        **employee_dict,
         password_hash=get_password_hash(employee_data.password),
         invite_temp_password=employee_data.password,
     )
@@ -197,6 +219,10 @@ async def update_employee(employee_id: int, employee_data: EmployeeUpdate, curre
 
     # Обновление полей
     update_data = employee_data.model_dump(exclude_unset=True)
+
+    # Автопересчёт отдела при смене должности
+    if "position" in update_data:
+        update_data["department"] = _department_by_position(update_data["position"])
 
     # Если обновляется пароль
     if "password" in update_data:
