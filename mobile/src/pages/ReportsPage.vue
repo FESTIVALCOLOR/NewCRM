@@ -498,7 +498,7 @@ const contractsDynamics = computed(() => {
   return {
     labels: months,
     datasets: [
-      { label: 'Индивид.', data: months.map((_, i) => d[String(i + 1)]?.count || 0), color: '#F39C12' },
+      { label: 'Индивид.', data: months.map((_, i) => d[String(i + 1)]?.individual_count || 0), color: '#F39C12' },
       { label: 'Шаблон.', data: months.map((_, i) => d[String(i + 1)]?.template_count || 0), color: '#C62828' },
     ],
   }
