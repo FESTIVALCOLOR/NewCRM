@@ -963,7 +963,36 @@
           </div>
         </q-card-section>
         <q-card-section class="q-pt-none">
+          <!-- Переключатель ₽/% с подсказкой — только для Индивидуальных с известной суммой -->
+          <div v-if="payDialogIsIndividual && payDialogTotalAmount" class="row items-center q-mb-sm">
+            <q-btn-toggle
+              v-model="payDialogMode"
+              :options="[{ label: '₽', value: 'rub' }, { label: '%', value: 'pct' }]"
+              dense
+              unelevated
+              no-caps
+              size="sm"
+              color="white"
+              text-color="grey-7"
+              toggle-color="primary"
+              toggle-text-color="white"
+              style="border: 1px solid #ccc; border-radius: 6px"
+            />
+            <span class="text-caption text-grey-6 q-ml-sm">
+              <template v-if="payDialogMode === 'rub' && payDialogCalcPercent !== null">
+                ≈ {{ payDialogCalcPercent }}% от договора
+              </template>
+              <template v-else-if="payDialogMode === 'pct' && payDialogCalcRubles !== null">
+                = {{ fmtMoney(payDialogCalcRubles) }}
+              </template>
+              <template v-else>
+                договор: {{ fmtMoney(payDialogTotalAmount) }}
+              </template>
+            </span>
+          </div>
+
           <q-input
+            v-if="payDialogMode === 'rub'"
             v-model="payDialogAmount"
             label="Сумма оплаты, ₽"
             outlined
@@ -972,11 +1001,22 @@
             class="q-mb-sm"
           />
           <q-input
+            v-else
+            v-model="payDialogPercent"
+            label="Процент от суммы договора"
+            outlined
+            dense
+            type="number"
+            suffix="%"
+            class="q-mb-sm"
+          />
+          <q-input
             v-model="payDialogDate"
             label="Дата оплаты"
             outlined
             dense
             type="date"
+            stack-label
           />
         </q-card-section>
         <q-card-actions align="right" class="q-pt-none">
@@ -995,7 +1035,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { addWorkingDays, countWorkingDaysUntil, countWorkingDaysBetween } from 'src/composables/useDeadline'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
@@ -1454,23 +1494,61 @@ const payDialogOpen = ref(false)
 const payDialogKey = ref('')
 const payDialogDate = ref('')
 const payDialogAmount = ref('')
+const payDialogPercent = ref('')
+const payDialogMode = ref('rub')      // 'rub' | 'pct'
+const payDialogTotalAmount = ref(null)
+const payDialogIsIndividual = ref(false)
+
+const payDialogCalcPercent = computed(() => {
+  const amt = parseFloat(payDialogAmount.value)
+  const total = payDialogTotalAmount.value
+  if (!amt || !total) return null
+  return Math.round(amt / total * 1000) / 10
+})
+
+const payDialogCalcRubles = computed(() => {
+  const pct = parseFloat(payDialogPercent.value)
+  const total = payDialogTotalAmount.value
+  if (!pct || !total) return null
+  return Math.round(pct / 100 * total)
+})
+
+watch(payDialogMode, (newMode) => {
+  if (newMode === 'pct' && payDialogAmount.value && payDialogTotalAmount.value) {
+    const amt = parseFloat(payDialogAmount.value)
+    payDialogPercent.value = String(Math.round(amt / payDialogTotalAmount.value * 1000) / 10)
+  } else if (newMode === 'rub' && payDialogPercent.value && payDialogTotalAmount.value) {
+    const pct = parseFloat(payDialogPercent.value)
+    payDialogAmount.value = String(Math.round(pct / 100 * payDialogTotalAmount.value))
+  }
+})
 
 function pickPayDate(payKey) {
   payDialogKey.value = payKey
   payDialogDate.value = new Date().toISOString().split('T')[0]
   const currentAmount = contract.value[`${payKey}_payment`]
   payDialogAmount.value = currentAmount ? String(currentAmount) : ''
+  payDialogPercent.value = ''
+  payDialogMode.value = 'rub'
+  payDialogTotalAmount.value = contract.value.total_amount || null
+  payDialogIsIndividual.value = contract.value.project_type === 'Индивидуальный'
   payDialogOpen.value = true
 }
 
 async function confirmPay() {
   const payKey = payDialogKey.value
+  let amount = null
+  if (payDialogMode.value === 'pct' && payDialogCalcRubles.value !== null) {
+    amount = payDialogCalcRubles.value
+  } else if (payDialogAmount.value) {
+    amount = parseFloat(payDialogAmount.value)
+  }
   try {
     const update = { [`${payKey}_payment_paid_date`]: payDialogDate.value }
-    if (payDialogAmount.value) update[`${payKey}_payment`] = parseFloat(payDialogAmount.value)
+    if (amount !== null) update[`${payKey}_payment`] = amount
     await contractsApi.update(contract.value.id, update)
     contract.value[`${payKey}_payment_paid_date`] = payDialogDate.value
-    if (payDialogAmount.value) contract.value[`${payKey}_payment`] = parseFloat(payDialogAmount.value)
+    if (amount !== null) contract.value[`${payKey}_payment`] = amount
     payDialogOpen.value = false
     $q.notify({ type: 'positive', message: 'Оплата проведена' })
   } catch (err) {
