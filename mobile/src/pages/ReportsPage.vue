@@ -324,31 +324,33 @@
               <bar-chart :labels="supervisionByCityChart.labels" :datasets="supervisionByCityChart.datasets" horizontal />
             </div>
           </div>
+        </q-card-section>
+      </q-card>
 
-          <!-- Комиссии (доход студии из закупок) -->
-          <div v-if="supervisionCommissionByStageChart || supervisionCommissionByAgentChart" class="q-mt-md">
-            <div class="text-subtitle2 text-weight-bold q-mb-sm" style="color: #27AE60">
-              Комиссии (доход студии из закупок)
-              <span v-if="supervisionDetailed?.commission?.total || supervisionDetailed?.commission?.undated_total" class="text-caption text-grey-7 q-ml-xs">
-                Итого: {{ fmtMoney((supervisionDetailed.commission.total || 0) + (supervisionDetailed.commission.undated_total || 0)) }}
-                <span v-if="supervisionDetailed?.commission?.undated_total > 0" style="color: #F39C12">
-                  (в т.ч. {{ fmtMoney(supervisionDetailed.commission.undated_total) }} без даты)
-                </span>
-              </span>
+      <!-- ========== КОМИССИИ НАДЗОРА ========== -->
+      <q-card v-if="supervisionCommissionByStageChart || supervisionCommissionByAgentChart" class="is-card q-mb-md">
+        <q-card-section>
+          <div class="text-subtitle2 text-weight-bold text-center q-mb-xs" style="color: #27AE60">
+            Комиссии (доход студии из закупок)
+          </div>
+          <div v-if="supervisionDetailed?.commission?.total || supervisionDetailed?.commission?.undated_total" class="text-caption text-center q-mb-md" style="color: #555">
+            Итого: {{ fmtMoney((supervisionDetailed.commission.total || 0) + (supervisionDetailed.commission.undated_total || 0)) }}
+            <span v-if="supervisionDetailed?.commission?.undated_total > 0" style="color: #F39C12">
+              (в т.ч. {{ fmtMoney(supervisionDetailed.commission.undated_total) }} без даты)
+            </span>
+          </div>
+          <div class="row q-col-gutter-md">
+            <div v-if="supervisionCommissionByStageChart" class="col-12 col-md-6">
+              <div class="text-caption text-weight-bold q-mb-xs">
+                По стадиям закупок
+              </div>
+              <bar-chart :labels="supervisionCommissionByStageChart.labels" :datasets="supervisionCommissionByStageChart.datasets" horizontal />
             </div>
-            <div class="row q-col-gutter-md">
-              <div v-if="supervisionCommissionByStageChart" class="col-12 col-md-6">
-                <div class="text-caption text-weight-bold q-mb-xs">
-                  По стадиям закупок
-                </div>
-                <bar-chart :labels="supervisionCommissionByStageChart.labels" :datasets="supervisionCommissionByStageChart.datasets" horizontal />
+            <div v-if="supervisionCommissionByAgentChart" class="col-12 col-md-6">
+              <div class="text-caption text-weight-bold q-mb-xs">
+                По агентам
               </div>
-              <div v-if="supervisionCommissionByAgentChart" class="col-12 col-md-6">
-                <div class="text-caption text-weight-bold q-mb-xs">
-                  По агентам
-                </div>
-                <bar-chart :labels="supervisionCommissionByAgentChart.labels" :datasets="supervisionCommissionByAgentChart.datasets" horizontal />
-              </div>
+              <bar-chart :labels="supervisionCommissionByAgentChart.labels" :datasets="supervisionCommissionByAgentChart.datasets" horizontal />
             </div>
           </div>
         </q-card-section>
