@@ -27,24 +27,26 @@
     <template v-else>
       <!-- Архив -->
       <div v-if="showArchive" class="q-pa-sm">
-        <q-card v-for="card in cards" :key="card.id" class="is-card q-mb-sm cursor-pointer" @click="openCard(card)">
-          <q-card-section class="q-pa-md">
-            <div class="row items-center justify-between q-mb-xs">
-              <div class="text-subtitle2 text-weight-bold" style="color: #333">
-                {{ card.contract_number || `#${card.id}` }}
-              </div>
-              <q-badge :color="sColor(card)" :label="card.column_name || 'Архив'" dense />
-            </div>
-            <div class="text-body2" style="color: #333">
-              {{ card.address || 'Без адреса' }}
-            </div>
-            <div class="row q-gutter-sm text-caption" style="color: #888">
-              <span v-if="card.area">{{ card.area }} м²</span><span v-if="card.city">{{ card.city }}</span>
-            </div>
-          </q-card-section>
-        </q-card>
         <div v-if="cards.length === 0" class="text-center q-py-xl" style="color: #999">
           Архив пуст
+        </div>
+        <div v-else class="archive-grid">
+          <q-card v-for="card in cards" :key="card.id" class="is-card cursor-pointer q-mb-none" @click="openCard(card)">
+            <q-card-section class="q-pa-md">
+              <div class="row items-center justify-between q-mb-xs">
+                <div class="text-subtitle2 text-weight-bold" style="color: #333">
+                  {{ card.contract_number || `#${card.id}` }}
+                </div>
+                <q-badge :color="sColor(card)" :label="card.column_name || 'Архив'" dense />
+              </div>
+              <div class="text-body2" style="color: #333">
+                {{ card.address || 'Без адреса' }}
+              </div>
+              <div class="row q-gutter-sm text-caption" style="color: #888">
+                <span v-if="card.area">{{ card.area }} м²</span><span v-if="card.city">{{ card.city }}</span>
+              </div>
+            </q-card-section>
+          </q-card>
         </div>
       </div>
 
@@ -555,6 +557,12 @@ onMounted(() => { loadCards(); cardMutes.load(); if (can('supervision.view_archi
 </script>
 
 <style scoped>
+.archive-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 8px;
+}
+
 .toggle-pills { display: inline-flex; border: 1px solid #d9d9d9; border-radius: 6px; overflow: hidden }
 .toggle-pills button { border: none; background: #F0F0F0; color: #666; font-size: 11px; padding: 5px 12px; cursor: pointer; transition: all 0.2s; font-family: inherit }
 .toggle-pills button.active { background: white; color: #333; font-weight: bold; box-shadow: 0 1px 3px rgba(0,0,0,0.08) }

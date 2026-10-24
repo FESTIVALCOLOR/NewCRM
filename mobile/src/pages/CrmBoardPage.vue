@@ -54,10 +54,14 @@
             {{ archiveSearch ? 'Ничего не найдено' : 'Архив пуст' }}
           </div>
         </div>
-        <div class="row q-gutter-sm">
-          <div v-for="card in archiveFiltered" :key="card.id" class="col-12 col-sm-5 col-md-3 col-lg-2">
-            <crm-card-item :card="card" @click="openCard(card.id)" />
-          </div>
+        <div class="archive-grid">
+          <crm-card-item
+            v-for="card in archiveFiltered"
+            :key="card.id"
+            :card="card"
+            class="q-mb-none"
+            @click="openCard(card.id)"
+          />
         </div>
       </div>
 
@@ -1093,6 +1097,14 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+/* Архивная сетка — равные высоты в ряду, 100% ширина */
+.archive-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
 /* Toggle pill buttons */
 .toggle-pills {
   display: inline-flex;
