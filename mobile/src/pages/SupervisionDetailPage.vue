@@ -453,22 +453,23 @@
                   <q-item-label class="text-weight-medium">
                     {{ entry.stage_name.replace(/^Стадия \d+: /, '') }}
                   </q-item-label>
-                  <q-item-label caption>
-                    <span v-if="entry.plan_date">План: {{ formatDate(entry.plan_date) }}</span>
-                    <span v-if="entry.actual_date"> | Факт: {{ formatDate(entry.actual_date) }}</span>
-                  </q-item-label>
-                  <q-item-label v-if="entry.supplier" caption style="color: #888">
-                    {{ entry.supplier }}
-                  </q-item-label>
-                  <q-item-label v-if="entry.budget_planned > 0" caption style="color: #888">
-                    Факт. {{ formatMoney(entry.budget_actual || 0) }} / План {{ formatMoney(entry.budget_planned) }}
-                  </q-item-label>
-                  <q-item-label v-if="entry.executor" caption style="color: #555">
-                    Исполнитель: {{ entry.executor }}
-                  </q-item-label>
-                  <q-item-label caption :style="entry.commission > 0 ? 'color: #2e7d32; font-weight: 500' : 'color: #999'">
-                    Комиссия: {{ entry.commission > 0 ? formatMoney(entry.commission) : '—' }}
-                  </q-item-label>
+                  <template v-if="hasPurchaseData(entry)">
+                    <q-item-label caption>
+                      План: {{ entry.plan_date ? formatDate(entry.plan_date) : '—' }} | Факт: {{ entry.actual_date ? formatDate(entry.actual_date) : '—' }}
+                    </q-item-label>
+                    <q-item-label caption style="color: #888">
+                      {{ entry.supplier || '—' }}
+                    </q-item-label>
+                    <q-item-label caption style="color: #888">
+                      Факт. {{ formatMoney(entry.budget_actual || 0) }} / План {{ entry.budget_planned > 0 ? formatMoney(entry.budget_planned) : '—' }}
+                    </q-item-label>
+                    <q-item-label caption style="color: #555">
+                      Исполнитель: {{ entry.executor || '—' }}
+                    </q-item-label>
+                    <q-item-label caption :style="entry.commission > 0 ? 'color: #2e7d32; font-weight: 500' : 'color: #999'">
+                      Комиссия: {{ entry.commission > 0 ? formatMoney(entry.commission) : '—' }}
+                    </q-item-label>
+                  </template>
                 </q-item-section>
                 <q-item-section side>
                   <div class="column items-end q-gutter-xs">
@@ -2917,6 +2918,17 @@ function exportTimelineExcel() {
 function editTimelineEntry(entry) {
   editEntry.value = { ...entry }
   showEditEntry.value = true
+}
+
+function hasPurchaseData(entry) {
+  return !!(
+    entry.executor ||
+    entry.commission > 0 ||
+    entry.actual_date ||
+    entry.plan_date ||
+    entry.supplier ||
+    entry.budget_planned > 0
+  )
 }
 
 async function toggleStageComplete(entry) {
