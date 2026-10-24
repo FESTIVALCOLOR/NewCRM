@@ -66,27 +66,33 @@
                   :style="{ background: agentColorFor(card.agent_type), color: 'white', fontSize: '10px', fontWeight: 'bold', padding: '3px 8px', borderRadius: '4px', lineHeight: '16px' }"
                 >{{ card.agent_type }}</span>
               </div>
-              <!-- Команда -->
+              <!-- Команда (сворачиваемая) -->
               <div
                 v-if="card.senior_manager_name || card.dan_name || card.studio_director_name"
                 style="border: 1px solid #E0E0E0; border-radius: 4px; padding: 4px 6px; margin-bottom: 4px; background: #F8F9FA"
                 @click.stop
               >
-                <div style="font-size: 10px; color: #888; font-weight: bold; margin-bottom: 2px">
-                  Команда
+                <div
+                  style="font-size: 10px; color: #888; font-weight: bold; cursor: pointer"
+                  @click="showTeamMap[card.id] = !showTeamMap[card.id]"
+                >
+                  Команда ({{ [card.studio_director_name, card.senior_manager_name, card.dan_name].filter(Boolean).length }})
+                  {{ showTeamMap[card.id] ? '▲' : '▼' }}
                 </div>
-                <div v-if="card.studio_director_name" style="font-size: 10px; color: #333; padding: 1px 0">
-                  РС: {{ card.studio_director_name }}
-                </div>
-                <div v-if="card.senior_manager_name" style="font-size: 10px; color: #333; padding: 1px 0">
-                  СМ: {{ card.senior_manager_name }}
-                </div>
-                <div v-if="card.dan_name" style="font-size: 10px; color: #333; padding: 1px 0">
-                  ДАН: {{ card.dan_name }}
+                <div v-if="showTeamMap[card.id]">
+                  <div v-if="card.studio_director_name" style="font-size: 10px; color: #333; padding: 1px 4px; border-radius: 2px; margin-top: 1px; background: #E8F4FD">
+                    РС: {{ card.studio_director_name }}
+                  </div>
+                  <div v-if="card.senior_manager_name" style="font-size: 10px; color: #333; padding: 1px 4px; border-radius: 2px; margin-top: 1px; background: #EAF7F0">
+                    СМ: {{ card.senior_manager_name }}
+                  </div>
+                  <div v-if="card.dan_name" style="font-size: 10px; color: #333; padding: 1px 4px; border-radius: 2px; margin-top: 1px; background: #FEF9E7">
+                    ДАН: {{ card.dan_name }}
+                  </div>
                 </div>
               </div>
               <!-- Теги -->
-              <div v-if="card.tags" style="display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px">
+              <div v-if="card.tags" style="display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; justify-content: center">
                 <span
                   v-for="(tag, tidx) in parseSvTags(card.tags)"
                   :key="tidx"
@@ -401,7 +407,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { supervisionApi } from 'src/services/api'
@@ -426,6 +432,7 @@ const loading = ref(false)
 const showArchive = ref(false)
 const archiveCount = ref(0)
 const activeCount = ref(0)
+const showTeamMap = reactive({})
 
 async function loadArchiveCount() {
   try {
