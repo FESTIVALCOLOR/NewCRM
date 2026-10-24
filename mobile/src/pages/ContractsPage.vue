@@ -261,11 +261,13 @@ function formatAmount(amount) {
 }
 
 function isFullyPaid(contract) {
-  const parts = []
-  if (contract.advance_payment) parts.push(!!contract.advance_payment_paid_date)
-  if (contract.additional_payment) parts.push(!!contract.additional_payment_paid_date)
-  if (contract.third_payment) parts.push(!!contract.third_payment_paid_date)
-  return parts.length > 0 && parts.every(Boolean)
+  if (contract.project_type === 'Шаблонный') {
+    return !!contract.advance_payment_paid_date
+  }
+  // Индивидуальный — все три платежа должны быть оплачены
+  return !!contract.advance_payment_paid_date
+    && !!contract.additional_payment_paid_date
+    && !!contract.third_payment_paid_date
 }
 
 function shortType(type) {
