@@ -1808,6 +1808,47 @@ async def get_supervision_analytics(
                 defects_found += entry.defects_found or 0
                 defects_resolved += entry.defects_resolved or 0
 
+        # --- Комиссии по стадиям и агентам (все карточки: активные + архивные) ---
+        def _entry_in_period(actual_date_str) -> bool:
+            """True если дата попадает в выбранный период (или период не задан)."""
+            if not (year or quarter or month):
+                return True
+            if not actual_date_str:
+                return False
+            try:
+                d = datetime.strptime(str(actual_date_str)[:10], "%Y-%m-%d")
+            except (ValueError, TypeError):
+                return False
+            if year and d.year != year:
+                return False
+            if month and d.month != month:
+                return False
+            if quarter and (d.month - 1) // 3 + 1 != quarter:
+                return False
+            return True
+
+        commission_by_stage: dict = defaultdict(float)
+        commission_by_agent: dict = defaultdict(float)
+
+        if supervision_card_ids_all:
+            all_commission_entries = db.query(SupervisionTimelineEntry).filter(SupervisionTimelineEntry.supervision_card_id.in_(supervision_card_ids_all)).all()
+            for entry in all_commission_entries:
+                if not _entry_in_period(entry.actual_date):
+                    continue
+                comm = entry.commission or 0.0
+                if comm <= 0:
+                    continue
+                commission_by_stage[entry.stage_name] += comm
+                sc = sc_by_id.get(entry.supervision_card_id)
+                if sc:
+                    cont = contracts_map.get(sc.contract_id)
+                    agent = (cont.agent_type if cont else None) or "Не указан"
+                    commission_by_agent[agent] += comm
+
+        commission_stages_result = [{"stage": sname, "commission": round(commission_by_stage.get(sname, 0.0), 2)} for sname in supervision_stage_names]
+        commission_agents_result = [{"agent": agent, "commission": round(val, 2)} for agent, val in sorted(commission_by_agent.items(), key=lambda x: -x[1])]
+        commission_total = round(sum(commission_by_agent.values()), 2)
+
         savings_pct = round(total_savings / total_planned * 100, 1) if total_planned > 0 else 0.0
         resolution_pct = round(defects_resolved / defects_found * 100, 1) if defects_found > 0 else 0.0
 
@@ -1896,6 +1937,11 @@ async def get_supervision_analytics(
                 "overdue": overdue_visits,
                 "avg_per_card": avg_visits,
                 "by_city": by_city_visits,
+            },
+            "commission": {
+                "total": commission_total,
+                "by_stage": commission_stages_result,
+                "by_agent": commission_agents_result,
             },
         }
 
