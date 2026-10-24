@@ -27,6 +27,7 @@
 
 from collections import defaultdict
 from datetime import datetime
+import json
 import logging
 from typing import List, Optional
 
@@ -61,6 +62,7 @@ from database import (
     ProjectTimelineEntry,
     Salary,
     StageExecutor,
+    SupervisionBudgetExtra,
     SupervisionCard,
     SupervisionTimelineEntry,
     SupervisionVisit,
@@ -1833,6 +1835,7 @@ async def get_supervision_analytics(
         commission_by_agent: dict = defaultdict(float)
 
         if supervision_card_ids_all:
+            # 1. Комиссии из SupervisionTimelineEntry (стадии закупок)
             all_commission_entries = db.query(SupervisionTimelineEntry).filter(SupervisionTimelineEntry.supervision_card_id.in_(supervision_card_ids_all)).all()
             for entry in all_commission_entries:
                 if not _entry_in_period(entry.actual_date):
@@ -1847,7 +1850,34 @@ async def get_supervision_analytics(
                     agent = (cont.agent_type if cont else None) or "Не указан"
                     commission_by_agent[agent] += comm
 
-        commission_stages_result = [{"stage": sname, "commission": round(commission_by_stage.get(sname, 0.0), 2)} for sname in supervision_stage_names]
+            # 2. Комиссии из SupervisionBudgetExtra (строительные работы и материалы)
+            budget_extras = db.query(SupervisionBudgetExtra).filter(SupervisionBudgetExtra.supervision_card_id.in_(supervision_card_ids_all)).all()
+            for be in budget_extras:
+                sc = sc_by_id.get(be.supervision_card_id)
+                cont = contracts_map.get(sc.contract_id) if sc else None
+                agent = (cont.agent_type if cont else None) or "Не указан"
+                for field, label in [("construction_payments", "Строительные работы"), ("materials_payments", "Черновые материалы")]:
+                    raw = getattr(be, field, None)
+                    if not raw:
+                        continue
+                    try:
+                        payments = json.loads(raw)
+                    except Exception:
+                        continue
+                    for p in payments:
+                        comm = float(p.get("commission") or 0)
+                        if comm <= 0:
+                            continue
+                        if not _entry_in_period(p.get("date") or ""):
+                            continue
+                        commission_by_stage[label] += comm
+                        commission_by_agent[agent] += comm
+
+        # Все стадии с ненулевой комиссией, отсортированные по убыванию
+        commission_stages_result = sorted(
+            [{"stage": sname, "commission": round(val, 2)} for sname, val in commission_by_stage.items() if val > 0],
+            key=lambda x: -x["commission"],
+        )
         commission_agents_result = [{"agent": agent, "commission": round(val, 2)} for agent, val in sorted(commission_by_agent.items(), key=lambda x: -x[1])]
         commission_total = round(sum(commission_by_agent.values()), 2)
 

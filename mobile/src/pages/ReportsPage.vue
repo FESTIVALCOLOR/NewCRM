@@ -334,13 +334,13 @@
               </span>
             </div>
             <div class="row q-col-gutter-md">
-              <div v-if="supervisionCommissionByStageChart" class="col-12 col-md-8">
+              <div v-if="supervisionCommissionByStageChart" class="col-12 col-md-6">
                 <div class="text-caption text-weight-bold q-mb-xs">
                   По стадиям закупок
                 </div>
                 <bar-chart :labels="supervisionCommissionByStageChart.labels" :datasets="supervisionCommissionByStageChart.datasets" horizontal />
               </div>
-              <div v-if="supervisionCommissionByAgentChart" class="col-12 col-md-4">
+              <div v-if="supervisionCommissionByAgentChart" class="col-12 col-md-6">
                 <div class="text-caption text-weight-bold q-mb-xs">
                   По агентам
                 </div>
@@ -734,13 +734,11 @@ const supervisionByCityChart = computed(() => {
 const supervisionCommissionByStageChart = computed(() => {
   const stages = supervisionDetailed.value?.commission?.by_stage
   if (!stages?.length) return null
-  const active = stages.filter(s => s.commission > 0)
-  if (!active.length) return null
   // Укорачиваем метки: "Стадия N: Закупка Керамогранита" → "Керамогранит"
-  const labels = active.map(s => s.stage.replace(/^Стадия\s+\d+:\s+Закупка\s+/i, ''))
+  const labels = stages.map(s => s.stage.replace(/^Стадия\s+\d+:\s+Закупка\s+/i, ''))
   return {
     labels,
-    datasets: [{ label: 'Комиссия, ₽', data: active.map(s => s.commission), color: '#27AE60' }],
+    datasets: [{ label: 'Комиссия, ₽', data: stages.map(s => s.commission), color: '#27AE60' }],
   }
 })
 
