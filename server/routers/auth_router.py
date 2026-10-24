@@ -8,13 +8,10 @@
 Подключается в main.py через:
     app.include_router(auth_router, prefix="/api/auth")
 """
-import logging
+
 from collections import defaultdict
 from datetime import datetime, timedelta
-
-from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
-from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy.orm import Session
+import logging
 
 from auth import (
     create_access_token,
@@ -23,10 +20,14 @@ from auth import (
     verify_password,
     verify_refresh_token,
 )
-from config import get_settings
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
+from fastapi.security import OAuth2PasswordRequestForm
 from rate_limit import limiter
+from schemas import EmployeeResponse, LoginResponse, MessageResponse, RefreshTokenResponse
+from sqlalchemy.orm import Session
+
+from config import get_settings
 from database import ActivityLog, Employee, UserSession, get_db
-from schemas import EmployeeResponse, LoginResponse, RefreshTokenResponse, MessageResponse
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,7 @@ router = APIRouter(tags=["auth"])
 # В CI-окружении лимиты увеличены для прохождения тестов
 # ---------------------------------------------------------------------------
 import os as _os
+
 _is_ci = _os.environ.get("CI", "").lower() in ("true", "1")
 
 _login_attempts: dict = defaultdict(list)
@@ -48,6 +50,7 @@ _LOGIN_BLOCK_MINUTES: int = 15
 # POST /login
 # ---------------------------------------------------------------------------
 
+
 @router.post("/login", response_model=LoginResponse)
 @limiter.limit("20/minute")
 async def login(
@@ -57,18 +60,12 @@ async def login(
 ):
     """Вход в систему — возвращает access_token и refresh_token"""
     # Получаем реальный IP клиента (за Nginx/Docker прокси)
-    client_ip = (
-        request.headers.get("X-Real-IP")
-        or request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
-        or (request.client.host if request.client else "unknown")
-    )
+    client_ip = request.headers.get("X-Real-IP") or request.headers.get("X-Forwarded-For", "").split(",")[0].strip() or (request.client.host if request.client else "unknown")
     now = datetime.utcnow()
     cutoff = now - timedelta(minutes=_LOGIN_BLOCK_MINUTES)
 
     # In-memory счётчик (быстрый)
-    _login_attempts[client_ip] = [
-        t for t in _login_attempts[client_ip] if t > cutoff
-    ]
+    _login_attempts[client_ip] = [t for t in _login_attempts[client_ip] if t > cutoff]
 
     # Дополнительно проверяем в БД (персистентно, переживает рестарт)
     # Фильтруем по конкретному IP, а не по всем попыткам
@@ -85,9 +82,7 @@ async def login(
 
     total_attempts = max(len(_login_attempts[client_ip]), db_failed_count)
     if total_attempts >= _LOGIN_MAX_ATTEMPTS:
-        logger.warning(
-            f"Brute-force заблокирован: IP={client_ip}, попыток={total_attempts}"
-        )
+        logger.warning(f"Brute-force заблокирован: IP={client_ip}, попыток={total_attempts}")
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=f"Слишком много попыток входа. Повторите через {_LOGIN_BLOCK_MINUTES} минут",
@@ -166,10 +161,7 @@ async def login(
         for old_session in sessions_to_close:
             old_session.is_active = False
             old_session.logout_time = datetime.utcnow()
-        logger.info(
-            f"Лимит сессий: закрыто {len(sessions_to_close)} старых "
-            f"сессий для employee_id={employee.id} (макс={max_sessions})"
-        )
+        logger.info(f"Лимит сессий: закрыто {len(sessions_to_close)} старых сессий для employee_id={employee.id} (макс={max_sessions})")
 
     # Создание токенов
     access_token = create_access_token(data={"sub": str(employee.id)})
@@ -218,6 +210,7 @@ async def login(
 # POST /refresh
 # ---------------------------------------------------------------------------
 
+
 @router.post("/refresh", response_model=RefreshTokenResponse)
 @limiter.limit("10/minute")
 async def refresh_token(
@@ -263,6 +256,18 @@ async def refresh_token(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    # Проверка: уволенный / в резерве / неактивный сотрудник не может обновить токен
+    if employee.status != "активный":
+        # Деактивируем сессию
+        session.is_active = False
+        session.logout_time = datetime.utcnow()
+        db.commit()
+        status_label = employee.status or "неизвестен"
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Вход запрещён. Статус сотрудника: {status_label}",
+        )
+
     # Создаём новый access_token
     new_access_token = create_access_token(data={"sub": str(employee.id)})
 
@@ -270,6 +275,7 @@ async def refresh_token(
     session.session_token = new_access_token
     employee.current_session_token = new_access_token
     employee.last_activity = datetime.utcnow()
+    employee.last_login = datetime.utcnow()
 
     db.commit()
 
@@ -284,6 +290,7 @@ async def refresh_token(
 # ---------------------------------------------------------------------------
 # POST /logout
 # ---------------------------------------------------------------------------
+
 
 @router.post("/logout", response_model=MessageResponse)
 async def logout(
@@ -324,6 +331,7 @@ async def logout(
 # ---------------------------------------------------------------------------
 # GET /me
 # ---------------------------------------------------------------------------
+
 
 @router.get("/me", response_model=EmployeeResponse)
 async def get_me(current_user: Employee = Depends(get_current_user)):

@@ -5,9 +5,10 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                              QTableWidget, QTableWidgetItem, QDialog, QFormLayout,
                              QLineEdit, QComboBox, QLabel, QMessageBox, QHeaderView,
                              QDateEdit, QCheckBox, QGroupBox, QTextEdit, QFrame,
-                             QTabWidget)
+                             QTabWidget, QApplication)
 from ui.custom_dateedit import CustomDateEdit
 from PyQt5.QtCore import Qt, QDate, QTimer, QSize
+from PyQt5.QtGui import QColor, QPainter, QPen, QPainterPath
 from database.db_manager import DatabaseManager
 from config import POSITIONS
 from utils.icon_loader import IconLoader
@@ -17,6 +18,170 @@ from ui.custom_combobox import CustomComboBox
 from utils.calendar_helpers import CALENDAR_STYLE, add_today_button_to_dateedit
 from utils.table_settings import ProportionalResizeTable
 from utils.data_access import DataAccess
+
+class PaymentDetailsPopup(QWidget):
+    """Всплывающая подсказка с выделяемым текстом — стилизована как BubbleToolTip.
+    Белый фон, серая рамка, скруглённые углы, тень, хвостик-стрелка."""
+
+    SHADOW = 6
+    ARROW = 6
+    RADIUS = 6
+    PAD_H = 10
+    PAD_V = 6
+
+    def __init__(self, parent=None):
+        super().__init__(None, Qt.ToolTip | Qt.FramelessWindowHint)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setAttribute(Qt.WA_ShowWithoutActivating)
+        self.setFocusPolicy(Qt.NoFocus)
+
+        self._arrow_x = 0
+        self._arrow_top = True
+
+        s = self.SHADOW
+        a = self.ARROW
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(s + self.PAD_H, s + a + self.PAD_V,
+                                  s + self.PAD_H, s + self.PAD_V)
+        self._label = QLabel()
+        self._label.setStyleSheet('color: #333333; font-size: 12px; background: transparent;')
+        self._label.setTextInteractionFlags(
+            Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
+        )
+        self._label.setCursor(Qt.IBeamCursor)
+        self._label.setContextMenuPolicy(Qt.CustomContextMenu)
+        self._label.customContextMenuRequested.connect(self._show_context_menu)
+        layout.addWidget(self._label)
+
+        self._hide_timer = QTimer(self)
+        self._hide_timer.setSingleShot(True)
+        self._hide_timer.setInterval(400)
+        self._hide_timer.timeout.connect(self.hide)
+
+    def _show_context_menu(self, pos):
+        """Контекстное меню на русском"""
+        from PyQt5.QtWidgets import QMenu
+        menu = QMenu(self)
+        copy_action = menu.addAction('Копировать')
+        copy_action.setShortcut('Ctrl+C')
+        select_all_action = menu.addAction('Выделить всё')
+        select_all_action.setShortcut('Ctrl+A')
+        action = menu.exec_(self._label.mapToGlobal(pos))
+        if action == copy_action:
+            if self._label.hasSelectedText():
+                QApplication.clipboard().setText(self._label.selectedText())
+            else:
+                QApplication.clipboard().setText(self._label.text())
+        elif action == select_all_action:
+            self._label.selectAll()
+
+    def show_at(self, text, global_pos):
+        """Показать popup с текстом около указанной позиции"""
+        self._label.setText(text)
+        self.adjustSize()
+
+        s = self.SHADOW
+        w = self.width()
+        h = self.height()
+
+        screen = QApplication.primaryScreen().availableGeometry()
+        x = global_pos.x() - w // 2
+        y = global_pos.y() + 2
+
+        if x < screen.left():
+            x = screen.left()
+        if x + w > screen.right():
+            x = screen.right() - w
+
+        self._arrow_x = max(self.RADIUS + self.ARROW,
+                            min(global_pos.x() - x - s,
+                                w - 2 * s - self.RADIUS - self.ARROW))
+
+        if y + h > screen.bottom():
+            y = global_pos.y() - h - 2
+            self._arrow_top = False
+            # Пересчитать margins для стрелки снизу
+            a = self.ARROW
+            self.layout().setContentsMargins(s + self.PAD_H, s + self.PAD_V,
+                                             s + self.PAD_H, s + a + self.PAD_V)
+        else:
+            self._arrow_top = True
+            a = self.ARROW
+            self.layout().setContentsMargins(s + self.PAD_H, s + a + self.PAD_V,
+                                             s + self.PAD_H, s + self.PAD_V)
+
+        self.move(x, y)
+        self.show()
+        self.update()
+        self._hide_timer.stop()
+
+    def _build_path(self):
+        """Построить path облачка с хвостиком (как BubbleToolTip)"""
+        s = self.SHADOW
+        bw = self.width() - 2 * s
+        bh = self.height() - 2 * s
+        a = self.ARROW
+        r = self.RADIUS
+        ax = self._arrow_x
+
+        path = QPainterPath()
+        if self._arrow_top:
+            bt = float(a)
+            path.moveTo(r, bt)
+            path.lineTo(ax - a, bt)
+            path.lineTo(ax, 0)
+            path.lineTo(ax + a, bt)
+            path.lineTo(bw - r, bt)
+            path.arcTo(bw - 2 * r, bt, 2 * r, 2 * r, 90, -90)
+            path.lineTo(bw, bh - r)
+            path.arcTo(bw - 2 * r, bh - 2 * r, 2 * r, 2 * r, 0, -90)
+            path.lineTo(r, bh)
+            path.arcTo(0, bh - 2 * r, 2 * r, 2 * r, -90, -90)
+            path.lineTo(0, bt + r)
+            path.arcTo(0, bt, 2 * r, 2 * r, 180, -90)
+        else:
+            bb = float(bh - a)
+            path.moveTo(r, 0)
+            path.lineTo(bw - r, 0)
+            path.arcTo(bw - 2 * r, 0, 2 * r, 2 * r, 90, -90)
+            path.lineTo(bw, bb - r)
+            path.arcTo(bw - 2 * r, bb - 2 * r, 2 * r, 2 * r, 0, -90)
+            path.lineTo(ax + a, bb)
+            path.lineTo(ax, bh)
+            path.lineTo(ax - a, bb)
+            path.lineTo(r, bb)
+            path.arcTo(0, bb - 2 * r, 2 * r, 2 * r, -90, -90)
+            path.lineTo(0, r)
+            path.arcTo(0, 0, 2 * r, 2 * r, 180, -90)
+        path.closeSubpath()
+        return path
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        s = self.SHADOW
+        path = self._build_path()
+        painter.translate(s, s)
+        # Тень
+        for dy, alpha in [(4, 8), (3, 12), (2, 16), (1, 20)]:
+            painter.save()
+            painter.translate(0, dy)
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QColor(0, 0, 0, alpha))
+            painter.drawPath(path)
+            painter.restore()
+        # Облачко
+        painter.setPen(QPen(QColor('#d9d9d9'), 1))
+        painter.setBrush(QColor('#ffffff'))
+        painter.drawPath(path)
+        painter.end()
+
+    def enterEvent(self, event):
+        self._hide_timer.stop()
+
+    def leaveEvent(self, event):
+        self._hide_timer.start()
+
 
 class EmployeesTab(QWidget):
     def __init__(self, employee, api_client=None, parent=None):
@@ -31,6 +196,8 @@ class EmployeesTab(QWidget):
         self.can_create = _has_perm(employee, api_client, 'employees.create')
         self.can_edit = _has_perm(employee, api_client, 'employees.update')
         self.can_delete = _has_perm(employee, api_client, 'employees.delete')
+        # Тип оплаты и пароль видит только Руководитель студии
+        self.is_director = employee.get('position', '') == 'Руководитель студии'
         # ======================================
 
         self._data_loaded = False
@@ -139,22 +306,25 @@ class EmployeesTab(QWidget):
                 background-color: #FFFFFF;
             }
         """)
-        self.employees_table.setColumnCount(8)
+        self.employees_table.setColumnCount(9)
         self.employees_table.setHorizontalHeaderLabels([
             ' ID ', ' ФИО ', ' Должность ', ' Телефон ', ' Email ',
-            ' Дата рождения ', ' Статус ', ' Действия '
+            ' Тип оплаты ', ' Дата рождения ', ' Статус ', ' Действия '
         ])
 
         # ========== СКРЫВАЕМ КОЛОНКУ ID ==========
         self.employees_table.setColumnHidden(0, True)
+        # Колонка "Тип оплаты" видна только руководителю студии
+        if not self.is_director:
+            self.employees_table.setColumnHidden(5, True)
         # =========================================
 
         # Настройка пропорционального изменения размера:
-        # - Колонки 0-6 растягиваются пропорционально И можно менять вручную
-        # - Колонка 7 (Действия) фиксирована 110px
+        # - Колонки 0-7 растягиваются пропорционально
+        # - Колонка 8 (Действия) фиксирована 140px
         self.employees_table.setup_proportional_resize(
-            column_ratios=[0.05, 0.22, 0.18, 0.14, 0.18, 0.13, 0.10],  # Пропорции для колонок 0-6
-            fixed_columns={7: 140},  # Действия = 140px фиксированно (4 кнопки)
+            column_ratios=[0.05, 0.20, 0.15, 0.13, 0.15, 0.12, 0.10, 0.10],  # Пропорции для колонок 0-7
+            fixed_columns={8: 140},  # Действия = 140px фиксированно (4 кнопки)
             min_width=50
         )
 
@@ -166,6 +336,10 @@ class EmployeesTab(QWidget):
         self.employees_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.employees_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.employees_table.setAlternatingRowColors(True)
+        # Popup для реквизитов оплаты (выделяемый текст)
+        self._payment_popup = PaymentDetailsPopup(self)
+        self.employees_table.viewport().setMouseTracking(True)
+        self.employees_table.cellEntered.connect(self._on_cell_entered)
 
         layout.addWidget(self.employees_table)
 
@@ -234,8 +408,28 @@ class EmployeesTab(QWidget):
             
             self.employees_table.setItem(row, 3, QTableWidgetItem(emp.get('phone', '')))
             self.employees_table.setItem(row, 4, QTableWidgetItem(emp.get('email', '')))
-            
-            # ========== НОВОЕ: ДАТА РОЖДЕНИЯ ==========
+
+            # Тип оплаты (колонка 5)
+            payment_type = emp.get('payment_type', '') or ''
+            payment_item = QTableWidgetItem(payment_type)
+            tooltip_lines = []
+            if payment_type:
+                tooltip_lines.append(f"Тип: {payment_type}")
+            if payment_type == 'Переводом на карту':
+                for k, label in [('payment_phone', 'Телефон'), ('payment_account', 'Счёт'), ('payment_bank_name', 'Банк')]:
+                    if emp.get(k):
+                        tooltip_lines.append(f"{label}: {emp[k]}")
+            elif payment_type == 'Переводом по реквизитам':
+                for k, label in [('payment_account', 'Счёт'), ('payment_bik', 'БИК'), ('payment_corr_account', 'Кор. счёт'), ('payment_bank_name', 'Банк')]:
+                    if emp.get(k):
+                        tooltip_lines.append(f"{label}: {emp[k]}")
+            if tooltip_lines:
+                # Храним текст в UserRole (а не в tooltip) — иначе Qt показывает
+                # свой стандартный tooltip-прямоугольник поверх кастомного popup
+                payment_item.setData(Qt.UserRole, '\n'.join(tooltip_lines))
+            self.employees_table.setItem(row, 5, payment_item)
+
+            # Дата рождения (колонка 6)
             birth_date_str = emp.get('birth_date', '')
             if birth_date_str:
                 try:
@@ -245,17 +439,15 @@ class EmployeesTab(QWidget):
                     formatted_date = ''
             else:
                 formatted_date = ''
-            self.employees_table.setItem(row, 5, QTableWidgetItem(formatted_date))
-            # ==========================================
-            
-            # ========== СТАТУС (QLabel для гарантированного CSS-цвета) ==========
+            self.employees_table.setItem(row, 6, QTableWidgetItem(formatted_date))
+
+            # Статус (колонка 7)
             status = emp.get('status', 'активный')
             status_item = QTableWidgetItem(status)
-            self.employees_table.setItem(row, 6, status_item)
-            self.employees_table.setCellWidget(row, 6, self._create_status_widget(status))
-            # ===================================================================
+            self.employees_table.setItem(row, 7, status_item)
+            self.employees_table.setCellWidget(row, 7, self._create_status_widget(status))
 
-            # Кнопки действий (в колонке 7)
+            # Кнопки действий (колонка 8)
             actions_widget = QWidget()
             actions_layout = QHBoxLayout()
             actions_layout.setContentsMargins(0, 0, 0, 0)
@@ -359,13 +551,13 @@ class EmployeesTab(QWidget):
             actions_layout.addWidget(invite_btn)
 
             actions_widget.setLayout(actions_layout)
-            self.employees_table.setCellWidget(row, 7, actions_widget)
+            self.employees_table.setCellWidget(row, 8, actions_widget)
 
 
         self.employees_table.setSortingEnabled(True)
 
         CustomMessageBox(
-            self, 
+            self,
             'Результаты поиска', 
             f'Найдено сотрудников: {len(filtered_employees)}', 
             'info'
@@ -447,8 +639,38 @@ class EmployeesTab(QWidget):
             
             self.employees_table.setItem(row, 3, QTableWidgetItem(emp.get('phone', '')))
             self.employees_table.setItem(row, 4, QTableWidgetItem(emp.get('email', '')))
-            
-            # ========== НОВОЕ: ДАТА РОЖДЕНИЯ ==========
+
+            # ========== СТОЛБЕЦ ТИП ОПЛАТЫ ==========
+            payment_type = emp.get('payment_type', '') or ''
+            payment_item = QTableWidgetItem(payment_type)
+            # Формируем подсказку с деталями оплаты
+            tooltip_lines = []
+            if payment_type:
+                tooltip_lines.append(f"Тип: {payment_type}")
+            if payment_type == 'Переводом на карту':
+                if emp.get('payment_phone'):
+                    tooltip_lines.append(f"Телефон: {emp['payment_phone']}")
+                if emp.get('payment_account'):
+                    tooltip_lines.append(f"Счёт: {emp['payment_account']}")
+                if emp.get('payment_bank_name'):
+                    tooltip_lines.append(f"Банк: {emp['payment_bank_name']}")
+            elif payment_type == 'Переводом по реквизитам':
+                if emp.get('payment_account'):
+                    tooltip_lines.append(f"Счёт: {emp['payment_account']}")
+                if emp.get('payment_bik'):
+                    tooltip_lines.append(f"БИК: {emp['payment_bik']}")
+                if emp.get('payment_corr_account'):
+                    tooltip_lines.append(f"Кор. счёт: {emp['payment_corr_account']}")
+                if emp.get('payment_bank_name'):
+                    tooltip_lines.append(f"Банк: {emp['payment_bank_name']}")
+            if tooltip_lines:
+                # Храним текст в UserRole (а не в tooltip) — иначе Qt показывает
+                # свой стандартный tooltip-прямоугольник поверх кастомного popup
+                payment_item.setData(Qt.UserRole, '\n'.join(tooltip_lines))
+            self.employees_table.setItem(row, 5, payment_item)
+            # =========================================
+
+            # ========== ДАТА РОЖДЕНИЯ ==========
             birth_date_str = emp.get('birth_date', '')
             if birth_date_str:
                 try:
@@ -458,17 +680,17 @@ class EmployeesTab(QWidget):
                     formatted_date = ''
             else:
                 formatted_date = ''
-            self.employees_table.setItem(row, 5, QTableWidgetItem(formatted_date))
-            # ==========================================
-            
-            # ========== СТАТУС (QLabel для гарантированного CSS-цвета) ==========
+            self.employees_table.setItem(row, 6, QTableWidgetItem(formatted_date))
+            # ====================================
+
+            # ========== СТАТУС ==========
             status = emp.get('status', 'активный')
             status_item = QTableWidgetItem(status)
-            self.employees_table.setItem(row, 6, status_item)
-            self.employees_table.setCellWidget(row, 6, self._create_status_widget(status))
-            # ===================================================================
+            self.employees_table.setItem(row, 7, status_item)
+            self.employees_table.setCellWidget(row, 7, self._create_status_widget(status))
+            # ============================
 
-            # Кнопки действий (теперь в колонке 7)
+            # Кнопки действий (колонка 8)
             actions_widget = QWidget()
             actions_layout = QHBoxLayout()
             actions_layout.setContentsMargins(0, 0, 0, 0)
@@ -573,7 +795,7 @@ class EmployeesTab(QWidget):
             actions_layout.addWidget(invite_btn)
 
             actions_widget.setLayout(actions_layout)
-            self.employees_table.setCellWidget(row, 7, actions_widget)
+            self.employees_table.setCellWidget(row, 8, actions_widget)
 
         self.employees_table.setSortingEnabled(True)
 
@@ -622,6 +844,20 @@ class EmployeesTab(QWidget):
             self._reload_employees(prefer_local=False)
             self._refresh_dashboard()
             
+    def _on_cell_entered(self, row, column):
+        """При наведении на ячейку 'Тип оплаты' — показать popup с реквизитами"""
+        if column == 5:
+            item = self.employees_table.item(row, column)
+            popup_text = item.data(Qt.UserRole) if item else None
+            if popup_text:
+                cell_rect = self.employees_table.visualItemRect(item)
+                global_pos = self.employees_table.viewport().mapToGlobal(cell_rect.bottomLeft())
+                self._payment_popup.show_at(popup_text, global_pos)
+                return
+        # При наведении на другие столбцы — скрываем popup
+        if self._payment_popup.isVisible():
+            self._payment_popup._hide_timer.start()
+
     def view_employee(self, employee_data):
         """Просмотр информации о сотруднике"""
         dialog = EmployeeDialog(self, employee_data, view_only=True)
@@ -796,6 +1032,7 @@ class EmployeeDialog(QDialog):
         # ========== НОВОЕ: ПРОВЕРКА ПРАВ ==========
         self.current_user = parent.employee  # Получаем текущего пользователя
         self.api_client = getattr(parent, 'api_client', None)
+        self._is_director = self.current_user.get('position', '') == 'Руководитель студии'
         # ==========================================
 
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
@@ -820,7 +1057,7 @@ class EmployeeDialog(QDialog):
         border_frame.setStyleSheet("""
             QFrame#borderFrame {
                 background-color: #FFFFFF;
-                border: none;
+                border: 1px solid #d9d9d9;
                 border-radius: 10px;
             }
         """)
@@ -853,7 +1090,7 @@ class EmployeeDialog(QDialog):
         
         layout = QVBoxLayout()
         layout.setSpacing(15)
-        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setContentsMargins(20, 20, 20, 30)
         
         # Основная информация
         main_group = QGroupBox('Основная информация')
@@ -923,16 +1160,55 @@ class EmployeeDialog(QDialog):
         
         self.email = QLineEdit()
         self.email.setPlaceholderText('example@mail.com')
-        contact_layout.addRow('Email:', self.email)
+        contact_layout.addRow('Email*:', self.email)
         
         self.address = QTextEdit()
         self.address.setPlaceholderText('Адрес проживания')
         self.address.setMaximumHeight(80)
         contact_layout.addRow('Адрес:', self.address)
-        
+
         contact_group.setLayout(contact_layout)
         layout.addWidget(contact_group)
-        
+
+        # Способ оплаты
+        payment_group = QGroupBox('Способ оплаты')
+        self._payment_form_layout = QFormLayout()
+
+        self.payment_type = CustomComboBox()
+        self.payment_type.addItems(['', 'Наличными', 'Переводом на карту', 'Переводом по реквизитам'])
+        self.payment_type.currentTextChanged.connect(self._on_payment_type_changed)
+        self._payment_form_layout.addRow('Тип оплаты:', self.payment_type)
+
+        self.payment_phone = QLineEdit()
+        self.payment_phone.setPlaceholderText('+7 (XXX) XXX-XX-XX')
+        self.payment_phone.textChanged.connect(
+            lambda text: self._format_phone_field(self.payment_phone, text))
+        self.payment_phone.focusInEvent = lambda e: self.on_phone_focus_in(self.payment_phone, e)
+        self._payment_form_layout.addRow('Телефон:', self.payment_phone)
+
+        self.payment_account = QLineEdit()
+        self.payment_account.setPlaceholderText('Номер счёта')
+        self._payment_form_layout.addRow('Номер счёта:', self.payment_account)
+
+        self.payment_bank_name = QLineEdit()
+        self.payment_bank_name.setPlaceholderText('Наименование банка')
+        self._payment_form_layout.addRow('Банк:', self.payment_bank_name)
+
+        self.payment_bik = QLineEdit()
+        self.payment_bik.setPlaceholderText('БИК (9 цифр)')
+        self._payment_form_layout.addRow('БИК:', self.payment_bik)
+
+        self.payment_corr_account = QLineEdit()
+        self.payment_corr_account.setPlaceholderText('Корреспондентский счёт')
+        self._payment_form_layout.addRow('Кор. счёт:', self.payment_corr_account)
+
+        payment_group.setLayout(self._payment_form_layout)
+        layout.addWidget(payment_group)
+        # Секция оплаты видна только руководителю студии
+        if not self._is_director:
+            payment_group.setVisible(False)
+        self._update_payment_fields_visibility()
+
         # Данные для входа
         login_group = QGroupBox('Данные для входа в систему')
         login_layout = QFormLayout()
@@ -965,6 +1241,9 @@ class EmployeeDialog(QDialog):
             )
         )
         pw_layout.addWidget(self._eye_btn)
+        # Показать пароль может только руководитель студии
+        if not self._is_director:
+            self._eye_btn.setVisible(False)
 
         self.password_confirm = QLineEdit()
         self.password_confirm.setEchoMode(QLineEdit.Password)
@@ -990,6 +1269,8 @@ class EmployeeDialog(QDialog):
             )
         )
         pw_confirm_layout.addWidget(self._eye_btn_confirm)
+        if not self._is_director:
+            self._eye_btn_confirm.setVisible(False)
 
         if self.employee_data:
             self.password.setPlaceholderText('Оставьте пустым, чтобы не менять пароль')
@@ -1150,6 +1431,88 @@ class EmployeeDialog(QDialog):
             line_edit.setText('+7 (')
             line_edit.setCursorPosition(4)
 
+    def _format_phone_field(self, field, text):
+        """Универсальное форматирование телефона +7 (XXX) XXX-XX-XX для любого QLineEdit"""
+        field.blockSignals(True)
+        if not text:
+            field.blockSignals(False)
+            return
+        cursor_pos = field.cursorPosition()
+        digits = ''.join(filter(str.isdigit, text))
+        if not digits:
+            field.setText('')
+            field.blockSignals(False)
+            return
+        digits_before_cursor = len(''.join(filter(str.isdigit, text[:cursor_pos])))
+        if digits.startswith('7') or digits.startswith('8'):
+            digits = digits[1:]
+        digits = digits[:10]
+        if len(digits) == 0:
+            formatted = '+7 ('
+            new_cursor_pos = 4
+        elif len(digits) <= 3:
+            formatted = f'+7 ({digits}'
+            new_cursor_pos = 4 + len(digits)
+        elif len(digits) <= 6:
+            formatted = f'+7 ({digits[:3]}) {digits[3:]}'
+            new_cursor_pos = (4 + digits_before_cursor) if digits_before_cursor <= 3 else (9 + digits_before_cursor - 3)
+        elif len(digits) <= 8:
+            formatted = f'+7 ({digits[:3]}) {digits[3:6]}-{digits[6:]}'
+            if digits_before_cursor <= 3:
+                new_cursor_pos = 4 + digits_before_cursor
+            elif digits_before_cursor <= 6:
+                new_cursor_pos = 9 + (digits_before_cursor - 3)
+            else:
+                new_cursor_pos = 13 + (digits_before_cursor - 6)
+        else:
+            formatted = f'+7 ({digits[:3]}) {digits[3:6]}-{digits[6:8]}-{digits[8:]}'
+            if digits_before_cursor <= 3:
+                new_cursor_pos = 4 + digits_before_cursor
+            elif digits_before_cursor <= 6:
+                new_cursor_pos = 9 + (digits_before_cursor - 3)
+            elif digits_before_cursor <= 8:
+                new_cursor_pos = 13 + (digits_before_cursor - 6)
+            else:
+                new_cursor_pos = 16 + (digits_before_cursor - 8)
+        field.setText(formatted)
+        field.setCursorPosition(min(new_cursor_pos, len(formatted)))
+        field.blockSignals(False)
+
+    def _on_payment_type_changed(self, text):
+        """Показать/скрыть поля в зависимости от типа оплаты"""
+        self._update_payment_fields_visibility()
+
+    def _update_payment_fields_visibility(self):
+        """Управление видимостью полей платёжных реквизитов"""
+        pt = self.payment_type.currentText()
+        # Наличными — ничего не нужно
+        # Переводом на карту — телефон, счёт, банк
+        # Переводом по реквизитам — счёт, банк, БИК, кор. счёт
+        show_card = (pt == 'Переводом на карту')
+        show_details = (pt == 'Переводом по реквизитам')
+        show_any = show_card or show_details
+
+        self.payment_phone.setVisible(show_card)
+        # Лейбл для payment_phone
+        self._set_form_row_visible(self._payment_form_layout, self.payment_phone, show_card)
+
+        self._set_form_row_visible(self._payment_form_layout, self.payment_account, show_any)
+        self._set_form_row_visible(self._payment_form_layout, self.payment_bank_name, show_any)
+        self._set_form_row_visible(self._payment_form_layout, self.payment_bik, show_details)
+        self._set_form_row_visible(self._payment_form_layout, self.payment_corr_account, show_details)
+
+    @staticmethod
+    def _set_form_row_visible(form_layout, widget, visible):
+        """Показать/скрыть строку QFormLayout по виджету"""
+        for row in range(form_layout.rowCount()):
+            item = form_layout.itemAt(row, QFormLayout.FieldRole)
+            label_item = form_layout.itemAt(row, QFormLayout.LabelRole)
+            if item and item.widget() == widget:
+                widget.setVisible(visible)
+                if label_item and label_item.widget():
+                    label_item.widget().setVisible(visible)
+                break
+
     def _open_permissions_dialog(self):
         """Открыть диалог управления правами доступа"""
         if not self.employee_data or not self.data:
@@ -1203,6 +1566,17 @@ class EmployeeDialog(QDialog):
                 self.password.setText(temp_pw)
                 self.password_confirm.setText(temp_pw)
 
+            # Платёжные реквизиты
+            pt = self.employee_data.get('payment_type', '') or ''
+            if pt:
+                self.payment_type.setCurrentText(pt)
+            self.payment_phone.setText(self.employee_data.get('payment_phone', '') or '')
+            self.payment_account.setText(self.employee_data.get('payment_account', '') or '')
+            self.payment_bank_name.setText(self.employee_data.get('payment_bank_name', '') or '')
+            self.payment_bik.setText(self.employee_data.get('payment_bik', '') or '')
+            self.payment_corr_account.setText(self.employee_data.get('payment_corr_account', '') or '')
+            self._update_payment_fields_visibility()
+
     def save_employee(self):
         """Сохранение сотрудника"""
         from utils.permissions import _has_perm
@@ -1214,8 +1588,8 @@ class EmployeeDialog(QDialog):
             if not _has_perm(self.current_user, self.api_client, 'employees.update'):
                 CustomMessageBox(self, 'Ошибка', 'У вас нет прав на редактирование сотрудников.', 'error').exec_()
                 return
-        if not self.full_name.text().strip() or not self.login.text().strip():
-            CustomMessageBox(self, 'Ошибка', 'Заполните все обязательные поля (ФИО, Логин)', 'warning').exec_()
+        if not self.full_name.text().strip() or not self.login.text().strip() or not self.email.text().strip():
+            CustomMessageBox(self, 'Ошибка', 'Заполните все обязательные поля (ФИО, Логин, Email)', 'warning').exec_()
             return
         
         # Проверка пароля при создании
@@ -1276,9 +1650,15 @@ class EmployeeDialog(QDialog):
             'phone': self.phone.text().strip(),
             'email': self.email.text().strip(),
             'address': self.address.toPlainText().strip(),
-            'login': self.login.text().strip()
+            'login': self.login.text().strip(),
+            'payment_type': self.payment_type.currentText() or '',
+            'payment_phone': self.payment_phone.text().strip(),
+            'payment_account': self.payment_account.text().strip(),
+            'payment_bank_name': self.payment_bank_name.text().strip(),
+            'payment_bik': self.payment_bik.text().strip(),
+            'payment_corr_account': self.payment_corr_account.text().strip(),
         }
-        
+
         if self.password.text().strip():
             employee_data['password'] = self.password.text().strip()
         
@@ -1435,7 +1815,7 @@ class EmployeeSearchDialog(QDialog):
         
         self.email_input = QLineEdit()
         self.email_input.setPlaceholderText('example@mail.com')
-        form_layout.addRow('Email:', self.email_input)
+        form_layout.addRow('Email*:', self.email_input)
         
         self.login_input = QLineEdit()
         self.login_input.setPlaceholderText('ivanov')
@@ -1839,6 +2219,7 @@ class EmployeeDialog(QDialog):
         # ========== НОВОЕ: ПРОВЕРКА ПРАВ ==========
         self.current_user = parent.employee  # Получаем текущего пользователя
         self.api_client = getattr(parent, 'api_client', None)
+        self._is_director = self.current_user.get('position', '') == 'Руководитель студии'
         # ==========================================
 
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
@@ -1863,7 +2244,7 @@ class EmployeeDialog(QDialog):
         border_frame.setStyleSheet("""
             QFrame#borderFrame {
                 background-color: #FFFFFF;
-                border: none;
+                border: 1px solid #d9d9d9;
                 border-radius: 10px;
             }
         """)
@@ -1966,16 +2347,55 @@ class EmployeeDialog(QDialog):
         
         self.email = QLineEdit()
         self.email.setPlaceholderText('example@mail.com')
-        contact_layout.addRow('Email:', self.email)
+        contact_layout.addRow('Email*:', self.email)
         
         self.address = QTextEdit()
         self.address.setPlaceholderText('Адрес проживания')
         self.address.setMaximumHeight(80)
         contact_layout.addRow('Адрес:', self.address)
-        
+
         contact_group.setLayout(contact_layout)
         layout.addWidget(contact_group)
-        
+
+        # Способ оплаты
+        payment_group = QGroupBox('Способ оплаты')
+        self._payment_form_layout = QFormLayout()
+
+        self.payment_type = CustomComboBox()
+        self.payment_type.addItems(['', 'Наличными', 'Переводом на карту', 'Переводом по реквизитам'])
+        self.payment_type.currentTextChanged.connect(self._on_payment_type_changed)
+        self._payment_form_layout.addRow('Тип оплаты:', self.payment_type)
+
+        self.payment_phone = QLineEdit()
+        self.payment_phone.setPlaceholderText('+7 (XXX) XXX-XX-XX')
+        self.payment_phone.textChanged.connect(
+            lambda text: self._format_phone_field(self.payment_phone, text))
+        self.payment_phone.focusInEvent = lambda e: self.on_phone_focus_in(self.payment_phone, e)
+        self._payment_form_layout.addRow('Телефон:', self.payment_phone)
+
+        self.payment_account = QLineEdit()
+        self.payment_account.setPlaceholderText('Номер счёта')
+        self._payment_form_layout.addRow('Номер счёта:', self.payment_account)
+
+        self.payment_bank_name = QLineEdit()
+        self.payment_bank_name.setPlaceholderText('Наименование банка')
+        self._payment_form_layout.addRow('Банк:', self.payment_bank_name)
+
+        self.payment_bik = QLineEdit()
+        self.payment_bik.setPlaceholderText('БИК (9 цифр)')
+        self._payment_form_layout.addRow('БИК:', self.payment_bik)
+
+        self.payment_corr_account = QLineEdit()
+        self.payment_corr_account.setPlaceholderText('Корреспондентский счёт')
+        self._payment_form_layout.addRow('Кор. счёт:', self.payment_corr_account)
+
+        payment_group.setLayout(self._payment_form_layout)
+        layout.addWidget(payment_group)
+        # Секция оплаты видна только руководителю студии
+        if not self._is_director:
+            payment_group.setVisible(False)
+        self._update_payment_fields_visibility()
+
         # Данные для входа
         login_group = QGroupBox('Данные для входа в систему')
         login_layout = QFormLayout()
@@ -2008,6 +2428,9 @@ class EmployeeDialog(QDialog):
             )
         )
         pw_layout.addWidget(self._eye_btn)
+        # Показать пароль может только руководитель студии
+        if not self._is_director:
+            self._eye_btn.setVisible(False)
 
         self.password_confirm = QLineEdit()
         self.password_confirm.setEchoMode(QLineEdit.Password)
@@ -2033,6 +2456,8 @@ class EmployeeDialog(QDialog):
             )
         )
         pw_confirm_layout.addWidget(self._eye_btn_confirm)
+        if not self._is_director:
+            self._eye_btn_confirm.setVisible(False)
 
         if self.employee_data:
             self.password.setPlaceholderText('Оставьте пустым, чтобы не менять пароль')
@@ -2046,7 +2471,74 @@ class EmployeeDialog(QDialog):
         
         login_group.setLayout(login_layout)
         layout.addWidget(login_group)
-        
+
+        # ========== TELEGRAM ПОДКЛЮЧЕНИЕ (одна строка) ==========
+        if self.employee_data and (getattr(self, '_is_director', False) or self.current_user.get('role') in ('admin', 'director')):
+            tg_widget = QWidget()
+            tg_row = QHBoxLayout(tg_widget)
+            tg_row.setContentsMargins(8, 2, 8, 8)
+            tg_row.setSpacing(8)
+            _tg_title = QLabel('Telegram:')
+            _tg_title.setStyleSheet('font-weight: bold; color: #333; font-size: 12px;')
+            _tg_title.setFixedWidth(80)
+            tg_row.addWidget(_tg_title)
+
+            tg_id = self.employee_data.get('telegram_user_id')
+            tg_token_cmd = None
+            try:
+                _eid = self.employee_data.get('id')
+                _resp = self.api_client._request('GET', self.api_client.base_url + '/api/v1/employees/' + str(_eid) + '/telegram-info')
+                if _resp.status_code == 200:
+                    _info = _resp.json()
+                    tg_id = _info.get('telegram_user_id')
+                    tg_token_cmd = _info.get('token_command')
+            except Exception:
+                pass
+            if tg_id:
+                _sl = QLabel('Подключён (ID: ' + str(tg_id) + ')')
+                _sl.setStyleSheet('color: #27AE60; font-size: 11px;')
+                tg_row.addWidget(_sl)
+            elif tg_token_cmd:
+                _sl = QLabel('НЕ подключён')
+                _sl.setStyleSheet('color: #E74C3C; font-size: 11px;')
+                tg_row.addWidget(_sl)
+                tg_row.addStretch()
+                _cb = QPushButton('Копировать команду')
+                _cb.setStyleSheet('background: #ffd93c; color: #333; border: 1px solid #e6c235; border-radius: 3px; padding: 2px 10px; font-size: 10px;')
+                _cb.setFixedHeight(22)
+                _cb.setCursor(Qt.PointingHandCursor)
+                _tcmd = str(tg_token_cmd)
+                _cb.clicked.connect(lambda ch=False, c=_tcmd: __import__('PyQt5.QtWidgets', fromlist=['QApplication']).QApplication.clipboard().setText(c))
+                tg_row.addWidget(_cb)
+            else:
+                _sl = QLabel('НЕ подключён')
+                _sl.setStyleSheet('color: #E74C3C; font-size: 11px;')
+                tg_row.addWidget(_sl)
+                tg_row.addStretch()
+                _ctb = QPushButton('Создать токен')
+                _ctb.setStyleSheet('background: #2AABEE; color: white; border: none; border-radius: 3px; padding: 2px 10px; font-size: 10px;')
+                _ctb.setFixedHeight(22)
+                _ctb.setCursor(Qt.PointingHandCursor)
+                _meid = self.employee_data.get('id')
+                def _mk_tok(ch=False, eid=_meid):
+                    try:
+                        _r = self.api_client._request('POST', self.api_client.base_url + '/api/v1/employees/' + str(eid) + '/create-telegram-token')
+                        if _r.status_code == 200:
+                            _cmd = _r.json().get('token_command', '')
+                            if _cmd:
+                                from PyQt5.QtWidgets import QApplication
+                                QApplication.clipboard().setText(_cmd)
+                                CustomMessageBox(self, 'Токен создан', 'Команда скопирована: ' + _cmd, 'info').exec_()
+                        else:
+                            CustomMessageBox(self, 'Ошибка', str(_r.status_code) + ' ' + _r.text[:100], 'error').exec_()
+                    except Exception as _ex:
+                        CustomMessageBox(self, 'Ошибка', str(_ex), 'error').exec_()
+                _ctb.clicked.connect(_mk_tok)
+                tg_row.addWidget(_ctb)
+            layout.addWidget(tg_widget)
+            layout.addSpacing(5)
+        # ==================================================================================
+
         # Кнопка "Администрирование" — по праву access.admin
         if not self.view_only:
             from utils.permissions import _has_perm
@@ -2114,8 +2606,13 @@ class EmployeeDialog(QDialog):
                 child.setEnabled(False)
         # ==========================================================
 
+
         self.setMinimumWidth(650)
-    
+        self.adjustSize()
+        # Запас высоты только если есть Telegram блок (руководитель)
+        if self.employee_data and (getattr(self, '_is_director', False) or self.current_user.get('role') in ('admin', 'director')):
+            self.resize(self.width(), self.height() + 50)
+
     def format_phone(self, text):
         """Форматирование телефона +7 (XXX) XXX-XX-XX"""
         self.phone.blockSignals(True)
@@ -2193,6 +2690,88 @@ class EmployeeDialog(QDialog):
             line_edit.setText('+7 (')
             line_edit.setCursorPosition(4)
 
+    def _format_phone_field(self, field, text):
+        """Универсальное форматирование телефона +7 (XXX) XXX-XX-XX для любого QLineEdit"""
+        field.blockSignals(True)
+        if not text:
+            field.blockSignals(False)
+            return
+        cursor_pos = field.cursorPosition()
+        digits = ''.join(filter(str.isdigit, text))
+        if not digits:
+            field.setText('')
+            field.blockSignals(False)
+            return
+        digits_before_cursor = len(''.join(filter(str.isdigit, text[:cursor_pos])))
+        if digits.startswith('7') or digits.startswith('8'):
+            digits = digits[1:]
+        digits = digits[:10]
+        if len(digits) == 0:
+            formatted = '+7 ('
+            new_cursor_pos = 4
+        elif len(digits) <= 3:
+            formatted = f'+7 ({digits}'
+            new_cursor_pos = 4 + len(digits)
+        elif len(digits) <= 6:
+            formatted = f'+7 ({digits[:3]}) {digits[3:]}'
+            new_cursor_pos = (4 + digits_before_cursor) if digits_before_cursor <= 3 else (9 + digits_before_cursor - 3)
+        elif len(digits) <= 8:
+            formatted = f'+7 ({digits[:3]}) {digits[3:6]}-{digits[6:]}'
+            if digits_before_cursor <= 3:
+                new_cursor_pos = 4 + digits_before_cursor
+            elif digits_before_cursor <= 6:
+                new_cursor_pos = 9 + (digits_before_cursor - 3)
+            else:
+                new_cursor_pos = 13 + (digits_before_cursor - 6)
+        else:
+            formatted = f'+7 ({digits[:3]}) {digits[3:6]}-{digits[6:8]}-{digits[8:]}'
+            if digits_before_cursor <= 3:
+                new_cursor_pos = 4 + digits_before_cursor
+            elif digits_before_cursor <= 6:
+                new_cursor_pos = 9 + (digits_before_cursor - 3)
+            elif digits_before_cursor <= 8:
+                new_cursor_pos = 13 + (digits_before_cursor - 6)
+            else:
+                new_cursor_pos = 16 + (digits_before_cursor - 8)
+        field.setText(formatted)
+        field.setCursorPosition(min(new_cursor_pos, len(formatted)))
+        field.blockSignals(False)
+
+    def _on_payment_type_changed(self, text):
+        """Показать/скрыть поля в зависимости от типа оплаты"""
+        self._update_payment_fields_visibility()
+
+    def _update_payment_fields_visibility(self):
+        """Управление видимостью полей платёжных реквизитов"""
+        pt = self.payment_type.currentText()
+        # Наличными — ничего не нужно
+        # Переводом на карту — телефон, счёт, банк
+        # Переводом по реквизитам — счёт, банк, БИК, кор. счёт
+        show_card = (pt == 'Переводом на карту')
+        show_details = (pt == 'Переводом по реквизитам')
+        show_any = show_card or show_details
+
+        self.payment_phone.setVisible(show_card)
+        # Лейбл для payment_phone
+        self._set_form_row_visible(self._payment_form_layout, self.payment_phone, show_card)
+
+        self._set_form_row_visible(self._payment_form_layout, self.payment_account, show_any)
+        self._set_form_row_visible(self._payment_form_layout, self.payment_bank_name, show_any)
+        self._set_form_row_visible(self._payment_form_layout, self.payment_bik, show_details)
+        self._set_form_row_visible(self._payment_form_layout, self.payment_corr_account, show_details)
+
+    @staticmethod
+    def _set_form_row_visible(form_layout, widget, visible):
+        """Показать/скрыть строку QFormLayout по виджету"""
+        for row in range(form_layout.rowCount()):
+            item = form_layout.itemAt(row, QFormLayout.FieldRole)
+            label_item = form_layout.itemAt(row, QFormLayout.LabelRole)
+            if item and item.widget() == widget:
+                widget.setVisible(visible)
+                if label_item and label_item.widget():
+                    label_item.widget().setVisible(visible)
+                break
+
     def _open_permissions_dialog(self):
         """Открыть диалог управления правами доступа"""
         if not self.employee_data or not self.data:
@@ -2246,6 +2825,17 @@ class EmployeeDialog(QDialog):
                 self.password.setText(temp_pw)
                 self.password_confirm.setText(temp_pw)
 
+            # Платёжные реквизиты
+            pt = self.employee_data.get('payment_type', '') or ''
+            if pt:
+                self.payment_type.setCurrentText(pt)
+            self.payment_phone.setText(self.employee_data.get('payment_phone', '') or '')
+            self.payment_account.setText(self.employee_data.get('payment_account', '') or '')
+            self.payment_bank_name.setText(self.employee_data.get('payment_bank_name', '') or '')
+            self.payment_bik.setText(self.employee_data.get('payment_bik', '') or '')
+            self.payment_corr_account.setText(self.employee_data.get('payment_corr_account', '') or '')
+            self._update_payment_fields_visibility()
+
     def save_employee(self):
         """Сохранение сотрудника"""
         from utils.permissions import _has_perm
@@ -2257,8 +2847,8 @@ class EmployeeDialog(QDialog):
             if not _has_perm(self.current_user, self.api_client, 'employees.update'):
                 CustomMessageBox(self, 'Ошибка', 'У вас нет прав на редактирование сотрудников.', 'error').exec_()
                 return
-        if not self.full_name.text().strip() or not self.login.text().strip():
-            CustomMessageBox(self, 'Ошибка', 'Заполните все обязательные поля (ФИО, Логин)', 'warning').exec_()
+        if not self.full_name.text().strip() or not self.login.text().strip() or not self.email.text().strip():
+            CustomMessageBox(self, 'Ошибка', 'Заполните все обязательные поля (ФИО, Логин, Email)', 'warning').exec_()
             return
         
         # Проверка пароля при создании
@@ -2319,9 +2909,15 @@ class EmployeeDialog(QDialog):
             'phone': self.phone.text().strip(),
             'email': self.email.text().strip(),
             'address': self.address.toPlainText().strip(),
-            'login': self.login.text().strip()
+            'login': self.login.text().strip(),
+            'payment_type': self.payment_type.currentText() or '',
+            'payment_phone': self.payment_phone.text().strip(),
+            'payment_account': self.payment_account.text().strip(),
+            'payment_bank_name': self.payment_bank_name.text().strip(),
+            'payment_bik': self.payment_bik.text().strip(),
+            'payment_corr_account': self.payment_corr_account.text().strip(),
         }
-        
+
         if self.password.text().strip():
             employee_data['password'] = self.password.text().strip()
         
@@ -2478,7 +3074,7 @@ class EmployeeSearchDialog(QDialog):
         
         self.email_input = QLineEdit()
         self.email_input.setPlaceholderText('example@mail.com')
-        form_layout.addRow('Email:', self.email_input)
+        form_layout.addRow('Email*:', self.email_input)
         
         self.login_input = QLineEdit()
         self.login_input.setPlaceholderText('ivanov')

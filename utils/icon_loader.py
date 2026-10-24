@@ -2,15 +2,35 @@
 Утилита для загрузки SVG иконок
 """
 
-from PyQt5.QtGui import QIcon
-from PyQt5.QtCore import QSize, Qt
-from utils.resource_path import resource_path
+try:
+    from PyQt5.QtCore import QSize, Qt
+    from PyQt5.QtGui import QIcon
+except ImportError:
+
+    class QIcon:  # type: ignore[no-redef]
+        def __init__(self, *a, **kw):
+            pass
+
+        def isNull(self):
+            return True
+
+    class QSize:  # type: ignore[no-redef]
+        def __init__(self, *a, **kw):
+            pass
+
+    class Qt:  # type: ignore[no-redef]
+        pass
+
+
 import os
+
+from utils.resource_path import resource_path
+
 
 class IconLoader:
     """Загрузчик SVG иконок"""
 
-    ICONS_DIR = 'resources/icons'
+    ICONS_DIR = "resources/icons"
 
     @staticmethod
     def load(icon_name, size=18):
@@ -25,8 +45,8 @@ class IconLoader:
             QIcon или None
         """
         # Добавляем .svg если не указано
-        if not icon_name.endswith('.svg'):
-            icon_name += '.svg'
+        if not icon_name.endswith(".svg"):
+            icon_name += ".svg"
 
         icon_path = resource_path(os.path.join(IconLoader.ICONS_DIR, icon_name))
 
@@ -38,7 +58,7 @@ class IconLoader:
             return QIcon()
 
     @staticmethod
-    def load_colored(icon_name, color='#808080', size=20):
+    def load_colored(icon_name, color="#808080", size=20):
         """
         Загрузка SVG иконки с заменой цвета
 
@@ -50,8 +70,8 @@ class IconLoader:
         Returns:
             QIcon с заменённым цветом
         """
-        if not icon_name.endswith('.svg'):
-            icon_name += '.svg'
+        if not icon_name.endswith(".svg"):
+            icon_name += ".svg"
 
         icon_path = resource_path(os.path.join(IconLoader.ICONS_DIR, icon_name))
 
@@ -60,23 +80,21 @@ class IconLoader:
             return QIcon()
 
         try:
-            with open(icon_path, 'r', encoding='utf-8') as f:
+            with open(icon_path, "r", encoding="utf-8") as f:
                 svg_content = f.read()
 
             # Заменяем цвета в SVG
-            svg_content = svg_content.replace('currentColor', color)
-            for attr in ['stroke', 'fill']:
-                for old_val in ['black', '#000', '#000000', 'white', '#fff', '#ffffff']:
-                    svg_content = svg_content.replace(
-                        f'{attr}="{old_val}"', f'{attr}="{color}"')
-                    svg_content = svg_content.replace(
-                        f"{attr}='{old_val}'", f"{attr}='{color}'")
+            svg_content = svg_content.replace("currentColor", color)
+            for attr in ["stroke", "fill"]:
+                for old_val in ["black", "#000", "#000000", "white", "#fff", "#ffffff"]:
+                    svg_content = svg_content.replace(f'{attr}="{old_val}"', f'{attr}="{color}"')
+                    svg_content = svg_content.replace(f"{attr}='{old_val}'", f"{attr}='{color}'")
 
-            from PyQt5.QtSvg import QSvgRenderer
-            from PyQt5.QtGui import QPixmap, QPainter
             from PyQt5.QtCore import QByteArray
+            from PyQt5.QtGui import QPainter, QPixmap
+            from PyQt5.QtSvg import QSvgRenderer
 
-            renderer = QSvgRenderer(QByteArray(svg_content.encode('utf-8')))
+            renderer = QSvgRenderer(QByteArray(svg_content.encode("utf-8")))
             pixmap = QPixmap(size, size)
             pixmap.fill(Qt.transparent)
             painter = QPainter(pixmap)
@@ -88,7 +106,7 @@ class IconLoader:
             return IconLoader.load(icon_name, size)
 
     @staticmethod
-    def create_icon_button(icon_name, text='', tooltip='', icon_size=18):
+    def create_icon_button(icon_name, text="", tooltip="", icon_size=18):
         """
         Создание кнопки с SVG иконкой
 
@@ -117,17 +135,20 @@ class IconLoader:
         if tooltip:
             btn.setToolTip(tooltip)
 
+        # Accessibility: имя для UIA (pywinauto, screen readers)
+        accessible_name = text or tooltip
+        if accessible_name:
+            btn.setAccessibleName(accessible_name)
+
         # Если текста нет - это кнопка только с иконкой
         # Устанавливаем свойство для QSS стилей
         if not text:
-            btn.setProperty('icon-only', True)
+            btn.setProperty("icon-only", True)
 
         return btn
 
     @staticmethod
-    def create_action_button(icon_name, tooltip='', bg_color='#ffffff',
-                             hover_color='#f5f5f5', icon_size=20,
-                             button_size=36, icon_color='#808080'):
+    def create_action_button(icon_name, tooltip="", bg_color="#ffffff", hover_color="#f5f5f5", icon_size=20, button_size=36, icon_color="#808080"):
         """
         Создание минималистичной кнопки действия (icon-only, без рамок)
 
@@ -154,9 +175,10 @@ class IconLoader:
 
         if tooltip:
             btn.setToolTip(tooltip)
+            btn.setAccessibleName(tooltip)
 
         # Явные CSS размеры — гарантируют размер фона независимо от каскада
-        btn.setStyleSheet(f'''
+        btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {bg_color};
                 border: none;
@@ -173,12 +195,12 @@ class IconLoader:
             QPushButton:pressed {{
                 background-color: {hover_color};
             }}
-        ''')
+        """)
 
         # setFixedSize ПОСЛЕ setStyleSheet для гарантии
         btn.setFixedSize(button_size, button_size)
 
-        btn.setProperty('icon-only', True)
+        btn.setProperty("icon-only", True)
         btn.setCursor(Qt.PointingHandCursor)
 
         return btn

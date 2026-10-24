@@ -4,16 +4,20 @@ from typing import Optional, List, Dict, Any
 class MessengerMixin:
 
     def create_messenger_chat(self, crm_card_id: int, messenger_type: str = "telegram",
-                               members: list = None) -> Dict[str, Any]:
+                               members: list = None, chat_title: str = None) -> Dict[str, Any]:
         """Создать чат автоматически (MTProto)"""
+        payload = {
+            "crm_card_id": crm_card_id,
+            "messenger_type": messenger_type,
+            "members": members or []
+        }
+        if chat_title:
+            payload["chat_title"] = chat_title
         response = self._request(
             'POST',
             f"{self.base_url}/api/v1/messenger/chats",
-            json={
-                "crm_card_id": crm_card_id,
-                "messenger_type": messenger_type,
-                "members": members or []
-            }
+            json=payload,
+            timeout=60  # Создание TG-группы + миграция в supergroup — долгая операция
         )
         return self._handle_response(response)
 
@@ -28,7 +32,8 @@ class MessengerMixin:
                 "invite_link": invite_link,
                 "messenger_type": messenger_type,
                 "members": members or []
-            }
+            },
+            timeout=60  # MTProto join + добавление бота + promote — долгая операция
         )
         return self._handle_response(response)
 
@@ -49,16 +54,19 @@ class MessengerMixin:
             return None
 
     def create_supervision_chat(self, supervision_card_id: int, messenger_type: str = "telegram",
-                                 members: list = None) -> Dict[str, Any]:
+                                 members: list = None, chat_title: str = None) -> Dict[str, Any]:
         """Создать чат для карточки надзора"""
+        payload = {
+            "supervision_card_id": supervision_card_id,
+            "messenger_type": messenger_type,
+            "members": members or []
+        }
+        if chat_title:
+            payload["chat_title"] = chat_title
         response = self._request(
             'POST',
             f"{self.base_url}/api/v1/messenger/chats/supervision",
-            json={
-                "supervision_card_id": supervision_card_id,
-                "messenger_type": messenger_type,
-                "members": members or []
-            }
+            json=payload
         )
         return self._handle_response(response)
 
@@ -95,6 +103,15 @@ class MessengerMixin:
         )
         return self._handle_response(response)
 
+    def add_member_to_chat(self, chat_id: int, employee_id: int, role_in_project: str = "") -> Dict[str, Any]:
+        """Добавить сотрудника в существующий чат"""
+        response = self._request(
+            'POST',
+            f"{self.base_url}/api/v1/messenger/chats/{chat_id}/add-member",
+            json={"employee_id": employee_id, "role_in_project": role_in_project}
+        )
+        return self._handle_response(response)
+
     def send_messenger_invites(self, chat_id: int, member_ids: list = None) -> Dict[str, Any]:
         """Разослать invite-ссылки"""
         response = self._request(
@@ -119,6 +136,54 @@ class MessengerMixin:
             return response is not None and response.status_code == 200
         except Exception:
             return False
+
+    def preview_script(self, card_id: int, script_type: str = 'stage_complete',
+                       stage_name: str = None) -> Dict[str, Any]:
+        """Предпросмотр скрипта с рендерингом переменных"""
+        payload = {'card_id': card_id, 'script_type': script_type}
+        if stage_name:
+            payload['stage_name'] = stage_name
+        response = self._request(
+            'POST', f"{self.base_url}/api/v1/messenger/preview-script", json=payload
+        )
+        return self._handle_response(response)
+
+    def preview_act(self, card_id: int) -> Dict[str, Any]:
+        """Предпросмотр скрипта отправки акта клиенту"""
+        response = self._request(
+            'POST', f"{self.base_url}/api/v1/messenger/preview-act",
+            json={'card_id': card_id}
+        )
+        return self._handle_response(response)
+
+    def send_act(self, card_id: int, text: str, act_prefixes: list = None) -> Dict[str, Any]:
+        """Отправить акт в групповой чат"""
+        response = self._request(
+            'POST', f"{self.base_url}/api/v1/messenger/send-act",
+            timeout=60,
+            json={
+                'card_id': card_id,
+                'text': text,
+                'act_prefixes': act_prefixes or [],
+            }
+        )
+        return self._handle_response(response)
+
+    def send_edited_script(self, card_id: int, text: str, file_ids: list = None,
+                           deadline_date: str = None, custom_deadline: bool = False) -> Dict[str, Any]:
+        """Отправить отредактированный скрипт в групповой чат"""
+        response = self._request(
+            'POST', f"{self.base_url}/api/v1/messenger/send-edited-script",
+            timeout=120,  # Скачивание с ЯД + отправка в Telegram — долгая операция
+            json={
+                'card_id': card_id,
+                'text': text,
+                'file_ids': file_ids or [],
+                'deadline_date': deadline_date,
+                'custom_deadline': custom_deadline,
+            }
+        )
+        return self._handle_response(response)
 
     # --- Скрипты ---
 

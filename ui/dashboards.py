@@ -4,6 +4,7 @@
 """
 
 from datetime import datetime
+
 from ui.dashboard_widget import DashboardWidget
 from utils.data_access import DataAccess
 
@@ -19,10 +20,10 @@ class ClientsDashboard(DashboardWidget):
         try:
             self.agent_types = self.data_access.get_agent_types()
             if not self.agent_types:
-                self.agent_types = ['Прямой', 'Агент', 'Партнер']
+                self.agent_types = ["Прямой", "Агент", "Партнер"]
         except Exception as e:
             print(f"[WARN] Ошибка получения типов агентов: {e}")
-            self.agent_types = ['Прямой', 'Агент', 'Партнер']
+            self.agent_types = ["Прямой", "Агент", "Партнер"]
 
         # Независимые фильтры для каждой карточки
         self.filter_clients_by_year_year = datetime.now().year
@@ -39,74 +40,53 @@ class ClientsDashboard(DashboardWidget):
         years = self.get_years()
 
         # 1. Всего клиентов
-        self.add_metric_card(
-            row=0, col=0,
-            object_name='total_clients',
-            title='Всего клиентов',
-            value='0',
-            icon_path='resources/icons/users.svg',
-            border_color='#2196F3'
-        )
+        self.add_metric_card(row=0, col=0, object_name="total_clients", title="Всего клиентов", value="0", icon_path="resources/icons/users.svg", border_color="#2196F3")
 
         # 2. Всего физлиц
-        self.add_metric_card(
-            row=0, col=1,
-            object_name='total_individual',
-            title='Всего физлиц',
-            value='0',
-            icon_path='resources/icons/user.svg',
-            border_color='#4CAF50'
-        )
+        self.add_metric_card(row=0, col=1, object_name="total_individual", title="Всего физлиц", value="0", icon_path="resources/icons/user.svg", border_color="#4CAF50")
 
         # 3. Всего юрлиц
-        self.add_metric_card(
-            row=0, col=2,
-            object_name='total_legal',
-            title='Всего юрлиц',
-            value='0',
-            icon_path='resources/icons/briefcase.svg',
-            border_color='#FF9800'
-        )
+        self.add_metric_card(row=0, col=2, object_name="total_legal", title="Всего юрлиц", value="0", icon_path="resources/icons/briefcase.svg", border_color="#FF9800")
 
         # 4. Клиенты за год (с фильтром Год) - НЕЗАВИСИМЫЙ
         card = self.add_metric_card(
-            row=0, col=3,
-            object_name='clients_by_year',
-            title='Клиенты за год',
-            value='0',
-            icon_path='resources/icons/calendar.svg',
-            border_color='#9C27B0',
-            filters=[{'type': 'year', 'options': years}]
+            row=0,
+            col=3,
+            object_name="clients_by_year",
+            title="Клиенты за год",
+            value="0",
+            icon_path="resources/icons/calendar.svg",
+            border_color="#9C27B0",
+            filters=[{"type": "year", "options": years}],
         )
-        card.connect_filter('year', self.on_clients_by_year_changed)
+        card.connect_filter("year", self.on_clients_by_year_changed)
 
         # 5. Клиенты агента (всего) с фильтром Агент - НЕЗАВИСИМЫЙ
         card = self.add_metric_card(
-            row=0, col=4,
-            object_name='agent_clients_total',
-            title='Клиенты агента (всего)',
-            value='0',
-            icon_path='resources/icons/team.svg',
-            border_color='#F44336',
-            filters=[{'type': 'agent', 'options': self.agent_types}]
+            row=0,
+            col=4,
+            object_name="agent_clients_total",
+            title="Клиенты агента (всего)",
+            value="0",
+            icon_path="resources/icons/team.svg",
+            border_color="#F44336",
+            filters=[{"type": "agent", "options": self.agent_types}],
         )
-        card.connect_filter('agent', self.on_agent_clients_total_changed)
+        card.connect_filter("agent", self.on_agent_clients_total_changed)
 
         # 6. Клиенты агента за год (с фильтрами Агент и Год) - НЕЗАВИСИМЫЙ
         card = self.add_metric_card(
-            row=0, col=5,
-            object_name='agent_clients_by_year',
-            title='Клиенты агента (за год)',
-            value='0',
-            icon_path='resources/icons/team.svg',
-            border_color='#E91E63',
-            filters=[
-                {'type': 'agent', 'options': self.agent_types},
-                {'type': 'year', 'options': years}
-            ]
+            row=0,
+            col=5,
+            object_name="agent_clients_by_year",
+            title="Клиенты агента (за год)",
+            value="0",
+            icon_path="resources/icons/team.svg",
+            border_color="#E91E63",
+            filters=[{"type": "agent", "options": self.agent_types}, {"type": "year", "options": years}],
         )
-        card.connect_filter('agent', self.on_agent_clients_by_year_agent_changed)
-        card.connect_filter('year', self.on_agent_clients_by_year_year_changed)
+        card.connect_filter("agent", self.on_agent_clients_by_year_agent_changed)
+        card.connect_filter("year", self.on_agent_clients_by_year_year_changed)
 
         self.set_column_stretch(6)
 
@@ -138,7 +118,7 @@ class ClientsDashboard(DashboardWidget):
         """Обновить только карточку 'Клиенты за год'"""
         try:
             stats = self._get_stats(year=self.filter_clients_by_year_year, agent_type=None)
-            self.update_metric('clients_by_year', str(stats['clients_by_year']))
+            self.update_metric("clients_by_year", str(stats["clients_by_year"]))
         except Exception as e:
             print(f"[ERROR] Ошибка обновления clients_by_year: {e}")
 
@@ -146,18 +126,15 @@ class ClientsDashboard(DashboardWidget):
         """Обновить только карточку 'Клиенты агента (всего)'"""
         try:
             stats = self._get_stats(year=None, agent_type=self.filter_agent_clients_total_agent)
-            self.update_metric('agent_clients_total', str(stats['agent_clients_total']))
+            self.update_metric("agent_clients_total", str(stats["agent_clients_total"]))
         except Exception as e:
             print(f"[ERROR] Ошибка обновления agent_clients_total: {e}")
 
     def _update_agent_clients_by_year(self):
         """Обновить только карточку 'Клиенты агента (за год)'"""
         try:
-            stats = self._get_stats(
-                year=self.filter_agent_clients_by_year_year,
-                agent_type=self.filter_agent_clients_by_year_agent
-            )
-            self.update_metric('agent_clients_by_year', str(stats['agent_clients_by_year']))
+            stats = self._get_stats(year=self.filter_agent_clients_by_year_year, agent_type=self.filter_agent_clients_by_year_agent)
+            self.update_metric("agent_clients_by_year", str(stats["agent_clients_by_year"]))
         except Exception as e:
             print(f"[ERROR] Ошибка обновления agent_clients_by_year: {e}")
 
@@ -167,9 +144,9 @@ class ClientsDashboard(DashboardWidget):
             # Загружаем базовую статистику (без фильтров)
             stats = self._get_stats(year=None, agent_type=None)
 
-            self.update_metric('total_clients', str(stats['total_clients']))
-            self.update_metric('total_individual', str(stats['total_individual']))
-            self.update_metric('total_legal', str(stats['total_legal']))
+            self.update_metric("total_clients", str(stats["total_clients"]))
+            self.update_metric("total_individual", str(stats["total_individual"]))
+            self.update_metric("total_legal", str(stats["total_legal"]))
 
             # Загружаем данные с фильтрами для каждой карточки
             self._update_clients_by_year()
@@ -179,6 +156,7 @@ class ClientsDashboard(DashboardWidget):
         except Exception as e:
             print(f"[ERROR] Ошибка загрузки данных дашборда клиентов: {e}")
             import traceback
+
             traceback.print_exc()
 
 
@@ -192,10 +170,10 @@ class ContractsDashboard(DashboardWidget):
         try:
             self.agent_types = self.data_access.get_agent_types()
             if not self.agent_types:
-                self.agent_types = ['Прямой', 'Агент', 'Партнер']
+                self.agent_types = ["Прямой", "Агент", "Партнер"]
         except Exception as e:
             print(f"[WARN] Ошибка получения типов агентов: {e}")
-            self.agent_types = ['Прямой', 'Агент', 'Партнер']
+            self.agent_types = ["Прямой", "Агент", "Партнер"]
 
         # Фильтры для карточки "Заказы агента" (связаны с "Площадь агента")
         self.filter_agent_year = datetime.now().year
@@ -210,69 +188,40 @@ class ContractsDashboard(DashboardWidget):
         years = self.get_years()
 
         # 1. Всего индивидуальных заказов
-        self.add_metric_card(
-            row=0, col=0,
-            object_name='individual_orders',
-            title='Индивидуальные заказы',
-            value='0',
-            icon_path='resources/icons/clipboard1.svg',
-            border_color='#F57C00'
-        )
+        self.add_metric_card(row=0, col=0, object_name="individual_orders", title="Индивидуальные заказы", value="0", icon_path="resources/icons/clipboard1.svg", border_color="#F57C00")
 
         # 2. Площадь индивидуальных
-        self.add_metric_card(
-            row=0, col=1,
-            object_name='individual_area',
-            title='Площадь индивидуальных',
-            value='0 м2',
-            icon_path='resources/icons/codepen1.svg',
-            border_color='#F57C00'
-        )
+        self.add_metric_card(row=0, col=1, object_name="individual_area", title="Площадь индивидуальных", value="0 м2", icon_path="resources/icons/codepen1.svg", border_color="#F57C00")
 
         # 3. Всего шаблонных заказов
-        self.add_metric_card(
-            row=0, col=2,
-            object_name='template_orders',
-            title='Шаблонные заказы',
-            value='0',
-            icon_path='resources/icons/clipboard2.svg',
-            border_color='#C62828'
-        )
+        self.add_metric_card(row=0, col=2, object_name="template_orders", title="Шаблонные заказы", value="0", icon_path="resources/icons/clipboard2.svg", border_color="#C62828")
 
         # 4. Площадь шаблонных
-        self.add_metric_card(
-            row=0, col=3,
-            object_name='template_area',
-            title='Площадь шаблонных',
-            value='0 м2',
-            icon_path='resources/icons/codepen2.svg',
-            border_color='#C62828'
-        )
+        self.add_metric_card(row=0, col=3, object_name="template_area", title="Площадь шаблонных", value="0 м2", icon_path="resources/icons/codepen2.svg", border_color="#C62828")
 
         # 5. Заказы агента за год (с фильтрами)
         card = self.add_metric_card(
-            row=0, col=4,
-            object_name='agent_orders_by_year',
-            title='Заказы агента (за год)',
-            value='0',
-            icon_path='resources/icons/team.svg',
-            border_color='#388E3C',
-            filters=[
-                {'type': 'agent', 'options': self.agent_types},
-                {'type': 'year', 'options': years}
-            ]
+            row=0,
+            col=4,
+            object_name="agent_orders_by_year",
+            title="Заказы агента (за год)",
+            value="0",
+            icon_path="resources/icons/team.svg",
+            border_color="#388E3C",
+            filters=[{"type": "agent", "options": self.agent_types}, {"type": "year", "options": years}],
         )
-        card.connect_filter('agent', self.on_agent_changed)
-        card.connect_filter('year', self.on_year_changed)
+        card.connect_filter("agent", self.on_agent_changed)
+        card.connect_filter("year", self.on_year_changed)
 
         # 6. Площадь агента за год (БЕЗ кнопок фильтров - синхронизируется с предыдущей)
         self.add_metric_card(
-            row=0, col=5,
-            object_name='agent_area_by_year',
-            title='Площадь агента (за год)',
-            value='0 м2',
-            icon_path='resources/icons/codepen3.svg',
-            border_color='#388E3C'
+            row=0,
+            col=5,
+            object_name="agent_area_by_year",
+            title="Площадь агента (за год)",
+            value="0 м2",
+            icon_path="resources/icons/codepen3.svg",
+            border_color="#388E3C",
             # Без filters - синхронизируется с карточкой "Заказы агента"
         )
 
@@ -296,8 +245,8 @@ class ContractsDashboard(DashboardWidget):
         """Обновить карточки агента"""
         try:
             stats = self._get_stats(year=self.filter_agent_year, agent_type=self.filter_agent_type)
-            self.update_metric('agent_orders_by_year', str(stats['agent_orders_by_year']))
-            self.update_metric('agent_area_by_year', f"{stats['agent_area_by_year']:,.0f} м2")
+            self.update_metric("agent_orders_by_year", str(stats["agent_orders_by_year"]))
+            self.update_metric("agent_area_by_year", f"{stats['agent_area_by_year']:,.0f} м2")
         except Exception as e:
             print(f"[ERROR] Ошибка обновления agent stats: {e}")
 
@@ -307,10 +256,10 @@ class ContractsDashboard(DashboardWidget):
             # Загружаем базовую статистику (без фильтров)
             stats = self._get_stats(year=None, agent_type=None)
 
-            self.update_metric('individual_orders', str(stats['individual_orders']))
-            self.update_metric('individual_area', f"{stats['individual_area']:,.0f} м2")
-            self.update_metric('template_orders', str(stats['template_orders']))
-            self.update_metric('template_area', f"{stats['template_area']:,.0f} м2")
+            self.update_metric("individual_orders", str(stats["individual_orders"]))
+            self.update_metric("individual_area", f"{stats['individual_area']:,.0f} м2")
+            self.update_metric("template_orders", str(stats["template_orders"]))
+            self.update_metric("template_area", f"{stats['template_area']:,.0f} м2")
 
             # Загружаем данные агента с фильтрами
             self._update_agent_stats()
@@ -318,6 +267,7 @@ class ContractsDashboard(DashboardWidget):
         except Exception as e:
             print(f"[ERROR] Ошибка загрузки данных дашборда договоров: {e}")
             import traceback
+
             traceback.print_exc()
 
 
@@ -336,10 +286,10 @@ class CRMDashboard(DashboardWidget):
         try:
             self.agent_types = self.data_access.get_agent_types()
             if not self.agent_types:
-                self.agent_types = ['Прямой', 'Агент', 'Партнер']
+                self.agent_types = ["Прямой", "Агент", "Партнер"]
         except Exception as e:
             print(f"[WARN] Ошибка получения типов агентов: {e}")
-            self.agent_types = ['Прямой', 'Агент', 'Партнер']
+            self.agent_types = ["Прямой", "Агент", "Партнер"]
 
         # Независимые фильтры для каждой карточки
         self.filter_agent_active = None
@@ -351,76 +301,50 @@ class CRMDashboard(DashboardWidget):
         """Создание UI дашборда"""
 
         # Определяем цвета в зависимости от типа проекта
-        if self.project_type == 'Индивидуальный':
-            color = '#F57C00'
-        elif self.project_type == 'Шаблонный':
-            color = '#C62828'
+        if self.project_type == "Индивидуальный":
+            color = "#F57C00"
+        elif self.project_type == "Шаблонный":
+            color = "#C62828"
         else:  # Авторский надзор
-            color = '#388E3C'
+            color = "#388E3C"
 
         # 1. Всего заказов
-        self.add_metric_card(
-            row=0, col=0,
-            object_name='total_orders',
-            title='Всего заказов',
-            value='0',
-            icon_path='resources/icons/clipboard1.svg',
-            border_color=color
-        )
+        self.add_metric_card(row=0, col=0, object_name="total_orders", title="Всего заказов", value="0", icon_path="resources/icons/clipboard1.svg", border_color=color)
 
         # 2. Всего площадь
-        self.add_metric_card(
-            row=0, col=1,
-            object_name='total_area',
-            title='Всего площадь',
-            value='0 м2',
-            icon_path='resources/icons/codepen1.svg',
-            border_color=color
-        )
+        self.add_metric_card(row=0, col=1, object_name="total_area", title="Всего площадь", value="0 м2", icon_path="resources/icons/codepen1.svg", border_color=color)
 
         # 3. Активные заказы в СРМ
-        self.add_metric_card(
-            row=0, col=2,
-            object_name='active_orders',
-            title='Активные в СРМ',
-            value='0',
-            icon_path='resources/icons/active.svg',
-            border_color='#4CAF50'
-        )
+        self.add_metric_card(row=0, col=2, object_name="active_orders", title="Активные в СРМ", value="0", icon_path="resources/icons/active.svg", border_color="#4CAF50")
 
         # 4. Архивные заказы
-        self.add_metric_card(
-            row=0, col=3,
-            object_name='archive_orders',
-            title='Архивные заказы',
-            value='0',
-            icon_path='resources/icons/archive.svg',
-            border_color='#9E9E9E'
-        )
+        self.add_metric_card(row=0, col=3, object_name="archive_orders", title="Архивные заказы", value="0", icon_path="resources/icons/archive.svg", border_color="#9E9E9E")
 
         # 5. Активные заказы агента - НЕЗАВИСИМЫЙ фильтр
         card = self.add_metric_card(
-            row=0, col=4,
-            object_name='agent_active_orders',
-            title='Активные агента',
-            value='0',
-            icon_path='resources/icons/team.svg',
-            border_color='#2196F3',
-            filters=[{'type': 'agent', 'options': self.agent_types}]
+            row=0,
+            col=4,
+            object_name="agent_active_orders",
+            title="Активные агента",
+            value="0",
+            icon_path="resources/icons/team.svg",
+            border_color="#2196F3",
+            filters=[{"type": "agent", "options": self.agent_types}],
         )
-        card.connect_filter('agent', self.on_agent_active_changed)
+        card.connect_filter("agent", self.on_agent_active_changed)
 
         # 6. Архивные заказы агента - НЕЗАВИСИМЫЙ фильтр
         card = self.add_metric_card(
-            row=0, col=5,
-            object_name='agent_archive_orders',
-            title='Архивные агента',
-            value='0',
-            icon_path='resources/icons/archive.svg',
-            border_color='#607D8B',
-            filters=[{'type': 'agent', 'options': self.agent_types}]
+            row=0,
+            col=5,
+            object_name="agent_archive_orders",
+            title="Архивные агента",
+            value="0",
+            icon_path="resources/icons/archive.svg",
+            border_color="#607D8B",
+            filters=[{"type": "agent", "options": self.agent_types}],
         )
-        card.connect_filter('agent', self.on_agent_archive_changed)
+        card.connect_filter("agent", self.on_agent_archive_changed)
 
         self.set_column_stretch(6)
 
@@ -436,16 +360,13 @@ class CRMDashboard(DashboardWidget):
 
     def _get_stats(self, agent_type=None):
         """Получить статистику через DataAccess"""
-        return self.data_access.get_crm_dashboard_stats(
-            project_type=self.project_type,
-            agent_type=agent_type
-        )
+        return self.data_access.get_crm_dashboard_stats(project_type=self.project_type, agent_type=agent_type)
 
     def _update_agent_active(self):
         """Обновить карточку активных заказов агента"""
         try:
             stats = self._get_stats(agent_type=self.filter_agent_active)
-            self.update_metric('agent_active_orders', str(stats['agent_active_orders']))
+            self.update_metric("agent_active_orders", str(stats["agent_active_orders"]))
         except Exception as e:
             print(f"[ERROR] Ошибка обновления agent_active_orders: {e}")
 
@@ -453,7 +374,7 @@ class CRMDashboard(DashboardWidget):
         """Обновить карточку архивных заказов агента"""
         try:
             stats = self._get_stats(agent_type=self.filter_agent_archive)
-            self.update_metric('agent_archive_orders', str(stats['agent_archive_orders']))
+            self.update_metric("agent_archive_orders", str(stats["agent_archive_orders"]))
         except Exception as e:
             print(f"[ERROR] Ошибка обновления agent_archive_orders: {e}")
 
@@ -463,10 +384,10 @@ class CRMDashboard(DashboardWidget):
             # Загружаем базовую статистику (без фильтров агента)
             stats = self._get_stats(agent_type=None)
 
-            self.update_metric('total_orders', str(stats['total_orders']))
-            self.update_metric('total_area', f"{stats['total_area']:,.0f} м2")
-            self.update_metric('active_orders', str(stats['active_orders']))
-            self.update_metric('archive_orders', str(stats['archive_orders']))
+            self.update_metric("total_orders", str(stats["total_orders"]))
+            self.update_metric("total_area", f"{stats['total_area']:,.0f} м2")
+            self.update_metric("active_orders", str(stats["active_orders"]))
+            self.update_metric("archive_orders", str(stats["archive_orders"]))
 
             # Загружаем данные агента с независимыми фильтрами
             self._update_agent_active()
@@ -475,6 +396,7 @@ class CRMDashboard(DashboardWidget):
         except Exception as e:
             print(f"[ERROR] Ошибка загрузки данных дашборда СРМ: {e}")
             import traceback
+
             traceback.print_exc()
 
 
@@ -491,64 +413,22 @@ class EmployeesDashboard(DashboardWidget):
         """Создание UI дашборда"""
 
         # 1. Активные сотрудники
-        self.add_metric_card(
-            row=0, col=0,
-            object_name='active_employees',
-            title='Активные сотрудники',
-            value='0',
-            icon_path='resources/icons/active.svg',
-            border_color='#4CAF50'
-        )
+        self.add_metric_card(row=0, col=0, object_name="active_employees", title="Активные сотрудники", value="0", icon_path="resources/icons/active.svg", border_color="#4CAF50")
 
         # 2. Сотрудники в резерве
-        self.add_metric_card(
-            row=0, col=1,
-            object_name='reserve_employees',
-            title='Сотрудники в резерве',
-            value='0',
-            icon_path='resources/icons/pause.svg',
-            border_color='#FF9800'
-        )
+        self.add_metric_card(row=0, col=1, object_name="reserve_employees", title="Сотрудники в резерве", value="0", icon_path="resources/icons/pause.svg", border_color="#FF9800")
 
         # 3. Руководящий состав
-        self.add_metric_card(
-            row=0, col=2,
-            object_name='active_admin',
-            title='Руководящий состав',
-            value='0',
-            icon_path='resources/icons/team.svg',
-            border_color='#9C27B0'
-        )
+        self.add_metric_card(row=0, col=2, object_name="active_admin", title="Руководящий состав", value="0", icon_path="resources/icons/team.svg", border_color="#9C27B0")
 
         # 4. Проектный отдел
-        self.add_metric_card(
-            row=0, col=3,
-            object_name='active_project',
-            title='Проектный отдел',
-            value='0',
-            icon_path='resources/icons/team.svg',
-            border_color='#2196F3'
-        )
+        self.add_metric_card(row=0, col=3, object_name="active_project", title="Проектный отдел", value="0", icon_path="resources/icons/team.svg", border_color="#2196F3")
 
         # 5. Исполнительный отдел
-        self.add_metric_card(
-            row=0, col=4,
-            object_name='active_execution',
-            title='Исполнительный отдел',
-            value='0',
-            icon_path='resources/icons/team.svg',
-            border_color='#00BCD4'
-        )
+        self.add_metric_card(row=0, col=4, object_name="active_execution", title="Исполнительный отдел", value="0", icon_path="resources/icons/team.svg", border_color="#00BCD4")
 
         # 6. Ближайший день рождения
-        self.add_metric_card(
-            row=0, col=5,
-            object_name='nearest_birthday',
-            title='Ближайший ДР',
-            value='Нет данных',
-            icon_path='resources/icons/birthday.svg',
-            border_color='#E91E63'
-        )
+        self.add_metric_card(row=0, col=5, object_name="nearest_birthday", title="Ближайший ДР", value="Нет данных", icon_path="resources/icons/birthday.svg", border_color="#E91E63")
 
         self.set_column_stretch(6)
 
@@ -557,29 +437,30 @@ class EmployeesDashboard(DashboardWidget):
         try:
             stats = self.data_access.get_employees_dashboard_stats()
 
-            self.update_metric('active_employees', str(stats.get('active_employees', 0)))
-            self.update_metric('reserve_employees', str(stats.get('reserve_employees', 0)))
+            self.update_metric("active_employees", str(stats.get("active_employees", 0)))
+            self.update_metric("reserve_employees", str(stats.get("reserve_employees", 0)))
 
             # Поддержка разных ключей от API и локальной БД
-            active_admin = stats.get('active_admin') or stats.get('active_management', 0)
-            active_project = stats.get('active_project') or stats.get('active_projects_dept', 0)
-            active_execution = stats.get('active_execution') or stats.get('active_execution_dept', 0)
+            active_admin = stats.get("active_admin") or stats.get("active_management", 0)
+            active_project = stats.get("active_project") or stats.get("active_projects_dept", 0)
+            active_execution = stats.get("active_execution") or stats.get("active_execution_dept", 0)
 
-            self.update_metric('active_admin', str(active_admin))
-            self.update_metric('active_project', str(active_project))
-            self.update_metric('active_execution', str(active_execution))
+            self.update_metric("active_admin", str(active_admin))
+            self.update_metric("active_project", str(active_project))
+            self.update_metric("active_execution", str(active_execution))
 
             # Для дня рождения - поддержка разных ключей
-            birthday_text = stats.get('nearest_birthday') or str(stats.get('upcoming_birthdays', 'Нет данных'))
+            birthday_text = stats.get("nearest_birthday") or str(stats.get("upcoming_birthdays", "Нет данных"))
             if isinstance(birthday_text, int):
                 birthday_text = f"{birthday_text} чел."
             if len(str(birthday_text)) > 30:
-                birthday_text = str(birthday_text)[:27] + '...'
-            self.update_metric('nearest_birthday', str(birthday_text))
+                birthday_text = str(birthday_text)[:27] + "..."
+            self.update_metric("nearest_birthday", str(birthday_text))
 
         except Exception as e:
             print(f"[ERROR] Ошибка загрузки данных дашборда сотрудников: {e}")
             import traceback
+
             traceback.print_exc()
 
 
@@ -602,85 +483,77 @@ class SalariesDashboard(DashboardWidget):
         # Динамический список годов из договоров
         years = self.get_years()
 
-        months = [
-            f'{i:02d} - {["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
-                         "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"][i-1]}'
-            for i in range(1, 13)
-        ]
+        _month_names = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"]
+        months = [f"{i:02d} - {_month_names[i - 1]}" for i in range(1, 13)]
 
         # 1. Всего выплачено
-        self.add_metric_card(
-            row=0, col=0,
-            object_name='total_paid',
-            title='Всего выплачено',
-            value='0 руб',
-            icon_path='resources/icons/money.svg',
-            border_color='#4CAF50'
-        )
+        self.add_metric_card(row=0, col=0, object_name="total_paid", title="Всего выплачено", value="0 руб", icon_path="resources/icons/money.svg", border_color="#4CAF50")
 
         # 2. Выплачено за год
         card = self.add_metric_card(
-            row=0, col=1,
-            object_name='paid_by_year',
-            title='Выплачено за год',
-            value='0 руб',
-            icon_path='resources/icons/dollar.svg',
-            border_color='#2196F3',
-            filters=[{'type': 'year', 'options': years}]
+            row=0,
+            col=1,
+            object_name="paid_by_year",
+            title="Выплачено за год",
+            value="0 руб",
+            icon_path="resources/icons/dollar.svg",
+            border_color="#2196F3",
+            filters=[{"type": "year", "options": years}],
         )
-        card.connect_filter('year', self.on_year_changed)
+        card.connect_filter("year", self.on_year_changed)
 
         # 3. Выплачено за месяц
         card = self.add_metric_card(
-            row=0, col=2,
-            object_name='paid_by_month',
-            title='Выплачено за месяц',
-            value='0 руб',
-            icon_path='resources/icons/calendar.svg',
-            border_color='#FF9800',
-            filters=[
-                {'type': 'month', 'options': months},
-                {'type': 'year', 'options': years}
-            ]
+            row=0,
+            col=2,
+            object_name="paid_by_month",
+            title="Выплачено за месяц",
+            value="0 руб",
+            icon_path="resources/icons/calendar.svg",
+            border_color="#FF9800",
+            filters=[{"type": "month", "options": months}, {"type": "year", "options": years}],
         )
-        card.connect_filter('month', self.on_month_changed)
-        card.connect_filter('year', self.on_year_changed)
+        card.connect_filter("month", self.on_month_changed)
+        card.connect_filter("year", self.on_year_changed)
 
         # 4. Индивидуальные за год
         card = self.add_metric_card(
-            row=0, col=3,
-            object_name='individual_by_year',
-            title='Индивидуальные (год)',
-            value='0 руб',
-            icon_path='resources/icons/clipboard1.svg',
-            border_color='#F57C00',
-            filters=[{'type': 'year', 'options': years}]
+            row=0,
+            col=3,
+            object_name="individual_by_year",
+            title="Индивидуальные (год)",
+            value="0 руб",
+            icon_path="resources/icons/clipboard1.svg",
+            border_color="#F57C00",
+            filters=[{"type": "year", "options": years}],
         )
-        card.connect_filter('year', self.on_year_changed)
+        card.connect_filter("year", self.on_year_changed)
 
         # 5. Шаблонные за год
         card = self.add_metric_card(
-            row=0, col=4,
-            object_name='template_by_year',
-            title='Шаблонные (год)',
-            value='0 руб',
-            icon_path='resources/icons/clipboard2.svg',
-            border_color='#C62828',
-            filters=[{'type': 'year', 'options': years}]
+            row=0,
+            col=4,
+            object_name="template_by_year",
+            title="Шаблонные (год)",
+            value="0 руб",
+            icon_path="resources/icons/clipboard2.svg",
+            border_color="#C62828",
+            filters=[{"type": "year", "options": years}],
         )
-        card.connect_filter('year', self.on_year_changed)
+        card.connect_filter("year", self.on_year_changed)
 
         # 6. Авторские надзоры за год
         card = self.add_metric_card(
-            row=0, col=5,
-            object_name='supervision_by_year',
-            title='Авт. надзоры (год)',
-            value='0 руб',
-            icon_path='resources/icons/clipboard3.svg',
-            border_color='#388E3C',
-            filters=[{'type': 'year', 'options': years}]
+            row=0,
+            col=5,
+            object_name="supervision_by_year",
+            title="Авт. надзоры (год)",
+            value="0 руб",
+            icon_path="resources/icons/clipboard3.svg",
+            border_color="#388E3C",
+            filters=[{"type": "year", "options": years}],
         )
-        card.connect_filter('year', self.on_year_changed)
+        card.connect_filter("year", self.on_year_changed)
 
         self.set_column_stretch(6)
 
@@ -692,23 +565,20 @@ class SalariesDashboard(DashboardWidget):
     def on_month_changed(self, month_str):
         """Обработка изменения месяца"""
         # Извлекаем номер месяца из строки "01 - Январь"
-        self.current_month = int(month_str.split(' - ')[0])
+        self.current_month = int(month_str.split(" - ")[0])
         self.load_data()
 
     def load_data(self):
         """Загрузка данных"""
         try:
-            stats = self.data_access.get_salaries_dashboard_stats(
-                year=self.current_year,
-                month=self.current_month
-            )
+            stats = self.data_access.get_salaries_dashboard_stats(year=self.current_year, month=self.current_month)
 
-            self.update_metric('total_paid', f"{stats['total_paid']:,.0f} руб")
-            self.update_metric('paid_by_year', f"{stats['paid_by_year']:,.0f} руб")
-            self.update_metric('paid_by_month', f"{stats['paid_by_month']:,.0f} руб")
-            self.update_metric('individual_by_year', f"{stats['individual_by_year']:,.0f} руб")
-            self.update_metric('template_by_year', f"{stats['template_by_year']:,.0f} руб")
-            self.update_metric('supervision_by_year', f"{stats['supervision_by_year']:,.0f} руб")
+            self.update_metric("total_paid", f"{stats['total_paid']:,.0f} руб")
+            self.update_metric("paid_by_year", f"{stats['paid_by_year']:,.0f} руб")
+            self.update_metric("paid_by_month", f"{stats['paid_by_month']:,.0f} руб")
+            self.update_metric("individual_by_year", f"{stats['individual_by_year']:,.0f} руб")
+            self.update_metric("template_by_year", f"{stats['template_by_year']:,.0f} руб")
+            self.update_metric("supervision_by_year", f"{stats['supervision_by_year']:,.0f} руб")
 
         except Exception as e:
             print(f"[ERROR] Ошибка загрузки данных дашборда зарплат: {e}")
@@ -729,78 +599,46 @@ class SalariesAllPaymentsDashboard(DashboardWidget):
 
     def setup_ui(self):
         years = self.get_years()
-        months = [
-            f'{i:02d} - {["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"][i-1]}'
-            for i in range(1, 13)
-        ]
+        months = [f"{i:02d} - {['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'][i - 1]}" for i in range(1, 13)]
 
         # 1. Всего выплачено
-        self.add_metric_card(
-            row=0, col=0,
-            object_name='total_paid',
-            title='Всего выплачено',
-            value='0 руб',
-            icon_path='resources/icons/money.svg',
-            border_color='#4CAF50'
-        )
+        self.add_metric_card(row=0, col=0, object_name="total_paid", title="Всего выплачено", value="0 руб", icon_path="resources/icons/money.svg", border_color="#4CAF50")
 
         # 2. Выплачено за год (с селектором года)
         card = self.add_metric_card(
-            row=0, col=1,
-            object_name='paid_by_year',
-            title='Выплачено за год',
-            value='0 руб',
-            icon_path='resources/icons/dollar.svg',
-            border_color='#2196F3',
-            filters=[{'type': 'year', 'options': years}]
+            row=0,
+            col=1,
+            object_name="paid_by_year",
+            title="Выплачено за год",
+            value="0 руб",
+            icon_path="resources/icons/dollar.svg",
+            border_color="#2196F3",
+            filters=[{"type": "year", "options": years}],
         )
-        card.connect_filter('year', self.on_year_changed)
+        card.connect_filter("year", self.on_year_changed)
 
         # 3. Выплачено за месяц (с селекторами года и месяца)
         card = self.add_metric_card(
-            row=0, col=2,
-            object_name='paid_by_month',
-            title='Выплачено за месяц',
-            value='0 руб',
-            icon_path='resources/icons/calendar.svg',
-            border_color='#FF9800',
-            filters=[
-                {'type': 'year', 'options': years},
-                {'type': 'month', 'options': months}
-            ]
+            row=0,
+            col=2,
+            object_name="paid_by_month",
+            title="Выплачено за месяц",
+            value="0 руб",
+            icon_path="resources/icons/calendar.svg",
+            border_color="#FF9800",
+            filters=[{"type": "year", "options": years}, {"type": "month", "options": months}],
         )
-        card.connect_filter('year', self.on_month_year_changed)
-        card.connect_filter('month', self.on_month_changed)
+        card.connect_filter("year", self.on_month_year_changed)
+        card.connect_filter("month", self.on_month_changed)
 
         # 4. Индивидуальные (год) - привязан к году из п.2
-        self.add_metric_card(
-            row=0, col=3,
-            object_name='individual_by_year',
-            title='Индивидуальные (ГОД)',
-            value='0 руб',
-            icon_path='resources/icons/clipboard1.svg',
-            border_color='#F57C00'
-        )
+        self.add_metric_card(row=0, col=3, object_name="individual_by_year", title="Индивидуальные (ГОД)", value="0 руб", icon_path="resources/icons/clipboard1.svg", border_color="#F57C00")
 
         # 5. Шаблонные (год) - привязан к году из п.2
-        self.add_metric_card(
-            row=0, col=4,
-            object_name='template_by_year',
-            title='Шаблонные (ГОД)',
-            value='0 руб',
-            icon_path='resources/icons/clipboard2.svg',
-            border_color='#C62828'
-        )
+        self.add_metric_card(row=0, col=4, object_name="template_by_year", title="Шаблонные (ГОД)", value="0 руб", icon_path="resources/icons/clipboard2.svg", border_color="#C62828")
 
         # 6. Авторский надзор (год) - привязан к году из п.2
-        self.add_metric_card(
-            row=0, col=5,
-            object_name='supervision_by_year',
-            title='Авт. надзор (ГОД)',
-            value='0 руб',
-            icon_path='resources/icons/eye.svg',
-            border_color='#388E3C'
-        )
+        self.add_metric_card(row=0, col=5, object_name="supervision_by_year", title="Авт. надзор (ГОД)", value="0 руб", icon_path="resources/icons/eye.svg", border_color="#388E3C")
 
         self.set_column_stretch(6)
 
@@ -816,7 +654,7 @@ class SalariesAllPaymentsDashboard(DashboardWidget):
 
     def on_month_changed(self, month_str):
         """Изменение месяца"""
-        self.current_month = int(month_str.split(' - ')[0])
+        self.current_month = int(month_str.split(" - ")[0])
         self._update_month_card()
 
     def _get_stats(self, year=None, month=None):
@@ -827,10 +665,10 @@ class SalariesAllPaymentsDashboard(DashboardWidget):
         """Обновить карточки зависящие от года"""
         try:
             stats = self._get_stats(year=self.current_year)
-            self.update_metric('paid_by_year', f"{stats['paid_by_year']:,.0f} руб")
-            self.update_metric('individual_by_year', f"{stats['individual_by_year']:,.0f} руб")
-            self.update_metric('template_by_year', f"{stats['template_by_year']:,.0f} руб")
-            self.update_metric('supervision_by_year', f"{stats['supervision_by_year']:,.0f} руб")
+            self.update_metric("paid_by_year", f"{stats['paid_by_year']:,.0f} руб")
+            self.update_metric("individual_by_year", f"{stats['individual_by_year']:,.0f} руб")
+            self.update_metric("template_by_year", f"{stats['template_by_year']:,.0f} руб")
+            self.update_metric("supervision_by_year", f"{stats['supervision_by_year']:,.0f} руб")
         except Exception as e:
             print(f"[ERROR] Ошибка обновления год-карточек: {e}")
 
@@ -838,7 +676,7 @@ class SalariesAllPaymentsDashboard(DashboardWidget):
         """Обновить карточку месяца"""
         try:
             stats = self._get_stats(year=self.current_year, month=self.current_month)
-            self.update_metric('paid_by_month', f"{stats['paid_by_month']:,.0f} руб")
+            self.update_metric("paid_by_month", f"{stats['paid_by_month']:,.0f} руб")
         except Exception as e:
             print(f"[ERROR] Ошибка обновления месяц-карточки: {e}")
 
@@ -846,7 +684,7 @@ class SalariesAllPaymentsDashboard(DashboardWidget):
         """Загрузка данных"""
         try:
             stats = self._get_stats()
-            self.update_metric('total_paid', f"{stats['total_paid']:,.0f} руб")
+            self.update_metric("total_paid", f"{stats['total_paid']:,.0f} руб")
             self._update_year_based_cards()
             self._update_month_card()
         except Exception as e:
@@ -868,88 +706,64 @@ class SalariesIndividualDashboard(DashboardWidget):
         try:
             self.agent_types = self.data_access.get_agent_types()
             if not self.agent_types:
-                self.agent_types = ['Фестиваль', 'Петрович']
+                self.agent_types = ["Фестиваль", "Петрович"]
         except Exception:
-            self.agent_types = ['Фестиваль', 'Петрович']
+            self.agent_types = ["Фестиваль", "Петрович"]
 
         self.setup_ui()
 
     def setup_ui(self):
         years = self.get_years()
-        months = [
-            f'{i:02d} - {["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"][i-1]}'
-            for i in range(1, 13)
-        ]
+        months = [f"{i:02d} - {['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'][i - 1]}" for i in range(1, 13)]
 
         # 1. Всего выплачено
-        self.add_metric_card(
-            row=0, col=0,
-            object_name='total_paid',
-            title='Всего выплачено',
-            value='0 руб',
-            icon_path='resources/icons/money.svg',
-            border_color='#F57C00'
-        )
+        self.add_metric_card(row=0, col=0, object_name="total_paid", title="Всего выплачено", value="0 руб", icon_path="resources/icons/money.svg", border_color="#F57C00")
 
         # 2. Выплачено за год
         card = self.add_metric_card(
-            row=0, col=1,
-            object_name='paid_by_year',
-            title='Выплачено за год',
-            value='0 руб',
-            icon_path='resources/icons/dollar.svg',
-            border_color='#2196F3',
-            filters=[{'type': 'year', 'options': years}]
+            row=0,
+            col=1,
+            object_name="paid_by_year",
+            title="Выплачено за год",
+            value="0 руб",
+            icon_path="resources/icons/dollar.svg",
+            border_color="#2196F3",
+            filters=[{"type": "year", "options": years}],
         )
-        card.connect_filter('year', self.on_year_changed)
+        card.connect_filter("year", self.on_year_changed)
 
         # 3. Выплачено за месяц
         card = self.add_metric_card(
-            row=0, col=2,
-            object_name='paid_by_month',
-            title='Выплачено за месяц',
-            value='0 руб',
-            icon_path='resources/icons/calendar.svg',
-            border_color='#FF9800',
-            filters=[
-                {'type': 'year', 'options': years},
-                {'type': 'month', 'options': months}
-            ]
+            row=0,
+            col=2,
+            object_name="paid_by_month",
+            title="Выплачено за месяц",
+            value="0 руб",
+            icon_path="resources/icons/calendar.svg",
+            border_color="#FF9800",
+            filters=[{"type": "year", "options": years}, {"type": "month", "options": months}],
         )
-        card.connect_filter('year', self.on_month_year_changed)
-        card.connect_filter('month', self.on_month_changed)
+        card.connect_filter("year", self.on_month_year_changed)
+        card.connect_filter("month", self.on_month_changed)
 
         # 4. По типу агента
         card = self.add_metric_card(
-            row=0, col=3,
-            object_name='by_agent',
-            title='По типу агента',
-            value='0 руб',
-            icon_path='resources/icons/user.svg',
-            border_color='#9C27B0',
-            filters=[{'type': 'agent', 'options': self.agent_types}]
+            row=0,
+            col=3,
+            object_name="by_agent",
+            title="По типу агента",
+            value="0 руб",
+            icon_path="resources/icons/user.svg",
+            border_color="#9C27B0",
+            filters=[{"type": "agent", "options": self.agent_types}],
         )
-        card.connect_filter('agent', self.on_agent_changed)
+        card.connect_filter("agent", self.on_agent_changed)
 
         # 5. Средний чек
-        self.add_metric_card(
-            row=0, col=4,
-            object_name='avg_payment',
-            title='Средний чек',
-            value='0 руб',
-            icon_path='resources/icons/trending-up.svg',
-            border_color='#00BCD4'
-        )
+        self.add_metric_card(row=0, col=4, object_name="avg_payment", title="Средний чек", value="0 руб", icon_path="resources/icons/trending-up.svg", border_color="#00BCD4")
 
         # 6. Кол-во выплат (привязан к году)
-        self.add_metric_card(
-            row=0, col=5,
-            object_name='payments_count',
-            title='Кол-во выплат',
-            value='0',
-            icon_path='resources/icons/layers.svg',
-            border_color='#607D8B'
-        )
+        self.add_metric_card(row=0, col=5, object_name="payments_count", title="Кол-во выплат", value="0", icon_path="resources/icons/layers.svg", border_color="#607D8B")
 
         self.set_column_stretch(6)
 
@@ -962,7 +776,7 @@ class SalariesIndividualDashboard(DashboardWidget):
         self._update_month_card()
 
     def on_month_changed(self, month_str):
-        self.current_month = int(month_str.split(' - ')[0])
+        self.current_month = int(month_str.split(" - ")[0])
         self._update_month_card()
 
     def on_agent_changed(self, agent):
@@ -975,30 +789,30 @@ class SalariesIndividualDashboard(DashboardWidget):
     def _update_year_based_cards(self):
         try:
             stats = self._get_stats(year=self.current_year)
-            self.update_metric('paid_by_year', f"{stats['paid_by_year']:,.0f} руб")
-            self.update_metric('payments_count', str(stats['payments_count']))
+            self.update_metric("paid_by_year", f"{stats['paid_by_year']:,.0f} руб")
+            self.update_metric("payments_count", str(stats["payments_count"]))
         except Exception as e:
             print(f"[ERROR] Ошибка обновления год-карточек: {e}")
 
     def _update_month_card(self):
         try:
             stats = self._get_stats(year=self.current_year, month=self.current_month)
-            self.update_metric('paid_by_month', f"{stats['paid_by_month']:,.0f} руб")
+            self.update_metric("paid_by_month", f"{stats['paid_by_month']:,.0f} руб")
         except Exception as e:
             print(f"[ERROR] Ошибка обновления месяц-карточки: {e}")
 
     def _update_agent_card(self):
         try:
             stats = self._get_stats(agent_type=self.filter_agent_type)
-            self.update_metric('by_agent', f"{stats['by_agent']:,.0f} руб")
+            self.update_metric("by_agent", f"{stats['by_agent']:,.0f} руб")
         except Exception as e:
             print(f"[ERROR] Ошибка обновления агент-карточки: {e}")
 
     def load_data(self):
         try:
             stats = self._get_stats()
-            self.update_metric('total_paid', f"{stats['total_paid']:,.0f} руб")
-            self.update_metric('avg_payment', f"{stats['avg_payment']:,.0f} руб")
+            self.update_metric("total_paid", f"{stats['total_paid']:,.0f} руб")
+            self.update_metric("avg_payment", f"{stats['avg_payment']:,.0f} руб")
             self._update_year_based_cards()
             self._update_month_card()
             self._update_agent_card()
@@ -1021,88 +835,64 @@ class SalariesTemplateDashboard(DashboardWidget):
         try:
             self.agent_types = self.data_access.get_agent_types()
             if not self.agent_types:
-                self.agent_types = ['Фестиваль', 'Петрович']
+                self.agent_types = ["Фестиваль", "Петрович"]
         except Exception:
-            self.agent_types = ['Фестиваль', 'Петрович']
+            self.agent_types = ["Фестиваль", "Петрович"]
 
         self.setup_ui()
 
     def setup_ui(self):
         years = self.get_years()
-        months = [
-            f'{i:02d} - {["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"][i-1]}'
-            for i in range(1, 13)
-        ]
+        months = [f"{i:02d} - {['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'][i - 1]}" for i in range(1, 13)]
 
         # 1. Всего выплачено
-        self.add_metric_card(
-            row=0, col=0,
-            object_name='total_paid',
-            title='Всего выплачено',
-            value='0 руб',
-            icon_path='resources/icons/money.svg',
-            border_color='#C62828'
-        )
+        self.add_metric_card(row=0, col=0, object_name="total_paid", title="Всего выплачено", value="0 руб", icon_path="resources/icons/money.svg", border_color="#C62828")
 
         # 2. Выплачено за год
         card = self.add_metric_card(
-            row=0, col=1,
-            object_name='paid_by_year',
-            title='Выплачено за год',
-            value='0 руб',
-            icon_path='resources/icons/dollar.svg',
-            border_color='#2196F3',
-            filters=[{'type': 'year', 'options': years}]
+            row=0,
+            col=1,
+            object_name="paid_by_year",
+            title="Выплачено за год",
+            value="0 руб",
+            icon_path="resources/icons/dollar.svg",
+            border_color="#2196F3",
+            filters=[{"type": "year", "options": years}],
         )
-        card.connect_filter('year', self.on_year_changed)
+        card.connect_filter("year", self.on_year_changed)
 
         # 3. Выплачено за месяц
         card = self.add_metric_card(
-            row=0, col=2,
-            object_name='paid_by_month',
-            title='Выплачено за месяц',
-            value='0 руб',
-            icon_path='resources/icons/calendar.svg',
-            border_color='#FF9800',
-            filters=[
-                {'type': 'year', 'options': years},
-                {'type': 'month', 'options': months}
-            ]
+            row=0,
+            col=2,
+            object_name="paid_by_month",
+            title="Выплачено за месяц",
+            value="0 руб",
+            icon_path="resources/icons/calendar.svg",
+            border_color="#FF9800",
+            filters=[{"type": "year", "options": years}, {"type": "month", "options": months}],
         )
-        card.connect_filter('year', self.on_month_year_changed)
-        card.connect_filter('month', self.on_month_changed)
+        card.connect_filter("year", self.on_month_year_changed)
+        card.connect_filter("month", self.on_month_changed)
 
         # 4. По типу агента
         card = self.add_metric_card(
-            row=0, col=3,
-            object_name='by_agent',
-            title='По типу агента',
-            value='0 руб',
-            icon_path='resources/icons/user.svg',
-            border_color='#9C27B0',
-            filters=[{'type': 'agent', 'options': self.agent_types}]
+            row=0,
+            col=3,
+            object_name="by_agent",
+            title="По типу агента",
+            value="0 руб",
+            icon_path="resources/icons/user.svg",
+            border_color="#9C27B0",
+            filters=[{"type": "agent", "options": self.agent_types}],
         )
-        card.connect_filter('agent', self.on_agent_changed)
+        card.connect_filter("agent", self.on_agent_changed)
 
         # 5. Средний чек
-        self.add_metric_card(
-            row=0, col=4,
-            object_name='avg_payment',
-            title='Средний чек',
-            value='0 руб',
-            icon_path='resources/icons/trending-up.svg',
-            border_color='#00BCD4'
-        )
+        self.add_metric_card(row=0, col=4, object_name="avg_payment", title="Средний чек", value="0 руб", icon_path="resources/icons/trending-up.svg", border_color="#00BCD4")
 
         # 6. Кол-во выплат
-        self.add_metric_card(
-            row=0, col=5,
-            object_name='payments_count',
-            title='Кол-во выплат',
-            value='0',
-            icon_path='resources/icons/layers.svg',
-            border_color='#607D8B'
-        )
+        self.add_metric_card(row=0, col=5, object_name="payments_count", title="Кол-во выплат", value="0", icon_path="resources/icons/layers.svg", border_color="#607D8B")
 
         self.set_column_stretch(6)
 
@@ -1115,7 +905,7 @@ class SalariesTemplateDashboard(DashboardWidget):
         self._update_month_card()
 
     def on_month_changed(self, month_str):
-        self.current_month = int(month_str.split(' - ')[0])
+        self.current_month = int(month_str.split(" - ")[0])
         self._update_month_card()
 
     def on_agent_changed(self, agent):
@@ -1128,30 +918,30 @@ class SalariesTemplateDashboard(DashboardWidget):
     def _update_year_based_cards(self):
         try:
             stats = self._get_stats(year=self.current_year)
-            self.update_metric('paid_by_year', f"{stats['paid_by_year']:,.0f} руб")
-            self.update_metric('payments_count', str(stats['payments_count']))
+            self.update_metric("paid_by_year", f"{stats['paid_by_year']:,.0f} руб")
+            self.update_metric("payments_count", str(stats["payments_count"]))
         except Exception as e:
             print(f"[ERROR] Ошибка обновления год-карточек: {e}")
 
     def _update_month_card(self):
         try:
             stats = self._get_stats(year=self.current_year, month=self.current_month)
-            self.update_metric('paid_by_month', f"{stats['paid_by_month']:,.0f} руб")
+            self.update_metric("paid_by_month", f"{stats['paid_by_month']:,.0f} руб")
         except Exception as e:
             print(f"[ERROR] Ошибка обновления месяц-карточки: {e}")
 
     def _update_agent_card(self):
         try:
             stats = self._get_stats(agent_type=self.filter_agent_type)
-            self.update_metric('by_agent', f"{stats['by_agent']:,.0f} руб")
+            self.update_metric("by_agent", f"{stats['by_agent']:,.0f} руб")
         except Exception as e:
             print(f"[ERROR] Ошибка обновления агент-карточки: {e}")
 
     def load_data(self):
         try:
             stats = self._get_stats()
-            self.update_metric('total_paid', f"{stats['total_paid']:,.0f} руб")
-            self.update_metric('avg_payment', f"{stats['avg_payment']:,.0f} руб")
+            self.update_metric("total_paid", f"{stats['total_paid']:,.0f} руб")
+            self.update_metric("avg_payment", f"{stats['avg_payment']:,.0f} руб")
             self._update_year_based_cards()
             self._update_month_card()
             self._update_agent_card()
@@ -1171,85 +961,61 @@ class SalariesSalaryDashboard(DashboardWidget):
         self.current_month = datetime.now().month
         self.filter_project_type = None
 
-        self.project_types = ['Индивидуальный', 'Шаблонный', 'Авторский надзор']
+        self.project_types = ["Индивидуальный", "Шаблонный", "Авторский надзор"]
         self.setup_ui()
 
     def setup_ui(self):
         years = self.get_years()
-        months = [
-            f'{i:02d} - {["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"][i-1]}'
-            for i in range(1, 13)
-        ]
+        months = [f"{i:02d} - {['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'][i - 1]}" for i in range(1, 13)]
 
         # 1. Всего выплачено
-        self.add_metric_card(
-            row=0, col=0,
-            object_name='total_paid',
-            title='Всего выплачено',
-            value='0 руб',
-            icon_path='resources/icons/money.svg',
-            border_color='#9C27B0'
-        )
+        self.add_metric_card(row=0, col=0, object_name="total_paid", title="Всего выплачено", value="0 руб", icon_path="resources/icons/money.svg", border_color="#9C27B0")
 
         # 2. Выплачено за год
         card = self.add_metric_card(
-            row=0, col=1,
-            object_name='paid_by_year',
-            title='Выплачено за год',
-            value='0 руб',
-            icon_path='resources/icons/dollar.svg',
-            border_color='#2196F3',
-            filters=[{'type': 'year', 'options': years}]
+            row=0,
+            col=1,
+            object_name="paid_by_year",
+            title="Выплачено за год",
+            value="0 руб",
+            icon_path="resources/icons/dollar.svg",
+            border_color="#2196F3",
+            filters=[{"type": "year", "options": years}],
         )
-        card.connect_filter('year', self.on_year_changed)
+        card.connect_filter("year", self.on_year_changed)
 
         # 3. Выплачено за месяц
         card = self.add_metric_card(
-            row=0, col=2,
-            object_name='paid_by_month',
-            title='Выплачено за месяц',
-            value='0 руб',
-            icon_path='resources/icons/calendar.svg',
-            border_color='#FF9800',
-            filters=[
-                {'type': 'year', 'options': years},
-                {'type': 'month', 'options': months}
-            ]
+            row=0,
+            col=2,
+            object_name="paid_by_month",
+            title="Выплачено за месяц",
+            value="0 руб",
+            icon_path="resources/icons/calendar.svg",
+            border_color="#FF9800",
+            filters=[{"type": "year", "options": years}, {"type": "month", "options": months}],
         )
-        card.connect_filter('year', self.on_month_year_changed)
-        card.connect_filter('month', self.on_month_changed)
+        card.connect_filter("year", self.on_month_year_changed)
+        card.connect_filter("month", self.on_month_changed)
 
         # 4. По типу проекта
         card = self.add_metric_card(
-            row=0, col=3,
-            object_name='by_project_type',
-            title='По типу проекта',
-            value='0 руб',
-            icon_path='resources/icons/briefcase.svg',
-            border_color='#F57C00',
-            filters=[{'type': 'project_type', 'options': self.project_types}]
+            row=0,
+            col=3,
+            object_name="by_project_type",
+            title="По типу проекта",
+            value="0 руб",
+            icon_path="resources/icons/briefcase.svg",
+            border_color="#F57C00",
+            filters=[{"type": "project_type", "options": self.project_types}],
         )
-        card.connect_filter('project_type', self.on_project_type_changed)
+        card.connect_filter("project_type", self.on_project_type_changed)
 
         # 5. Средний оклад
-        self.add_metric_card(
-            row=0, col=4,
-            object_name='avg_salary',
-            title='Средний оклад',
-            value='0 руб',
-            icon_path='resources/icons/trending-up.svg',
-            border_color='#00BCD4'
-        )
+        self.add_metric_card(row=0, col=4, object_name="avg_salary", title="Средний оклад", value="0 руб", icon_path="resources/icons/trending-up.svg", border_color="#00BCD4")
 
         # 6. Кол-во сотрудников (уникальных за год)
-        self.add_metric_card(
-            row=0, col=5,
-            object_name='employees_count',
-            title='Кол-во сотрудников',
-            value='0',
-            icon_path='resources/icons/users.svg',
-            border_color='#607D8B'
-        )
+        self.add_metric_card(row=0, col=5, object_name="employees_count", title="Кол-во сотрудников", value="0", icon_path="resources/icons/users.svg", border_color="#607D8B")
 
         self.set_column_stretch(6)
 
@@ -1262,7 +1028,7 @@ class SalariesSalaryDashboard(DashboardWidget):
         self._update_month_card()
 
     def on_month_changed(self, month_str):
-        self.current_month = int(month_str.split(' - ')[0])
+        self.current_month = int(month_str.split(" - ")[0])
         self._update_month_card()
 
     def on_project_type_changed(self, project_type):
@@ -1275,30 +1041,30 @@ class SalariesSalaryDashboard(DashboardWidget):
     def _update_year_based_cards(self):
         try:
             stats = self._get_stats(year=self.current_year)
-            self.update_metric('paid_by_year', f"{stats['paid_by_year']:,.0f} руб")
-            self.update_metric('employees_count', str(stats['employees_count']))
+            self.update_metric("paid_by_year", f"{stats['paid_by_year']:,.0f} руб")
+            self.update_metric("employees_count", str(stats["employees_count"]))
         except Exception as e:
             print(f"[ERROR] Ошибка обновления год-карточек: {e}")
 
     def _update_month_card(self):
         try:
             stats = self._get_stats(year=self.current_year, month=self.current_month)
-            self.update_metric('paid_by_month', f"{stats['paid_by_month']:,.0f} руб")
+            self.update_metric("paid_by_month", f"{stats['paid_by_month']:,.0f} руб")
         except Exception as e:
             print(f"[ERROR] Ошибка обновления месяц-карточки: {e}")
 
     def _update_project_type_card(self):
         try:
             stats = self._get_stats(project_type=self.filter_project_type)
-            self.update_metric('by_project_type', f"{stats['by_project_type']:,.0f} руб")
+            self.update_metric("by_project_type", f"{stats['by_project_type']:,.0f} руб")
         except Exception as e:
             print(f"[ERROR] Ошибка обновления project_type-карточки: {e}")
 
     def load_data(self):
         try:
             stats = self._get_stats()
-            self.update_metric('total_paid', f"{stats['total_paid']:,.0f} руб")
-            self.update_metric('avg_salary', f"{stats['avg_salary']:,.0f} руб")
+            self.update_metric("total_paid", f"{stats['total_paid']:,.0f} руб")
+            self.update_metric("avg_salary", f"{stats['avg_salary']:,.0f} руб")
             self._update_year_based_cards()
             self._update_month_card()
             self._update_project_type_card()
@@ -1321,88 +1087,64 @@ class SalariesSupervisionDashboard(DashboardWidget):
         try:
             self.agent_types = self.data_access.get_agent_types()
             if not self.agent_types:
-                self.agent_types = ['Фестиваль', 'Петрович']
+                self.agent_types = ["Фестиваль", "Петрович"]
         except Exception:
-            self.agent_types = ['Фестиваль', 'Петрович']
+            self.agent_types = ["Фестиваль", "Петрович"]
 
         self.setup_ui()
 
     def setup_ui(self):
         years = self.get_years()
-        months = [
-            f'{i:02d} - {["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"][i-1]}'
-            for i in range(1, 13)
-        ]
+        months = [f"{i:02d} - {['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'][i - 1]}" for i in range(1, 13)]
 
         # 1. Всего выплачено
-        self.add_metric_card(
-            row=0, col=0,
-            object_name='total_paid',
-            title='Всего выплачено',
-            value='0 руб',
-            icon_path='resources/icons/money.svg',
-            border_color='#388E3C'
-        )
+        self.add_metric_card(row=0, col=0, object_name="total_paid", title="Всего выплачено", value="0 руб", icon_path="resources/icons/money.svg", border_color="#388E3C")
 
         # 2. Выплачено за год
         card = self.add_metric_card(
-            row=0, col=1,
-            object_name='paid_by_year',
-            title='Выплачено за год',
-            value='0 руб',
-            icon_path='resources/icons/dollar.svg',
-            border_color='#2196F3',
-            filters=[{'type': 'year', 'options': years}]
+            row=0,
+            col=1,
+            object_name="paid_by_year",
+            title="Выплачено за год",
+            value="0 руб",
+            icon_path="resources/icons/dollar.svg",
+            border_color="#2196F3",
+            filters=[{"type": "year", "options": years}],
         )
-        card.connect_filter('year', self.on_year_changed)
+        card.connect_filter("year", self.on_year_changed)
 
         # 3. Выплачено за месяц
         card = self.add_metric_card(
-            row=0, col=2,
-            object_name='paid_by_month',
-            title='Выплачено за месяц',
-            value='0 руб',
-            icon_path='resources/icons/calendar.svg',
-            border_color='#FF9800',
-            filters=[
-                {'type': 'year', 'options': years},
-                {'type': 'month', 'options': months}
-            ]
+            row=0,
+            col=2,
+            object_name="paid_by_month",
+            title="Выплачено за месяц",
+            value="0 руб",
+            icon_path="resources/icons/calendar.svg",
+            border_color="#FF9800",
+            filters=[{"type": "year", "options": years}, {"type": "month", "options": months}],
         )
-        card.connect_filter('year', self.on_month_year_changed)
-        card.connect_filter('month', self.on_month_changed)
+        card.connect_filter("year", self.on_month_year_changed)
+        card.connect_filter("month", self.on_month_changed)
 
         # 4. По типу агента
         card = self.add_metric_card(
-            row=0, col=3,
-            object_name='by_agent',
-            title='По типу агента',
-            value='0 руб',
-            icon_path='resources/icons/user.svg',
-            border_color='#9C27B0',
-            filters=[{'type': 'agent', 'options': self.agent_types}]
+            row=0,
+            col=3,
+            object_name="by_agent",
+            title="По типу агента",
+            value="0 руб",
+            icon_path="resources/icons/user.svg",
+            border_color="#9C27B0",
+            filters=[{"type": "agent", "options": self.agent_types}],
         )
-        card.connect_filter('agent', self.on_agent_changed)
+        card.connect_filter("agent", self.on_agent_changed)
 
         # 5. Средний чек
-        self.add_metric_card(
-            row=0, col=4,
-            object_name='avg_payment',
-            title='Средний чек',
-            value='0 руб',
-            icon_path='resources/icons/trending-up.svg',
-            border_color='#00BCD4'
-        )
+        self.add_metric_card(row=0, col=4, object_name="avg_payment", title="Средний чек", value="0 руб", icon_path="resources/icons/trending-up.svg", border_color="#00BCD4")
 
         # 6. Кол-во выплат
-        self.add_metric_card(
-            row=0, col=5,
-            object_name='payments_count',
-            title='Кол-во выплат',
-            value='0',
-            icon_path='resources/icons/layers.svg',
-            border_color='#607D8B'
-        )
+        self.add_metric_card(row=0, col=5, object_name="payments_count", title="Кол-во выплат", value="0", icon_path="resources/icons/layers.svg", border_color="#607D8B")
 
         self.set_column_stretch(6)
 
@@ -1415,7 +1157,7 @@ class SalariesSupervisionDashboard(DashboardWidget):
         self._update_month_card()
 
     def on_month_changed(self, month_str):
-        self.current_month = int(month_str.split(' - ')[0])
+        self.current_month = int(month_str.split(" - ")[0])
         self._update_month_card()
 
     def on_agent_changed(self, agent):
@@ -1428,30 +1170,30 @@ class SalariesSupervisionDashboard(DashboardWidget):
     def _update_year_based_cards(self):
         try:
             stats = self._get_stats(year=self.current_year)
-            self.update_metric('paid_by_year', f"{stats['paid_by_year']:,.0f} руб")
-            self.update_metric('payments_count', str(stats['payments_count']))
+            self.update_metric("paid_by_year", f"{stats['paid_by_year']:,.0f} руб")
+            self.update_metric("payments_count", str(stats["payments_count"]))
         except Exception as e:
             print(f"[ERROR] Ошибка обновления год-карточек: {e}")
 
     def _update_month_card(self):
         try:
             stats = self._get_stats(year=self.current_year, month=self.current_month)
-            self.update_metric('paid_by_month', f"{stats['paid_by_month']:,.0f} руб")
+            self.update_metric("paid_by_month", f"{stats['paid_by_month']:,.0f} руб")
         except Exception as e:
             print(f"[ERROR] Ошибка обновления месяц-карточки: {e}")
 
     def _update_agent_card(self):
         try:
             stats = self._get_stats(agent_type=self.filter_agent_type)
-            self.update_metric('by_agent', f"{stats['by_agent']:,.0f} руб")
+            self.update_metric("by_agent", f"{stats['by_agent']:,.0f} руб")
         except Exception as e:
             print(f"[ERROR] Ошибка обновления агент-карточки: {e}")
 
     def load_data(self):
         try:
             stats = self._get_stats()
-            self.update_metric('total_paid', f"{stats['total_paid']:,.0f} руб")
-            self.update_metric('avg_payment', f"{stats['avg_payment']:,.0f} руб")
+            self.update_metric("total_paid", f"{stats['total_paid']:,.0f} руб")
+            self.update_metric("avg_payment", f"{stats['avg_payment']:,.0f} руб")
             self._update_year_based_cards()
             self._update_month_card()
             self._update_agent_card()
@@ -1474,116 +1216,32 @@ class ReportsStatisticsDashboard(DashboardWidget):
         """Создание UI агрегированного дашборда"""
 
         # Строка 1: Клиенты
-        self.add_metric_card(
-            row=0, col=0,
-            object_name='total_clients',
-            title='Всего клиентов',
-            value='0',
-            icon_path='resources/icons/users.svg',
-            border_color='#2196F3'
-        )
+        self.add_metric_card(row=0, col=0, object_name="total_clients", title="Всего клиентов", value="0", icon_path="resources/icons/users.svg", border_color="#2196F3")
 
-        self.add_metric_card(
-            row=0, col=1,
-            object_name='total_individual_clients',
-            title='Физические лица',
-            value='0',
-            icon_path='resources/icons/user.svg',
-            border_color='#4CAF50'
-        )
+        self.add_metric_card(row=0, col=1, object_name="total_individual_clients", title="Физические лица", value="0", icon_path="resources/icons/user.svg", border_color="#4CAF50")
 
-        self.add_metric_card(
-            row=0, col=2,
-            object_name='total_legal_clients',
-            title='Юридические лица',
-            value='0',
-            icon_path='resources/icons/briefcase.svg',
-            border_color='#FF9800'
-        )
+        self.add_metric_card(row=0, col=2, object_name="total_legal_clients", title="Юридические лица", value="0", icon_path="resources/icons/briefcase.svg", border_color="#FF9800")
 
         # Строка 2: Договора
-        self.add_metric_card(
-            row=0, col=3,
-            object_name='individual_orders',
-            title='Индивидуальные заказы',
-            value='0',
-            icon_path='resources/icons/clipboard1.svg',
-            border_color='#F57C00'
-        )
+        self.add_metric_card(row=0, col=3, object_name="individual_orders", title="Индивидуальные заказы", value="0", icon_path="resources/icons/clipboard1.svg", border_color="#F57C00")
 
-        self.add_metric_card(
-            row=0, col=4,
-            object_name='template_orders',
-            title='Шаблонные заказы',
-            value='0',
-            icon_path='resources/icons/clipboard2.svg',
-            border_color='#C62828'
-        )
+        self.add_metric_card(row=0, col=4, object_name="template_orders", title="Шаблонные заказы", value="0", icon_path="resources/icons/clipboard2.svg", border_color="#C62828")
 
-        self.add_metric_card(
-            row=0, col=5,
-            object_name='supervision_orders',
-            title='Надзоры',
-            value='0',
-            icon_path='resources/icons/eye.svg',
-            border_color='#388E3C'
-        )
+        self.add_metric_card(row=0, col=5, object_name="supervision_orders", title="Надзоры", value="0", icon_path="resources/icons/eye.svg", border_color="#388E3C")
 
         # Строка 3: СРМ активные
-        self.add_metric_card(
-            row=1, col=0,
-            object_name='crm_individual_active',
-            title='СРМ Индивидуальные (активные)',
-            value='0',
-            icon_path='resources/icons/activity.svg',
-            border_color='#F57C00'
-        )
+        self.add_metric_card(row=1, col=0, object_name="crm_individual_active", title="СРМ Индивидуальные (активные)", value="0", icon_path="resources/icons/activity.svg", border_color="#F57C00")
 
-        self.add_metric_card(
-            row=1, col=1,
-            object_name='crm_template_active',
-            title='СРМ Шаблонные (активные)',
-            value='0',
-            icon_path='resources/icons/activity.svg',
-            border_color='#C62828'
-        )
+        self.add_metric_card(row=1, col=1, object_name="crm_template_active", title="СРМ Шаблонные (активные)", value="0", icon_path="resources/icons/activity.svg", border_color="#C62828")
 
-        self.add_metric_card(
-            row=1, col=2,
-            object_name='crm_supervision_active',
-            title='СРМ Надзор (активные)',
-            value='0',
-            icon_path='resources/icons/check-circle.svg',
-            border_color='#388E3C'
-        )
+        self.add_metric_card(row=1, col=2, object_name="crm_supervision_active", title="СРМ Надзор (активные)", value="0", icon_path="resources/icons/check-circle.svg", border_color="#388E3C")
 
         # Строка 3: СРМ архив
-        self.add_metric_card(
-            row=1, col=3,
-            object_name='crm_individual_archive',
-            title='СРМ Индивидуальные (архив)',
-            value='0',
-            icon_path='resources/icons/archive.svg',
-            border_color='#9E9E9E'
-        )
+        self.add_metric_card(row=1, col=3, object_name="crm_individual_archive", title="СРМ Индивидуальные (архив)", value="0", icon_path="resources/icons/archive.svg", border_color="#9E9E9E")
 
-        self.add_metric_card(
-            row=1, col=4,
-            object_name='crm_template_archive',
-            title='СРМ Шаблонные (архив)',
-            value='0',
-            icon_path='resources/icons/archive.svg',
-            border_color='#9E9E9E'
-        )
+        self.add_metric_card(row=1, col=4, object_name="crm_template_archive", title="СРМ Шаблонные (архив)", value="0", icon_path="resources/icons/archive.svg", border_color="#9E9E9E")
 
-        self.add_metric_card(
-            row=1, col=5,
-            object_name='crm_supervision_archive',
-            title='СРМ Надзор (архив)',
-            value='0',
-            icon_path='resources/icons/x-circle.svg',
-            border_color='#9E9E9E'
-        )
+        self.add_metric_card(row=1, col=5, object_name="crm_supervision_archive", title="СРМ Надзор (архив)", value="0", icon_path="resources/icons/x-circle.svg", border_color="#9E9E9E")
 
         self.set_column_stretch(6)
 
@@ -1592,35 +1250,36 @@ class ReportsStatisticsDashboard(DashboardWidget):
         try:
             clients_stats = self.data_access.get_clients_dashboard_stats()
             contracts_stats = self.data_access.get_contracts_dashboard_stats()
-            crm_individual = self.data_access.get_crm_dashboard_stats(project_type='Индивидуальный')
-            crm_template = self.data_access.get_crm_dashboard_stats(project_type='Шаблонный')
-            crm_supervision = self.data_access.get_crm_dashboard_stats(project_type='Авторский надзор')
+            crm_individual = self.data_access.get_crm_dashboard_stats(project_type="Индивидуальный")
+            crm_template = self.data_access.get_crm_dashboard_stats(project_type="Шаблонный")
+            crm_supervision = self.data_access.get_crm_dashboard_stats(project_type="Авторский надзор")
 
             # Обновляем метрики клиентов
-            self.update_metric('total_clients', str(clients_stats.get('total_clients', 0)))
-            self.update_metric('total_individual_clients', str(clients_stats.get('total_individual', 0)))
-            self.update_metric('total_legal_clients', str(clients_stats.get('total_legal', 0)))
+            self.update_metric("total_clients", str(clients_stats.get("total_clients", 0)))
+            self.update_metric("total_individual_clients", str(clients_stats.get("total_individual", 0)))
+            self.update_metric("total_legal_clients", str(clients_stats.get("total_legal", 0)))
 
             # Обновляем метрики договоров
-            self.update_metric('individual_orders', str(contracts_stats.get('individual_orders', 0)))
-            self.update_metric('template_orders', str(contracts_stats.get('template_orders', 0)))
+            self.update_metric("individual_orders", str(contracts_stats.get("individual_orders", 0)))
+            self.update_metric("template_orders", str(contracts_stats.get("template_orders", 0)))
 
             # Надзоры считаем из СРМ надзора
-            supervision_total = crm_supervision.get('total_orders', 0)
-            self.update_metric('supervision_orders', str(supervision_total))
+            supervision_total = crm_supervision.get("total_orders", 0)
+            self.update_metric("supervision_orders", str(supervision_total))
 
             # Обновляем метрики СРМ
-            self.update_metric('crm_individual_active', str(crm_individual.get('active_orders', 0)))
-            self.update_metric('crm_template_active', str(crm_template.get('active_orders', 0)))
-            self.update_metric('crm_supervision_active', str(crm_supervision.get('active_orders', 0)))
+            self.update_metric("crm_individual_active", str(crm_individual.get("active_orders", 0)))
+            self.update_metric("crm_template_active", str(crm_template.get("active_orders", 0)))
+            self.update_metric("crm_supervision_active", str(crm_supervision.get("active_orders", 0)))
 
-            self.update_metric('crm_individual_archive', str(crm_individual.get('archive_orders', 0)))
-            self.update_metric('crm_template_archive', str(crm_template.get('archive_orders', 0)))
-            self.update_metric('crm_supervision_archive', str(crm_supervision.get('archive_orders', 0)))
+            self.update_metric("crm_individual_archive", str(crm_individual.get("archive_orders", 0)))
+            self.update_metric("crm_template_archive", str(crm_template.get("archive_orders", 0)))
+            self.update_metric("crm_supervision_archive", str(crm_supervision.get("archive_orders", 0)))
 
         except Exception as e:
             print(f"[ERROR] Ошибка загрузки агрегированного дашборда отчетов: {e}")
             import traceback
+
             traceback.print_exc()
 
 
@@ -1645,135 +1304,84 @@ class EmployeeReportsDashboard(DashboardWidget):
         # Динамический список годов из договоров
         years = self.get_years()
 
-        months = [
-            ('Январь', 1), ('Февраль', 2), ('Март', 3), ('Апрель', 4),
-            ('Май', 5), ('Июнь', 6), ('Июль', 7), ('Август', 8),
-            ('Сентябрь', 9), ('Октябрь', 10), ('Ноябрь', 11), ('Декабрь', 12)
-        ]
+        months = [("Январь", 1), ("Февраль", 2), ("Март", 3), ("Апрель", 4), ("Май", 5), ("Июнь", 6), ("Июль", 7), ("Август", 8), ("Сентябрь", 9), ("Октябрь", 10), ("Ноябрь", 11), ("Декабрь", 12)]
 
         # Строка 1: Сотрудники
-        self.add_metric_card(
-            row=0, col=0,
-            object_name='active_employees',
-            title='Активные сотрудники',
-            value='0',
-            icon_path='resources/icons/users.svg',
-            border_color='#2196F3'
-        )
+        self.add_metric_card(row=0, col=0, object_name="active_employees", title="Активные сотрудники", value="0", icon_path="resources/icons/users.svg", border_color="#2196F3")
 
-        self.add_metric_card(
-            row=0, col=1,
-            object_name='reserve_employees',
-            title='Резерв',
-            value='0',
-            icon_path='resources/icons/user-minus.svg',
-            border_color='#9E9E9E'
-        )
+        self.add_metric_card(row=0, col=1, object_name="reserve_employees", title="Резерв", value="0", icon_path="resources/icons/user-minus.svg", border_color="#9E9E9E")
 
-        self.add_metric_card(
-            row=0, col=2,
-            object_name='active_management',
-            title='Руководство',
-            value='0',
-            icon_path='resources/icons/award.svg',
-            border_color='#FF9800'
-        )
+        self.add_metric_card(row=0, col=2, object_name="active_management", title="Руководство", value="0", icon_path="resources/icons/award.svg", border_color="#FF9800")
 
-        self.add_metric_card(
-            row=0, col=3,
-            object_name='active_projects_dept',
-            title='Отдел проектов',
-            value='0',
-            icon_path='resources/icons/briefcase.svg',
-            border_color='#4CAF50'
-        )
+        self.add_metric_card(row=0, col=3, object_name="active_projects_dept", title="Отдел проектов", value="0", icon_path="resources/icons/briefcase.svg", border_color="#4CAF50")
 
-        self.add_metric_card(
-            row=0, col=4,
-            object_name='active_execution_dept',
-            title='Отдел реализации',
-            value='0',
-            icon_path='resources/icons/tool.svg',
-            border_color='#F44336'
-        )
+        self.add_metric_card(row=0, col=4, object_name="active_execution_dept", title="Отдел реализации", value="0", icon_path="resources/icons/tool.svg", border_color="#F44336")
 
-        self.add_metric_card(
-            row=0, col=5,
-            object_name='upcoming_birthdays',
-            title='Дни рождения (30 дней)',
-            value='0',
-            icon_path='resources/icons/gift.svg',
-            border_color='#E91E63'
-        )
+        self.add_metric_card(row=0, col=5, object_name="upcoming_birthdays", title="Дни рождения (30 дней)", value="0", icon_path="resources/icons/gift.svg", border_color="#E91E63")
 
         # Строка 2: Зарплаты
-        self.add_metric_card(
-            row=1, col=0,
-            object_name='total_paid',
-            title='Всего выплачено',
-            value='0 руб',
-            icon_path='resources/icons/dollar-sign.svg',
-            border_color='#4CAF50'
-        )
+        self.add_metric_card(row=1, col=0, object_name="total_paid", title="Всего выплачено", value="0 руб", icon_path="resources/icons/dollar-sign.svg", border_color="#4CAF50")
 
         card = self.add_metric_card(
-            row=1, col=1,
-            object_name='paid_by_year',
-            title='Выплачено за год',
-            value='0 руб',
-            icon_path='resources/icons/calendar.svg',
-            border_color='#2196F3',
-            filters=[{'type': 'year', 'options': years}]
+            row=1,
+            col=1,
+            object_name="paid_by_year",
+            title="Выплачено за год",
+            value="0 руб",
+            icon_path="resources/icons/calendar.svg",
+            border_color="#2196F3",
+            filters=[{"type": "year", "options": years}],
         )
-        card.connect_filter('year', self.on_year_changed)
+        card.connect_filter("year", self.on_year_changed)
 
         card = self.add_metric_card(
-            row=1, col=2,
-            object_name='paid_by_month',
-            title='Выплачено за месяц',
-            value='0 руб',
-            icon_path='resources/icons/clock.svg',
-            border_color='#9C27B0',
-            filters=[
-                {'type': 'year', 'options': years},
-                {'type': 'month', 'options': [m[0] for m in months]}
-            ]
+            row=1,
+            col=2,
+            object_name="paid_by_month",
+            title="Выплачено за месяц",
+            value="0 руб",
+            icon_path="resources/icons/clock.svg",
+            border_color="#9C27B0",
+            filters=[{"type": "year", "options": years}, {"type": "month", "options": [m[0] for m in months]}],
         )
-        card.connect_filter('year', self.on_year_changed)
-        card.connect_filter('month', self.on_month_changed)
+        card.connect_filter("year", self.on_year_changed)
+        card.connect_filter("month", self.on_month_changed)
 
         card = self.add_metric_card(
-            row=1, col=3,
-            object_name='individual_by_year',
-            title='Индивидуальные (год)',
-            value='0 руб',
-            icon_path='resources/icons/trending-up.svg',
-            border_color='#F57C00',
-            filters=[{'type': 'year', 'options': years}]
+            row=1,
+            col=3,
+            object_name="individual_by_year",
+            title="Индивидуальные (год)",
+            value="0 руб",
+            icon_path="resources/icons/trending-up.svg",
+            border_color="#F57C00",
+            filters=[{"type": "year", "options": years}],
         )
-        card.connect_filter('year', self.on_year_changed)
+        card.connect_filter("year", self.on_year_changed)
 
         card = self.add_metric_card(
-            row=1, col=4,
-            object_name='template_by_year',
-            title='Шаблонные (год)',
-            value='0 руб',
-            icon_path='resources/icons/trending-down.svg',
-            border_color='#C62828',
-            filters=[{'type': 'year', 'options': years}]
+            row=1,
+            col=4,
+            object_name="template_by_year",
+            title="Шаблонные (год)",
+            value="0 руб",
+            icon_path="resources/icons/trending-down.svg",
+            border_color="#C62828",
+            filters=[{"type": "year", "options": years}],
         )
-        card.connect_filter('year', self.on_year_changed)
+        card.connect_filter("year", self.on_year_changed)
 
         card = self.add_metric_card(
-            row=1, col=5,
-            object_name='supervision_by_year',
-            title='Надзор (год)',
-            value='0 руб',
-            icon_path='resources/icons/eye.svg',
-            border_color='#388E3C',
-            filters=[{'type': 'year', 'options': years}]
+            row=1,
+            col=5,
+            object_name="supervision_by_year",
+            title="Надзор (год)",
+            value="0 руб",
+            icon_path="resources/icons/eye.svg",
+            border_color="#388E3C",
+            filters=[{"type": "year", "options": years}],
         )
-        card.connect_filter('year', self.on_year_changed)
+        card.connect_filter("year", self.on_year_changed)
 
         self.set_column_stretch(6)
 
@@ -1784,11 +1392,7 @@ class EmployeeReportsDashboard(DashboardWidget):
 
     def on_month_changed(self, month_name):
         """Обработка изменения месяца"""
-        months = {
-            'Январь': 1, 'Февраль': 2, 'Март': 3, 'Апрель': 4,
-            'Май': 5, 'Июнь': 6, 'Июль': 7, 'Август': 8,
-            'Сентябрь': 9, 'Октябрь': 10, 'Ноябрь': 11, 'Декабрь': 12
-        }
+        months = {"Январь": 1, "Февраль": 2, "Март": 3, "Апрель": 4, "Май": 5, "Июнь": 6, "Июль": 7, "Август": 8, "Сентябрь": 9, "Октябрь": 10, "Ноябрь": 11, "Декабрь": 12}
         self.current_month = months.get(month_name, datetime.now().month)
         self.load_data()
 
@@ -1796,34 +1400,32 @@ class EmployeeReportsDashboard(DashboardWidget):
         """Загрузка агрегированных данных"""
         try:
             employees_stats = self.data_access.get_employees_dashboard_stats()
-            salaries_stats = self.data_access.get_salaries_dashboard_stats(
-                year=self.current_year,
-                month=self.current_month
-            )
+            salaries_stats = self.data_access.get_salaries_dashboard_stats(year=self.current_year, month=self.current_month)
 
             # Обновляем метрики сотрудников (поддержка разных ключей от API и локальной БД)
-            self.update_metric('active_employees', str(employees_stats.get('active_employees', 0)))
-            self.update_metric('reserve_employees', str(employees_stats.get('reserve_employees', 0)))
+            self.update_metric("active_employees", str(employees_stats.get("active_employees", 0)))
+            self.update_metric("reserve_employees", str(employees_stats.get("reserve_employees", 0)))
 
-            active_mgmt = employees_stats.get('active_management') or employees_stats.get('active_admin', 0)
-            active_proj = employees_stats.get('active_projects_dept') or employees_stats.get('active_project', 0)
-            active_exec = employees_stats.get('active_execution_dept') or employees_stats.get('active_execution', 0)
-            birthdays = employees_stats.get('upcoming_birthdays') or employees_stats.get('nearest_birthday', 0)
+            active_mgmt = employees_stats.get("active_management") or employees_stats.get("active_admin", 0)
+            active_proj = employees_stats.get("active_projects_dept") or employees_stats.get("active_project", 0)
+            active_exec = employees_stats.get("active_execution_dept") or employees_stats.get("active_execution", 0)
+            birthdays = employees_stats.get("upcoming_birthdays") or employees_stats.get("nearest_birthday", 0)
 
-            self.update_metric('active_management', str(active_mgmt))
-            self.update_metric('active_projects_dept', str(active_proj))
-            self.update_metric('active_execution_dept', str(active_exec))
-            self.update_metric('upcoming_birthdays', str(birthdays))
+            self.update_metric("active_management", str(active_mgmt))
+            self.update_metric("active_projects_dept", str(active_proj))
+            self.update_metric("active_execution_dept", str(active_exec))
+            self.update_metric("upcoming_birthdays", str(birthdays))
 
             # Обновляем метрики зарплат
-            self.update_metric('total_paid', f"{salaries_stats.get('total_paid', 0):,.0f} руб")
-            self.update_metric('paid_by_year', f"{salaries_stats.get('paid_by_year', 0):,.0f} руб")
-            self.update_metric('paid_by_month', f"{salaries_stats.get('paid_by_month', 0):,.0f} руб")
-            self.update_metric('individual_by_year', f"{salaries_stats.get('individual_by_year', 0):,.0f} руб")
-            self.update_metric('template_by_year', f"{salaries_stats.get('template_by_year', 0):,.0f} руб")
-            self.update_metric('supervision_by_year', f"{salaries_stats.get('supervision_by_year', 0):,.0f} руб")
+            self.update_metric("total_paid", f"{salaries_stats.get('total_paid', 0):,.0f} руб")
+            self.update_metric("paid_by_year", f"{salaries_stats.get('paid_by_year', 0):,.0f} руб")
+            self.update_metric("paid_by_month", f"{salaries_stats.get('paid_by_month', 0):,.0f} руб")
+            self.update_metric("individual_by_year", f"{salaries_stats.get('individual_by_year', 0):,.0f} руб")
+            self.update_metric("template_by_year", f"{salaries_stats.get('template_by_year', 0):,.0f} руб")
+            self.update_metric("supervision_by_year", f"{salaries_stats.get('supervision_by_year', 0):,.0f} руб")
 
         except Exception as e:
             print(f"[ERROR] Ошибка загрузки агрегированного дашборда сотрудников: {e}")
             import traceback
+
             traceback.print_exc()

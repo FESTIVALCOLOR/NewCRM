@@ -2,12 +2,26 @@
 Granular Permissions — именованные права доступа в БД
 Заменяет хардкод allowed_roles в endpoints
 """
-import time
+
 import logging
-from typing import Optional, List, Dict, Set
+import time
+from typing import Dict, List, Optional, Set
+
+from constants import (
+    POSITION_DAN,
+    POSITION_GAP,
+    POSITION_MANAGER,
+    POSITION_MEASURER,
+    POSITION_SDP,
+    POSITION_SENIOR_MANAGER,
+    POSITION_STUDIO_DIRECTOR,
+    ROLE_ADMIN,
+    ROLE_DIRECTOR,
+)
 from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
-from database import get_db, Employee, UserPermission, RoleDefaultPermission
+
+from database import Employee, RoleDefaultPermission, UserPermission, get_db
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +29,7 @@ logger = logging.getLogger(__name__)
 # ОПРЕДЕЛЕНИЯ ПРАВ (~65 штук)
 # =========================
 
-PERMISSION_NAMES: Dict[str, str] = {
+PERMISSION_NAMES: dict[str, str] = {
     # === Доступ к страницам ===
     "access.clients": "Доступ к странице Клиенты",
     "access.contracts": "Доступ к странице Договора",
@@ -25,6 +39,7 @@ PERMISSION_NAMES: Dict[str, str] = {
     "access.employees": "Доступ к странице Сотрудники",
     "access.salaries": "Доступ к странице Зарплаты",
     "access.employee_reports": "Доступ к странице Отчеты по сотрудникам",
+    "access.employee_analytics": "Доступ к странице Аналитика сотрудников",
     "access.admin": "Доступ к администрированию",
     "access.dashboards": "Показ дашбордов внизу страницы",
     # === Сотрудники ===
@@ -43,6 +58,7 @@ PERMISSION_NAMES: Dict[str, str] = {
     "contracts.delete": "Удаление договоров",
     # === CRM ===
     "crm_cards.update": "Редактирование CRM карточек",
+    "crm_cards.view_archive": "Просмотр архива CRM",
     "crm_cards.move": "Управление стадиями CRM",
     "crm_cards.delete": "Удаление CRM карточек",
     "crm_cards.assign_executor": "Назначение/переназначение исполнителей",
@@ -68,6 +84,7 @@ PERMISSION_NAMES: Dict[str, str] = {
     "supervision.files_delete": "Удаление файлов в надзоре",
     "supervision.deadlines": "Управление дедлайнами надзора",
     "supervision.payments": "Оплаты в карточках надзора",
+    "supervision.view_archive": "Просмотр архива надзора",
     # === Платежи (глобальные) ===
     "payments.create": "Создание платежей",
     "payments.update": "Редактирование платежей",
@@ -93,6 +110,23 @@ PERMISSION_NAMES: Dict[str, str] = {
     "messenger.delete_chat": "Удаление чатов",
     "messenger.view_chat": "Просмотр/открытие чатов",
     "messenger.manage_scripts": "Управление скриптами мессенджера",
+    # === Внутренний чат — сотрудники ===
+    "chat.employee.view": "Просмотр чатов сотрудников по заказу",
+    "chat.employee.send": "Отправка сообщений в чат сотрудников",
+    "chat.employee.manage": "Управление чатом сотрудников (создание, участники)",
+    "chat.employee.upload_to_data": "Загрузка файлов из чата в данные проекта",
+    # === Внутренний чат — клиенты ===
+    "chat.client.view": "Просмотр чатов с клиентами",
+    "chat.client.send": "Отправка сообщений клиенту",
+    "chat.client.manage": "Управление клиентским чатом (создание, ссылки, участники)",
+    "chat.client.send_script": "Отправка скриптов клиенту через чат",
+    "chat.client.show_phone": "Просмотр номера телефона клиента в чате",
+    "chat.members.show_last_login": "Просмотр даты и времени последнего входа участников чата",
+    # === Уведомления (видимость блоков настроек) ===
+    "notifications.settings_projects": "Настройка каналов по типам проектов",
+    "notifications.settings_duplication": "Настройка дублирования уведомлений",
+    "notifications.settings_supervision": "Уведомления авторского надзора",
+    "notifications.settings_payment": "Уведомления об оплатах",
 }
 
 # =========================
@@ -102,93 +136,254 @@ PERMISSION_NAMES: Dict[str, str] = {
 
 # Доступ к страницам — общие наборы
 _ACCESS_ALL = {
-    "access.clients", "access.contracts", "access.crm", "access.supervision",
-    "access.reports", "access.employees", "access.salaries", "access.employee_reports",
+    "access.clients",
+    "access.contracts",
+    "access.crm",
+    "access.supervision",
+    "access.reports",
+    "access.employees",
+    "access.salaries",
+    "access.employee_reports",
+    "access.employee_analytics",
     "access.admin",
 }
 _ACCESS_MANAGER = {
-    "access.clients", "access.contracts", "access.crm", "access.supervision",
-    "access.reports", "access.employees", "access.salaries", "access.employee_reports",
+    "access.clients",
+    "access.contracts",
+    "access.crm",
+    "access.supervision",
+    "access.reports",
+    "access.employees",
+    "access.salaries",
+    "access.employee_reports",
+    "access.employee_analytics",
 }
 
 # Базовый набор: Руководитель + Старший менеджер
 _BASE_MANAGER = {
     # Клиенты CRUD
-    "clients.create", "clients.view", "clients.update", "clients.delete",
+    "clients.create",
+    "clients.view",
+    "clients.update",
+    "clients.delete",
     # Договоры CRUD
-    "contracts.create", "contracts.view", "contracts.update", "contracts.delete",
+    "contracts.create",
+    "contracts.view",
+    "contracts.update",
+    "contracts.delete",
     # CRM
-    "crm_cards.update", "crm_cards.move", "crm_cards.delete",
-    "crm_cards.assign_executor", "crm_cards.delete_executor",
-    "crm_cards.reset_stages", "crm_cards.reset_approval", "crm_cards.complete_approval",
-    "crm_cards.files_upload", "crm_cards.files_delete",
-    "crm_cards.deadlines", "crm_cards.payments",
+    "crm_cards.update",
+    "crm_cards.view_archive",
+    "crm_cards.move",
+    "crm_cards.delete",
+    "crm_cards.assign_executor",
+    "crm_cards.delete_executor",
+    "crm_cards.reset_stages",
+    "crm_cards.reset_approval",
+    "crm_cards.complete_approval",
+    "crm_cards.files_upload",
+    "crm_cards.files_delete",
+    "crm_cards.deadlines",
+    "crm_cards.payments",
     # Надзор
-    "supervision.update", "supervision.move", "supervision.pause_resume",
-    "supervision.reset_stages", "supervision.complete_stage", "supervision.delete_order",
-    "supervision.assign_executor", "supervision.files_upload", "supervision.files_delete",
-    "supervision.deadlines", "supervision.payments",
+    "supervision.update",
+    "supervision.move",
+    "supervision.pause_resume",
+    "supervision.reset_stages",
+    "supervision.complete_stage",
+    "supervision.delete_order",
+    "supervision.assign_executor",
+    "supervision.files_upload",
+    "supervision.files_delete",
+    "supervision.deadlines",
+    "supervision.payments",
+    "supervision.view_archive",
     # Платежи
-    "payments.create", "payments.update", "payments.delete",
+    "payments.create",
+    "payments.update",
+    "payments.delete",
     # Зарплаты
-    "salaries.create", "salaries.update",
-    "salaries.mark_to_pay", "salaries.mark_paid",
+    "salaries.create",
+    "salaries.update",
+    "salaries.mark_to_pay",
+    "salaries.mark_paid",
     # Тарифы
-    "rates.create", "rates.delete",
+    "rates.create",
+    "rates.delete",
     # Агенты и города (для обратной совместимости)
-    "agents.create", "agents.update", "agents.delete",
-    "cities.create", "cities.delete",
-    # Мессенджер
-    "messenger.create_chat", "messenger.delete_chat", "messenger.view_chat",
+    "agents.create",
+    "agents.update",
+    "agents.delete",
+    "cities.create",
+    "cities.delete",
+    # Мессенджер (Telegram, устаревает)
+    "messenger.create_chat",
+    "messenger.delete_chat",
+    "messenger.view_chat",
+    # Внутренний чат — базовый доступ для руководства
+    "chat.employee.view",
+    "chat.employee.send",
+    "chat.employee.manage",
+    "chat.employee.upload_to_data",
+    "chat.client.view",
+    "chat.client.send",
+    "chat.client.manage",
+    "chat.client.send_script",
+    "chat.client.show_phone",
+    "chat.members.show_last_login",
 }
 
-DEFAULT_ROLE_PERMISSIONS: Dict[str, Set[str]] = {
-    "Руководитель студии": _ACCESS_ALL | _BASE_MANAGER | {
-        "employees.create", "employees.update", "employees.delete",
-        "crm_cards.reset_designer", "crm_cards.reset_draftsman",
+DEFAULT_ROLE_PERMISSIONS: dict[str, set[str]] = {
+    POSITION_STUDIO_DIRECTOR: _ACCESS_ALL
+    | _BASE_MANAGER
+    | {
+        "employees.create",
+        "employees.update",
+        "employees.delete",
+        "crm_cards.reset_designer",
+        "crm_cards.reset_draftsman",
         "salaries.delete",
         "messenger.manage_scripts",
+        "notifications.settings_projects",
+        "notifications.settings_duplication",
+        "notifications.settings_supervision",
+        "notifications.settings_payment",
     },
-    "Старший менеджер проектов": _ACCESS_MANAGER | _BASE_MANAGER | {
+    POSITION_SENIOR_MANAGER: _ACCESS_MANAGER
+    | _BASE_MANAGER
+    | {
         "employees.update",
-        "crm_cards.reset_designer", "crm_cards.reset_draftsman",
+        "crm_cards.reset_designer",
+        "crm_cards.reset_draftsman",
+        "notifications.settings_projects",
+        "notifications.settings_duplication",
+        "notifications.settings_supervision",
+        "notifications.settings_payment",
     },
-    "СДП": {
-        "access.crm", "access.reports", "access.employees",
-        "crm_cards.reset_designer", "crm_cards.reset_draftsman",
-        "messenger.view_chat",
-    },
-    "ГАП": {
-        "access.crm", "access.reports", "access.employees",
-        "crm_cards.reset_designer", "crm_cards.reset_draftsman",
-        "messenger.view_chat",
-    },
-    "Менеджер": {
-        "access.crm", "access.supervision", "access.reports", "access.employees",
-        "crm_cards.reset_designer", "crm_cards.reset_draftsman",
+    POSITION_SDP: {
+        "access.crm",
+        "access.clients",
+        "access.contracts",
+        "access.reports",
+        "access.employees",
+        # CRM workflow — СДП проверяет и передаёт клиенту на Стадиях 1 и 2
+        "crm_cards.update",
+        "crm_cards.move",
+        "crm_cards.complete_approval",
         "crm_cards.assign_executor",
+        "crm_cards.files_upload",
+        "crm_cards.deadlines",
+        "crm_cards.reset_designer",
+        "crm_cards.reset_draftsman",
+        "messenger.view_chat",
+        # Внутренний чат — СДП видит и пишет в чате сотрудников, может загружать в данные
+        "chat.employee.view",
+        "chat.employee.send",
+        "chat.employee.upload_to_data",
+        # Клиентский чат — видит и пишет
+        "chat.client.view",
+        "chat.client.send",
+        "chat.client.send_script",
+        "chat.client.show_phone",
+        "chat.members.show_last_login",
+        "notifications.settings_projects",
     },
-    "ДАН": {
+    POSITION_GAP: {
+        "access.crm",
+        "access.clients",
+        "access.contracts",
+        "access.reports",
+        "access.employees",
+        # CRM workflow — ГАП проверяет и передаёт клиенту на Стадии 3 (инд.) и Стадии 2 (шабл.)
+        "crm_cards.update",
+        "crm_cards.move",
+        "crm_cards.complete_approval",
+        "crm_cards.assign_executor",
+        "crm_cards.files_upload",
+        "crm_cards.deadlines",
+        "crm_cards.reset_designer",
+        "crm_cards.reset_draftsman",
+        "messenger.view_chat",
+        # Внутренний чат — ГАП аналогично СДП
+        "chat.employee.view",
+        "chat.employee.send",
+        "chat.employee.upload_to_data",
+        "chat.client.view",
+        "chat.client.send",
+        "chat.client.send_script",
+        "chat.client.show_phone",
+        "chat.members.show_last_login",
+        "notifications.settings_projects",
+    },
+    POSITION_MANAGER: {
+        "access.crm",
+        "access.supervision",
+        "access.clients",
+        "access.contracts",
+        "access.reports",
+        "access.employees",
+        # CRM workflow — Менеджер ведёт шаблонные проекты + назначает исполнителей
+        "crm_cards.update",
+        "crm_cards.move",
+        "crm_cards.complete_approval",
+        "crm_cards.assign_executor",
+        "crm_cards.files_upload",
+        "crm_cards.reset_designer",
+        "crm_cards.reset_draftsman",
+        # Надзор — Менеджер управляет авторским надзором
+        "supervision.update",
+        "supervision.move",
+        "supervision.complete_stage",
+        "supervision.assign_executor",
+        "supervision.files_upload",
+        "supervision.view_archive",
+        # Внутренний чат — Менеджер управляет клиентским чатом (ссылки, участники)
+        "chat.employee.view",
+        "chat.employee.send",
+        "chat.client.view",
+        "chat.client.send",
+        "chat.client.manage",
+        "chat.client.send_script",
+        "chat.client.show_phone",
+        "chat.members.show_last_login",
+        "notifications.settings_projects",
+        "notifications.settings_supervision",
+    },
+    POSITION_DAN: {
         "access.supervision",
         "supervision.complete_stage",
         "supervision.files_upload",
         "messenger.view_chat",
+        # Внутренний чат — ДАН только чат сотрудников
+        "chat.employee.view",
+        "chat.employee.send",
+        "notifications.settings_supervision",
     },
     "Дизайнер": {
         "access.crm",
+        "crm_cards.update",
         "crm_cards.files_upload",
+        # Дизайнер: чат сотрудников + загрузка в данные (только своих стадий)
+        "chat.employee.view",
+        "chat.employee.send",
+        "chat.employee.upload_to_data",
     },
     "Чертёжник": {
         "access.crm",
+        "crm_cards.update",
         "crm_cards.files_upload",
+        # Чертёжник: чат сотрудников + загрузка в данные (только своих стадий)
+        "chat.employee.view",
+        "chat.employee.send",
+        "chat.employee.upload_to_data",
     },
-    "Замерщик": {
+    POSITION_MEASURER: {
         "access.crm",
     },
 }
 
 # Системные роли/логины с полным доступом (не настраиваются)
-SUPERUSER_ROLES = {"admin", "director", "Руководитель студии"}
+SUPERUSER_ROLES = {ROLE_ADMIN, ROLE_DIRECTOR, POSITION_STUDIO_DIRECTOR}
 
 # Права, которые НЕ управляются через UI-матрицу (только суперпользователь/автоматика).
 # При apply_to_employees эти права сохраняются у сотрудников.
@@ -204,7 +399,7 @@ NON_MATRIX_PERMISSIONS = {
 # =========================
 
 _CACHE_TTL = 300  # 5 минут
-_permissions_cache: Dict[int, tuple] = {}  # {employee_id: (permissions_set, timestamp)}
+_permissions_cache: dict[int, tuple] = {}  # {employee_id: (permissions_set, timestamp)}
 
 
 def invalidate_cache(employee_id: Optional[int] = None):
@@ -215,7 +410,7 @@ def invalidate_cache(employee_id: Optional[int] = None):
         _permissions_cache.clear()
 
 
-def _get_cached(employee_id: int) -> Optional[Set[str]]:
+def _get_cached(employee_id: int) -> Optional[set[str]]:
     """Получить права из кэша если актуальны"""
     entry = _permissions_cache.get(employee_id)
     if entry and (time.time() - entry[1]) < _CACHE_TTL:
@@ -223,7 +418,7 @@ def _get_cached(employee_id: int) -> Optional[Set[str]]:
     return None
 
 
-def _set_cached(employee_id: int, perms: Set[str]):
+def _set_cached(employee_id: int, perms: set[str]):
     """Сохранить права в кэш"""
     _permissions_cache[employee_id] = (perms, time.time())
 
@@ -232,7 +427,8 @@ def _set_cached(employee_id: int, perms: Set[str]):
 # ЗАГРУЗКА И ПРОВЕРКА ПРАВ
 # =========================
 
-def load_permissions(employee_id: int, db: Session) -> Set[str]:
+
+def load_permissions(employee_id: int, db: Session) -> set[str]:
     """
     Загрузить права сотрудника.
     Если в БД есть записи — берём из БД.
@@ -243,9 +439,7 @@ def load_permissions(employee_id: int, db: Session) -> Set[str]:
         return cached
 
     # Запрос из БД
-    db_perms = db.query(UserPermission).filter(
-        UserPermission.employee_id == employee_id
-    ).all()
+    db_perms = db.query(UserPermission).filter(UserPermission.employee_id == employee_id).all()
 
     if db_perms:
         # Есть записи в БД — используем их
@@ -256,27 +450,31 @@ def load_permissions(employee_id: int, db: Session) -> Set[str]:
         if not employee:
             perms = set()
         else:
-            perms = _get_default_permissions(employee)
+            perms = _get_default_permissions(employee, db)
 
     _set_cached(employee_id, perms)
     return perms
 
 
-def _get_default_permissions(employee: Employee) -> Set[str]:
-    """Получить дефолтные права по роли и должности сотрудника"""
+def _get_default_permissions(employee: Employee, db: Session) -> set[str]:
+    """Получить дефолтные права по роли и должности из матрицы ролей в БД.
+    Fallback на хардкод DEFAULT_ROLE_PERMISSIONS если таблица пуста."""
     perms = set()
 
+    # Читаем матрицу из БД (load_role_matrix сам падает на хардкод если пусто)
+    role_matrix = load_role_matrix(db)
+
     # По роли
-    role_perms = DEFAULT_ROLE_PERMISSIONS.get(employee.role, set())
+    role_perms = set(role_matrix.get(employee.role, []))
     perms |= role_perms
 
-    # По основной должности (для reset_designer/draftsman)
-    pos_perms = DEFAULT_ROLE_PERMISSIONS.get(employee.position, set())
+    # По основной должности
+    pos_perms = set(role_matrix.get(employee.position, []))
     perms |= pos_perms
 
     # По совмещённой должности
     if employee.secondary_position:
-        sec_perms = DEFAULT_ROLE_PERMISSIONS.get(employee.secondary_position, set())
+        sec_perms = set(role_matrix.get(employee.secondary_position, []))
         perms |= sec_perms
 
     return perms
@@ -298,6 +496,7 @@ def check_permission(employee: Employee, permission_name: str, db: Session) -> b
 # FASTAPI DEPENDENCY
 # =========================
 
+
 def require_permission(permission_name: str):
     """
     FastAPI dependency factory.
@@ -305,10 +504,7 @@ def require_permission(permission_name: str):
     """
     from auth import get_current_user
 
-    async def _check(
-        current_user: Employee = Depends(get_current_user),
-        db: Session = Depends(get_db)
-    ):
+    async def _check(current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
         if not check_permission(current_user, permission_name, db):
             raise HTTPException(status_code=403, detail="Недостаточно прав")
         return current_user
@@ -319,6 +515,7 @@ def require_permission(permission_name: str):
 # =========================
 # SEED: Заполнение дефолтных прав
 # =========================
+
 
 def seed_permissions(db: Session):
     """
@@ -342,17 +539,12 @@ def seed_permissions(db: Session):
             if emp.role in SUPERUSER_ROLES and emp.role not in DEFAULT_ROLE_PERMISSIONS:
                 continue
 
-            default_perms = _get_default_permissions(emp)
+            default_perms = _get_default_permissions(emp, db)
             if not default_perms:
                 continue
 
             # Получаем существующие права
-            existing = {
-                r[0] for r in db.execute(
-                    text("SELECT permission_name FROM user_permissions WHERE employee_id = :eid"),
-                    {"eid": emp.id}
-                ).fetchall()
-            }
+            existing = {r[0] for r in db.execute(text("SELECT permission_name FROM user_permissions WHERE employee_id = :eid"), {"eid": emp.id}).fetchall()}
 
             # Seed ТОЛЬКО для сотрудников БЕЗ записей (новые, ещё не настроенные).
             # Если записи уже есть — значит права настроены (seed или админ), не трогаем.
@@ -366,13 +558,17 @@ def seed_permissions(db: Session):
                         VALUES (:emp_id, :perm)
                         ON CONFLICT (employee_id, permission_name) DO NOTHING
                     """),
-                    {"emp_id": emp.id, "perm": perm_name}
+                    {"emp_id": emp.id, "perm": perm_name},
                 )
                 total_added += 1
 
         db.commit()
         if total_added > 0:
             logger.info(f"Seeded {total_added} permissions for new employees")
+
+        # Миграция новых прав для существующих сотрудников
+        _migrate_new_permissions(db)
+
     except Exception as e:
         db.rollback()
         logger.warning(f"seed_permissions error (non-fatal): {e}")
@@ -384,11 +580,166 @@ def seed_permissions(db: Session):
             pass
 
 
+def _migrate_new_permissions(db: Session):
+    """
+    Добавить новые permissions в role_default_permissions и user_permissions
+    для существующих сотрудников. Вызывается из seed_permissions.
+
+    Безопасно вызывать повторно — ON CONFLICT DO NOTHING.
+    """
+    from datetime import datetime
+
+    from sqlalchemy import text
+
+    # Новые права, которые нужно добавить в существующую матрицу
+    NEW_ROLE_PERMS = {
+        "notifications.settings_projects": [
+            POSITION_STUDIO_DIRECTOR,
+            POSITION_SENIOR_MANAGER,
+            POSITION_SDP,
+            POSITION_GAP,
+            POSITION_MANAGER,
+        ],
+        "notifications.settings_duplication": [
+            POSITION_STUDIO_DIRECTOR,
+            POSITION_SENIOR_MANAGER,
+        ],
+        "notifications.settings_supervision": [
+            POSITION_STUDIO_DIRECTOR,
+            POSITION_SENIOR_MANAGER,
+            POSITION_DAN,
+            POSITION_MANAGER,
+        ],
+        "notifications.settings_payment": [
+            POSITION_STUDIO_DIRECTOR,
+            POSITION_SENIOR_MANAGER,
+        ],
+        # Права чата — добавлены после первичного сидирования прав
+        "chat.employee.view": [
+            POSITION_SENIOR_MANAGER,
+            POSITION_SDP,
+            POSITION_GAP,
+            POSITION_MANAGER,
+            POSITION_DAN,
+            "Дизайнер",
+            "Чертёжник",
+        ],
+        "chat.employee.send": [
+            POSITION_SENIOR_MANAGER,
+            POSITION_SDP,
+            POSITION_GAP,
+            POSITION_MANAGER,
+            POSITION_DAN,
+            "Дизайнер",
+            "Чертёжник",
+        ],
+        "chat.employee.upload_to_data": [
+            POSITION_SENIOR_MANAGER,
+            POSITION_SDP,
+            POSITION_GAP,
+            "Дизайнер",
+            "Чертёжник",
+        ],
+        "chat.employee.manage": [
+            POSITION_SENIOR_MANAGER,
+        ],
+        "chat.client.view": [
+            POSITION_SENIOR_MANAGER,
+            POSITION_SDP,
+            POSITION_GAP,
+            POSITION_MANAGER,
+        ],
+        "chat.client.send": [
+            POSITION_SENIOR_MANAGER,
+            POSITION_SDP,
+            POSITION_GAP,
+            POSITION_MANAGER,
+        ],
+        "chat.client.manage": [
+            POSITION_SENIOR_MANAGER,
+            POSITION_MANAGER,
+        ],
+        "chat.client.send_script": [
+            POSITION_SENIOR_MANAGER,
+            POSITION_SDP,
+            POSITION_GAP,
+            POSITION_MANAGER,
+        ],
+        "chat.client.show_phone": [
+            POSITION_SENIOR_MANAGER,
+            POSITION_SDP,
+            POSITION_GAP,
+            POSITION_MANAGER,
+        ],
+        "chat.members.show_last_login": [
+            POSITION_SENIOR_MANAGER,
+            POSITION_SDP,
+            POSITION_GAP,
+            POSITION_MANAGER,
+        ],
+    }
+
+    # Проверяем, есть ли уже записи в role_default_permissions
+    existing_count = db.execute(text("SELECT COUNT(*) FROM role_default_permissions")).scalar()
+    if not existing_count:
+        # Таблица пуста — seed_permissions заполнит всё из DEFAULT_ROLE_PERMISSIONS
+        return
+
+    now = datetime.utcnow()
+    added_matrix = 0
+    added_users = 0
+
+    for perm_name, roles in NEW_ROLE_PERMS.items():
+        for role in roles:
+            # 1. Добавить в role_default_permissions (если нет)
+            exists = db.execute(
+                text("""
+                    SELECT 1 FROM role_default_permissions
+                    WHERE role = :role AND permission_name = :perm
+                """),
+                {"role": role, "perm": perm_name},
+            ).first()
+            if not exists:
+                db.execute(
+                    text("""
+                        INSERT INTO role_default_permissions (role, permission_name, updated_at)
+                        VALUES (:role, :perm, :now)
+                    """),
+                    {"role": role, "perm": perm_name, "now": now},
+                )
+                added_matrix += 1
+
+            # 2. Добавить в user_permissions для существующих сотрудников этой роли
+            employees_of_role = db.execute(
+                text("""
+                    SELECT id FROM employees
+                    WHERE (role = :role OR position = :role) AND status = 'активный'
+                """),
+                {"role": role},
+            ).fetchall()
+
+            for (emp_id,) in employees_of_role:
+                db.execute(
+                    text("""
+                        INSERT INTO user_permissions (employee_id, permission_name)
+                        VALUES (:emp_id, :perm)
+                        ON CONFLICT (employee_id, permission_name) DO NOTHING
+                    """),
+                    {"emp_id": emp_id, "perm": perm_name},
+                )
+                added_users += 1
+
+    db.commit()
+    if added_matrix or added_users:
+        logger.info(f"Миграция новых прав: {added_matrix} в матрицу, {added_users} сотрудникам")
+
+
 # =========================
 # УПРАВЛЕНИЕ ПРАВАМИ
 # =========================
 
-def get_employee_permissions(employee_id: int, db: Session) -> List[str]:
+
+def get_employee_permissions(employee_id: int, db: Session) -> list[str]:
     """Получить список прав сотрудника"""
     employee = db.query(Employee).filter(Employee.id == employee_id).first()
     if not employee:
@@ -401,21 +752,21 @@ def get_employee_permissions(employee_id: int, db: Session) -> List[str]:
     return sorted(perms)
 
 
-def set_employee_permissions(employee_id: int, permissions: List[str], granted_by: int, db: Session):
+def set_employee_permissions(employee_id: int, permissions: list[str], granted_by: int, db: Session):
     """Установить права сотрудника (полная замена)"""
     # Удаляем старые
-    db.query(UserPermission).filter(
-        UserPermission.employee_id == employee_id
-    ).delete(synchronize_session=False)
+    db.query(UserPermission).filter(UserPermission.employee_id == employee_id).delete(synchronize_session=False)
 
     # Создаём новые
     for perm_name in permissions:
         if perm_name in PERMISSION_NAMES:
-            db.add(UserPermission(
-                employee_id=employee_id,
-                permission_name=perm_name,
-                granted_by=granted_by,
-            ))
+            db.add(
+                UserPermission(
+                    employee_id=employee_id,
+                    permission_name=perm_name,
+                    granted_by=granted_by,
+                )
+            )
 
     db.commit()
     invalidate_cache(employee_id)
@@ -424,9 +775,7 @@ def set_employee_permissions(employee_id: int, permissions: List[str], granted_b
 def reset_to_defaults(employee_id: int, db: Session):
     """Сбросить права сотрудника до дефолтных по роли"""
     # Удаляем все записи — load_permissions вернёт дефолтные
-    db.query(UserPermission).filter(
-        UserPermission.employee_id == employee_id
-    ).delete(synchronize_session=False)
+    db.query(UserPermission).filter(UserPermission.employee_id == employee_id).delete(synchronize_session=False)
     db.commit()
     invalidate_cache(employee_id)
 
@@ -435,22 +784,21 @@ def reset_to_defaults(employee_id: int, db: Session):
 # МАТРИЦА РОЛЕЙ
 # =========================
 
-def load_role_matrix(db: Session) -> Dict[str, List[str]]:
+
+def load_role_matrix(db: Session) -> dict[str, list[str]]:
     """
     Загрузить матрицу прав по ролям из БД.
     Если таблица пуста — возвращает DEFAULT_ROLE_PERMISSIONS.
     """
     from datetime import datetime
+
     rows = db.query(RoleDefaultPermission).all()
     if not rows:
         # Таблица пуста — возвращаем хардкод-дефолты
-        return {
-            role: sorted(perms)
-            for role, perms in DEFAULT_ROLE_PERMISSIONS.items()
-        }
+        return {role: sorted(perms) for role, perms in DEFAULT_ROLE_PERMISSIONS.items()}
 
     # Группируем по ролям
-    matrix: Dict[str, List[str]] = {}
+    matrix: dict[str, list[str]] = {}
     for row in rows:
         matrix.setdefault(row.role, []).append(row.permission_name)
 
@@ -461,27 +809,30 @@ def load_role_matrix(db: Session) -> Dict[str, List[str]]:
     return matrix
 
 
-def save_role_matrix(matrix: Dict[str, List[str]], updated_by: int, db: Session):
+def save_role_matrix(matrix: dict[str, list[str]], updated_by: int, db: Session):
     """
     Сохранить матрицу прав по ролям в БД.
-    Полная замена: удаляет старые записи, создаёт новые.
+    Частичная замена: удаляет и заново вставляет строки только для переданных ролей.
+    Остальные роли в БД не трогает — это защита от UI-бага, когда фронтенд
+    отправляет только одну роль вместо всей матрицы.
     """
     from datetime import datetime
 
-    # Удаляем все старые записи
-    db.query(RoleDefaultPermission).delete(synchronize_session=False)
-
-    # Создаём новые записи
     now = datetime.utcnow()
     for role, permissions in matrix.items():
+        # Удаляем старые записи только для этой роли
+        db.query(RoleDefaultPermission).filter(RoleDefaultPermission.role == role).delete(synchronize_session=False)
+        # Создаём новые записи для этой роли
         for perm_name in permissions:
             if perm_name in PERMISSION_NAMES:
-                db.add(RoleDefaultPermission(
-                    role=role,
-                    permission_name=perm_name,
-                    updated_at=now,
-                    updated_by=updated_by,
-                ))
+                db.add(
+                    RoleDefaultPermission(
+                        role=role,
+                        permission_name=perm_name,
+                        updated_at=now,
+                        updated_by=updated_by,
+                    )
+                )
 
     db.commit()
     logger.info(f"Матрица ролей обновлена пользователем {updated_by}: {len(matrix)} ролей")

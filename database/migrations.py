@@ -3,6 +3,7 @@
 
 import json
 import os
+
 from utils.password_utils import hash_password
 
 
@@ -11,14 +12,15 @@ def add_contract_status_fields(db_path):
     Вызывается из run_migrations() как свободная функция.
     """
     import sqlite3
+
     try:
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         cursor.execute("PRAGMA table_info(contracts)")
         columns = [c[1] for c in cursor.fetchall()]
-        if 'status' not in columns:
+        if "status" not in columns:
             cursor.execute("ALTER TABLE contracts ADD COLUMN status TEXT DEFAULT 'Новый заказ'")
-        if 'termination_reason' not in columns:
+        if "termination_reason" not in columns:
             cursor.execute("ALTER TABLE contracts ADD COLUMN termination_reason TEXT")
         conn.commit()
         conn.close()
@@ -41,7 +43,7 @@ class DatabaseMigrations:
             columns = [column[1] for column in cursor.fetchall()]
             self.close()
 
-            if 'status' not in columns or 'termination_reason' not in columns:
+            if "status" not in columns or "termination_reason" not in columns:
                 add_contract_status_fields(self.db_path)
 
             # ========== НОВАЯ МИГРАЦИЯ №2 ==========
@@ -129,9 +131,29 @@ class DatabaseMigrations:
             self.add_agents_status_field()
             # ======================================================
 
+            # ========== МИГРАЦИЯ: платёжные реквизиты сотрудников ==========
+            self.add_employee_payment_fields()
+            # ============================================================
+
             # ========== МИГРАЦИЯ: таблица городов ==========
             self.migrate_add_cities_table()
             # ===============================================
+
+            # ========== МИГРАЦИЯ: доп. соглашения ==========
+            self.add_additional_agreement_fields()
+            # ===============================================
+
+            # ========== МИГРАЦИЯ: visit_yandex_folder в supervision_visits ==========
+            self.add_visit_yandex_folder_field()
+            # ==========================================================================
+
+            # ========== МИГРАЦИЯ: корзина договоров ==========
+            self.create_deleted_contracts_table()
+            # ========== МИГРАЦИЯ: guest_push_subscription в chat members ==========
+            self.add_guest_push_subscription()
+            # ========== МИГРАЦИЯ: выезды — min_visits_per_month + is_additional ==========
+            self.add_visits_per_month_fields()
+            # ==================================================
 
         except Exception as e:
             print(f"[WARN] Предупреждение при миграции: {e}")
@@ -147,21 +169,21 @@ class DatabaseMigrations:
 
             new_cols = {
                 # Даты оплат
-                'advance_payment_paid_date': 'TEXT',
-                'additional_payment_paid_date': 'TEXT',
-                'third_payment_paid_date': 'TEXT',
+                "advance_payment_paid_date": "TEXT",
+                "additional_payment_paid_date": "TEXT",
+                "third_payment_paid_date": "TEXT",
                 # Чек аванса
-                'advance_receipt_link': 'TEXT',
-                'advance_receipt_yandex_path': 'TEXT',
-                'advance_receipt_file_name': 'TEXT',
+                "advance_receipt_link": "TEXT",
+                "advance_receipt_yandex_path": "TEXT",
+                "advance_receipt_file_name": "TEXT",
                 # Чек 2-го платежа
-                'additional_receipt_link': 'TEXT',
-                'additional_receipt_yandex_path': 'TEXT',
-                'additional_receipt_file_name': 'TEXT',
+                "additional_receipt_link": "TEXT",
+                "additional_receipt_yandex_path": "TEXT",
+                "additional_receipt_file_name": "TEXT",
                 # Чек 3-го платежа
-                'third_receipt_link': 'TEXT',
-                'third_receipt_yandex_path': 'TEXT',
-                'third_receipt_file_name': 'TEXT',
+                "third_receipt_link": "TEXT",
+                "third_receipt_yandex_path": "TEXT",
+                "third_receipt_file_name": "TEXT",
             }
 
             added = []
@@ -190,18 +212,18 @@ class DatabaseMigrations:
             columns = [column[1] for column in cursor.fetchall()]
 
             new_cols = {
-                'act_planning_signed_link': 'TEXT',
-                'act_planning_signed_yandex_path': 'TEXT',
-                'act_planning_signed_file_name': 'TEXT',
-                'act_concept_signed_link': 'TEXT',
-                'act_concept_signed_yandex_path': 'TEXT',
-                'act_concept_signed_file_name': 'TEXT',
-                'info_letter_signed_link': 'TEXT',
-                'info_letter_signed_yandex_path': 'TEXT',
-                'info_letter_signed_file_name': 'TEXT',
-                'act_final_signed_link': 'TEXT',
-                'act_final_signed_yandex_path': 'TEXT',
-                'act_final_signed_file_name': 'TEXT',
+                "act_planning_signed_link": "TEXT",
+                "act_planning_signed_yandex_path": "TEXT",
+                "act_planning_signed_file_name": "TEXT",
+                "act_concept_signed_link": "TEXT",
+                "act_concept_signed_yandex_path": "TEXT",
+                "act_concept_signed_file_name": "TEXT",
+                "info_letter_signed_link": "TEXT",
+                "info_letter_signed_yandex_path": "TEXT",
+                "info_letter_signed_file_name": "TEXT",
+                "act_final_signed_link": "TEXT",
+                "act_final_signed_yandex_path": "TEXT",
+                "act_final_signed_file_name": "TEXT",
             }
 
             added = []
@@ -226,7 +248,7 @@ class DatabaseMigrations:
             conn = self.connect()
             cursor = conn.cursor()
 
-            cursor.execute('''
+            cursor.execute("""
             CREATE TABLE IF NOT EXISTS user_permissions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 employee_id INTEGER NOT NULL,
@@ -236,7 +258,7 @@ class DatabaseMigrations:
                 FOREIGN KEY (employee_id) REFERENCES employees(id),
                 UNIQUE(employee_id, permission_name)
             )
-            ''')
+            """)
 
             conn.commit()
             self.close()
@@ -249,7 +271,7 @@ class DatabaseMigrations:
             conn = self.connect()
             cursor = conn.cursor()
 
-            cursor.execute('''
+            cursor.execute("""
             CREATE TABLE IF NOT EXISTS role_default_permissions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 role TEXT NOT NULL,
@@ -258,7 +280,7 @@ class DatabaseMigrations:
                 updated_by INTEGER,
                 UNIQUE(role, permission_name)
             )
-            ''')
+            """)
 
             conn.commit()
             self.close()
@@ -271,7 +293,7 @@ class DatabaseMigrations:
             conn = self.connect()
             cursor = conn.cursor()
 
-            cursor.execute('''CREATE TABLE IF NOT EXISTS norm_days_templates (
+            cursor.execute("""CREATE TABLE IF NOT EXISTS norm_days_templates (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 project_type TEXT NOT NULL,
                 project_subtype TEXT NOT NULL,
@@ -288,7 +310,7 @@ class DatabaseMigrations:
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_by INTEGER,
                 UNIQUE(project_type, project_subtype, stage_code, agent_type)
-            )''')
+            )""")
 
             conn.commit()
             self.close()
@@ -304,18 +326,14 @@ class DatabaseMigrations:
             cursor.execute("PRAGMA table_info(norm_days_templates)")
             columns = [col[1] for col in cursor.fetchall()]
 
-            if 'agent_type' not in columns:
+            if "agent_type" not in columns:
                 # 1. Добавляем колонку
-                cursor.execute(
-                    "ALTER TABLE norm_days_templates ADD COLUMN agent_type TEXT DEFAULT 'Все агенты'"
-                )
+                cursor.execute("ALTER TABLE norm_days_templates ADD COLUMN agent_type TEXT DEFAULT 'Все агенты'")
                 # 2. Обновляем NULL → 'Все агенты'
-                cursor.execute(
-                    "UPDATE norm_days_templates SET agent_type = 'Все агенты' WHERE agent_type IS NULL"
-                )
+                cursor.execute("UPDATE norm_days_templates SET agent_type = 'Все агенты' WHERE agent_type IS NULL")
                 # 3. Пересоздаём таблицу для обновления UNIQUE-constraint
                 # SQLite не поддерживает ALTER CONSTRAINT, поэтому нужен полный цикл
-                cursor.execute('''CREATE TABLE IF NOT EXISTS norm_days_templates_new (
+                cursor.execute("""CREATE TABLE IF NOT EXISTS norm_days_templates_new (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     project_type TEXT NOT NULL,
                     project_subtype TEXT NOT NULL,
@@ -332,15 +350,15 @@ class DatabaseMigrations:
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_by INTEGER,
                     UNIQUE(project_type, project_subtype, stage_code, agent_type)
-                )''')
-                cursor.execute('''INSERT INTO norm_days_templates_new
+                )""")
+                cursor.execute("""INSERT INTO norm_days_templates_new
                     (id, project_type, project_subtype, stage_code, stage_name, stage_group,
                      substage_group, base_norm_days, k_multiplier, executor_role,
                      is_in_contract_scope, sort_order, agent_type, updated_at, updated_by)
                     SELECT id, project_type, project_subtype, stage_code, stage_name, stage_group,
                      substage_group, base_norm_days, k_multiplier, executor_role,
                      is_in_contract_scope, sort_order, agent_type, updated_at, updated_by
-                    FROM norm_days_templates''')
+                    FROM norm_days_templates""")
                 cursor.execute("DROP TABLE norm_days_templates")
                 cursor.execute("ALTER TABLE norm_days_templates_new RENAME TO norm_days_templates")
                 conn.commit()
@@ -359,10 +377,8 @@ class DatabaseMigrations:
             cursor.execute("PRAGMA table_info(project_timeline_entries)")
             columns = [col[1] for col in cursor.fetchall()]
 
-            if 'custom_norm_days' not in columns:
-                cursor.execute(
-                    "ALTER TABLE project_timeline_entries ADD COLUMN custom_norm_days INTEGER"
-                )
+            if "custom_norm_days" not in columns:
+                cursor.execute("ALTER TABLE project_timeline_entries ADD COLUMN custom_norm_days INTEGER")
                 conn.commit()
                 print("[OK] Миграция: добавлена колонка custom_norm_days в project_timeline_entries")
 
@@ -380,11 +396,11 @@ class DatabaseMigrations:
             columns = [col[1] for col in cursor.fetchall()]
 
             new_cols = {
-                'is_online': 'INTEGER DEFAULT 0',
-                'last_login': 'TIMESTAMP',
-                'last_activity': 'TIMESTAMP',
-                'current_session_token': 'TEXT',
-                'agent_color': 'TEXT',
+                "is_online": "INTEGER DEFAULT 0",
+                "last_login": "TIMESTAMP",
+                "last_activity": "TIMESTAMP",
+                "current_session_token": "TEXT",
+                "agent_color": "TEXT",
             }
 
             added = []
@@ -403,6 +419,40 @@ class DatabaseMigrations:
         except Exception as e:
             print(f"[ERROR] Ошибка миграции employee_multiuser: {e}")
 
+    def add_employee_payment_fields(self):
+        """Миграция: добавление платёжных реквизитов в таблицу employees"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+
+            cursor.execute("PRAGMA table_info(employees)")
+            columns = [col[1] for col in cursor.fetchall()]
+
+            new_cols = {
+                "payment_type": "TEXT",
+                "payment_phone": "TEXT",
+                "payment_account": "TEXT",
+                "payment_bank_name": "TEXT",
+                "payment_bik": "TEXT",
+                "payment_corr_account": "TEXT",
+            }
+
+            added = []
+            for col_name, col_def in new_cols.items():
+                if col_name not in columns:
+                    cursor.execute(f"ALTER TABLE employees ADD COLUMN {col_name} {col_def}")
+                    added.append(col_name)
+
+            if added:
+                conn.commit()
+                print(f"[OK] Миграция employee_payment: добавлено {len(added)} колонок: {', '.join(added)}")
+            else:
+                print("[OK] Поля employee_payment уже существуют")
+
+            self.close()
+        except Exception as e:
+            print(f"[ERROR] Ошибка миграции employee_payment: {e}")
+
     def add_agents_status_field(self):
         """Миграция: добавление поля status в таблицу agents"""
         try:
@@ -412,10 +462,8 @@ class DatabaseMigrations:
             cursor.execute("PRAGMA table_info(agents)")
             columns = [col[1] for col in cursor.fetchall()]
 
-            if 'status' not in columns:
-                cursor.execute(
-                    "ALTER TABLE agents ADD COLUMN status TEXT DEFAULT 'активный'"
-                )
+            if "status" not in columns:
+                cursor.execute("ALTER TABLE agents ADD COLUMN status TEXT DEFAULT 'активный'")
                 conn.commit()
                 print("[OK] Миграция: добавлена колонка status в agents")
             else:
@@ -424,6 +472,42 @@ class DatabaseMigrations:
             self.close()
         except Exception as e:
             print(f"[ERROR] Ошибка миграции agents status: {e}")
+
+    def add_additional_agreement_fields(self):
+        """Миграция: добавление полей для доп. соглашений"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+
+            cursor.execute("PRAGMA table_info(contracts)")
+            columns = [column[1] for column in cursor.fetchall()]
+
+            new_cols = {
+                "additional_agreement_link": "TEXT",
+                "additional_agreement_yandex_path": "TEXT",
+                "additional_agreement_file_name": "TEXT",
+                "additional_agreement_signed_link": "TEXT",
+                "additional_agreement_signed_yandex_path": "TEXT",
+                "additional_agreement_signed_file_name": "TEXT",
+                "measurement_folder_public_link": "TEXT",
+                "photo_folder_public_link": "TEXT",
+            }
+
+            added = []
+            for col_name, col_type in new_cols.items():
+                if col_name not in columns:
+                    cursor.execute(f"ALTER TABLE contracts ADD COLUMN {col_name} {col_type}")
+                    added.append(col_name)
+
+            if added:
+                conn.commit()
+                print(f"[OK] Миграция additional_agreement: добавлено {len(added)} колонок: {', '.join(added)}")
+            else:
+                print("[OK] Поля additional_agreement уже существуют")
+
+            self.close()
+        except Exception as e:
+            print(f"[ERROR] Ошибка миграции additional_agreement: {e}")
 
     def migrate_add_cities_table(self):
         """Добавить таблицу городов"""
@@ -439,11 +523,8 @@ class DatabaseMigrations:
                 )
             """)
             # Seed дефолтные города
-            for city_name in ['СПБ', 'МСК', 'ВН']:
-                cursor.execute(
-                    "INSERT OR IGNORE INTO cities (name) VALUES (?)",
-                    (city_name,)
-                )
+            for city_name in ["СПБ", "МСК", "ВН"]:
+                cursor.execute("INSERT OR IGNORE INTO cities (name) VALUES (?)", (city_name,))
             conn.commit()
             self.close()
             print("[OK] Таблица cities создана (с seed-данными)")
@@ -459,7 +540,7 @@ class DatabaseMigrations:
             cursor.execute("PRAGMA table_info(contracts)")
             columns = [column[1] for column in cursor.fetchall()]
 
-            if 'third_payment' not in columns:
+            if "third_payment" not in columns:
                 print("[>] Выполняется миграция: добавление third_payment...")
                 cursor.execute("ALTER TABLE contracts ADD COLUMN third_payment REAL DEFAULT 0")
                 conn.commit()
@@ -477,7 +558,7 @@ class DatabaseMigrations:
         cursor = conn.cursor()
 
         # Таблица сотрудников
-        cursor.execute('''
+        cursor.execute("""
         CREATE TABLE IF NOT EXISTS employees (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             full_name TEXT NOT NULL,
@@ -500,13 +581,19 @@ class DatabaseMigrations:
             last_activity TIMESTAMP,
             current_session_token TEXT,
             agent_color TEXT,
+            payment_type TEXT,
+            payment_phone TEXT,
+            payment_account TEXT,
+            payment_bank_name TEXT,
+            payment_bik TEXT,
+            payment_corr_account TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
-        ''')
+        """)
 
         # Таблица клиентов
-        cursor.execute('''
+        cursor.execute("""
         CREATE TABLE IF NOT EXISTS clients (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             client_type TEXT NOT NULL,
@@ -527,10 +614,10 @@ class DatabaseMigrations:
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
-        ''')
+        """)
 
         # Таблица договоров
-        cursor.execute('''
+        cursor.execute("""
         CREATE TABLE IF NOT EXISTS contracts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             client_id INTEGER NOT NULL,
@@ -561,6 +648,8 @@ class DatabaseMigrations:
             measurement_file_name TEXT,
             measurement_yandex_path TEXT,
             measurement_date DATE,
+            measurement_folder_public_link TEXT,
+            photo_folder_public_link TEXT,
             contract_file_name TEXT,
             contract_file_yandex_path TEXT,
             template_contract_file_link TEXT,
@@ -608,10 +697,10 @@ class DatabaseMigrations:
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (client_id) REFERENCES clients(id)
         )
-        ''')
+        """)
 
         # Таблица CRM (карточки проектов)
-        cursor.execute('''
+        cursor.execute("""
         CREATE TABLE IF NOT EXISTS crm_cards (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             contract_id INTEGER NOT NULL,
@@ -638,10 +727,10 @@ class DatabaseMigrations:
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (contract_id) REFERENCES contracts(id)
         )
-        ''')
+        """)
 
         # Таблица исполнителей по стадиям
-        cursor.execute('''
+        cursor.execute("""
         CREATE TABLE IF NOT EXISTS stage_executors (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             crm_card_id INTEGER NOT NULL,
@@ -657,10 +746,10 @@ class DatabaseMigrations:
             FOREIGN KEY (executor_id) REFERENCES employees(id),
             FOREIGN KEY (assigned_by) REFERENCES employees(id)
         )
-        ''')
+        """)
 
         # Таблица CRM надзора
-        cursor.execute('''
+        cursor.execute("""
         CREATE TABLE IF NOT EXISTS crm_supervision (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             contract_id INTEGER NOT NULL,
@@ -676,10 +765,10 @@ class DatabaseMigrations:
             FOREIGN KEY (contract_id) REFERENCES contracts(id),
             FOREIGN KEY (executor_id) REFERENCES employees(id)
         )
-        ''')
+        """)
 
         # Таблица зарплат
-        cursor.execute('''
+        cursor.execute("""
         CREATE TABLE IF NOT EXISTS salaries (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             contract_id INTEGER,
@@ -701,10 +790,10 @@ class DatabaseMigrations:
             FOREIGN KEY (contract_id) REFERENCES contracts(id),
             FOREIGN KEY (employee_id) REFERENCES employees(id)
         )
-        ''')
+        """)
 
         # Таблица истории действий (для аудита)
-        cursor.execute('''
+        cursor.execute("""
         CREATE TABLE IF NOT EXISTS action_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
@@ -715,37 +804,39 @@ class DatabaseMigrations:
             action_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES employees(id)
         )
-        ''')
+        """)
 
         # Создание администратора по умолчанию
         # Пароль из переменной окружения или 'admin' как fallback
-        default_admin_password = os.environ.get('ADMIN_DEFAULT_PASSWORD', 'admin')
+        default_admin_password = os.environ.get("ADMIN_DEFAULT_PASSWORD", "admin")
         default_password_hash = hash_password(default_admin_password)
-        cursor.execute('''
+        cursor.execute(
+            """
         INSERT OR IGNORE INTO employees
         (full_name, phone, position, department, login, password, role, status)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ''', ('Администратор', '+7 (000) 000-00-00', 'Руководитель студии',
-              'Руководящий отдел', 'admin', default_password_hash, 'Администратор', 'активный'))
+        """,
+            ("Администратор", "+7 (000) 000-00-00", "Руководитель студии", "Руководящий отдел", "admin", default_password_hash, "Администратор", "активный"),
+        )
 
         # ИСПРАВЛЕНИЕ: Таблица агентов с цветами
-        cursor.execute('''
+        cursor.execute("""
         CREATE TABLE IF NOT EXISTS agents (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT UNIQUE NOT NULL,
             color TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
-        ''')
+        """)
 
         # Добавляем агентов по умолчанию с цветами
-        cursor.execute('SELECT COUNT(*) as count FROM agents')
-        if cursor.fetchone()['count'] == 0:
-            cursor.execute('''
+        cursor.execute("SELECT COUNT(*) as count FROM agents")
+        if cursor.fetchone()["count"] == 0:
+            cursor.execute("""
             INSERT INTO agents (name, color) VALUES
             ('ПЕТРОВИЧ', '#FFA500'),
             ('ФЕСТИВАЛЬ', '#FF69B4')
-            ''')
+            """)
             print("Агенты по умолчанию добавлены с цветами")
 
         conn.commit()
@@ -762,7 +853,7 @@ class DatabaseMigrations:
             cursor.execute("PRAGMA table_info(crm_cards)")
             columns = [column[1] for column in cursor.fetchall()]
 
-            if 'approval_deadline' not in columns:
+            if "approval_deadline" not in columns:
                 print("[>] Выполняется миграция: добавление approval_deadline...")
                 cursor.execute("ALTER TABLE crm_cards ADD COLUMN approval_deadline DATE")
                 conn.commit()
@@ -774,6 +865,7 @@ class DatabaseMigrations:
         except Exception as e:
             print(f"[ERROR] Ошибка миграции approval_deadline: {e}")
             import traceback
+
             traceback.print_exc()
 
     def add_approval_stages_field(self):
@@ -785,7 +877,7 @@ class DatabaseMigrations:
             cursor.execute("PRAGMA table_info(crm_cards)")
             columns = [column[1] for column in cursor.fetchall()]
 
-            if 'approval_stages' not in columns:
+            if "approval_stages" not in columns:
                 print("[>] Выполняется миграция: добавление approval_stages...")
                 cursor.execute("ALTER TABLE crm_cards ADD COLUMN approval_stages TEXT")
                 conn.commit()
@@ -803,7 +895,7 @@ class DatabaseMigrations:
             conn = self.connect()
             cursor = conn.cursor()
 
-            cursor.execute('''
+            cursor.execute("""
             CREATE TABLE IF NOT EXISTS approval_stage_deadlines (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 crm_card_id INTEGER NOT NULL,
@@ -814,7 +906,7 @@ class DatabaseMigrations:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (crm_card_id) REFERENCES crm_cards(id)
             )
-            ''')
+            """)
 
             conn.commit()
             self.close()
@@ -831,7 +923,7 @@ class DatabaseMigrations:
             cursor.execute("PRAGMA table_info(crm_cards)")
             columns = [column[1] for column in cursor.fetchall()]
 
-            if 'project_data_link' not in columns:
+            if "project_data_link" not in columns:
                 print("[>] Выполняется миграция: добавление project_data_link...")
                 cursor.execute("ALTER TABLE crm_cards ADD COLUMN project_data_link TEXT")
                 conn.commit()
@@ -856,7 +948,7 @@ class DatabaseMigrations:
 
             if not exists:
                 print("[>] Создание таблицы supervision_cards...")
-                cursor.execute('''
+                cursor.execute("""
                 CREATE TABLE supervision_cards (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     contract_id INTEGER NOT NULL,
@@ -876,7 +968,7 @@ class DatabaseMigrations:
                     FOREIGN KEY (senior_manager_id) REFERENCES employees(id),
                     FOREIGN KEY (dan_id) REFERENCES employees(id)
                 )
-                ''')
+                """)
                 conn.commit()
                 print("[OK] Таблица supervision_cards создана")
             else:
@@ -885,15 +977,15 @@ class DatabaseMigrations:
                 columns = [col[1] for col in cursor.fetchall()]
 
                 new_fields = {
-                    'senior_manager_id': 'INTEGER',
-                    'dan_id': 'INTEGER',
-                    'studio_director_id': 'INTEGER',
-                    'dan_completed': 'BOOLEAN DEFAULT 0',
-                    'is_paused': 'BOOLEAN DEFAULT 0',
-                    'pause_reason': 'TEXT',
-                    'paused_at': 'TIMESTAMP',
-                    'start_date': 'TEXT',
-                    'previous_column': 'TEXT',
+                    "senior_manager_id": "INTEGER",
+                    "dan_id": "INTEGER",
+                    "studio_director_id": "INTEGER",
+                    "dan_completed": "BOOLEAN DEFAULT 0",
+                    "is_paused": "BOOLEAN DEFAULT 0",
+                    "pause_reason": "TEXT",
+                    "paused_at": "TIMESTAMP",
+                    "start_date": "TEXT",
+                    "previous_column": "TEXT",
                 }
 
                 for field, field_type in new_fields.items():
@@ -908,6 +1000,7 @@ class DatabaseMigrations:
         except Exception as e:
             print(f"[ERROR] Ошибка миграции supervision_cards: {e}")
             import traceback
+
             traceback.print_exc()
 
     def create_supervision_history_table(self):
@@ -916,7 +1009,7 @@ class DatabaseMigrations:
             conn = self.connect()
             cursor = conn.cursor()
 
-            cursor.execute('''
+            cursor.execute("""
             CREATE TABLE IF NOT EXISTS supervision_project_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 supervision_card_id INTEGER NOT NULL,
@@ -927,7 +1020,7 @@ class DatabaseMigrations:
                 FOREIGN KEY (supervision_card_id) REFERENCES supervision_cards(id),
                 FOREIGN KEY (created_by) REFERENCES employees(id)
             )
-            ''')
+            """)
 
             conn.commit()
             self.close()
@@ -945,7 +1038,7 @@ class DatabaseMigrations:
             print("[>] Проверка и исправление column_name в supervision_cards...")
 
             # Обновляем все старые карточки с неправильным column_name
-            cursor.execute('''
+            cursor.execute("""
             UPDATE supervision_cards
             SET column_name = 'Новый заказ', updated_at = datetime('now')
             WHERE column_name NOT IN (
@@ -958,7 +1051,7 @@ class DatabaseMigrations:
                 'Стадия 11: Закупка фабричной мебели', 'Стадия 12: Закупка декора',
                 'Выполненный проект'
             )
-            ''')
+            """)
 
             fixed_count = cursor.rowcount
 
@@ -973,6 +1066,7 @@ class DatabaseMigrations:
         except Exception as e:
             print(f"[ERROR] Ошибка миграции column_name: {e}")
             import traceback
+
             traceback.print_exc()
 
     def create_manager_acceptance_table(self):
@@ -981,7 +1075,7 @@ class DatabaseMigrations:
             conn = self.connect()
             cursor = conn.cursor()
 
-            cursor.execute('''
+            cursor.execute("""
             CREATE TABLE IF NOT EXISTS manager_stage_acceptance (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 crm_card_id INTEGER NOT NULL,
@@ -992,7 +1086,7 @@ class DatabaseMigrations:
                 FOREIGN KEY (crm_card_id) REFERENCES crm_cards(id),
                 FOREIGN KEY (accepted_by) REFERENCES employees(id)
             )
-            ''')
+            """)
 
             conn.commit()
             self.close()
@@ -1011,7 +1105,7 @@ class DatabaseMigrations:
             cursor.execute("PRAGMA table_info(employees)")
             columns = [column[1] for column in cursor.fetchall()]
 
-            if 'birth_date' not in columns:
+            if "birth_date" not in columns:
                 print("[>] Выполняется миграция: добавление birth_date...")
                 cursor.execute("ALTER TABLE employees ADD COLUMN birth_date TEXT")
                 conn.commit()
@@ -1023,6 +1117,7 @@ class DatabaseMigrations:
         except Exception as e:
             print(f"[ERROR] Ошибка добавления birth_date: {e}")
             import traceback
+
             traceback.print_exc()
 
     def add_address_column(self):
@@ -1035,7 +1130,7 @@ class DatabaseMigrations:
             cursor.execute("PRAGMA table_info(employees)")
             columns = [column[1] for column in cursor.fetchall()]
 
-            if 'address' not in columns:
+            if "address" not in columns:
                 print("[>] Выполняется миграция: добавление address...")
                 cursor.execute("ALTER TABLE employees ADD COLUMN address TEXT")
                 conn.commit()
@@ -1047,6 +1142,7 @@ class DatabaseMigrations:
         except Exception as e:
             print(f"[ERROR] Ошибка добавления address: {e}")
             import traceback
+
             traceback.print_exc()
 
     def add_secondary_position_column(self):
@@ -1058,7 +1154,7 @@ class DatabaseMigrations:
             cursor.execute("PRAGMA table_info(employees)")
             columns = [column[1] for column in cursor.fetchall()]
 
-            if 'secondary_position' not in columns:
+            if "secondary_position" not in columns:
                 print("[>] Выполняется миграция: добавление secondary_position...")
                 cursor.execute("ALTER TABLE employees ADD COLUMN secondary_position TEXT")
                 conn.commit()
@@ -1079,7 +1175,7 @@ class DatabaseMigrations:
             cursor.execute("PRAGMA table_info(contracts)")
             columns = [column[1] for column in cursor.fetchall()]
 
-            if 'status_changed_date' not in columns:
+            if "status_changed_date" not in columns:
                 print("[>] Выполняется миграция: добавление status_changed_date...")
                 cursor.execute("ALTER TABLE contracts ADD COLUMN status_changed_date DATE")
                 conn.commit()
@@ -1100,7 +1196,7 @@ class DatabaseMigrations:
             cursor.execute("PRAGMA table_info(crm_cards)")
             columns = [column[1] for column in cursor.fetchall()]
 
-            if 'tech_task_file' not in columns:
+            if "tech_task_file" not in columns:
                 print("[>] Выполняется миграция: добавление tech_task_file...")
                 cursor.execute("ALTER TABLE crm_cards ADD COLUMN tech_task_file TEXT")
                 conn.commit()
@@ -1108,7 +1204,7 @@ class DatabaseMigrations:
             else:
                 print("[OK] Поле tech_task_file уже существует")
 
-            if 'tech_task_date' not in columns:
+            if "tech_task_date" not in columns:
                 print("[>] Выполняется миграция: добавление tech_task_date...")
                 cursor.execute("ALTER TABLE crm_cards ADD COLUMN tech_task_date DATE")
                 conn.commit()
@@ -1129,7 +1225,7 @@ class DatabaseMigrations:
             cursor.execute("PRAGMA table_info(crm_cards)")
             columns = [column[1] for column in cursor.fetchall()]
 
-            if 'survey_date' not in columns:
+            if "survey_date" not in columns:
                 print("[>] Выполняется миграция: добавление survey_date...")
                 cursor.execute("ALTER TABLE crm_cards ADD COLUMN survey_date DATE")
                 conn.commit()
@@ -1137,20 +1233,20 @@ class DatabaseMigrations:
             else:
                 print("[OK] Поле survey_date уже существует")
 
-            if 'previous_column' not in columns:
+            if "previous_column" not in columns:
                 print("[>] Выполняется миграция: добавление previous_column в crm_cards...")
                 cursor.execute("ALTER TABLE crm_cards ADD COLUMN previous_column TEXT")
                 conn.commit()
                 print("[OK] Поле previous_column добавлено в crm_cards")
 
             # K1: Поля для паузы дедлайна CRM
-            if 'paused_at' not in columns:
+            if "paused_at" not in columns:
                 print("[>] Выполняется миграция: добавление paused_at в crm_cards...")
                 cursor.execute("ALTER TABLE crm_cards ADD COLUMN paused_at TIMESTAMP")
                 conn.commit()
                 print("[OK] Поле paused_at добавлено в crm_cards")
 
-            if 'total_pause_days' not in columns:
+            if "total_pause_days" not in columns:
                 print("[>] Выполняется миграция: добавление total_pause_days в crm_cards...")
                 cursor.execute("ALTER TABLE crm_cards ADD COLUMN total_pause_days INTEGER DEFAULT 0")
                 conn.commit()
@@ -1176,7 +1272,7 @@ class DatabaseMigrations:
                 print("[>] Создание таблицы project_files...")
 
                 # Создаем таблицу
-                cursor.execute('''
+                cursor.execute("""
                     CREATE TABLE project_files (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         contract_id INTEGER NOT NULL,
@@ -1191,18 +1287,18 @@ class DatabaseMigrations:
                         variation INTEGER DEFAULT 1,
                         FOREIGN KEY (contract_id) REFERENCES contracts(id) ON DELETE CASCADE
                     )
-                ''')
+                """)
 
                 # Создаем индексы
-                cursor.execute('''
+                cursor.execute("""
                     CREATE INDEX IF NOT EXISTS idx_project_files_contract
                     ON project_files(contract_id)
-                ''')
+                """)
 
-                cursor.execute('''
+                cursor.execute("""
                     CREATE INDEX IF NOT EXISTS idx_project_files_stage
                     ON project_files(contract_id, stage)
-                ''')
+                """)
 
                 conn.commit()
                 print("[OK] Таблица project_files создана с индексами")
@@ -1212,8 +1308,8 @@ class DatabaseMigrations:
             # Миграция: добавление колонки variation
             cursor.execute("PRAGMA table_info(project_files)")
             columns = [col[1] for col in cursor.fetchall()]
-            if 'variation' not in columns:
-                cursor.execute('ALTER TABLE project_files ADD COLUMN variation INTEGER DEFAULT 1')
+            if "variation" not in columns:
+                cursor.execute("ALTER TABLE project_files ADD COLUMN variation INTEGER DEFAULT 1")
                 conn.commit()
                 print("[OK] Добавлена колонка variation в project_files")
 
@@ -1231,59 +1327,68 @@ class DatabaseMigrations:
             columns = [column[1] for column in cursor.fetchall()]
 
             new_columns = {
-                'yandex_folder_path': 'TEXT',
-                'tech_task_file_name': 'TEXT',
-                'tech_task_yandex_path': 'TEXT',
-                'measurement_image_link': 'TEXT',
-                'measurement_file_name': 'TEXT',
-                'measurement_yandex_path': 'TEXT',
-                'measurement_date': 'DATE',
-                'contract_file_name': 'TEXT',
-                'contract_file_yandex_path': 'TEXT',
-                'template_contract_file_link': 'TEXT',
-                'template_contract_file_name': 'TEXT',
-                'template_contract_file_yandex_path': 'TEXT',
-                'references_yandex_path': 'TEXT',
-                'photo_documentation_yandex_path': 'TEXT',
+                "yandex_folder_path": "TEXT",
+                "tech_task_file_name": "TEXT",
+                "tech_task_yandex_path": "TEXT",
+                "measurement_image_link": "TEXT",
+                "measurement_file_name": "TEXT",
+                "measurement_yandex_path": "TEXT",
+                "measurement_date": "DATE",
+                "measurement_folder_public_link": "TEXT",
+                "photo_folder_public_link": "TEXT",
+                "contract_file_name": "TEXT",
+                "contract_file_yandex_path": "TEXT",
+                "template_contract_file_link": "TEXT",
+                "template_contract_file_name": "TEXT",
+                "template_contract_file_yandex_path": "TEXT",
+                "references_yandex_path": "TEXT",
+                "photo_documentation_yandex_path": "TEXT",
                 # Акты и информационное письмо
-                'act_planning_link': 'TEXT',
-                'act_planning_yandex_path': 'TEXT',
-                'act_planning_file_name': 'TEXT',
-                'act_concept_link': 'TEXT',
-                'act_concept_yandex_path': 'TEXT',
-                'act_concept_file_name': 'TEXT',
-                'info_letter_link': 'TEXT',
-                'info_letter_yandex_path': 'TEXT',
-                'info_letter_file_name': 'TEXT',
-                'act_final_link': 'TEXT',
-                'act_final_yandex_path': 'TEXT',
-                'act_final_file_name': 'TEXT',
+                "act_planning_link": "TEXT",
+                "act_planning_yandex_path": "TEXT",
+                "act_planning_file_name": "TEXT",
+                "act_concept_link": "TEXT",
+                "act_concept_yandex_path": "TEXT",
+                "act_concept_file_name": "TEXT",
+                "info_letter_link": "TEXT",
+                "info_letter_yandex_path": "TEXT",
+                "info_letter_file_name": "TEXT",
+                "act_final_link": "TEXT",
+                "act_final_yandex_path": "TEXT",
+                "act_final_file_name": "TEXT",
                 # Подписанные акты
-                'act_planning_signed_link': 'TEXT',
-                'act_planning_signed_yandex_path': 'TEXT',
-                'act_planning_signed_file_name': 'TEXT',
-                'act_concept_signed_link': 'TEXT',
-                'act_concept_signed_yandex_path': 'TEXT',
-                'act_concept_signed_file_name': 'TEXT',
-                'info_letter_signed_link': 'TEXT',
-                'info_letter_signed_yandex_path': 'TEXT',
-                'info_letter_signed_file_name': 'TEXT',
-                'act_final_signed_link': 'TEXT',
-                'act_final_signed_yandex_path': 'TEXT',
-                'act_final_signed_file_name': 'TEXT',
+                "act_planning_signed_link": "TEXT",
+                "act_planning_signed_yandex_path": "TEXT",
+                "act_planning_signed_file_name": "TEXT",
+                "act_concept_signed_link": "TEXT",
+                "act_concept_signed_yandex_path": "TEXT",
+                "act_concept_signed_file_name": "TEXT",
+                "info_letter_signed_link": "TEXT",
+                "info_letter_signed_yandex_path": "TEXT",
+                "info_letter_signed_file_name": "TEXT",
+                "act_final_signed_link": "TEXT",
+                "act_final_signed_yandex_path": "TEXT",
+                "act_final_signed_file_name": "TEXT",
+                # Доп. соглашения
+                "additional_agreement_link": "TEXT",
+                "additional_agreement_yandex_path": "TEXT",
+                "additional_agreement_file_name": "TEXT",
+                "additional_agreement_signed_link": "TEXT",
+                "additional_agreement_signed_yandex_path": "TEXT",
+                "additional_agreement_signed_file_name": "TEXT",
                 # Отслеживание платежей
-                'advance_payment_paid_date': 'TEXT',
-                'additional_payment_paid_date': 'TEXT',
-                'third_payment_paid_date': 'TEXT',
-                'advance_receipt_link': 'TEXT',
-                'advance_receipt_yandex_path': 'TEXT',
-                'advance_receipt_file_name': 'TEXT',
-                'additional_receipt_link': 'TEXT',
-                'additional_receipt_yandex_path': 'TEXT',
-                'additional_receipt_file_name': 'TEXT',
-                'third_receipt_link': 'TEXT',
-                'third_receipt_yandex_path': 'TEXT',
-                'third_receipt_file_name': 'TEXT',
+                "advance_payment_paid_date": "TEXT",
+                "additional_payment_paid_date": "TEXT",
+                "third_payment_paid_date": "TEXT",
+                "advance_receipt_link": "TEXT",
+                "advance_receipt_yandex_path": "TEXT",
+                "advance_receipt_file_name": "TEXT",
+                "additional_receipt_link": "TEXT",
+                "additional_receipt_yandex_path": "TEXT",
+                "additional_receipt_file_name": "TEXT",
+                "third_receipt_link": "TEXT",
+                "third_receipt_yandex_path": "TEXT",
+                "third_receipt_file_name": "TEXT",
             }
 
             added = []
@@ -1315,7 +1420,7 @@ class DatabaseMigrations:
 
             if not cursor.fetchone():
                 print("[>] Создание таблицы project_templates...")
-                cursor.execute('''
+                cursor.execute("""
                     CREATE TABLE project_templates (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         contract_id INTEGER NOT NULL,
@@ -1323,11 +1428,11 @@ class DatabaseMigrations:
                         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                         FOREIGN KEY (contract_id) REFERENCES contracts(id) ON DELETE CASCADE
                     )
-                ''')
-                cursor.execute('''
+                """)
+                cursor.execute("""
                     CREATE INDEX IF NOT EXISTS idx_project_templates_contract
                     ON project_templates(contract_id)
-                ''')
+                """)
                 conn.commit()
                 print("[OK] Таблица project_templates создана")
             else:
@@ -1351,7 +1456,7 @@ class DatabaseMigrations:
             if not table_exists:
                 print("[>] Создание таблицы rates...")
 
-                cursor.execute('''
+                cursor.execute("""
                 CREATE TABLE rates (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     project_type TEXT,
@@ -1366,7 +1471,7 @@ class DatabaseMigrations:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
-                ''')
+                """)
 
                 print("[OK] Таблица rates создана")
             else:
@@ -1374,7 +1479,7 @@ class DatabaseMigrations:
             # =========================================================
 
             # Таблица выплат
-            cursor.execute('''
+            cursor.execute("""
             CREATE TABLE IF NOT EXISTS payments (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 contract_id INTEGER,
@@ -1397,10 +1502,10 @@ class DatabaseMigrations:
                 FOREIGN KEY (contract_id) REFERENCES contracts(id),
                 FOREIGN KEY (employee_id) REFERENCES employees(id)
             )
-            ''')
+            """)
 
             # Таблица замеров
-            cursor.execute('''
+            cursor.execute("""
             CREATE TABLE IF NOT EXISTS surveys (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 contract_id INTEGER NOT NULL,
@@ -1411,7 +1516,7 @@ class DatabaseMigrations:
                 FOREIGN KEY (contract_id) REFERENCES contracts(id),
                 FOREIGN KEY (surveyor_id) REFERENCES employees(id)
             )
-            ''')
+            """)
 
             conn.commit()
             self.close()
@@ -1420,6 +1525,7 @@ class DatabaseMigrations:
         except Exception as e:
             print(f"[ERROR] Ошибка создания таблиц оплат: {e}")
             import traceback
+
             traceback.print_exc()
 
     def add_reassigned_field_to_payments(self):
@@ -1432,7 +1538,7 @@ class DatabaseMigrations:
             cursor.execute("PRAGMA table_info(payments)")
             columns = [column[1] for column in cursor.fetchall()]
 
-            if 'reassigned' not in columns:
+            if "reassigned" not in columns:
                 print("[>] Выполняется миграция: добавление reassigned в payments...")
                 cursor.execute("ALTER TABLE payments ADD COLUMN reassigned BOOLEAN DEFAULT 0")
                 conn.commit()
@@ -1440,7 +1546,7 @@ class DatabaseMigrations:
             else:
                 print("[OK] Поле reassigned уже существует")
 
-            if 'old_employee_id' not in columns:
+            if "old_employee_id" not in columns:
                 print("[>] Выполняется миграция: добавление old_employee_id в payments...")
                 cursor.execute("ALTER TABLE payments ADD COLUMN old_employee_id INTEGER")
                 conn.commit()
@@ -1452,6 +1558,7 @@ class DatabaseMigrations:
         except Exception as e:
             print(f"[ERROR] Ошибка миграции reassigned: {e}")
             import traceback
+
             traceback.print_exc()
 
     def add_submitted_date_to_stage_executors(self):
@@ -1464,7 +1571,7 @@ class DatabaseMigrations:
             cursor.execute("PRAGMA table_info(stage_executors)")
             columns = [column[1] for column in cursor.fetchall()]
 
-            if 'submitted_date' not in columns:
+            if "submitted_date" not in columns:
                 print("[>] Выполняется миграция: добавление submitted_date в stage_executors...")
                 cursor.execute("ALTER TABLE stage_executors ADD COLUMN submitted_date TIMESTAMP")
                 conn.commit()
@@ -1476,6 +1583,7 @@ class DatabaseMigrations:
         except Exception as e:
             print(f"[ERROR] Ошибка миграции submitted_date: {e}")
             import traceback
+
             traceback.print_exc()
 
     def add_stage_field_to_payments(self):
@@ -1489,14 +1597,7 @@ class DatabaseMigrations:
             columns = [column[1] for column in cursor.fetchall()]
 
             # Список полей для добавления
-            fields_to_add = {
-                'stage': 'TEXT',
-                'base_amount': 'REAL',
-                'bonus_amount': 'REAL',
-                'penalty_amount': 'REAL',
-                'status': 'TEXT',
-                'payment_date': 'TIMESTAMP'
-            }
+            fields_to_add = {"stage": "TEXT", "base_amount": "REAL", "bonus_amount": "REAL", "penalty_amount": "REAL", "status": "TEXT", "payment_date": "TIMESTAMP"}
 
             for field_name, field_type in fields_to_add.items():
                 if field_name not in columns:
@@ -1511,6 +1612,7 @@ class DatabaseMigrations:
         except Exception as e:
             print(f"[ERROR] Ошибка миграции полей payments: {e}")
             import traceback
+
             traceback.print_exc()
 
     def create_performance_indexes(self):
@@ -1552,27 +1654,27 @@ class DatabaseMigrations:
             # rates: price, executor_rate, manager_rate
             cursor.execute("PRAGMA table_info(rates)")
             rate_cols = [col[1] for col in cursor.fetchall()]
-            for field, ftype in [('price', 'REAL'), ('executor_rate', 'REAL'), ('manager_rate', 'REAL')]:
+            for field, ftype in [("price", "REAL"), ("executor_rate", "REAL"), ("manager_rate", "REAL")]:
                 if field not in rate_cols:
                     cursor.execute(f"ALTER TABLE rates ADD COLUMN {field} {ftype}")
 
             # payments: payment_status
             cursor.execute("PRAGMA table_info(payments)")
             pay_cols = [col[1] for col in cursor.fetchall()]
-            if 'payment_status' not in pay_cols:
+            if "payment_status" not in pay_cols:
                 cursor.execute("ALTER TABLE payments ADD COLUMN payment_status TEXT")
 
             # salaries: salary_type, period, status, payment_date, updated_at, project_type, payment_status
             cursor.execute("PRAGMA table_info(salaries)")
             sal_cols = [col[1] for col in cursor.fetchall()]
             for field, ftype in [
-                ('salary_type', 'TEXT'),
-                ('period', 'TEXT'),
-                ('status', 'TEXT'),
-                ('payment_date', 'TIMESTAMP'),
-                ('updated_at', 'TIMESTAMP'),
-                ('project_type', 'TEXT'),
-                ('payment_status', 'TEXT'),
+                ("salary_type", "TEXT"),
+                ("period", "TEXT"),
+                ("status", "TEXT"),
+                ("payment_date", "TIMESTAMP"),
+                ("updated_at", "TIMESTAMP"),
+                ("project_type", "TEXT"),
+                ("payment_status", "TEXT"),
             ]:
                 if field not in sal_cols:
                     cursor.execute(f"ALTER TABLE salaries ADD COLUMN {field} {ftype}")
@@ -1591,7 +1693,7 @@ class DatabaseMigrations:
             # Проверяем, есть ли NOT NULL на contract_id
             cursor.execute("PRAGMA table_info(payments)")
             cols = cursor.fetchall()
-            contract_col = [c for c in cols if c[1] == 'contract_id']
+            contract_col = [c for c in cols if c[1] == "contract_id"]
             if not contract_col:
                 self.close()
                 return
@@ -1603,11 +1705,11 @@ class DatabaseMigrations:
             # Пересоздаём таблицу без NOT NULL на contract_id
             # Шаг 1: получаем все колонки
             col_names = [c[1] for c in cols]
-            cols_str = ', '.join(col_names)
+            cols_str = ", ".join(col_names)
             # Шаг 2: rename → temp
             cursor.execute("ALTER TABLE payments RENAME TO payments_old")
             # Шаг 3: создаём новую таблицу (contract_id без NOT NULL)
-            cursor.execute('''
+            cursor.execute("""
             CREATE TABLE payments (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 contract_id INTEGER,
@@ -1639,20 +1741,39 @@ class DatabaseMigrations:
                 FOREIGN KEY (contract_id) REFERENCES contracts(id),
                 FOREIGN KEY (employee_id) REFERENCES employees(id)
             )
-            ''')
+            """)
             # Шаг 4: копируем данные (только колонки которые есть в обоих таблицах)
             new_cols = [
-                'id', 'contract_id', 'crm_card_id', 'supervision_card_id',
-                'employee_id', 'role', 'stage_name',
-                'calculated_amount', 'manual_amount', 'final_amount',
-                'is_manual', 'payment_type', 'report_month',
-                'is_paid', 'paid_date', 'paid_by',
-                'payment_status', 'reassigned', 'old_employee_id',
-                'stage', 'base_amount', 'bonus_amount', 'penalty_amount',
-                'status', 'payment_date', 'created_at', 'updated_at'
+                "id",
+                "contract_id",
+                "crm_card_id",
+                "supervision_card_id",
+                "employee_id",
+                "role",
+                "stage_name",
+                "calculated_amount",
+                "manual_amount",
+                "final_amount",
+                "is_manual",
+                "payment_type",
+                "report_month",
+                "is_paid",
+                "paid_date",
+                "paid_by",
+                "payment_status",
+                "reassigned",
+                "old_employee_id",
+                "stage",
+                "base_amount",
+                "bonus_amount",
+                "penalty_amount",
+                "status",
+                "payment_date",
+                "created_at",
+                "updated_at",
             ]
             common_cols = [c for c in new_cols if c in col_names]
-            common_str = ', '.join(common_cols)
+            common_str = ", ".join(common_cols)
             cursor.execute(f"INSERT INTO payments ({common_str}) SELECT {common_str} FROM payments_old")
             # Шаг 5: удаляем старую
             cursor.execute("DROP TABLE payments_old")
@@ -1669,7 +1790,7 @@ class DatabaseMigrations:
             cursor = conn.cursor()
             cursor.execute("PRAGMA table_info(contracts)")
             columns = [col[1] for col in cursor.fetchall()]
-            if 'project_subtype' not in columns:
+            if "project_subtype" not in columns:
                 cursor.execute("ALTER TABLE contracts ADD COLUMN project_subtype TEXT")
                 conn.commit()
                 print("[OK] Поле project_subtype добавлено")
@@ -1684,7 +1805,7 @@ class DatabaseMigrations:
             cursor = conn.cursor()
             cursor.execute("PRAGMA table_info(contracts)")
             columns = [col[1] for col in cursor.fetchall()]
-            if 'floors' not in columns:
+            if "floors" not in columns:
                 cursor.execute("ALTER TABLE contracts ADD COLUMN floors INTEGER DEFAULT 1")
                 conn.commit()
                 print("[OK] Поле floors добавлено")
@@ -1697,7 +1818,7 @@ class DatabaseMigrations:
         try:
             conn = self.connect()
             cursor = conn.cursor()
-            cursor.execute('''
+            cursor.execute("""
                 CREATE TABLE IF NOT EXISTS stage_workflow_state (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     crm_card_id INTEGER NOT NULL REFERENCES crm_cards(id),
@@ -1711,7 +1832,7 @@ class DatabaseMigrations:
                     created_at TEXT DEFAULT (datetime('now')),
                     updated_at TEXT DEFAULT (datetime('now'))
                 )
-            ''')
+            """)
             conn.commit()
             self.close()
         except Exception as e:
@@ -1724,7 +1845,7 @@ class DatabaseMigrations:
             cursor = conn.cursor()
 
             # Таблица чатов проектов
-            cursor.execute('''
+            cursor.execute("""
                 CREATE TABLE IF NOT EXISTS messenger_chats (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     contract_id INTEGER REFERENCES contracts(id),
@@ -1740,10 +1861,10 @@ class DatabaseMigrations:
                     created_at TEXT DEFAULT (datetime('now')),
                     is_active INTEGER DEFAULT 1
                 )
-            ''')
+            """)
 
             # Таблица участников чата
-            cursor.execute('''
+            cursor.execute("""
                 CREATE TABLE IF NOT EXISTS messenger_chat_members (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     messenger_chat_id INTEGER NOT NULL REFERENCES messenger_chats(id) ON DELETE CASCADE,
@@ -1758,10 +1879,10 @@ class DatabaseMigrations:
                     invited_at TEXT,
                     joined_at TEXT
                 )
-            ''')
+            """)
 
             # Таблица скриптов сообщений
-            cursor.execute('''
+            cursor.execute("""
                 CREATE TABLE IF NOT EXISTS messenger_scripts (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     script_type TEXT NOT NULL,
@@ -1774,10 +1895,10 @@ class DatabaseMigrations:
                     created_at TEXT DEFAULT (datetime('now')),
                     updated_at TEXT DEFAULT (datetime('now'))
                 )
-            ''')
+            """)
 
             # Таблица настроек мессенджера
-            cursor.execute('''
+            cursor.execute("""
                 CREATE TABLE IF NOT EXISTS messenger_settings (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     setting_key TEXT UNIQUE NOT NULL,
@@ -1785,10 +1906,10 @@ class DatabaseMigrations:
                     updated_at TEXT DEFAULT (datetime('now')),
                     updated_by INTEGER REFERENCES employees(id)
                 )
-            ''')
+            """)
 
             # Лог отправленных сообщений
-            cursor.execute('''
+            cursor.execute("""
                 CREATE TABLE IF NOT EXISTS messenger_message_log (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     messenger_chat_id INTEGER REFERENCES messenger_chats(id) ON DELETE CASCADE,
@@ -1800,7 +1921,7 @@ class DatabaseMigrations:
                     telegram_message_id INTEGER,
                     delivery_status TEXT DEFAULT 'sent'
                 )
-            ''')
+            """)
 
             # Индексы для быстрого поиска
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_messenger_chats_crm_card ON messenger_chats(crm_card_id)")
@@ -1821,7 +1942,7 @@ class DatabaseMigrations:
             conn = self.connect()
             cursor = conn.cursor()
 
-            cursor.execute('''
+            cursor.execute("""
                 CREATE TABLE IF NOT EXISTS project_timeline_entries (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     contract_id INTEGER NOT NULL,
@@ -1843,14 +1964,14 @@ class DatabaseMigrations:
                     FOREIGN KEY (contract_id) REFERENCES contracts(id) ON DELETE CASCADE,
                     UNIQUE(contract_id, stage_code)
                 )
-            ''')
+            """)
 
-            cursor.execute('''
+            cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_timeline_contract
                 ON project_timeline_entries(contract_id)
-            ''')
+            """)
 
-            cursor.execute('''
+            cursor.execute("""
                 CREATE TABLE IF NOT EXISTS supervision_timeline_entries (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     supervision_card_id INTEGER NOT NULL,
@@ -1876,21 +1997,21 @@ class DatabaseMigrations:
                     FOREIGN KEY (supervision_card_id) REFERENCES supervision_cards(id) ON DELETE CASCADE,
                     UNIQUE(supervision_card_id, stage_code)
                 )
-            ''')
+            """)
 
-            cursor.execute('''
+            cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_supervision_timeline_card
                 ON supervision_timeline_entries(supervision_card_id)
-            ''')
+            """)
 
             # Миграция: добавляем commission если отсутствует
             cursor.execute("PRAGMA table_info(supervision_timeline_entries)")
             sv_cols = [col[1] for col in cursor.fetchall()]
-            if 'commission' not in sv_cols:
-                cursor.execute('ALTER TABLE supervision_timeline_entries ADD COLUMN commission REAL DEFAULT 0')
+            if "commission" not in sv_cols:
+                cursor.execute("ALTER TABLE supervision_timeline_entries ADD COLUMN commission REAL DEFAULT 0")
 
             # Таблица выездов надзора
-            cursor.execute('''
+            cursor.execute("""
                 CREATE TABLE IF NOT EXISTS supervision_visits (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     supervision_card_id INTEGER NOT NULL,
@@ -1904,12 +2025,12 @@ class DatabaseMigrations:
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (supervision_card_id) REFERENCES supervision_cards(id) ON DELETE CASCADE
                 )
-            ''')
+            """)
 
-            cursor.execute('''
+            cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_supervision_visits_card_id
                 ON supervision_visits(supervision_card_id)
-            ''')
+            """)
 
             conn.commit()
             self.close()
@@ -1923,7 +2044,7 @@ class DatabaseMigrations:
             cursor = conn.cursor()
             cursor.execute("PRAGMA table_info(employees)")
             columns = [column[1] for column in cursor.fetchall()]
-            if 'invite_temp_password' not in columns:
+            if "invite_temp_password" not in columns:
                 print("[>] Выполняется миграция: добавление invite_temp_password в employees...")
                 cursor.execute("ALTER TABLE employees ADD COLUMN invite_temp_password TEXT")
                 conn.commit()
@@ -1931,3 +2052,95 @@ class DatabaseMigrations:
             self.close()
         except Exception as e:
             print(f"[ERROR] Ошибка миграции invite_temp_password: {e}")
+
+    def add_visit_yandex_folder_field(self):
+        """Миграция: добавление поля visit_yandex_folder в supervision_visits"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+            cursor.execute("PRAGMA table_info(supervision_visits)")
+            columns = [column[1] for column in cursor.fetchall()]
+            if "visit_yandex_folder" not in columns:
+                print("[>] Выполняется миграция: добавление visit_yandex_folder в supervision_visits...")
+                cursor.execute("ALTER TABLE supervision_visits ADD COLUMN visit_yandex_folder TEXT")
+                conn.commit()
+                print("[OK] Поле visit_yandex_folder добавлено")
+            else:
+                print("[OK] Поле visit_yandex_folder уже существует")
+            self.close()
+        except Exception as e:
+            print(f"[ERROR] Ошибка миграции visit_yandex_folder: {e}")
+
+    def create_deleted_contracts_table(self):
+        """Миграция: создание таблицы корзины договоров"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='deleted_contracts'")
+            if not cursor.fetchone():
+                print("[>] Выполняется миграция: создание таблицы deleted_contracts...")
+                cursor.execute("""
+                    CREATE TABLE deleted_contracts (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        original_contract_id INTEGER NOT NULL,
+                        contract_number TEXT,
+                        client_name TEXT,
+                        address TEXT,
+                        project_type TEXT,
+                        project_subtype TEXT,
+                        yandex_folder_path TEXT,
+                        snapshot TEXT NOT NULL,
+                        deleted_by_id INTEGER REFERENCES employees(id) ON DELETE SET NULL,
+                        deleted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_deleted_contracts_deleted_at ON deleted_contracts(deleted_at)")
+                conn.commit()
+                print("[OK] Таблица deleted_contracts создана")
+            else:
+                print("[OK] Таблица deleted_contracts уже существует")
+            self.close()
+        except Exception as e:
+            print(f"[ERROR] Ошибка миграции deleted_contracts: {e}")
+
+    def add_guest_push_subscription(self):
+        """Миграция: guest_push_subscription для гостей клиентского чата"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM pragma_table_info('internal_chat_members') WHERE name='guest_push_subscription'")
+            if not cursor.fetchone():
+                print("[>] Выполняется миграция: guest_push_subscription в internal_chat_members...")
+                cursor.execute("ALTER TABLE internal_chat_members ADD COLUMN guest_push_subscription TEXT")
+                conn.commit()
+                print("[OK] Колонка guest_push_subscription добавлена")
+            else:
+                print("[OK] guest_push_subscription уже существует")
+            self.close()
+        except Exception as e:
+            print(f"[ERROR] Ошибка миграции guest_push_subscription: {e}")
+
+    def add_visits_per_month_fields(self):
+        """Миграция: min_visits_per_month в supervision_cards + is_additional в supervision_visits"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM pragma_table_info('supervision_cards') WHERE name='min_visits_per_month'")
+            if not cursor.fetchone():
+                print("[>] Выполняется миграция: min_visits_per_month в supervision_cards...")
+                cursor.execute("ALTER TABLE supervision_cards ADD COLUMN min_visits_per_month INTEGER")
+                conn.commit()
+                print("[OK] Колонка min_visits_per_month добавлена")
+            else:
+                print("[OK] min_visits_per_month уже существует")
+            cursor.execute("SELECT * FROM pragma_table_info('supervision_visits') WHERE name='is_additional'")
+            if not cursor.fetchone():
+                print("[>] Выполняется миграция: is_additional в supervision_visits...")
+                cursor.execute("ALTER TABLE supervision_visits ADD COLUMN is_additional INTEGER DEFAULT 0")
+                conn.commit()
+                print("[OK] Колонка is_additional добавлена")
+            else:
+                print("[OK] is_additional уже существует")
+            self.close()
+        except Exception as e:
+            print(f"[ERROR] Ошибка миграции visits_per_month_fields: {e}")
