@@ -368,6 +368,7 @@ async def get_supervision_card(card_id: int, current_user: Employee = Depends(ge
             "agent_type": contract.agent_type if contract else None,
             "project_type": contract.project_type if contract else None,
             "project_subtype": contract.project_subtype if contract else None,
+            "contract_status": contract.status if contract else None,
             "min_visits_per_month": card.min_visits_per_month,
             "created_at": card.created_at.isoformat() if card.created_at else None,
             "updated_at": card.updated_at.isoformat() if card.updated_at else None,

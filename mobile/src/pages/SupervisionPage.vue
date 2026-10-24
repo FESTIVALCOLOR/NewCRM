@@ -34,22 +34,26 @@
           <q-card
             v-for="card in cards"
             :key="card.id"
-            class="is-card cursor-pointer q-mb-none"
-            :style="{ borderLeft: card.contract_status === 'РАСТОРГНУТ' ? '4px solid #E74C3C' : '4px solid #27AE60' }"
+            flat
+            bordered
+            class="crm-card cursor-pointer q-mb-none"
+            :style="svArchiveCardStyle(card)"
             @click="openCard(card)"
           >
             <q-card-section class="q-pa-sm">
-              <!-- Номер + статус договора -->
+              <!-- Номер договора + бейдж статуса -->
               <div class="row items-center justify-between q-mb-xs">
                 <div style="color: #888; font-size: 10px">
-                  {{ card.contract_number || `#${card.id}` }}
+                  Договор: {{ card.contract_number || `#${card.id}` }}
                 </div>
-                <q-badge :color="sColor(card)" :label="card.contract_status || card.column_name || 'Архив'" dense />
+                <q-badge :color="sColor(card)" :label="card.contract_status || card.column_name || 'Архив'" dense style="font-size: 9px" />
               </div>
               <!-- Адрес -->
-              <div class="text-weight-bold q-mb-xs" style="font-size: 13px; color: #222">
+              <div class="text-weight-bold q-mb-xs" style="font-size: 14px; color: #222; word-wrap: break-word">
                 {{ card.address || 'Без адреса' }}
               </div>
+              <!-- Разделитель -->
+              <div style="height: 1px; background: #DDD" class="q-mb-xs" />
               <!-- Площадь + город + агент -->
               <div class="row items-center justify-between q-mb-xs">
                 <div style="font-size: 11px; color: #888">
@@ -59,7 +63,7 @@
                 </div>
                 <span
                   v-if="card.agent_type"
-                  :style="{ background: agentColorFor(card.agent_type), color: 'white', fontSize: '10px', fontWeight: 'bold', padding: '3px 8px', borderRadius: '4px' }"
+                  :style="{ background: agentColorFor(card.agent_type), color: 'white', fontSize: '10px', fontWeight: 'bold', padding: '3px 8px', borderRadius: '4px', lineHeight: '16px' }"
                 >{{ card.agent_type }}</span>
               </div>
               <!-- Теги -->
@@ -454,6 +458,11 @@ function sColor(card) {
   if (s.includes('Стадия')) return 'orange'
   if (s.includes('Выполненный')) return 'positive'
   return 'blue'
+}
+function svArchiveCardStyle(card) {
+  const cs = card.contract_status || ''
+  if (cs === 'РАСТОРГНУТ') return { background: '#FADBD8', borderColor: '#E74C3C' }
+  return { background: '#E8F8F5', borderColor: '#27AE60' }
 }
 function dlColor(d) { const days = Math.ceil((new Date(d) - new Date()) / 86400000); if (days < 0) return '#8B0000'; if (days <= 2) return '#F39C12'; return '#888' }
 function openCard(card) { router.push(`/supervision/${card.id}`) }
