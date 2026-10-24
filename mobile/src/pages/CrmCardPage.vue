@@ -461,7 +461,7 @@
                 @click="showRestoreDialog = true"
               />
               <q-btn
-                v-if="canRestore && card.column_name !== 'АВТОРСКИЙ НАДЗОР' && contractData?.status !== 'АВТОРСКИЙ НАДЗОР'"
+                v-if="canRestore && card.column_name !== 'АВТОРСКИЙ НАДЗОР' && contractData !== null && contractData?.status !== 'АВТОРСКИЙ НАДЗОР'"
                 unelevated
                 dense
                 no-caps
@@ -474,7 +474,7 @@
               />
               <!-- В архив (Индивидуальный и Шаблонный) — с проверкой оплат и актов -->
               <q-btn
-                v-if="card.column_name === 'Выполненный проект' && !card.is_archived && contractData?.status !== 'СДАН' && contractData?.status !== 'РАСТОРГНУТ'"
+                v-if="card.column_name === 'Выполненный проект' && !card.is_archived && contractData !== null && contractData?.status !== 'СДАН' && contractData?.status !== 'РАСТОРГНУТ'"
                 unelevated
                 dense
                 no-caps
@@ -486,7 +486,7 @@
                 @click="archiveWithValidation"
               />
               <div
-                v-if="card.is_archived || contractData?.status === 'СДАН' || contractData?.status === 'РАСТОРГНУТ'"
+                v-if="card.is_archived || (contractData !== null && (contractData?.status === 'СДАН' || contractData?.status === 'РАСТОРГНУТ'))"
                 class="text-center"
                 style="color: #999; font-size: 12px; padding: 4px 0"
               >
@@ -3960,9 +3960,13 @@ async function archiveWithValidation() {
   const pt = card.value?.project_type
   const warnings = []
 
-  const unpaid = cardPayments.value.filter(p => !p.is_paid && p.payment_status !== 'paid')
-  if (unpaid.length > 0) {
-    warnings.push(`Неоплаченные выплаты: ${unpaid.length} шт.`)
+  // Платежи по договору (оплата от клиента, не зарплаты сотрудников)
+  if (pt === 'Индивидуальный') {
+    if (!cd?.advance_payment_paid_date) warnings.push('Не получен аванс (1-й платёж)')
+    if (!cd?.additional_payment_paid_date) warnings.push('Не получена доплата (2-й платёж)')
+    if (!cd?.third_payment_paid_date) warnings.push('Не получен финальный платёж (3-й платёж)')
+  } else {
+    if (!cd?.advance_payment_paid_date) warnings.push('Не получен аванс по договору')
   }
 
   const hasPlanning = cd?.act_planning_signed_link || cd?.act_planning_signed_yandex_path

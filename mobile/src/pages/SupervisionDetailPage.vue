@@ -2653,11 +2653,12 @@ function daysLeft(deadline) {
 
 async function archiveSupervisionWithValidation() {
   const warnings = []
+  // Проверка платежей по договору (оплата от клиента)
   try {
-    const { data: payments } = await supervisionApi.getPayments(card.value.id)
-    const unpaid = (payments || []).filter(p => !p.is_paid && p.payment_status !== 'paid')
-    if (unpaid.length > 0) {
-      warnings.push(`Неоплаченные выплаты: ${unpaid.length} шт.`)
+    const { contractsApi: cApi } = await import('src/services/api')
+    const { data: cd } = await cApi.getById(card.value.contract_id)
+    if (!cd?.advance_payment_paid_date) {
+      warnings.push('Не получен аванс по договору')
     }
   } catch {}
 
