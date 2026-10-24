@@ -188,6 +188,9 @@
                   </q-item-label>
                   <q-item-label class="text-weight-bold" style="color: #333">
                     {{ fmtMoney(pay.amount) }}
+                    <span v-if="pay.amount && contract.total_amount" class="text-caption text-grey-6 q-ml-xs">
+                      ({{ Math.round(pay.amount / contract.total_amount * 100) }}%)
+                    </span>
                   </q-item-label>
                   <q-item-label caption :style="{ color: pay.paidDate ? '#27AE60' : '#888' }">
                     {{ pay.paidDate ? `Оплачено ${fmtDate(pay.paidDate)}` : 'Не оплачено' }}
@@ -1010,13 +1013,14 @@
             suffix="%"
             class="q-mb-sm"
           />
+          <div class="text-caption text-grey-7 q-mb-xs">
+            Дата оплаты
+          </div>
           <q-input
             v-model="payDialogDate"
-            label="Дата оплаты"
             outlined
             dense
             type="date"
-            stack-label
           />
         </q-card-section>
         <q-card-actions align="right" class="q-pt-none">
