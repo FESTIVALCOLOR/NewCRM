@@ -466,8 +466,8 @@
                   <q-item-label v-if="entry.executor" caption style="color: #555">
                     Исполнитель: {{ entry.executor }}
                   </q-item-label>
-                  <q-item-label v-if="entry.commission > 0" caption style="color: #2e7d32; font-weight: 500">
-                    Комиссия: {{ formatMoney(entry.commission) }}
+                  <q-item-label caption :style="entry.commission > 0 ? 'color: #2e7d32; font-weight: 500' : 'color: #999'">
+                    Комиссия: {{ entry.commission > 0 ? formatMoney(entry.commission) : '—' }}
                   </q-item-label>
                 </q-item-section>
                 <q-item-section side>
