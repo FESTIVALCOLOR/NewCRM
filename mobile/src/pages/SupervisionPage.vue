@@ -66,12 +66,31 @@
                   :style="{ background: agentColorFor(card.agent_type), color: 'white', fontSize: '10px', fontWeight: 'bold', padding: '3px 8px', borderRadius: '4px', lineHeight: '16px' }"
                 >{{ card.agent_type }}</span>
               </div>
+              <!-- Команда -->
+              <div
+                v-if="card.senior_manager_name || card.dan_name || card.studio_director_name"
+                style="border: 1px solid #E0E0E0; border-radius: 4px; padding: 4px 6px; margin-bottom: 4px; background: #F8F9FA"
+                @click.stop
+              >
+                <div style="font-size: 10px; color: #888; font-weight: bold; margin-bottom: 2px">
+                  Команда
+                </div>
+                <div v-if="card.studio_director_name" style="font-size: 10px; color: #333; padding: 1px 0">
+                  РС: {{ card.studio_director_name }}
+                </div>
+                <div v-if="card.senior_manager_name" style="font-size: 10px; color: #333; padding: 1px 0">
+                  СМ: {{ card.senior_manager_name }}
+                </div>
+                <div v-if="card.dan_name" style="font-size: 10px; color: #333; padding: 1px 0">
+                  ДАН: {{ card.dan_name }}
+                </div>
+              </div>
               <!-- Теги -->
-              <div v-if="card.tags" class="row q-gutter-xs q-mb-xs">
+              <div v-if="card.tags" style="display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px">
                 <span
                   v-for="(tag, tidx) in parseSvTags(card.tags)"
                   :key="tidx"
-                  :style="{ display: 'inline-block', background: tag.color, color: 'white', borderRadius: '4px', padding: '2px 8px', fontSize: '10px', fontWeight: '600' }"
+                  :style="{ background: tag.color, color: 'white', borderRadius: '4px', padding: '2px 8px', fontSize: '10px', fontWeight: '600' }"
                 >{{ tag.text }}</span>
               </div>
               <!-- Кнопка -->

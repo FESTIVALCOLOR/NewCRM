@@ -365,6 +365,19 @@
                 :loading="archiveLoading"
                 @click="archiveSupervisionWithValidation"
               />
+              <!-- Вернуть в активные: карточка в архиве (СДАН/РАСТОРГНУТ) -->
+              <q-btn
+                v-if="isArchived && (card.contract_status === 'СДАН' || card.contract_status === 'РАСТОРГНУТ') && canRestoreSupervision"
+                unelevated
+                dense
+                no-caps
+                icon="replay"
+                label="Вернуть в активные"
+                class="full-width q-mb-sm"
+                style="background: #5DADE2; color: white; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px"
+                :loading="archiveLoading"
+                @click="restoreSupervision"
+              />
               <div
                 v-if="isArchived && (card.contract_status === 'СДАН' || card.contract_status === 'РАСТОРГНУТ')"
                 class="text-center"
@@ -2383,6 +2396,12 @@ const isDan = computed(() => {
   return card.value && card.value.dan_id === authStore.user?.id
 })
 
+const canRestoreSupervision = computed(() => {
+  const pos = authStore.user?.position || ''
+  const role = authStore.user?.role || ''
+  return pos === 'Руководитель студии' || pos === 'Старший менеджер проектов' || role === 'admin' || role === 'director'
+})
+
 // Исполнитель надзора — видит только свои выплаты (нет supervision.payments)
 const svIsExecutor = computed(() => {
   const pos = authStore.user?.position || ''
@@ -2675,6 +2694,17 @@ async function archiveSupervisionWithValidation() {
     cancel: { label: 'Отмена', flat: true },
     persistent: true,
   }).onOk(() => { doArchiveSupervision() })
+}
+
+async function restoreSupervision() {
+  archiveLoading.value = true
+  try {
+    const { contractsApi: cApi } = await import('src/services/api')
+    await cApi.update(card.value.contract_id, { status: 'АВТОРСКИЙ НАДЗОР' })
+    await reloadData()
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка восстановления' })
+  } finally { archiveLoading.value = false }
 }
 
 async function doArchiveSupervision() {
