@@ -64,7 +64,7 @@
               dense
               size="xs"
               icon="label"
-              style="background: rgba(255,217,60,0.25); color: #555; width: 22px; height: 22px; min-height: 22px; flex-shrink: 0"
+              style="color: #888; width: 22px; height: 22px !important; min-height: 22px !important; max-height: 22px !important; flex-shrink: 0; padding: 0"
               @click.stop="openTagDialog"
             >
               <q-tooltip>Теги</q-tooltip>
