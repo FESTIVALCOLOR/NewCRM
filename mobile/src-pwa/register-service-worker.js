@@ -1,17 +1,21 @@
 import { register } from 'register-service-worker'
 
-// Флаг: не перезагружать дважды
-let _reloading = false
+// sessionStorage переживает reload (в отличие от JS-переменной)
+// Защищает от цикла: updated() → reload → updated() → ...
 function softReload() {
-  if (_reloading) return
-  _reloading = true
+  if (sessionStorage.getItem('sw_reloading')) return
+  sessionStorage.setItem('sw_reloading', '1')
   window.location.reload()
 }
 
-// Перезагрузка при смене контроллера (новый SW взял управление через clientsClaim)
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.addEventListener('controllerchange', softReload)
-}
+// Сбрасываем флаг через 3 сек после загрузки — чтобы следующее реальное обновление SW
+// снова могло перезагрузить страницу
+window.addEventListener('load', () => {
+  setTimeout(() => sessionStorage.removeItem('sw_reloading'), 3000)
+})
+
+// НЕ подписываемся на controllerchange — это создаёт бесконечный цикл:
+// skipWaiting() → clientsClaim() → controllerchange → reload → снова сначала
 
 register(process.env.SERVICE_WORKER_FILE, {
   ready(/* registration */) {
@@ -20,9 +24,11 @@ register(process.env.SERVICE_WORKER_FILE, {
 
   registered(registration) {
     console.log('Service worker зарегистрирован.')
-    // Сразу проверить обновление при загрузке страницы
-    registration.update()
-    // И каждые 5 минут — чтобы долго открытые вкладки не застревали на старой версии
+    // Не проверять обновление сразу если мы только что перезагрузились из-за SW
+    if (!sessionStorage.getItem('sw_reloading')) {
+      registration.update()
+    }
+    // Проверять обновление каждые 5 минут
     setInterval(() => registration.update(), 5 * 60 * 1000)
   },
 
@@ -45,5 +51,5 @@ register(process.env.SERVICE_WORKER_FILE, {
 
   error(err) {
     console.error('Ошибка Service Worker:', err)
-  }
+  },
 })
