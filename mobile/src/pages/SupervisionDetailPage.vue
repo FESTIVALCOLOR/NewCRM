@@ -488,7 +488,7 @@
                         @click.stop="openStageFolder(entry)"
                       />
                       <q-btn
-                        v-if="can('supervision.files_upload')"
+                        v-if="can('supervision.files_upload') && !isArchived"
                         unelevated
                         dense
                         no-caps
@@ -527,7 +527,7 @@
                   <div class="row q-gutter-xs items-center">
                     <q-badge color="grey-4" label="Не начато" dense />
                     <q-btn
-                      v-if="can('supervision.files_upload')"
+                      v-if="can('supervision.files_upload') && !isArchived"
                       unelevated
                       dense
                       no-caps
@@ -762,6 +762,7 @@
                       <q-icon name="description" size="14px" color="orange" />
                       <a :href="f.public_link || '#'" target="_blank" style="color: #1677FF; text-decoration: none; font-size: 11px">{{ f.file_name }}</a>
                       <q-btn
+                        v-if="!isArchived"
                         flat
                         round
                         dense
@@ -782,6 +783,7 @@
                       <q-icon name="image" size="14px" color="blue" />
                       <a :href="f.public_link || '#'" target="_blank" style="color: #1677FF; text-decoration: none; font-size: 11px">{{ f.file_name }}</a>
                       <q-btn
+                        v-if="!isArchived"
                         flat
                         round
                         dense
@@ -809,6 +811,7 @@
                     />
                     <q-space />
                     <q-btn
+                      v-if="!isArchived"
                       outline
                       dense
                       size="xs"
@@ -820,6 +823,7 @@
                       @click="uploadVisitReport(visit)"
                     />
                     <q-btn
+                      v-if="!isArchived"
                       outline
                       dense
                       size="xs"
@@ -831,7 +835,7 @@
                       @click="uploadVisitPhoto(visit)"
                     />
                     <q-btn
-                      v-if="!visit.actual_date"
+                      v-if="!isArchived && !visit.actual_date"
                       outline
                       dense
                       size="xs"
@@ -1008,7 +1012,7 @@
                   <q-item-label v-if="p.report_month" caption style="color: #5DADE2">
                     {{ formatReportMonth(p.report_month) }}
                   </q-item-label>
-                  <div class="row items-center q-gutter-xs q-mt-xs">
+                  <div v-if="!isArchived" class="row items-center q-gutter-xs q-mt-xs">
                     <q-btn
                       flat
                       round
@@ -2226,7 +2230,12 @@ const authStore = useAuthStore()
 const { ensureLoaded: loadAvatars, getAvatarByName } = useEmployeeAvatars()
 const { uploadToYd } = useYdUpload()
 const agentColor = computed(() => refs.agentByName(card.value?.agent_type)?.color || '#95A5A6')
-const isArchived = computed(() => card.value?.column_name === 'Выполненный проект')
+const isArchived = computed(() => {
+  if (!card.value) return false
+  if (card.value.column_name === 'Выполненный проект') return true
+  const cs = card.value.contract_status || ''
+  return cs === 'СДАН' || cs === 'РАСТОРГНУТ'
+})
 const archiveLoading = ref(false)
 
 const route = useRoute()
