@@ -58,6 +58,17 @@
             </q-btn>
           </div>
           <div v-if="card.current_substep_name || card.revision_count > 0" class="row items-center q-gutter-xs q-mt-xs" style="flex-wrap: wrap; align-items: center">
+            <q-btn
+              round
+              flat
+              dense
+              size="xs"
+              icon="label"
+              style="background: rgba(255,217,60,0.25); color: #555; width: 22px; height: 22px; min-height: 22px; flex-shrink: 0"
+              @click.stop="openTagDialog"
+            >
+              <q-tooltip>Теги</q-tooltip>
+            </q-btn>
             <q-chip
               v-if="card.current_substep_name"
               dense
