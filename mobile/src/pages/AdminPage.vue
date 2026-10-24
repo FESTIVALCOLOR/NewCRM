@@ -133,6 +133,55 @@
           />
         </div>
 
+        <!-- =================== ТАРИФЫ ПО ЗАКУПКАМ =================== -->
+        <div v-if="rateTab === 'supervision'" class="q-mt-md q-mb-xs">
+          <div class="text-caption text-weight-bold q-px-sm q-mb-xs" style="color: #888; text-transform: uppercase; font-size: 11px">
+            Тарифы исполнителя по закупкам
+          </div>
+          <q-card v-for="pr in purchaseRates" :key="'p_' + pr.id" class="is-card q-mb-xs">
+            <q-card-section class="q-pa-sm">
+              <div class="row items-center justify-between">
+                <div style="flex: 1">
+                  <div class="text-weight-bold" style="font-size: 12px; color: #333">
+                    {{ pr.role }}
+                  </div>
+                  <div class="text-caption" style="color: #888">
+                    {{ pr.stage_name || 'Все закупки' }}
+                  </div>
+                </div>
+                <div class="text-weight-bold q-mr-sm" style="color: #333">
+                  {{ pr.fixed_price }} ₽
+                </div>
+                <div>
+                  <q-btn
+                    flat
+                    dense
+                    size="xs"
+                    icon="edit"
+                    color="grey-7"
+                    @click="editPurchaseRate(pr)"
+                  />
+                  <q-btn
+                    flat
+                    dense
+                    size="xs"
+                    icon="delete"
+                    color="negative"
+                    @click="deleteRate(pr)"
+                  />
+                </div>
+              </div>
+            </q-card-section>
+          </q-card>
+          <q-btn
+            unelevated
+            no-caps
+            label="+ Добавить тариф закупки"
+            style="background: #f5f5f5; color: #555; border-radius: 8px; width: 100%; margin-top: 4px"
+            @click="addPurchaseRate"
+          />
+        </div>
+
         <!-- =================== ЕЖЕМЕСЯЧНЫЕ ТАРИФЫ НАДЗОРА =================== -->
         <div v-if="rateTab === 'supervision_monthly'" class="q-mt-md q-mb-xs">
           <div class="text-caption text-weight-bold q-px-sm q-mb-xs" style="color: #888; text-transform: uppercase; font-size: 11px">
@@ -187,7 +236,7 @@
 
         <q-page-sticky position="bottom-right" :offset="[18, 18]">
           <q-btn
-            v-if="rateTab !== 'supervision_monthly'"
+            v-if="rateTab !== 'supervision_monthly' && rateTab !== 'supervision'"
             fab
             icon="add"
             style="background: #ffd93c; color: #333"
@@ -1265,6 +1314,34 @@
               class="q-mb-sm"
             />
           </template>
+          <!-- Тариф исполнителя по закупкам -->
+          <template v-else-if="editingRate._isPurchase">
+            <q-select
+              v-model="editingRate.role"
+              :options="['ДАН', 'Старший менеджер проектов']"
+              label="Роль"
+              outlined
+              dense
+              class="q-mb-sm"
+            />
+            <q-select
+              v-model="editingRate.stage_name"
+              :options="PURCHASE_STAGE_OPTIONS"
+              label="Стадия закупки (пусто = все)"
+              outlined
+              dense
+              clearable
+              class="q-mb-sm"
+            />
+            <q-input
+              v-model.number="editingRate.fixed_price"
+              label="Тариф за закупку (₽)"
+              outlined
+              dense
+              type="number"
+              class="q-mb-sm"
+            />
+          </template>
           <!-- Тариф замерщика: только цена и город -->
           <template v-else-if="rateTab === 'surveyor' || editingRate.surveyor_price">
             <q-input
@@ -1589,20 +1666,31 @@ const rateTypeMap = { individual: 'Индивидуальный', template: 'Ш�
 const STAGES_BY_TAB = {
   individual: ['Стадия 1: планировочные решения', 'Стадия 2: концепция дизайна', 'Стадия 3: рабочие чертежи'],
   template: ['Стадия 1: планировочные решения', 'Стадия 2: рабочие чертежи', 'Стадия 3: 3д визуализация (Дополнительная)'],
-  supervision: ['Разработка КД', 'Авторский надзор', 'Согласование проекта'],
   surveyor: [],
 }
+
+const PURCHASE_STAGE_OPTIONS = [
+  'Закупка керамогранита', 'Закупка сантехники', 'Закупка оборудования',
+  'Закупка дверей и окон', 'Закупка настенных материалов', 'Закупка напольных материалов',
+  'Лепной декор', 'Освещение', 'Закупка потолочных материалов',
+  'Бытовая техника', 'Закупка заказной мебели', 'Закупка фабричной мебели', 'Закупка декора',
+]
 
 const stageOptions = computed(() => STAGES_BY_TAB[rateTab.value] || [])
 
 const filteredRates = computed(() => {
   if (rateTab.value === 'surveyor') return rates.value.filter(r => r.role === 'Замерщик')
-  if (rateTab.value === 'supervision') return rates.value.filter(r => r.project_type === 'Авторский надзор' && !r.fixed_price)
+  // Для надзора — только устаревшие записи без fixed_price и не закупки (не показываем в основном списке)
+  if (rateTab.value === 'supervision') return []
   return rates.value.filter(r => r.project_type === rateTypeMap[rateTab.value])
 })
 
 const visitRates = computed(() =>
-  rates.value.filter(r => r.project_type === 'Авторский надзор' && r.fixed_price != null && r.city && r.project_subtype !== 'monthly'),
+  rates.value.filter(r => r.project_type === 'Авторский надзор' && r.fixed_price != null && r.city && r.project_subtype !== 'monthly' && r.project_subtype !== 'purchase'),
+)
+
+const purchaseRates = computed(() =>
+  rates.value.filter(r => r.project_type === 'Авторский надзор' && r.project_subtype === 'purchase'),
 )
 
 const monthlyRates = computed(() =>
@@ -1877,6 +1965,16 @@ function editVisitRate(rate) {
   showRateDialog.value = true
 }
 
+function addPurchaseRate() {
+  editingRate.value = { project_type: 'Авторский надзор', project_subtype: 'purchase', role: null, stage_name: null, fixed_price: null, _isPurchase: true }
+  showRateDialog.value = true
+}
+
+function editPurchaseRate(rate) {
+  editingRate.value = { ...rate, _isPurchase: true }
+  showRateDialog.value = true
+}
+
 function addMonthlyRate() {
   editingMonthlyRate.value = { id: null, role: null, city: null, fixed_price: null }
   showMonthlyRateDialog.value = true
@@ -1925,6 +2023,24 @@ async function saveRate() {
         await api.post('/api/v1/rates', payload)
       }
       $q.notify({ type: 'positive', message: 'Тариф выезда сохранён' })
+      showRateDialog.value = false
+      loadRates()
+      return
+    }
+    if (editingRate.value._isPurchase) {
+      const payload = {
+        project_type: 'Авторский надзор',
+        project_subtype: 'purchase',
+        role: editingRate.value.role,
+        stage_name: editingRate.value.stage_name || null,
+        fixed_price: editingRate.value.fixed_price,
+      }
+      if (editingRate.value.id) {
+        await api.put(`/api/v1/rates/${editingRate.value.id}`, payload)
+      } else {
+        await api.post('/api/v1/rates', payload)
+      }
+      $q.notify({ type: 'positive', message: 'Тариф закупки сохранён' })
       showRateDialog.value = false
       loadRates()
       return
