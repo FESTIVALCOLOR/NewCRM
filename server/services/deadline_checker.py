@@ -342,63 +342,78 @@ async def check_deadlines_once():
 
 async def create_monthly_supervision_payments(db_session_factory):
     """Создаёт ежемесячные оплаты для активных назначений надзора (запускать 1-го числа каждого месяца)."""
+    from sqlalchemy import text
+
     from database import Payment, SupervisionCard, SupervisionMonthlyAssignment
 
     logger.info("Запуск ежемесячного создания оплат надзора...")
     with db_session_factory() as db:
         try:
-            current_month = datetime.utcnow().strftime("%Y-%m")
-            COMPLETED_COLUMN = "Выполненный проект"
+            # Advisory lock предотвращает дублирование при --workers 2:
+            # только один воркер выполняет расчёт, второй сразу выходит
+            LOCK_ID = 7419823  # произвольный уникальный int для этой задачи
+            acquired = db.execute(text("SELECT pg_try_advisory_lock(:lid)"), {"lid": LOCK_ID}).scalar()
+            if not acquired:
+                logger.info("Monthly supervision payments: блокировка занята другим воркером, пропускаем")
+                return
 
-            assignments = (
-                db.query(SupervisionMonthlyAssignment)
-                .join(SupervisionCard, SupervisionMonthlyAssignment.supervision_card_id == SupervisionCard.id)
-                .filter(
-                    SupervisionMonthlyAssignment.is_active == True,
-                    SupervisionCard.column_name != COMPLETED_COLUMN,
-                )
-                .all()
-            )
+            try:
+                current_month = datetime.utcnow().strftime("%Y-%m")
+                COMPLETED_COLUMN = "Выполненный проект"
 
-            created = 0
-            for a in assignments:
-                # Проверить нет ли уже оплаты за этот месяц
-                exists = (
-                    db.query(Payment)
+                assignments = (
+                    db.query(SupervisionMonthlyAssignment)
+                    .join(SupervisionCard, SupervisionMonthlyAssignment.supervision_card_id == SupervisionCard.id)
                     .filter(
-                        Payment.supervision_card_id == a.supervision_card_id,
-                        Payment.employee_name == a.employee_name,
-                        Payment.stage_name == "Ежемесячная ставка",
-                        Payment.report_month == current_month,
+                        SupervisionMonthlyAssignment.is_active == True,
+                        SupervisionCard.column_name != COMPLETED_COLUMN,
                     )
-                    .first()
+                    .all()
                 )
-                if exists:
-                    continue
 
-                card = db.query(SupervisionCard).filter(SupervisionCard.id == a.supervision_card_id).first()
-                if not card:
-                    continue
+                created = 0
+                for a in assignments:
+                    # Проверить нет ли уже оплаты за этот месяц для этой роли
+                    exists = (
+                        db.query(Payment)
+                        .filter(
+                            Payment.supervision_card_id == a.supervision_card_id,
+                            Payment.employee_name == a.employee_name,
+                            Payment.role == a.role,
+                            Payment.stage_name == "Ежемесячная ставка",
+                            Payment.report_month == current_month,
+                        )
+                        .first()
+                    )
+                    if exists:
+                        continue
 
-                payment = Payment(
-                    contract_id=card.contract_id,
-                    supervision_card_id=a.supervision_card_id,
-                    employee_id=a.employee_id,
-                    employee_name=a.employee_name,
-                    role=a.role,
-                    stage_name="Ежемесячная ставка",
-                    calculated_amount=a.monthly_amount,
-                    final_amount=a.monthly_amount,
-                    payment_type="Оклад",
-                    report_month=current_month,
-                    payment_status="pending",
-                    is_paid=False,
-                )
-                db.add(payment)
-                created += 1
+                    card = db.query(SupervisionCard).filter(SupervisionCard.id == a.supervision_card_id).first()
+                    if not card:
+                        continue
 
-            db.commit()
-            logger.info(f"Ежемесячные оплаты надзора: создано {created} записей за {current_month}")
+                    payment = Payment(
+                        contract_id=card.contract_id,
+                        supervision_card_id=a.supervision_card_id,
+                        employee_id=a.employee_id,
+                        employee_name=a.employee_name,
+                        role=a.role,
+                        stage_name="Ежемесячная ставка",
+                        calculated_amount=a.monthly_amount,
+                        final_amount=a.monthly_amount,
+                        payment_type="Оклад",
+                        report_month=current_month,
+                        payment_status="pending",
+                        is_paid=False,
+                    )
+                    db.add(payment)
+                    created += 1
+
+                db.commit()
+                logger.info(f"Ежемесячные оплаты надзора: создано {created} записей за {current_month}")
+            finally:
+                db.execute(text("SELECT pg_advisory_unlock(:lid)"), {"lid": LOCK_ID})
+                db.commit()
         except Exception as e:
             logger.exception(f"Ошибка при создании ежемесячных оплат надзора: {e}")
             db.rollback()
