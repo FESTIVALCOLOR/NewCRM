@@ -432,9 +432,9 @@
                 v-for="entry in timeline"
                 :key="entry.id"
                 v-ripple
-                clickable
+                :clickable="!isArchived"
                 :style="purchaseRowStyle(entry.status)"
-                @click="editTimelineEntry(entry)"
+                @click="!isArchived && editTimelineEntry(entry)"
               >
                 <q-item-section avatar>
                   <q-btn
@@ -444,7 +444,8 @@
                     size="sm"
                     :icon="entry.status === 'Закуплено' || entry.status === 'Доставлено' ? 'check_circle' : 'radio_button_unchecked'"
                     :color="entry.status === 'Закуплено' || entry.status === 'Доставлено' ? 'positive' : 'grey-4'"
-                    @click.stop="toggleStageComplete(entry)"
+                    :disable="isArchived"
+                    @click.stop="!isArchived && toggleStageComplete(entry)"
                   >
                     <q-tooltip>{{ entry.status === 'Закуплено' || entry.status === 'Доставлено' ? 'Снять отметку' : 'Отметить закупленным' }}</q-tooltip>
                   </q-btn>
@@ -512,8 +513,8 @@
                 v-for="s in defaultStages"
                 :key="s.code"
                 v-ripple
-                clickable
-                @click="initAndEditStage(s)"
+                :clickable="!isArchived"
+                @click="!isArchived && initAndEditStage(s)"
               >
                 <q-item-section avatar>
                   <q-icon name="radio_button_unchecked" color="grey-4" size="20px" />
@@ -887,7 +888,7 @@
                 </div>
                 <div class="row q-gutter-xs">
                   <q-btn
-                    v-if="can('supervision.files_upload')"
+                    v-if="can('supervision.files_upload') && !isArchived"
                     outline
                     dense
                     size="xs"
@@ -899,7 +900,7 @@
                     @click="uploadReport"
                   />
                   <q-btn
-                    v-if="can('supervision.files_upload')"
+                    v-if="can('supervision.files_upload') && !isArchived"
                     outline
                     dense
                     size="xs"
