@@ -26,7 +26,11 @@ PURCHASE_TRIGGER_STATUSES = {"Закуплено", "Доставлено"}
 
 
 def _auto_create_purchase_payments(db: Session, entry: SupervisionTimelineEntry, card: SupervisionCard, user_id: int):
-    """Авто-создание оплат ДАН и Старшего менеджера при завершении закупки."""
+    """Авто-создание оплаты только исполнителю закупки (entry.executor)."""
+    if not entry.executor:
+        logger.warning(f"Пропуск авто-оплаты закупки: исполнитель не указан в записи, card={card.id}, stage={entry.stage_name}")
+        return
+
     report_month = datetime.utcnow().strftime("%Y-%m")
     if entry.actual_date:
         try:
@@ -34,73 +38,82 @@ def _auto_create_purchase_payments(db: Session, entry: SupervisionTimelineEntry,
         except (ValueError, TypeError):
             pass
 
-    # Убираем "Стадия N: " префикс для поиска тарифа
+    # Определяем исполнителя: сопоставляем имя с ДАН / Старшим менеджером карточки
+    candidates = [(card.dan_id, POSITION_DAN), (card.senior_manager_id, POSITION_SENIOR_MANAGER)]
+    emp_id, role = None, None
+    for cand_id, cand_role in candidates:
+        if not cand_id:
+            continue
+        emp = db.query(Employee).filter(Employee.id == cand_id).first()
+        if emp and emp.full_name == entry.executor:
+            emp_id, role = cand_id, cand_role
+            break
+
+    if not emp_id:
+        logger.warning(f"Исполнитель закупки «{entry.executor}» не совпадает ни с ДАН, ни с Ст. менеджером карточки {card.id}")
+        return
+
+    # Защита от дублей
+    existing = (
+        db.query(Payment)
+        .filter(
+            Payment.supervision_card_id == card.id,
+            Payment.stage_name == entry.stage_name,
+            Payment.role == role,
+            Payment.payment_type == "Закупка",
+        )
+        .first()
+    )
+    if existing:
+        logger.info(f"Пропуск дубля оплаты закупки: card={card.id}, role={role}, stage={entry.stage_name}")
+        return
+
+    # Тариф: сначала по конкретной стадии, потом "Все закупки"
     short_stage = re.sub(r"^Стадия \d+:\s*", "", entry.stage_name).strip()
-
-    for emp_id, role in [(card.dan_id, POSITION_DAN), (card.senior_manager_id, POSITION_SENIOR_MANAGER)]:
-        if not emp_id:
-            continue
-
-        # Защита от дублей
-        existing = (
-            db.query(Payment)
-            .filter(
-                Payment.supervision_card_id == card.id,
-                Payment.stage_name == entry.stage_name,
-                Payment.role == role,
-                Payment.payment_type == "Закупка",
-            )
-            .first()
+    rate_obj = (
+        db.query(Rate)
+        .filter(
+            Rate.project_type == "Авторский надзор",
+            Rate.project_subtype == "purchase",
+            Rate.role == role,
+            or_(Rate.stage_name == short_stage, Rate.stage_name == "Все закупки", Rate.stage_name.is_(None)),
         )
-        if existing:
-            logger.info(f"Пропуск дубля оплаты закупки: card={card.id}, role={role}, stage={entry.stage_name}")
-            continue
+        .order_by(Rate.stage_name.desc().nullslast())
+        .first()
+    )
 
-        # Ищем тариф: сначала конкретная стадия, потом "Все закупки"
-        rate_obj = (
-            db.query(Rate)
-            .filter(
-                Rate.project_type == "Авторский надзор",
-                Rate.project_subtype == "purchase",
-                Rate.role == role,
-                or_(Rate.stage_name == short_stage, Rate.stage_name == "Все закупки", Rate.stage_name.is_(None)),
-            )
-            .order_by(Rate.stage_name.desc().nullslast())
-            .first()
+    if not rate_obj or not rate_obj.fixed_price:
+        logger.warning(f"Тариф закупки не найден: role={role}, stage={short_stage}")
+        return
+
+    amount = float(rate_obj.fixed_price)
+    emp = db.query(Employee).filter(Employee.id == emp_id).first()
+    emp_name = emp.full_name if emp else None
+
+    db.add(
+        Payment(
+            contract_id=card.contract_id,
+            employee_id=emp_id,
+            employee_name=emp_name,
+            role=role,
+            stage_name=entry.stage_name,
+            calculated_amount=amount,
+            final_amount=amount,
+            payment_type="Закупка",
+            report_month=report_month,
+            supervision_card_id=card.id,
         )
-
-        if not rate_obj or not rate_obj.fixed_price:
-            logger.warning(f"Тариф закупки не найден: role={role}, stage={short_stage}")
-            continue
-
-        amount = float(rate_obj.fixed_price)
-        emp = db.query(Employee).filter(Employee.id == emp_id).first()
-        emp_name = emp.full_name if emp else None
-
-        db.add(
-            Payment(
-                contract_id=card.contract_id,
-                employee_id=emp_id,
-                employee_name=emp_name,
-                role=role,
-                stage_name=entry.stage_name,
-                calculated_amount=amount,
-                final_amount=amount,
-                payment_type="Закупка",
-                report_month=report_month,
-                supervision_card_id=card.id,
-            )
+    )
+    db.add(
+        ActionHistory(
+            user_id=user_id,
+            action_type="payment_created",
+            entity_type="supervision_card",
+            entity_id=card.id,
+            description=f"Авто-оплата закупки: {emp_name or 'ID ' + str(emp_id)}, роль: {role}, стадия: «{entry.stage_name}», сумма: {amount}",
         )
-        db.add(
-            ActionHistory(
-                user_id=user_id,
-                action_type="payment_created",
-                entity_type="supervision_card",
-                entity_id=card.id,
-                description=f"Авто-оплата закупки: {emp_name or 'ID ' + str(emp_id)}, роль: {role}, стадия: «{entry.stage_name}», сумма: {amount}",
-            )
-        )
-        logger.info(f"Авто-оплата закупки: card={card.id}, role={role}, stage={entry.stage_name}, amount={amount}")
+    )
+    logger.info(f"Авто-оплата закупки: card={card.id}, role={role}, stage={entry.stage_name}, amount={amount}")
 
 
 router = APIRouter(tags=["supervision-timeline"])
