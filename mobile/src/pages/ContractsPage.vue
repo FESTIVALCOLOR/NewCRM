@@ -104,6 +104,16 @@
           </div>
           <div v-if="contract.project_type" class="contract-row3">
             <span class="contract-type-info">{{ shortType(contract.project_type) }}<template v-if="contract.project_subtype"> | {{ contract.project_subtype }}</template></span>
+            <span class="contract-amount-info">
+              <span v-if="contract.total_amount" class="contract-amount">{{ formatAmount(contract.total_amount) }} ₽</span>
+              <q-icon
+                v-if="isFullyPaid(contract)"
+                name="check_circle"
+                color="positive"
+                size="13px"
+                class="q-ml-xs"
+              />
+            </span>
           </div>
         </div>
         <div v-if="filtered.length === 0" class="text-center q-pa-xl text-grey-5">
@@ -398,10 +408,29 @@ onMounted(() => loadContracts())
 }
 .contract-row3 {
   margin-top: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
 }
 .contract-type-info {
   font-size: 10px;
   color: #999;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.contract-amount-info {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+}
+.contract-amount {
+  font-size: 10px;
+  color: #555;
+  font-weight: 500;
+  white-space: nowrap;
 }
 /* Радиус поиска и фильтров = радиус таблицы (8px) */
 .crm-search-input :deep(.q-field__control) { border-radius: 8px; }
