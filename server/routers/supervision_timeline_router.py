@@ -7,17 +7,102 @@ import asyncio
 from datetime import datetime
 import io
 import logging
+import re
 
 from auth import get_current_user
+from constants import POSITION_DAN, POSITION_SENIOR_MANAGER
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from schemas import SupervisionTimelineUpdate
 from services.notification_service import trigger_supervision_notification
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from database import Contract, Employee, SupervisionCard, SupervisionTimelineEntry, get_db
+from database import ActionHistory, Contract, Employee, Payment, Rate, SupervisionCard, SupervisionTimelineEntry, get_db
 
 logger = logging.getLogger(__name__)
+
+PURCHASE_TRIGGER_STATUSES = {"Закуплено", "Доставлено"}
+
+
+def _auto_create_purchase_payments(db: Session, entry: SupervisionTimelineEntry, card: SupervisionCard, user_id: int):
+    """Авто-создание оплат ДАН и Старшего менеджера при завершении закупки."""
+    report_month = datetime.utcnow().strftime("%Y-%m")
+    if entry.actual_date:
+        try:
+            report_month = datetime.strptime(entry.actual_date, "%Y-%m-%d").strftime("%Y-%m")
+        except (ValueError, TypeError):
+            pass
+
+    # Убираем "Стадия N: " префикс для поиска тарифа
+    short_stage = re.sub(r"^Стадия \d+:\s*", "", entry.stage_name).strip()
+
+    for emp_id, role in [(card.dan_id, POSITION_DAN), (card.senior_manager_id, POSITION_SENIOR_MANAGER)]:
+        if not emp_id:
+            continue
+
+        # Защита от дублей
+        existing = (
+            db.query(Payment)
+            .filter(
+                Payment.supervision_card_id == card.id,
+                Payment.stage_name == entry.stage_name,
+                Payment.role == role,
+                Payment.payment_type == "Закупка",
+            )
+            .first()
+        )
+        if existing:
+            logger.info(f"Пропуск дубля оплаты закупки: card={card.id}, role={role}, stage={entry.stage_name}")
+            continue
+
+        # Ищем тариф: сначала конкретная стадия, потом "Все закупки"
+        rate_obj = (
+            db.query(Rate)
+            .filter(
+                Rate.project_type == "Авторский надзор",
+                Rate.project_subtype == "purchase",
+                Rate.role == role,
+                or_(Rate.stage_name == short_stage, Rate.stage_name == "Все закупки", Rate.stage_name.is_(None)),
+            )
+            .order_by(Rate.stage_name.desc().nullslast())
+            .first()
+        )
+
+        if not rate_obj or not rate_obj.fixed_price:
+            logger.warning(f"Тариф закупки не найден: role={role}, stage={short_stage}")
+            continue
+
+        amount = float(rate_obj.fixed_price)
+        emp = db.query(Employee).filter(Employee.id == emp_id).first()
+        emp_name = emp.full_name if emp else None
+
+        db.add(
+            Payment(
+                contract_id=card.contract_id,
+                employee_id=emp_id,
+                employee_name=emp_name,
+                role=role,
+                stage_name=entry.stage_name,
+                calculated_amount=amount,
+                final_amount=amount,
+                payment_type="Закупка",
+                report_month=report_month,
+                supervision_card_id=card.id,
+            )
+        )
+        db.add(
+            ActionHistory(
+                user_id=user_id,
+                action_type="payment_created",
+                entity_type="supervision_card",
+                entity_id=card.id,
+                description=f"Авто-оплата закупки: {emp_name or 'ID ' + str(emp_id)}, роль: {role}, стадия: «{entry.stage_name}», сумма: {amount}",
+            )
+        )
+        logger.info(f"Авто-оплата закупки: card={card.id}, role={role}, stage={entry.stage_name}, amount={amount}")
+
+
 router = APIRouter(tags=["supervision-timeline"])
 
 SUPERVISION_STAGES = [
@@ -146,10 +231,18 @@ async def update_supervision_timeline_entry(card_id: int, stage_code: str, updat
         entry.budget_savings = entry.budget_planned - entry.budget_actual
 
     entry.updated_at = datetime.utcnow()
+
+    new_status = entry.status
+
+    # Авто-оплата исполнителям при первом достижении "Закуплено"/"Доставлено"
+    if new_status in PURCHASE_TRIGGER_STATUSES and old_status not in PURCHASE_TRIGGER_STATUSES:
+        card = db.query(SupervisionCard).filter(SupervisionCard.id == card_id).first()
+        if card:
+            _auto_create_purchase_payments(db, entry, card, current_user.id)
+
     db.commit()
 
     # Хук: уведомление в чат при завершении стадии
-    new_status = entry.status
     if new_status and new_status != old_status and new_status.lower() in ("выполнено", "завершено"):
         asyncio.create_task(trigger_supervision_notification(card_id, "supervision_stage_complete", stage_name=entry.stage_name))
 

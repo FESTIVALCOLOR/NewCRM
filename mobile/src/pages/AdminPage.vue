@@ -80,7 +80,7 @@
             </div>
           </q-card-section>
         </q-card>
-        <div v-if="filteredRates.length === 0" class="text-center q-pa-md" style="color: #999">
+        <div v-if="filteredRates.length === 0 && rateTab !== 'supervision'" class="text-center q-pa-md" style="color: #999">
           Нет тарифов
         </div>
 
