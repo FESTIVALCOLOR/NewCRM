@@ -5,6 +5,7 @@ prefix="/api/v1/supervision-client-payments"
 
 from datetime import datetime
 import logging
+from typing import Optional
 
 from auth import get_current_user
 from fastapi import APIRouter, Depends, HTTPException
@@ -107,6 +108,7 @@ class ClientPaymentCreate(BaseModel):
     contract_id: int
     amount: float
     payment_month: str  # YYYY-MM
+    payment_date: Optional[str] = None  # YYYY-MM-DD
 
 
 class ClientPaymentUpdate(BaseModel):
@@ -126,18 +128,24 @@ async def create_payment(
     if not card:
         raise HTTPException(status_code=404, detail="Карточка надзора не найдена")
 
-    # Устанавливаем день уведомления из первой записи если настройки ещё не менялись
     settings = _get_or_create_settings(db, body.supervision_card_id)
     existing_count = db.query(SupervisionClientPayment).filter_by(supervision_card_id=body.supervision_card_id).count()
-    if existing_count == 0 and settings.notification_day == 1:
-        # Оставляем 1-е число как дефолт, но можно расширить в будущем
-        pass
+
+    # При первом платеже — устанавливаем notification_day из даты оплаты
+    if existing_count == 0 and body.payment_date:
+        try:
+            day = int(body.payment_date.split("-")[2])
+            settings.notification_day = max(1, min(28, day))
+            db.flush()
+        except (ValueError, IndexError):
+            pass
 
     p = SupervisionClientPayment(
         supervision_card_id=body.supervision_card_id,
         contract_id=body.contract_id,
         amount=body.amount,
         payment_month=body.payment_month,
+        payment_date=body.payment_date or None,
         created_at=datetime.utcnow(),
     )
     db.add(p)

@@ -2218,6 +2218,15 @@
             dense
             input-style="font-size: 14px"
           />
+          <q-input
+            v-model="clientPayForm.payment_date"
+            label="Дата оплаты"
+            type="date"
+            outlined
+            dense
+            input-style="font-size: 14px"
+            hint="Первая дата задаёт день напоминания каждого месяца"
+          />
         </q-card-section>
         <q-card-actions align="right" class="q-px-md q-pb-md">
           <q-btn
@@ -2509,7 +2518,7 @@ const newMaterialsPayment = ref({ date: '', amount: null, supplier: '', commissi
 const clientPayments = ref([])
 const clientPaymentSettings = ref({ notification_enabled: true, notification_day: 1 })
 const showClientPayDialog = ref(false)
-const clientPayForm = ref({ amount: null, payment_month: '' })
+const clientPayForm = ref({ amount: null, payment_month: '', payment_date: '' })
 const clientPayReceiptInput = ref(null)
 const clientPayReceiptId = ref(null)
 
@@ -3641,9 +3650,10 @@ async function addClientPayment() {
       contract_id: contractId,
       amount: Number(clientPayForm.value.amount),
       payment_month: clientPayForm.value.payment_month,
+      payment_date: clientPayForm.value.payment_date || null,
     })
     showClientPayDialog.value = false
-    clientPayForm.value = { amount: null, payment_month: '' }
+    clientPayForm.value = { amount: null, payment_month: '', payment_date: '' }
     const { data } = await supervisionClientPaymentsApi.getByCard(cardId)
     clientPayments.value = data.payments || []
     $q.notify({ type: 'positive', message: 'Платёж добавлен' })

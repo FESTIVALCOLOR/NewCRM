@@ -289,7 +289,7 @@
           </q-card>
 
           <!-- Платежи клиента по авторскому надзору (ежемесячные) -->
-          <q-card v-if="contract.project_type === 'Авторский надзор'" class="is-card q-mb-md">
+          <q-card v-if="(contract.project_type === 'Авторский надзор' || contract.status === 'АВТОРСКИЙ НАДЗОР') && contract.supervision_card_id" class="is-card q-mb-md">
             <q-card-section class="q-pb-xs">
               <div class="row items-center">
                 <div class="text-subtitle2 text-weight-bold col" style="color: #333">
@@ -1091,6 +1091,14 @@
               outlined
               dense
             />
+            <q-input
+              v-model="svClientPayForm.payment_date"
+              label="Дата оплаты"
+              type="date"
+              outlined
+              dense
+              hint="Первая дата задаёт день напоминания каждого месяца"
+            />
           </q-card-section>
           <q-card-actions align="right" class="q-px-md q-pb-md">
             <q-btn
@@ -1245,7 +1253,7 @@ const crmDeadline = computed(() => contract.value?.crm_card_deadline || null)
 const svClientPayments = ref([])
 const svClientPaymentSettings = ref({ notification_enabled: true, notification_day: 1 })
 const showSvClientPayDialog = ref(false)
-const svClientPayForm = ref({ amount: null, payment_month: '' })
+const svClientPayForm = ref({ amount: null, payment_month: '', payment_date: '' })
 const svClientPayReceiptInput = ref(null)
 const svClientPayReceiptId = ref(null)
 
@@ -1995,9 +2003,10 @@ async function addSvClientPayment() {
       supervision_card_id: cardId, contract_id: contractId,
       amount: Number(svClientPayForm.value.amount),
       payment_month: svClientPayForm.value.payment_month,
+      payment_date: svClientPayForm.value.payment_date || null,
     })
     showSvClientPayDialog.value = false
-    svClientPayForm.value = { amount: null, payment_month: '' }
+    svClientPayForm.value = { amount: null, payment_month: '', payment_date: '' }
     const { data } = await supervisionClientPaymentsApi.getByCard(cardId)
     svClientPayments.value = data.payments || []
     $q.notify({ type: 'positive', message: 'Платёж добавлен' })
@@ -2076,7 +2085,7 @@ onMounted(async () => {
     loadSurveys()
 
     // Платежи клиента по надзору (если Авторский надзор)
-    if (contract.value?.project_type === 'Авторский надзор' && contract.value?.supervision_card_id) {
+    if ((contract.value?.project_type === 'Авторский надзор' || contract.value?.status === 'АВТОРСКИЙ НАДЗОР') && contract.value?.supervision_card_id) {
       try {
         const { data } = await supervisionClientPaymentsApi.getByCard(contract.value.supervision_card_id)
         svClientPayments.value = data.payments || []
