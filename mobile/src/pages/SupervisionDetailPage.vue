@@ -442,11 +442,11 @@
                     dense
                     round
                     size="sm"
-                    :icon="entry.status === 'Выполнено' ? 'check_circle' : 'radio_button_unchecked'"
-                    :color="entry.status === 'Выполнено' ? 'positive' : 'grey-4'"
+                    :icon="entry.status === 'Закуплено' || entry.status === 'Доставлено' ? 'check_circle' : 'radio_button_unchecked'"
+                    :color="entry.status === 'Закуплено' || entry.status === 'Доставлено' ? 'positive' : 'grey-4'"
                     @click.stop="toggleStageComplete(entry)"
                   >
-                    <q-tooltip>{{ entry.status === 'Выполнено' ? 'Снять отметку' : 'Отметить выполненным' }}</q-tooltip>
+                    <q-tooltip>{{ entry.status === 'Закуплено' || entry.status === 'Доставлено' ? 'Снять отметку' : 'Отметить закупленным' }}</q-tooltip>
                   </q-btn>
                 </q-item-section>
                 <q-item-section>
@@ -462,6 +462,12 @@
                   </q-item-label>
                   <q-item-label v-if="entry.budget_planned > 0" caption style="color: #888">
                     Факт. {{ formatMoney(entry.budget_actual || 0) }} / План {{ formatMoney(entry.budget_planned) }}
+                  </q-item-label>
+                  <q-item-label v-if="entry.executor" caption style="color: #555">
+                    Исполнитель: {{ entry.executor }}
+                  </q-item-label>
+                  <q-item-label v-if="entry.commission > 0" caption style="color: #2e7d32; font-weight: 500">
+                    Комиссия: {{ formatMoney(entry.commission) }}
                   </q-item-label>
                   <!-- Файлы стадии — кнопка папки ЯД -->
                   <div v-if="stageFiles(entry.stage_code).length > 0" class="q-mt-xs">
@@ -484,16 +490,17 @@
                     <!-- Кнопка загрузки файлов для этой стадии -->
                     <q-btn
                       v-if="can('supervision.files_upload')"
-                      flat
-                      round
+                      unelevated
                       dense
+                      no-caps
                       size="xs"
                       icon="attach_file"
-                      color="blue"
+                      label="Файл"
+                      color="blue-1"
+                      text-color="blue-8"
+                      style="font-size: 10px; border-radius: 4px; padding: 0 5px"
                       @click.stop="uploadStageFile(entry.stage_code)"
-                    >
-                      <q-tooltip>Загрузить файл для стадии</q-tooltip>
-                    </q-btn>
+                    />
                   </div>
                 </q-item-section>
               </q-item>
@@ -521,16 +528,17 @@
                     <q-badge color="grey-4" label="Не начато" dense />
                     <q-btn
                       v-if="can('supervision.files_upload')"
-                      flat
-                      round
+                      unelevated
                       dense
+                      no-caps
                       size="xs"
                       icon="attach_file"
-                      color="blue"
+                      label="Файл"
+                      color="blue-1"
+                      text-color="blue-8"
+                      style="font-size: 10px; border-radius: 4px; padding: 0 5px"
                       @click.stop="uploadStageFile(s.code)"
-                    >
-                      <q-tooltip>Загрузить файл</q-tooltip>
-                    </q-btn>
+                    />
                   </div>
                 </q-item-section>
               </q-item>
@@ -562,7 +570,7 @@
                 </div>
                 <div class="col-6" style="text-align: center">
                   <div class="text-caption text-grey-7">
-                    Экономия
+                    Остаток средств
                   </div>
                   <div class="text-weight-bold text-positive">
                     {{ formatMoney(summary.total_savings) }}
@@ -625,7 +633,7 @@
                     Оплаты:
                   </div>
                   <div v-for="(p, idx) in budgetExtra.construction_payments" :key="idx" class="text-caption q-mb-xs" style="color: #555">
-                    {{ p.date }} — {{ formatMoney(p.amount) }}<span v-if="p.commission > 0" style="color: #2e7d32"> (ком. {{ formatMoney(p.commission) }})</span>
+                    {{ fmtDMY(p.date) }} — {{ formatMoney(p.amount) }}<span v-if="p.commission > 0" style="color: #2e7d32"> (ком. {{ formatMoney(p.commission) }})</span>
                   </div>
                 </div>
               </template>
@@ -681,7 +689,7 @@
                     Заказы:
                   </div>
                   <div v-for="(p, idx) in budgetExtra.materials_payments" :key="idx" class="text-caption q-mb-xs" style="color: #555">
-                    {{ p.date }} — {{ formatMoney(p.amount) }}<span v-if="p.supplier" style="color: #888"> ({{ p.supplier }})</span><span v-if="p.commission > 0" style="color: #2e7d32"> ком. {{ formatMoney(p.commission) }}</span>
+                    {{ fmtDMY(p.date) }} — {{ formatMoney(p.amount) }}<span v-if="p.supplier" style="color: #888"> ({{ p.supplier }})</span><span v-if="p.commission > 0" style="color: #2e7d32"> ком. {{ formatMoney(p.commission) }}</span>
                   </div>
                 </div>
               </template>
@@ -2632,6 +2640,12 @@ function formatDate(dateStr) {
   })
 }
 
+function fmtDMY(dateStr) {
+  if (!dateStr) return '—'
+  const p = String(dateStr).slice(0, 10).split('-')
+  return p.length === 3 ? `${p[2]}.${p[1]}.${p[0]}` : dateStr
+}
+
 function formatMoney(amount) {
   if (!amount) return '0 ₽'
   return new Intl.NumberFormat('ru-RU', {
@@ -2899,14 +2913,15 @@ function editTimelineEntry(entry) {
 }
 
 async function toggleStageComplete(entry) {
-  const newStatus = entry.status === 'Выполнено' ? 'Не начато' : 'Выполнено'
+  const isDone = entry.status === 'Закуплено' || entry.status === 'Доставлено'
+  const newStatus = isDone ? 'Не начато' : 'Закуплено'
   try {
     await supervisionApi.updateTimelineEntry(card.value.id, entry.stage_code, {
       status: newStatus,
-      actual_date: newStatus === 'Выполнено' ? (entry.actual_date || new Date().toISOString().slice(0, 10)) : null,
+      actual_date: newStatus === 'Закуплено' ? (entry.actual_date || new Date().toISOString().slice(0, 10)) : null,
     })
     entry.status = newStatus
-    $q.notify({ type: 'positive', message: newStatus === 'Выполнено' ? 'Стадия отмечена выполненной' : 'Отметка снята', timeout: 1500 })
+    $q.notify({ type: 'positive', message: newStatus === 'Закуплено' ? 'Стадия отмечена закупленной' : 'Отметка снята', timeout: 1500 })
     await reloadData()
   } catch (err) {
     $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
