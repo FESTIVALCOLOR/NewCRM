@@ -25,10 +25,24 @@ logger = logging.getLogger(__name__)
 PURCHASE_TRIGGER_STATUSES = {"Закуплено", "Доставлено"}
 
 
+_ROLE_HINT_MAP = {
+    "ДАН": POSITION_DAN,
+    "Ст. менеджер": POSITION_SENIOR_MANAGER,
+}
+
+
+def _parse_executor(executor_str: str):
+    """'Иванов И. (ДАН)' → ('Иванов И.', 'ДАН')  |  'Иванов И.' → ('Иванов И.', None)"""
+    m = re.match(r"^(.+?)\s*\(([^)]+)\)\s*$", executor_str)
+    if m:
+        return m.group(1).strip(), m.group(2).strip()
+    return executor_str.strip(), None
+
+
 def _auto_create_purchase_payments(db: Session, entry: SupervisionTimelineEntry, card: SupervisionCard, user_id: int):
     """Авто-создание оплаты только исполнителю закупки (entry.executor)."""
     if not entry.executor:
-        logger.warning(f"Пропуск авто-оплаты закупки: исполнитель не указан в записи, card={card.id}, stage={entry.stage_name}")
+        logger.warning(f"Пропуск авто-оплаты закупки: исполнитель не указан, card={card.id}, stage={entry.stage_name}")
         return
 
     report_month = datetime.utcnow().strftime("%Y-%m")
@@ -38,19 +52,25 @@ def _auto_create_purchase_payments(db: Session, entry: SupervisionTimelineEntry,
         except (ValueError, TypeError):
             pass
 
-    # Определяем исполнителя: сопоставляем имя с ДАН / Старшим менеджером карточки
+    exec_name, role_hint = _parse_executor(entry.executor)
+    hinted_role = _ROLE_HINT_MAP.get(role_hint) if role_hint else None
+
+    # Сопоставляем исполнителя: имя + роль (если указана) или только имя
     candidates = [(card.dan_id, POSITION_DAN), (card.senior_manager_id, POSITION_SENIOR_MANAGER)]
     emp_id, role = None, None
     for cand_id, cand_role in candidates:
         if not cand_id:
             continue
         emp = db.query(Employee).filter(Employee.id == cand_id).first()
-        if emp and emp.full_name == entry.executor:
+        if not emp or emp.full_name != exec_name:
+            continue
+        # Если роль указана в строке — требуем точное совпадение; иначе берём первое совпадение по имени
+        if hinted_role is None or cand_role == hinted_role:
             emp_id, role = cand_id, cand_role
             break
 
     if not emp_id:
-        logger.warning(f"Исполнитель закупки «{entry.executor}» не совпадает ни с ДАН, ни с Ст. менеджером карточки {card.id}")
+        logger.warning(f"Исполнитель закупки «{entry.executor}» не найден среди назначенных на карточку {card.id}")
         return
 
     # Защита от дублей

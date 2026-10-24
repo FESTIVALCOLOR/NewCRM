@@ -2929,7 +2929,7 @@ async function reloadData() {
   if (card.value?.senior_manager_name) names.push({ label: `${card.value.senior_manager_name} (Ст. менеджер)`, value: card.value.senior_manager_id })
   if (card.value?.studio_director_name) names.push({ label: `${card.value.studio_director_name} (Руководитель)`, value: card.value.studio_director_id })
   executorOptions.value = names
-  executorNameOptions.value = names.map(n => n.label.split(' (')[0])
+  executorNameOptions.value = names.map(n => n.label)
 }
 
 // Загрузка файлов по стадиям закупок
@@ -3151,6 +3151,11 @@ async function saveMaterialsBudget() {
 
 async function saveTimelineEntry() {
   if (!editEntry.value || !card.value) return
+  const PURCHASE_PAID_STATUSES = ['Закуплено', 'Доставлено']
+  if (PURCHASE_PAID_STATUSES.includes(editEntry.value.status) && !editEntry.value.executor) {
+    $q.notify({ type: 'warning', message: `Укажите исполнителя перед установкой статуса «${editEntry.value.status}» — оплата начисляется только указанному исполнителю` })
+    return
+  }
   try {
     // Если таймлайн ещё не инициализирован — инициализируем
     if (timeline.value.length === 0) {
