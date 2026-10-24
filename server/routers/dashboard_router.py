@@ -1811,14 +1811,14 @@ async def get_supervision_analytics(
                 defects_resolved += entry.defects_resolved or 0
 
         # --- Комиссии по стадиям и агентам (все карточки: активные + архивные) ---
+        period_active = bool(year or quarter or month)
+
         def _entry_in_period(actual_date_str) -> bool:
-            """True если дата попадает в выбранный период (или период не задан, или дата не указана)."""
-            if not (year or quarter or month):
+            """True если дата попадает в выбранный период (или период не задан). Пустая дата → False при активном периоде."""
+            if not period_active:
                 return True
             if not actual_date_str:
-                # actual_date не заполнена — этап ещё не завершён, но комиссия уже записана.
-                # Включаем всегда, т.к. привязать к периоду невозможно.
-                return True
+                return False
             try:
                 d = datetime.strptime(str(actual_date_str)[:10], "%Y-%m-%d")
             except (ValueError, TypeError):
@@ -1833,21 +1833,26 @@ async def get_supervision_analytics(
 
         commission_by_stage: dict = defaultdict(float)
         commission_by_agent: dict = defaultdict(float)
+        # Комиссии без привязки к дате (фактическая дата не заполнена, период активен)
+        commission_undated_by_stage: dict = defaultdict(float)
+        commission_undated_by_agent: dict = defaultdict(float)
 
         if supervision_card_ids_all:
             # 1. Комиссии из SupervisionTimelineEntry (стадии закупок)
             all_commission_entries = db.query(SupervisionTimelineEntry).filter(SupervisionTimelineEntry.supervision_card_id.in_(supervision_card_ids_all)).all()
             for entry in all_commission_entries:
-                if not _entry_in_period(entry.actual_date):
-                    continue
                 comm = entry.commission or 0.0
                 if comm <= 0:
                     continue
-                commission_by_stage[entry.stage_name] += comm
                 sc = sc_by_id.get(entry.supervision_card_id)
-                if sc:
-                    cont = contracts_map.get(sc.contract_id)
-                    agent = (cont.agent_type if cont else None) or "Не указан"
+                cont = contracts_map.get(sc.contract_id) if sc else None
+                agent = (cont.agent_type if cont else None) or "Не указан"
+                if period_active and not entry.actual_date:
+                    # Дата не указана — нельзя привязать к периоду, показываем отдельно
+                    commission_undated_by_stage[entry.stage_name] += comm
+                    commission_undated_by_agent[agent] += comm
+                elif _entry_in_period(entry.actual_date):
+                    commission_by_stage[entry.stage_name] += comm
                     commission_by_agent[agent] += comm
 
             # 2. Комиссии из SupervisionBudgetExtra (строительные работы и материалы)
@@ -1868,18 +1873,28 @@ async def get_supervision_analytics(
                         comm = float(p.get("commission") or 0)
                         if comm <= 0:
                             continue
-                        if not _entry_in_period(p.get("date") or ""):
-                            continue
-                        commission_by_stage[label] += comm
-                        commission_by_agent[agent] += comm
+                        date_str = p.get("date") or ""
+                        if period_active and not date_str:
+                            commission_undated_by_stage[label] += comm
+                            commission_undated_by_agent[agent] += comm
+                        elif _entry_in_period(date_str):
+                            commission_by_stage[label] += comm
+                            commission_by_agent[agent] += comm
 
-        # Все стадии с ненулевой комиссией, отсортированные по убыванию
+        # Результаты: стадии с ненулевой комиссией, отсортированные по убыванию
         commission_stages_result = sorted(
             [{"stage": sname, "commission": round(val, 2)} for sname, val in commission_by_stage.items() if val > 0],
             key=lambda x: -x["commission"],
         )
         commission_agents_result = [{"agent": agent, "commission": round(val, 2)} for agent, val in sorted(commission_by_agent.items(), key=lambda x: -x[1])]
         commission_total = round(sum(commission_by_agent.values()), 2)
+
+        undated_stages_result = sorted(
+            [{"stage": sname, "commission": round(val, 2)} for sname, val in commission_undated_by_stage.items() if val > 0],
+            key=lambda x: -x["commission"],
+        )
+        undated_agents_result = [{"agent": agent, "commission": round(val, 2)} for agent, val in sorted(commission_undated_by_agent.items(), key=lambda x: -x[1])]
+        undated_total = round(sum(commission_undated_by_agent.values()), 2)
 
         savings_pct = round(total_savings / total_planned * 100, 1) if total_planned > 0 else 0.0
         resolution_pct = round(defects_resolved / defects_found * 100, 1) if defects_found > 0 else 0.0
@@ -1972,8 +1987,11 @@ async def get_supervision_analytics(
             },
             "commission": {
                 "total": commission_total,
+                "undated_total": undated_total,
                 "by_stage": commission_stages_result,
                 "by_agent": commission_agents_result,
+                "undated_by_stage": undated_stages_result,
+                "undated_by_agent": undated_agents_result,
             },
         }
 

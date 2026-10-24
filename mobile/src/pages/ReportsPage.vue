@@ -329,8 +329,11 @@
           <div v-if="supervisionCommissionByStageChart || supervisionCommissionByAgentChart" class="q-mt-md">
             <div class="text-subtitle2 text-weight-bold q-mb-sm" style="color: #27AE60">
               Комиссии (доход студии из закупок)
-              <span v-if="supervisionDetailed?.commission?.total" class="text-caption text-grey-7 q-ml-xs">
-                Итого: {{ fmtMoney(supervisionDetailed.commission.total) }}
+              <span v-if="supervisionDetailed?.commission?.total || supervisionDetailed?.commission?.undated_total" class="text-caption text-grey-7 q-ml-xs">
+                Итого: {{ fmtMoney((supervisionDetailed.commission.total || 0) + (supervisionDetailed.commission.undated_total || 0)) }}
+                <span v-if="supervisionDetailed?.commission?.undated_total > 0" style="color: #F39C12">
+                  (в т.ч. {{ fmtMoney(supervisionDetailed.commission.undated_total) }} без даты)
+                </span>
               </span>
             </div>
             <div class="row q-col-gutter-md">
@@ -730,25 +733,60 @@ const supervisionByCityChart = computed(() => {
   }
 })
 
+// Хелпер: "Стадия N: Закупка керамогранита" → "Керамогранит"
+const cleanStageLabel = (stage) => {
+  const s = stage.replace(/^Стадия\s+\d+:\s+Закупка\s+/i, '')
+  return s.charAt(0).toUpperCase() + s.slice(1)
+}
+
 // Комиссии по стадиям закупок надзора
 const supervisionCommissionByStageChart = computed(() => {
-  const stages = supervisionDetailed.value?.commission?.by_stage
-  if (!stages?.length) return null
-  // Укорачиваем метки: "Стадия N: Закупка Керамогранита" → "Керамогранит"
-  const labels = stages.map(s => s.stage.replace(/^Стадия\s+\d+:\s+Закупка\s+/i, ''))
+  const stages = supervisionDetailed.value?.commission?.by_stage || []
+  const undated = supervisionDetailed.value?.commission?.undated_by_stage || []
+  if (!stages.length && !undated.length) return null
+
+  if (!undated.length) {
+    return {
+      labels: stages.map(s => cleanStageLabel(s.stage)),
+      datasets: [{ label: 'Комиссия, ₽', data: stages.map(s => s.commission), color: '#27AE60' }],
+    }
+  }
+
+  // Два датасета: «в периоде» (зелёный) + «без даты» (оранжевый)
+  const allNames = [...new Set([...stages.map(s => s.stage), ...undated.map(s => s.stage)])]
+  const stMap = Object.fromEntries(stages.map(s => [s.stage, s.commission]))
+  const udMap = Object.fromEntries(undated.map(s => [s.stage, s.commission]))
   return {
-    labels,
-    datasets: [{ label: 'Комиссия, ₽', data: stages.map(s => s.commission), color: '#27AE60' }],
+    labels: allNames.map(cleanStageLabel),
+    datasets: [
+      { label: 'В периоде', data: allNames.map(n => stMap[n] || 0), color: '#27AE60' },
+      { label: 'Без даты', data: allNames.map(n => udMap[n] || 0), color: '#F39C12' },
+    ],
   }
 })
 
 // Комиссии по агентам надзора
 const supervisionCommissionByAgentChart = computed(() => {
-  const agents = supervisionDetailed.value?.commission?.by_agent
-  if (!agents?.length) return null
+  const agents = supervisionDetailed.value?.commission?.by_agent || []
+  const undated = supervisionDetailed.value?.commission?.undated_by_agent || []
+  if (!agents.length && !undated.length) return null
+
+  if (!undated.length) {
+    return {
+      labels: agents.map(a => a.agent),
+      datasets: [{ label: 'Комиссия, ₽', data: agents.map(a => a.commission), color: '#3498DB' }],
+    }
+  }
+
+  const allAgents = [...new Set([...agents.map(a => a.agent), ...undated.map(a => a.agent)])]
+  const agMap = Object.fromEntries(agents.map(a => [a.agent, a.commission]))
+  const udMap = Object.fromEntries(undated.map(a => [a.agent, a.commission]))
   return {
-    labels: agents.map(a => a.agent),
-    datasets: [{ label: 'Комиссия, ₽', data: agents.map(a => a.commission), color: '#3498DB' }],
+    labels: allAgents,
+    datasets: [
+      { label: 'В периоде', data: allAgents.map(n => agMap[n] || 0), color: '#3498DB' },
+      { label: 'Без даты', data: allAgents.map(n => udMap[n] || 0), color: '#F39C12' },
+    ],
   }
 })
 
