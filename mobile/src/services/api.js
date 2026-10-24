@@ -449,6 +449,9 @@ export const supervisionApi = {
 
   deleteMonthlyAssignment: (cardId, assignmentId) =>
     api.delete(`/api/v1/supervision/cards/${cardId}/monthly-assignments/${assignmentId}`),
+
+  getPayments: (cardId) =>
+    api.get(`/api/v1/payments/by-supervision-card/${cardId}`),
 }
 
 // === Supervision Budget Extra (строительные работы + черновые материалы) ===

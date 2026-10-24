@@ -352,8 +352,25 @@
                 style="background: #58D68D; color: white; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px"
                 @click="submitDanWork"
               />
-              <div v-if="isArchived" class="text-center" style="color: #999; font-size: 12px; padding: 4px 0">
-                Карточка завершена
+              <!-- В архив: карточка в "Выполненный проект", но договор ещё активен -->
+              <q-btn
+                v-if="isArchived && card.contract_status !== 'СДАН' && card.contract_status !== 'РАСТОРГНУТ'"
+                unelevated
+                dense
+                no-caps
+                icon="archive"
+                label="В архив"
+                class="full-width q-mb-sm"
+                style="background: #27AE60; color: white; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px"
+                :loading="archiveLoading"
+                @click="archiveSupervisionWithValidation"
+              />
+              <div
+                v-if="isArchived && (card.contract_status === 'СДАН' || card.contract_status === 'РАСТОРГНУТ')"
+                class="text-center"
+                style="color: #999; font-size: 12px; padding: 4px 0"
+              >
+                Карточка в архиве
               </div>
             </q-card-section>
           </q-card>
@@ -2181,6 +2198,7 @@ const { ensureLoaded: loadAvatars, getAvatarByName } = useEmployeeAvatars()
 const { uploadToYd } = useYdUpload()
 const agentColor = computed(() => refs.agentByName(card.value?.agent_type)?.color || '#95A5A6')
 const isArchived = computed(() => card.value?.column_name === 'Выполненный проект')
+const archiveLoading = ref(false)
 
 const route = useRoute()
 const router = useRouter()
@@ -2631,6 +2649,43 @@ function daysLeft(deadline) {
   if (diff < 0) return `просрочен на ${Math.abs(diff)} дн.`
   if (diff === 0) return 'сегодня'
   return `${diff} дн.`
+}
+
+async function archiveSupervisionWithValidation() {
+  const warnings = []
+  try {
+    const { data: payments } = await supervisionApi.getPayments(card.value.id)
+    const unpaid = (payments || []).filter(p => !p.is_paid && p.payment_status !== 'paid')
+    if (unpaid.length > 0) {
+      warnings.push(`Неоплаченные выплаты: ${unpaid.length} шт.`)
+    }
+  } catch {}
+
+  if (warnings.length === 0) {
+    await doArchiveSupervision()
+    return
+  }
+
+  $q.dialog({
+    title: 'Данные не заполнены',
+    message: `<b>Обнаружены незавершённые данные:</b><ul style="margin:8px 0 0 0;padding-left:16px">${warnings.map(w => `<li>${w}</li>`).join('')}</ul><br>Переместить в архив?`,
+    html: true,
+    ok: { label: 'В архив', color: 'green', unelevated: true },
+    cancel: { label: 'Отмена', flat: true },
+    persistent: true,
+  }).onOk(() => { doArchiveSupervision() })
+}
+
+async function doArchiveSupervision() {
+  archiveLoading.value = true
+  try {
+    const { contractsApi: cApi } = await import('src/services/api')
+    await cApi.update(card.value.contract_id, { status: 'СДАН' })
+    $q.notify({ type: 'positive', message: 'Проект завершён и перемещён в архив' })
+    await reloadData()
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка архивации' })
+  } finally { archiveLoading.value = false }
 }
 
 async function reloadData() {

@@ -472,9 +472,9 @@
                 :loading="actionLoading"
                 @click="transferToSupervision"
               />
-              <!-- Шаблонный в "Выполненный проект" — архивировать (без проверки актов/оплаты) -->
+              <!-- В архив (Индивидуальный и Шаблонный) — с проверкой оплат и актов -->
               <q-btn
-                v-if="card.project_type === 'Шаблонный' && card.column_name === 'Выполненный проект' && !card.is_archived"
+                v-if="card.column_name === 'Выполненный проект' && !card.is_archived && contractData?.status !== 'СДАН' && contractData?.status !== 'РАСТОРГНУТ'"
                 unelevated
                 dense
                 no-caps
@@ -483,9 +483,13 @@
                 class="full-width q-mb-sm"
                 style="background: #27AE60; color: white; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px"
                 :loading="actionLoading"
-                @click="markTemplateSdan"
+                @click="archiveWithValidation"
               />
-              <div class="text-center" style="color: #999; font-size: 12px; padding: 4px 0">
+              <div
+                v-if="card.is_archived || contractData?.status === 'СДАН' || contractData?.status === 'РАСТОРГНУТ'"
+                class="text-center"
+                style="color: #999; font-size: 12px; padding: 4px 0"
+              >
                 Карточка в архиве
               </div>
             </q-card-section>
@@ -3949,6 +3953,44 @@ async function markTemplateSdan() {
   } catch (err) {
     $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
   } finally { actionLoading.value = false }
+}
+
+async function archiveWithValidation() {
+  const cd = contractData.value
+  const pt = card.value?.project_type
+  const warnings = []
+
+  const unpaid = cardPayments.value.filter(p => !p.is_paid && p.payment_status !== 'paid')
+  if (unpaid.length > 0) {
+    warnings.push(`Неоплаченные выплаты: ${unpaid.length} шт.`)
+  }
+
+  const hasPlanning = cd?.act_planning_signed_link || cd?.act_planning_signed_yandex_path
+  const hasConcept = cd?.act_concept_signed_link || cd?.act_concept_signed_yandex_path
+  const hasFinal = cd?.act_final_signed_link || cd?.act_final_signed_yandex_path
+
+  if (pt === 'Индивидуальный') {
+    if (!hasPlanning) warnings.push('Не загружен акт ПР с подписью (Стадия 1)')
+    if (!hasConcept) warnings.push('Не загружен акт КД с подписью (Стадия 2)')
+    if (!hasFinal) warnings.push('Не загружен финальный акт с подписью (Стадия 3)')
+  } else {
+    if (!hasPlanning) warnings.push('Не загружен акт ПР с подписью (Стадия 1)')
+    if (!hasFinal) warnings.push('Не загружен финальный акт с подписью (Стадия 2)')
+  }
+
+  if (warnings.length === 0) {
+    await markTemplateSdan()
+    return
+  }
+
+  $q.dialog({
+    title: 'Данные не заполнены',
+    message: `<b>Обнаружены незавершённые данные:</b><ul style="margin:8px 0 0 0;padding-left:16px">${warnings.map(w => `<li>${w}</li>`).join('')}</ul><br>Переместить в архив без этих данных?`,
+    html: true,
+    ok: { label: 'В архив', color: 'green', unelevated: true },
+    cancel: { label: 'Отмена', flat: true },
+    persistent: true,
+  }).onOk(() => { markTemplateSdan() })
 }
 
 async function doAdvanceRound() {
