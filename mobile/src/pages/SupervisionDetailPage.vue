@@ -57,6 +57,39 @@
           </div>
           <!-- Статус ДАН убран — функционал завершения через кнопку "Завершить стадию" -->
         </q-card-section>
+        <!-- Таймлайн стадий надзора -->
+        <q-card-section class="q-pt-none q-pb-sm">
+          <div class="row items-center q-mb-xs">
+            <span class="text-caption" style="color: #888">
+              Стадия {{ currentStageIndex + 1 }}/{{ SUPERVISION_STAGES.length }}
+            </span>
+            <q-space />
+            <span class="text-caption text-weight-medium" style="color: #555; max-width: 180px; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
+              {{ card?.column_name }}
+            </span>
+          </div>
+          <div
+            class="row"
+            style="gap: 2px; cursor: pointer"
+            @click="showStagesDialog = true"
+          >
+            <div
+              v-for="(stage, idx) in SUPERVISION_STAGES"
+              :key="stage"
+              :style="{
+                flex: '1',
+                height: '8px',
+                borderRadius: '4px',
+                minWidth: '6px',
+                background: idx < currentStageIndex ? '#4CAF50' : idx === currentStageIndex ? '#1976D2' : '#E0E0E0',
+              }"
+            />
+          </div>
+          <div class="text-caption q-mt-xs" style="color: #aaa">
+            Нажмите для просмотра стадий
+          </div>
+        </q-card-section>
+
         <!-- Прогресс закупок -->
         <q-card-section v-if="timeline.length > 0" class="q-pt-none q-pb-sm">
           <div class="row items-center q-mb-xs">
@@ -1397,6 +1430,47 @@
     </q-dialog>
 
     <!-- Диалог статистики выездов по месяцам -->
+    <!-- Диалог стадий надзора -->
+    <q-dialog v-model="showStagesDialog">
+      <q-card style="min-width: 320px; max-width: 480px; border-radius: 12px">
+        <q-card-section class="row items-center q-pb-xs">
+          <div class="text-subtitle2 text-weight-bold">
+            Стадии надзора
+          </div>
+          <q-space />
+          <q-btn
+            flat
+            round
+            dense
+            icon="close"
+            @click="showStagesDialog = false"
+          />
+        </q-card-section>
+        <q-list dense class="q-pb-sm">
+          <q-item v-for="(stage, idx) in SUPERVISION_STAGES" :key="stage" dense>
+            <q-item-section avatar style="min-width: 32px">
+              <q-icon
+                :name="idx < currentStageIndex ? 'check_circle' : idx === currentStageIndex ? 'radio_button_checked' : 'radio_button_unchecked'"
+                :color="idx < currentStageIndex ? 'positive' : idx === currentStageIndex ? 'primary' : 'grey-4'"
+                size="20px"
+              />
+            </q-item-section>
+            <q-item-section>
+              <q-item-label
+                :style="{
+                  fontSize: '12px',
+                  color: idx < currentStageIndex ? '#2e7d32' : idx === currentStageIndex ? '#1565C0' : '#999',
+                  fontWeight: idx === currentStageIndex ? '600' : '400',
+                }"
+              >
+                {{ stage }}
+              </q-item-label>
+            </q-item-section>
+          </q-item>
+        </q-list>
+      </q-card>
+    </q-dialog>
+
     <q-dialog v-model="showVisitStatsDialog">
       <q-card style="min-width: 340px; max-width: 480px; border-radius: 12px">
         <q-card-section class="row items-center q-pb-sm">
@@ -2442,6 +2516,33 @@ const filteredSvPayments = computed(() => {
   return svPayments.value.filter(p => Number(p.employee_id) === Number(authStore.user?.id))
 })
 
+// Стадии надзора (порядок соответствует серверу)
+const SUPERVISION_STAGES = [
+  'Новый заказ',
+  'В ожидании',
+  'Стадия 1: Закупка керамогранита',
+  'Стадия 2: Закупка сантехники',
+  'Стадия 3: Закупка оборудования',
+  'Стадия 4: Закупка дверей и окон',
+  'Стадия 5: Закупка настенных материалов',
+  'Стадия 6: Закупка напольных материалов',
+  'Стадия 7: Лепной декор',
+  'Стадия 8: Освещение',
+  'Стадия 9: Закупка потолочных материалов',
+  'Стадия 10: Бытовая техника',
+  'Стадия 11: Закупка заказной мебели',
+  'Стадия 12: Закупка фабричной мебели',
+  'Стадия 13: Закупка декора',
+  'Выполненный проект',
+]
+
+const currentStageIndex = computed(() => {
+  if (!card.value) return -1
+  return SUPERVISION_STAGES.indexOf(card.value.column_name)
+})
+
+const showStagesDialog = ref(false)
+
 // Прогресс закупок (Закуплено / Доставлено = завершённые)
 const svStageProgress = computed(() => {
   const entries = timeline.value
@@ -3416,11 +3517,9 @@ async function reassignSM() {
 async function handleCompleteStage() {
   try {
     await supervisionApi.completeStage(card.value.id)
-    // Автоперемещение на следующую стадию
-    const columns = ['Чертежи', 'Комплектация', 'Черновые работы', 'Чистовые работы', 'Декор', 'Выполненный проект']
-    const currentIdx = columns.indexOf(card.value.column_name)
-    if (currentIdx >= 0 && currentIdx < columns.length - 1) {
-      await supervisionApi.moveCard(card.value.id, columns[currentIdx + 1])
+    const currentIdx = currentStageIndex.value
+    if (currentIdx >= 0 && currentIdx < SUPERVISION_STAGES.length - 1) {
+      await supervisionApi.moveCard(card.value.id, SUPERVISION_STAGES[currentIdx + 1])
     }
     $q.notify({ type: 'positive', message: 'Стадия завершена, карточка перемещена' })
     await reloadData()
