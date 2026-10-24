@@ -319,7 +319,7 @@
                     {{ fmtMonth(cp.payment_month) }}
                   </q-item-label>
                   <q-item-label caption :style="{ color: cp.payment_date ? '#27AE60' : '#888' }">
-                    {{ cp.payment_date ? `Оплачено ${fmtDate(cp.payment_date)}` : 'Не оплачено' }}
+                    {{ cp.payment_date ? `Оплачено ${fmtDMY(cp.payment_date)}` : 'Не оплачено' }}
                   </q-item-label>
                   <div class="row items-center q-gutter-xs q-mt-xs">
                     <q-btn
@@ -1351,6 +1351,7 @@ function stageLabel(s) { return STAGE_LABELS[s] || s || '' }
 function statusColor(s) { if (!s) return 'grey'; if (s === 'В работе') return 'orange'; if (s.includes('СДАН')) return 'positive'; if (s.includes('РАСТОРГНУТ')) return 'negative'; if (s.includes('НАДЗОР')) return 'purple'; return 'blue' }
 function fmtDate(d) { if (!d) return '—'; return new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }) }
 function fmtDateShort(d) { if (!d) return ''; return new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }) }
+function fmtDMY(d) { if (!d) return ''; try { const [y, m, day] = d.split('-'); return `${day}.${m}.${y}` } catch { return d } }
 
 const isTimelineEntry = e => e.executor_role !== 'header' && !e.stage_code?.endsWith('_HDR') && e.status !== 'skipped'
 

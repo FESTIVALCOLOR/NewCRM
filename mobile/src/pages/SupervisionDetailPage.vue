@@ -1059,7 +1059,7 @@
                     {{ formatReportMonth(cp.payment_month) }}
                   </q-item-label>
                   <q-item-label caption :style="{ color: cp.payment_date ? '#27AE60' : '#888' }">
-                    {{ cp.payment_date ? `Оплачено ${cp.payment_date}` : 'Не оплачено' }}
+                    {{ cp.payment_date ? `Оплачено ${fmtDMY(cp.payment_date)}` : 'Не оплачено' }}
                   </q-item-label>
                   <div v-if="!isArchived" class="row items-center q-gutter-xs q-mt-xs">
                     <q-btn
