@@ -2039,11 +2039,12 @@
               @click="constructionForm.payments.splice(idx, 1)"
             />
           </div>
-          <div class="row q-col-gutter-xs q-mb-xs items-end">
+          <div class="row q-col-gutter-xs q-mb-xs">
             <div class="col-4">
               <q-input
                 v-model="newConstructionPayment.date"
                 label="Дата"
+                stack-label
                 outlined
                 dense
                 type="date"
@@ -2053,6 +2054,7 @@
               <q-input
                 v-model.number="newConstructionPayment.amount"
                 label="Сумма"
+                stack-label
                 outlined
                 dense
                 type="number"
@@ -2063,6 +2065,7 @@
               <q-input
                 v-model.number="newConstructionPayment.commission"
                 label="Комиссия"
+                stack-label
                 outlined
                 dense
                 type="number"
@@ -2135,11 +2138,12 @@
               @click="materialsForm.payments.splice(idx, 1)"
             />
           </div>
-          <div class="row q-col-gutter-xs q-mb-xs items-end">
+          <div class="row q-col-gutter-xs q-mb-xs">
             <div class="col-3">
               <q-input
                 v-model="newMaterialsPayment.date"
                 label="Дата"
+                stack-label
                 outlined
                 dense
                 type="date"
@@ -2149,6 +2153,7 @@
               <q-input
                 v-model.number="newMaterialsPayment.amount"
                 label="Сумма"
+                stack-label
                 outlined
                 dense
                 type="number"
@@ -2156,12 +2161,19 @@
               />
             </div>
             <div class="col-3">
-              <q-input v-model="newMaterialsPayment.supplier" label="Поставщик" outlined dense />
+              <q-input
+                v-model="newMaterialsPayment.supplier"
+                label="Поставщик"
+                stack-label
+                outlined
+                dense
+              />
             </div>
             <div class="col-3">
               <q-input
                 v-model.number="newMaterialsPayment.commission"
                 label="Комиссия"
+                stack-label
                 outlined
                 dense
                 type="number"
