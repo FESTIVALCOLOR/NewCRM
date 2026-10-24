@@ -208,6 +208,17 @@ body {
   border-radius: 4px;
 }
 
+// Убрать нативные spin-кнопки (стрелки ↑↓) у всех числовых полей
+input[type='number'] {
+  -moz-appearance: textfield;
+
+  &::-webkit-outer-spin-button,
+  &::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+}
+
 // Выравниваем крестик clearable по центру с иконкой нативного date-инпута
 .q-field--dense .q-field__append {
   align-self: center;
