@@ -726,6 +726,33 @@ class SupervisionBudgetExtra(Base):
     supervision_card = relationship("SupervisionCard", backref="budget_extra")
 
 
+class SupervisionClientPayment(Base):
+    """Ежемесячные платежи клиента по авторскому надзору"""
+
+    __tablename__ = "supervision_client_payments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    supervision_card_id = Column(Integer, ForeignKey("supervision_cards.id", ondelete="CASCADE"), nullable=False, index=True)
+    contract_id = Column(Integer, ForeignKey("contracts.id"), nullable=False)
+    amount = Column(Float, nullable=False)
+    payment_month = Column(String(7), nullable=False)  # YYYY-MM
+    payment_date = Column(String(10), nullable=True)  # YYYY-MM-DD, когда оплачено
+    receipt_path = Column(String, nullable=True)  # Путь на ЯД
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    supervision_card = relationship("SupervisionCard", backref="client_payments")
+
+
+class SupervisionPaymentNotifSettings(Base):
+    """Настройки уведомлений о платежах клиента по надзору (на карточку)"""
+
+    __tablename__ = "supervision_payment_notif_settings"
+
+    supervision_card_id = Column(Integer, ForeignKey("supervision_cards.id", ondelete="CASCADE"), primary_key=True)
+    notification_enabled = Column(Boolean, default=True)
+    notification_day = Column(Integer, default=1)  # день месяца для напоминания
+
+
 class SupervisionVisit(Base):
     """Записи выездов на объект авторского надзора"""
 

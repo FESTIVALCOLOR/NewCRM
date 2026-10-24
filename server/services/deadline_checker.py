@@ -431,6 +431,91 @@ def _next_workday_run_utc(now: datetime) -> datetime:
     return candidate
 
 
+async def check_supervision_client_payment_reminders():
+    """Отправляет напоминания об оплате надзора клиентом.
+
+    Каждый день: если сегодня == notification_day для карточки и текущий месяц не оплачен —
+    отправляем уведомление ДАНу и Старшему менеджеру.
+    Advisory lock предотвращает дублирование при --workers 2.
+    """
+    from services.notification_dispatcher import dispatch_notification
+    from sqlalchemy import text
+
+    from database import (
+        Employee,
+        SessionLocal,
+        SupervisionCard,
+        SupervisionClientPayment,
+        SupervisionPaymentNotifSettings,
+    )
+
+    with SessionLocal() as db:
+        try:
+            LOCK_ID = 7419824
+            acquired = db.execute(text("SELECT pg_try_advisory_lock(:lid)"), {"lid": LOCK_ID}).scalar()
+            if not acquired:
+                logger.info("Client payment reminders: блокировка занята другим воркером, пропускаем")
+                return
+
+            try:
+                today = date.today()
+                current_month = today.strftime("%Y-%m")
+
+                settings_list = (
+                    db.query(SupervisionPaymentNotifSettings)
+                    .filter(
+                        SupervisionPaymentNotifSettings.notification_enabled == True,
+                        SupervisionPaymentNotifSettings.notification_day == today.day,
+                    )
+                    .all()
+                )
+
+                for s in settings_list:
+                    card = db.query(SupervisionCard).filter(SupervisionCard.id == s.supervision_card_id).first()
+                    if not card or card.column_name == "Выполненный проект":
+                        continue
+
+                    # Проверяем — есть ли уже оплаченный или запланированный платёж за текущий месяц
+                    existing = (
+                        db.query(SupervisionClientPayment)
+                        .filter(
+                            SupervisionClientPayment.supervision_card_id == card.id,
+                            SupervisionClientPayment.payment_month == current_month,
+                        )
+                        .first()
+                    )
+                    if existing and existing.payment_date:
+                        continue  # Уже оплачено
+
+                    # Адрес карточки для сообщения
+                    address = card.address or f"Надзор #{card.id}"
+                    title = f"Оплата надзора: {address}"
+                    message = f"Напоминание об оплате надзора по объекту «{address}» за {current_month}. Платёж ещё не зафиксирован."
+
+                    # Уведомляем ДАНа и Старшего менеджера
+                    recipient_ids = [r for r in [card.dan_id, card.senior_manager_id] if r]
+                    for emp_id in recipient_ids:
+                        if _already_sent_today(db, emp_id, card.id, f"Оплата надзора {current_month}"):
+                            continue
+                        await dispatch_notification(
+                            db=db,
+                            employee_id=emp_id,
+                            event_type="payment_reminder",
+                            title=title,
+                            message=message,
+                            related_entity_type="supervision_card",
+                            related_entity_id=card.id,
+                        )
+
+                logger.info(f"Client payment reminders: обработано {len(settings_list)} карточек за {current_month}")
+            finally:
+                db.execute(text("SELECT pg_advisory_unlock(:lid)"), {"lid": LOCK_ID})
+                db.commit()
+        except Exception as e:
+            logger.exception(f"Ошибка при проверке напоминаний об оплате надзора: {e}")
+            db.rollback()
+
+
 async def deadline_checker_loop():
     """Бесконечный цикл проверки дедлайнов, запускается в 10:00 МСК только в рабочие дни.
 
@@ -461,6 +546,7 @@ async def deadline_checker_loop():
 
             try:
                 await check_deadlines_once()
+                await check_supervision_client_payment_reminders()
             finally:
                 fcntl.flock(lock_fd, fcntl.LOCK_UN)
                 lock_fd.close()

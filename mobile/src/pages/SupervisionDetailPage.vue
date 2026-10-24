@@ -1028,6 +1028,123 @@
 
         <!-- ====== ВКЛАДКА 5: Оплаты надзора ====== -->
         <q-tab-panel name="payments" class="q-pa-none">
+          <!-- Блок: Оплата надзора клиентом (ежемесячная) -->
+          <q-card class="is-card q-mb-md">
+            <q-card-section class="q-pb-xs">
+              <div class="row items-center">
+                <div class="text-subtitle2 text-weight-bold col" style="color: #333">
+                  Оплата надзора клиентом
+                </div>
+                <q-btn
+                  flat
+                  round
+                  dense
+                  size="sm"
+                  :icon="clientPaymentSettings.notification_enabled ? 'notifications' : 'notifications_off'"
+                  :color="clientPaymentSettings.notification_enabled ? 'primary' : 'grey-5'"
+                  @click="toggleClientPaymentNotif"
+                >
+                  <q-tooltip>{{ clientPaymentSettings.notification_enabled ? 'Уведомления включены' : 'Уведомления отключены' }}</q-tooltip>
+                </q-btn>
+              </div>
+              <div v-if="clientPaymentSettings.notification_enabled" class="text-caption" style="color: #888">
+                Напоминание {{ clientPaymentSettings.notification_day }}-го числа каждого месяца
+              </div>
+            </q-card-section>
+
+            <q-list v-if="clientPayments.length > 0" dense separator>
+              <q-item v-for="cp in clientPayments" :key="cp.id" :style="cp.payment_date ? { background: '#E8F5E9' } : {}">
+                <q-item-section>
+                  <q-item-label class="text-weight-medium" style="font-size: 13px">
+                    {{ formatReportMonth(cp.payment_month) }}
+                  </q-item-label>
+                  <q-item-label caption :style="{ color: cp.payment_date ? '#27AE60' : '#888' }">
+                    {{ cp.payment_date ? `Оплачено ${cp.payment_date}` : 'Не оплачено' }}
+                  </q-item-label>
+                  <div v-if="!isArchived" class="row items-center q-gutter-xs q-mt-xs">
+                    <q-btn
+                      flat
+                      round
+                      dense
+                      size="xs"
+                      icon="delete_outline"
+                      color="negative"
+                      @click.stop="deleteClientPayment(cp)"
+                    />
+                  </div>
+                </q-item-section>
+                <q-item-section side>
+                  <div class="text-weight-bold" :style="{ color: cp.payment_date ? '#27AE60' : '#333' }">
+                    {{ formatMoney(cp.amount) }}
+                  </div>
+                  <div class="column q-gutter-xs items-stretch q-mt-xs">
+                    <q-btn
+                      v-if="!cp.payment_date && !isArchived"
+                      outline
+                      dense
+                      size="sm"
+                      icon="check_circle"
+                      label="Оплатить"
+                      color="positive"
+                      no-caps
+                      style="border-radius: 4px; min-width: 100px; height: 28px"
+                      @click="markClientPaymentPaid(cp)"
+                    />
+                    <q-badge v-else-if="cp.payment_date" color="positive" style="padding: 4px 10px; font-size: 11px; border-radius: 4px; min-width: 100px; justify-content: center; height: 28px; display: flex; align-items: center">
+                      Оплачено
+                      <q-btn
+                        v-if="!isArchived"
+                        flat
+                        round
+                        dense
+                        size="xs"
+                        icon="close"
+                        color="white"
+                        class="q-ml-xs"
+                        style="margin: -4px -4px -4px 0"
+                        @click.stop="cancelClientPaymentPaid(cp)"
+                      />
+                    </q-badge>
+                    <q-btn
+                      v-if="!isArchived"
+                      outline
+                      dense
+                      size="sm"
+                      icon="upload_file"
+                      label="Чек"
+                      no-caps
+                      :color="cp.receipt_path ? 'positive' : 'grey-7'"
+                      style="border-radius: 4px; min-width: 100px; height: 28px"
+                      @click="triggerClientPayReceiptUpload(cp.id)"
+                    >
+                      <q-tooltip v-if="cp.receipt_path">
+                        Чек загружен
+                      </q-tooltip>
+                    </q-btn>
+                  </div>
+                </q-item-section>
+              </q-item>
+            </q-list>
+
+            <q-card-section v-if="clientPayments.length === 0" class="text-center" style="color: #999; font-size: 12px">
+              Нет платежей клиента
+            </q-card-section>
+
+            <q-card-section v-if="!isArchived" class="q-pt-xs q-pb-sm">
+              <q-btn
+                outline
+                dense
+                no-caps
+                icon="add"
+                label="Добавить платёж клиента"
+                color="primary"
+                size="sm"
+                @click="showClientPayDialog = true"
+              />
+            </q-card-section>
+          </q-card>
+          <!-- /Блок оплата надзора клиентом -->
+
           <q-card class="is-card q-mb-md">
             <q-card-section class="q-pb-none">
               <div class="text-subtitle2 text-weight-bold" style="color: #333">
@@ -2076,6 +2193,60 @@
       </q-card>
     </q-dialog>
 
+    <!-- Диалог: Добавить платёж клиента -->
+    <q-dialog v-model="showClientPayDialog" persistent>
+      <q-card style="min-width: 300px; max-width: 420px; border-radius: 10px">
+        <q-card-section style="background: #F8F9FA; border-radius: 10px 10px 0 0">
+          <div class="text-subtitle1 text-weight-bold">
+            Ежемесячный платёж клиента
+          </div>
+        </q-card-section>
+        <q-card-section class="q-gutter-sm">
+          <q-input
+            v-model.number="clientPayForm.amount"
+            label="Сумма, ₽"
+            type="number"
+            outlined
+            dense
+            input-style="font-size: 14px"
+          />
+          <q-input
+            v-model="clientPayForm.payment_month"
+            label="Месяц (ГГГГ-ММ)"
+            type="month"
+            outlined
+            dense
+            input-style="font-size: 14px"
+          />
+        </q-card-section>
+        <q-card-actions align="right" class="q-px-md q-pb-md">
+          <q-btn
+            flat
+            label="Отмена"
+            color="grey-7"
+            no-caps
+            @click="showClientPayDialog = false"
+          />
+          <q-btn
+            unelevated
+            label="Добавить"
+            color="primary"
+            no-caps
+            @click="addClientPayment"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- Скрытый input для загрузки чека платежа клиента -->
+    <input
+      ref="clientPayReceiptInput"
+      type="file"
+      accept="image/*,application/pdf"
+      style="display:none"
+      @change="handleClientPayReceiptUpload"
+    >
+
     <!-- Диалог: Строительные работы -->
     <q-dialog v-model="showConstructionDialog" persistent>
       <q-card style="min-width: 320px; max-width: 480px; border-radius: 10px">
@@ -2289,7 +2460,7 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
-import { supervisionApi, supervisionBudgetApi, filesApi, employeesApi, paymentsApi, locksApi, messengerApi } from 'src/services/api'
+import { supervisionApi, supervisionBudgetApi, supervisionClientPaymentsApi, filesApi, employeesApi, paymentsApi, locksApi, messengerApi } from 'src/services/api'
 import VoiceRecorder from 'src/components/VoiceRecorder.vue'
 import InlineChatRoom from 'src/components/InlineChatRoom.vue'
 import { addToCalendar } from 'src/composables/useCalendar'
@@ -2333,6 +2504,14 @@ const constructionForm = ref({ planned: null, contractor: '', notes: '', payment
 const materialsForm = ref({ planned: null, supplier: '', notes: '', payments: [] })
 const newConstructionPayment = ref({ date: '', amount: null, commission: null })
 const newMaterialsPayment = ref({ date: '', amount: null, supplier: '', commission: null })
+
+// Ежемесячные платежи клиента по надзору
+const clientPayments = ref([])
+const clientPaymentSettings = ref({ notification_enabled: true, notification_day: 1 })
+const showClientPayDialog = ref(false)
+const clientPayForm = ref({ amount: null, payment_month: '' })
+const clientPayReceiptInput = ref(null)
+const clientPayReceiptId = ref(null)
 
 const constructionActualTotal = computed(() =>
   (budgetExtra.value.construction_payments || []).reduce((s, p) => s + (Number(p.amount) || 0), 0),
@@ -2904,6 +3083,13 @@ async function reloadData() {
     svPayments.value = data || []
   } catch { svPayments.value = [] }
 
+  // Платежи клиента по надзору
+  try {
+    const { data } = await supervisionClientPaymentsApi.getByCard(cardId)
+    clientPayments.value = data.payments || []
+    clientPaymentSettings.value = data.settings || { notification_enabled: true, notification_day: 1 }
+  } catch { clientPayments.value = [] }
+
   // Бюджет (строительные работы + черновые материалы)
   try { const { data } = await supervisionBudgetApi.get(cardId); budgetExtra.value = data } catch { /* ok */ }
 
@@ -3438,6 +3624,87 @@ async function uploadFile(file) {
   } finally {
     $q.loading.hide()
   }
+}
+
+// === Платежи клиента по надзору ===
+
+async function addClientPayment() {
+  if (!clientPayForm.value.amount || !clientPayForm.value.payment_month) {
+    $q.notify({ type: 'warning', message: 'Укажите сумму и месяц' })
+    return
+  }
+  try {
+    const cardId = card.value.id
+    const contractId = card.value.contract_id
+    await supervisionClientPaymentsApi.create({
+      supervision_card_id: cardId,
+      contract_id: contractId,
+      amount: Number(clientPayForm.value.amount),
+      payment_month: clientPayForm.value.payment_month,
+    })
+    showClientPayDialog.value = false
+    clientPayForm.value = { amount: null, payment_month: '' }
+    const { data } = await supervisionClientPaymentsApi.getByCard(cardId)
+    clientPayments.value = data.payments || []
+    $q.notify({ type: 'positive', message: 'Платёж добавлен' })
+  } catch { $q.notify({ type: 'negative', message: 'Ошибка сохранения' }) }
+}
+
+async function markClientPaymentPaid(p) {
+  const today = new Date().toISOString().slice(0, 10)
+  try {
+    await supervisionClientPaymentsApi.update(p.id, { payment_date: today })
+    p.payment_date = today
+    $q.notify({ type: 'positive', message: 'Отмечено как оплачено' })
+  } catch { $q.notify({ type: 'negative', message: 'Ошибка' }) }
+}
+
+async function cancelClientPaymentPaid(p) {
+  try {
+    await supervisionClientPaymentsApi.update(p.id, { payment_date: '' })
+    p.payment_date = null
+    $q.notify({ type: 'info', message: 'Отметка об оплате снята' })
+  } catch { $q.notify({ type: 'negative', message: 'Ошибка' }) }
+}
+
+async function deleteClientPayment(p) {
+  $q.dialog({ title: 'Удалить платёж?', message: `${formatReportMonth(p.payment_month)} — ${formatMoney(p.amount)}`, cancel: true }).onOk(async () => {
+    try {
+      await supervisionClientPaymentsApi.delete(p.id)
+      clientPayments.value = clientPayments.value.filter(x => x.id !== p.id)
+      $q.notify({ type: 'positive', message: 'Платёж удалён' })
+    } catch { $q.notify({ type: 'negative', message: 'Ошибка' }) }
+  })
+}
+
+async function toggleClientPaymentNotif() {
+  const newVal = !clientPaymentSettings.value.notification_enabled
+  try {
+    const { data } = await supervisionClientPaymentsApi.updateSettings(card.value.id, { notification_enabled: newVal })
+    clientPaymentSettings.value = data
+    $q.notify({ type: 'info', message: newVal ? 'Уведомления включены' : 'Уведомления отключены' })
+  } catch { $q.notify({ type: 'negative', message: 'Ошибка' }) }
+}
+
+function triggerClientPayReceiptUpload(paymentId) {
+  clientPayReceiptId.value = paymentId
+  clientPayReceiptInput.value?.click()
+}
+
+async function handleClientPayReceiptUpload(event) {
+  const file = event.target.files?.[0]
+  if (!file || !card.value) return
+  try {
+    $q.loading.show({ message: 'Загрузка чека...' })
+    const contractNum = card.value.contract_number || card.value.contract_id || card.value.id
+    const yandexPath = `/CRM/Чеки/${contractNum}/надзор_клиент_${clientPayReceiptId.value}_${file.name}`
+    const { yandex_path: actualPath } = await uploadToYd(file, yandexPath)
+    await supervisionClientPaymentsApi.update(clientPayReceiptId.value, { receipt_path: actualPath })
+    const idx = clientPayments.value.findIndex(p => p.id === clientPayReceiptId.value)
+    if (idx !== -1) clientPayments.value[idx].receipt_path = actualPath
+    $q.notify({ type: 'positive', message: 'Чек загружен' })
+  } catch { $q.notify({ type: 'negative', message: 'Ошибка загрузки чека' }) }
+  finally { $q.loading.hide(); event.target.value = '' }
 }
 
 function historyIcon(type) {

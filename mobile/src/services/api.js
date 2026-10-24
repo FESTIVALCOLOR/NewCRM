@@ -454,6 +454,31 @@ export const supervisionApi = {
     api.get(`/api/v1/payments/by-supervision-card/${cardId}`),
 }
 
+// === Ежемесячные платежи клиента по надзору ===
+
+export const supervisionClientPaymentsApi = {
+  getByCard: (cardId) =>
+    api.get(`/api/v1/supervision-client-payments/${cardId}`),
+
+  getByContract: (contractId) =>
+    api.get(`/api/v1/supervision-client-payments/by-contract/${contractId}`),
+
+  create: (data) =>
+    api.post('/api/v1/supervision-client-payments/', data),
+
+  update: (paymentId, data) =>
+    api.patch(`/api/v1/supervision-client-payments/${paymentId}`, data),
+
+  delete: (paymentId) =>
+    api.delete(`/api/v1/supervision-client-payments/${paymentId}`),
+
+  getSettings: (cardId) =>
+    api.get(`/api/v1/supervision-client-payments/${cardId}/settings`),
+
+  updateSettings: (cardId, data) =>
+    api.patch(`/api/v1/supervision-client-payments/${cardId}/settings`, data),
+}
+
 // === Supervision Budget Extra (строительные работы + черновые материалы) ===
 
 export const supervisionBudgetApi = {

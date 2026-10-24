@@ -329,6 +329,44 @@ async def startup_event():
     except Exception as e:
         logger.debug(f"user_chat_pins table: {e}")
 
+    # Миграция: supervision_client_payments + supervision_payment_notif_settings
+    try:
+        from sqlalchemy import text as _text_sv_client_pay
+
+        with engine.begin() as conn:
+            conn.execute(_text_sv_client_pay(f"SET LOCAL lock_timeout = '{_LOCK_TIMEOUT_MS}'"))
+            conn.execute(
+                _text_sv_client_pay("""
+                CREATE TABLE IF NOT EXISTS supervision_client_payments (
+                    id SERIAL PRIMARY KEY,
+                    supervision_card_id INTEGER NOT NULL REFERENCES supervision_cards(id) ON DELETE CASCADE,
+                    contract_id INTEGER NOT NULL REFERENCES contracts(id),
+                    amount FLOAT NOT NULL,
+                    payment_month VARCHAR(7) NOT NULL,
+                    payment_date VARCHAR(10),
+                    receipt_path VARCHAR,
+                    created_at TIMESTAMP
+                )
+            """)
+            )
+            conn.execute(_text_sv_client_pay("CREATE INDEX IF NOT EXISTS ix_sv_client_payments_card ON supervision_client_payments(supervision_card_id)"))
+            conn.execute(
+                _text_sv_client_pay("""
+                CREATE TABLE IF NOT EXISTS supervision_payment_notif_settings (
+                    supervision_card_id INTEGER PRIMARY KEY REFERENCES supervision_cards(id) ON DELETE CASCADE,
+                    notification_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                    notification_day INTEGER NOT NULL DEFAULT 1
+                )
+            """)
+            )
+            logger.info("Migrated: supervision_client_payments + supervision_payment_notif_settings")
+    except Exception as e:
+        _em = str(e).lower()
+        if "lock" in _em or "timeout" in _em:
+            logger.warning("supervision_client_payments migration: lock timeout, will retry on next restart")
+        elif "duplicate" not in _em and "already" not in _em and "exists" not in _em:
+            logger.debug(f"supervision_client_payments migration note: {e}")
+
     # Seed дефолтных прав и admin-пользователя
     from auth import get_password_hash
 
@@ -830,6 +868,11 @@ from routers.supervision_visits_router import router as supervision_visits_route
 
 app.include_router(supervision_visits_router, prefix="/api/v1/supervision-visits")
 app.include_router(supervision_budget_router, prefix="/api/v1/supervision-budget")
+
+from routers.supervision_client_payments_router import router as supervision_client_payments_router
+
+app.include_router(supervision_client_payments_router, prefix="/api/v1/supervision-client-payments")
+
 app.include_router(action_history_router, prefix="/api/v1/action-history")
 app.include_router(reports_router, prefix="/api/v1/reports")
 

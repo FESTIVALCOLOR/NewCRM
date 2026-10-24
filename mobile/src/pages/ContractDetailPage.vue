@@ -288,6 +288,118 @@
             </q-list>
           </q-card>
 
+          <!-- Платежи клиента по авторскому надзору (ежемесячные) -->
+          <q-card v-if="contract.project_type === 'Авторский надзор'" class="is-card q-mb-md">
+            <q-card-section class="q-pb-xs">
+              <div class="row items-center">
+                <div class="text-subtitle2 text-weight-bold col" style="color: #333">
+                  Оплата надзора клиентом
+                </div>
+                <q-btn
+                  flat
+                  round
+                  dense
+                  size="sm"
+                  :icon="svClientPaymentSettings.notification_enabled ? 'notifications' : 'notifications_off'"
+                  :color="svClientPaymentSettings.notification_enabled ? 'primary' : 'grey-5'"
+                  @click="toggleSvClientPayNotif"
+                >
+                  <q-tooltip>{{ svClientPaymentSettings.notification_enabled ? 'Уведомления включены' : 'Уведомления отключены' }}</q-tooltip>
+                </q-btn>
+              </div>
+              <div v-if="svClientPaymentSettings.notification_enabled" class="text-caption" style="color: #888">
+                Напоминание {{ svClientPaymentSettings.notification_day }}-го числа каждого месяца
+              </div>
+            </q-card-section>
+
+            <q-list v-if="svClientPayments.length > 0" dense separator>
+              <q-item v-for="cp in svClientPayments" :key="cp.id" :style="cp.payment_date ? { background: '#E8F5E9' } : {}">
+                <q-item-section>
+                  <q-item-label class="text-weight-medium" style="font-size: 13px">
+                    {{ fmtMonth(cp.payment_month) }}
+                  </q-item-label>
+                  <q-item-label caption :style="{ color: cp.payment_date ? '#27AE60' : '#888' }">
+                    {{ cp.payment_date ? `Оплачено ${fmtDate(cp.payment_date)}` : 'Не оплачено' }}
+                  </q-item-label>
+                  <div class="row items-center q-gutter-xs q-mt-xs">
+                    <q-btn
+                      flat
+                      round
+                      dense
+                      size="xs"
+                      icon="delete_outline"
+                      color="negative"
+                      @click.stop="deleteSvClientPayment(cp)"
+                    />
+                  </div>
+                </q-item-section>
+                <q-item-section side>
+                  <div class="text-weight-bold" :style="{ color: cp.payment_date ? '#27AE60' : '#333' }">
+                    {{ fmtMoney(cp.amount) }}
+                  </div>
+                  <div class="column q-gutter-xs items-stretch q-mt-xs">
+                    <q-btn
+                      v-if="!cp.payment_date"
+                      outline
+                      dense
+                      size="sm"
+                      icon="check_circle"
+                      label="Оплатить"
+                      color="positive"
+                      no-caps
+                      style="border-radius: 4px; min-width: 100px; height: 28px"
+                      @click="markSvClientPaymentPaid(cp)"
+                    />
+                    <q-badge v-else color="positive" style="padding: 4px 10px; font-size: 11px; border-radius: 4px; min-width: 100px; justify-content: center; height: 28px; display: flex; align-items: center">
+                      Оплачено
+                      <q-btn
+                        flat
+                        round
+                        dense
+                        size="xs"
+                        icon="close"
+                        color="white"
+                        class="q-ml-xs"
+                        style="margin: -4px -4px -4px 0"
+                        @click.stop="cancelSvClientPaymentPaid(cp)"
+                      />
+                    </q-badge>
+                    <q-btn
+                      outline
+                      dense
+                      size="sm"
+                      icon="upload_file"
+                      label="Чек"
+                      no-caps
+                      :color="cp.receipt_path ? 'positive' : 'grey-7'"
+                      style="border-radius: 4px; min-width: 100px; height: 28px"
+                      @click="triggerSvClientPayReceipt(cp.id)"
+                    >
+                      <q-tooltip v-if="cp.receipt_path">
+                        Чек загружен
+                      </q-tooltip>
+                    </q-btn>
+                  </div>
+                </q-item-section>
+              </q-item>
+            </q-list>
+            <q-card-section v-if="svClientPayments.length === 0" class="text-center" style="color: #999; font-size: 12px">
+              Нет платежей
+            </q-card-section>
+            <q-card-section class="q-pt-xs q-pb-sm">
+              <q-btn
+                outline
+                dense
+                no-caps
+                icon="add"
+                label="Добавить платёж"
+                color="primary"
+                size="sm"
+                @click="showSvClientPayDialog = true"
+              />
+            </q-card-section>
+          </q-card>
+
           <!-- Файлы: Договор / ТЗ / Доп.соглашения — в ландшафте 3 колонки -->
           <div class="contract-files-grid">
             <!-- Файлы: Договор -->
@@ -948,6 +1060,56 @@
         accept=".pdf,.jpg,.jpeg,.png"
         @change="handleReceiptUpload"
       >
+      <input
+        ref="svClientPayReceiptInput"
+        type="file"
+        style="display:none"
+        accept="image/*,application/pdf"
+        @change="handleSvClientPayReceiptUpload"
+      >
+
+      <!-- Диалог: Ежемесячный платёж клиента по надзору -->
+      <q-dialog v-model="showSvClientPayDialog" persistent>
+        <q-card style="min-width: 300px; max-width: 420px; border-radius: 10px">
+          <q-card-section style="background: #F8F9FA; border-radius: 10px 10px 0 0">
+            <div class="text-subtitle1 text-weight-bold">
+              Ежемесячный платёж клиента
+            </div>
+          </q-card-section>
+          <q-card-section class="q-gutter-sm">
+            <q-input
+              v-model.number="svClientPayForm.amount"
+              label="Сумма, ₽"
+              type="number"
+              outlined
+              dense
+            />
+            <q-input
+              v-model="svClientPayForm.payment_month"
+              label="Месяц (ГГГГ-ММ)"
+              type="month"
+              outlined
+              dense
+            />
+          </q-card-section>
+          <q-card-actions align="right" class="q-px-md q-pb-md">
+            <q-btn
+              flat
+              label="Отмена"
+              color="grey-7"
+              no-caps
+              @click="showSvClientPayDialog = false"
+            />
+            <q-btn
+              unelevated
+              label="Добавить"
+              color="primary"
+              no-caps
+              @click="addSvClientPayment"
+            />
+          </q-card-actions>
+        </q-card>
+      </q-dialog>
     </template>
 
     <div v-else-if="!loading" class="text-center q-pa-xl" style="color: #999">
@@ -1043,7 +1205,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { addWorkingDays, countWorkingDaysUntil, countWorkingDaysBetween } from 'src/composables/useDeadline'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
-import { contractsApi, filesApi, crmApi, clientsApi, timelineApi, surveyApi } from 'src/services/api'
+import { contractsApi, filesApi, crmApi, clientsApi, timelineApi, surveyApi, supervisionClientPaymentsApi } from 'src/services/api'
 import { useReferencesStore } from 'src/stores/references'
 import { useAuthStore } from 'src/stores/auth'
 import { usePermission } from 'src/composables/usePermission'
@@ -1078,6 +1240,14 @@ const receiptType = ref('')
 
 const agentColor = computed(() => refs.agentByName(contract.value?.agent_type)?.color || '#95A5A6')
 const crmDeadline = computed(() => contract.value?.crm_card_deadline || null)
+
+// Ежемесячные платежи клиента по надзору (только для Авторский надзор)
+const svClientPayments = ref([])
+const svClientPaymentSettings = ref({ notification_enabled: true, notification_day: 1 })
+const showSvClientPayDialog = ref(false)
+const svClientPayForm = ref({ amount: null, payment_month: '' })
+const svClientPayReceiptInput = ref(null)
+const svClientPayReceiptId = ref(null)
 
 // Опросы клиента
 const surveys = ref([])
@@ -1802,6 +1972,89 @@ async function syncWithYd() {
   } finally { syncing.value = false }
 }
 
+// === Платежи клиента по надзору (ContractDetailPage) ===
+
+function fmtMonth(m) {
+  if (!m) return ''
+  try {
+    const [y, mo] = m.split('-')
+    const months = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь']
+    return `${months[parseInt(mo) - 1]} ${y}`
+  } catch { return m }
+}
+
+async function addSvClientPayment() {
+  if (!svClientPayForm.value.amount || !svClientPayForm.value.payment_month) {
+    $q.notify({ type: 'warning', message: 'Укажите сумму и месяц' }); return
+  }
+  const cardId = contract.value?.supervision_card_id
+  const contractId = contract.value?.id
+  if (!cardId) return
+  try {
+    await supervisionClientPaymentsApi.create({
+      supervision_card_id: cardId, contract_id: contractId,
+      amount: Number(svClientPayForm.value.amount),
+      payment_month: svClientPayForm.value.payment_month,
+    })
+    showSvClientPayDialog.value = false
+    svClientPayForm.value = { amount: null, payment_month: '' }
+    const { data } = await supervisionClientPaymentsApi.getByCard(cardId)
+    svClientPayments.value = data.payments || []
+    $q.notify({ type: 'positive', message: 'Платёж добавлен' })
+  } catch { $q.notify({ type: 'negative', message: 'Ошибка сохранения' }) }
+}
+
+async function markSvClientPaymentPaid(p) {
+  const today = new Date().toISOString().slice(0, 10)
+  try { await supervisionClientPaymentsApi.update(p.id, { payment_date: today }); p.payment_date = today }
+  catch { $q.notify({ type: 'negative', message: 'Ошибка' }) }
+}
+
+async function cancelSvClientPaymentPaid(p) {
+  try { await supervisionClientPaymentsApi.update(p.id, { payment_date: '' }); p.payment_date = null }
+  catch { $q.notify({ type: 'negative', message: 'Ошибка' }) }
+}
+
+async function deleteSvClientPayment(p) {
+  $q.dialog({ title: 'Удалить платёж?', message: `${fmtMonth(p.payment_month)} — ${fmtMoney(p.amount)}`, cancel: true }).onOk(async () => {
+    try {
+      await supervisionClientPaymentsApi.delete(p.id)
+      svClientPayments.value = svClientPayments.value.filter(x => x.id !== p.id)
+    } catch { $q.notify({ type: 'negative', message: 'Ошибка' }) }
+  })
+}
+
+async function toggleSvClientPayNotif() {
+  const cardId = contract.value?.supervision_card_id
+  if (!cardId) return
+  const newVal = !svClientPaymentSettings.value.notification_enabled
+  try {
+    const { data } = await supervisionClientPaymentsApi.updateSettings(cardId, { notification_enabled: newVal })
+    svClientPaymentSettings.value = data
+  } catch { $q.notify({ type: 'negative', message: 'Ошибка' }) }
+}
+
+function triggerSvClientPayReceipt(paymentId) {
+  svClientPayReceiptId.value = paymentId
+  svClientPayReceiptInput.value?.click()
+}
+
+async function handleSvClientPayReceiptUpload(event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+  try {
+    $q.loading.show({ message: 'Загрузка чека...' })
+    const contractNum = contract.value?.contract_number || contract.value?.id
+    const yandexPath = `/CRM/Чеки/${contractNum}/надзор_клиент_${svClientPayReceiptId.value}_${file.name}`
+    const { yandex_path: actualPath } = await uploadToYd(file, yandexPath)
+    await supervisionClientPaymentsApi.update(svClientPayReceiptId.value, { receipt_path: actualPath })
+    const idx = svClientPayments.value.findIndex(p => p.id === svClientPayReceiptId.value)
+    if (idx !== -1) svClientPayments.value[idx].receipt_path = actualPath
+    $q.notify({ type: 'positive', message: 'Чек загружен' })
+  } catch { $q.notify({ type: 'negative', message: 'Ошибка загрузки' }) }
+  finally { $q.loading.hide(); event.target.value = '' }
+}
+
 onMounted(async () => {
   const id = route.params.id
   try {
@@ -1821,6 +2074,15 @@ onMounted(async () => {
     }
     // Загрузка опросов
     loadSurveys()
+
+    // Платежи клиента по надзору (если Авторский надзор)
+    if (contract.value?.project_type === 'Авторский надзор' && contract.value?.supervision_card_id) {
+      try {
+        const { data } = await supervisionClientPaymentsApi.getByCard(contract.value.supervision_card_id)
+        svClientPayments.value = data.payments || []
+        svClientPaymentSettings.value = data.settings || { notification_enabled: true, notification_day: 1 }
+      } catch {}
+    }
   } finally { loading.value = false }
 })
 </script>
