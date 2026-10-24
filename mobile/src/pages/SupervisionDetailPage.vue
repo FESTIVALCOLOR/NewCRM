@@ -2039,13 +2039,11 @@
               @click="constructionForm.payments.splice(idx, 1)"
             />
           </div>
-          <div class="row q-col-gutter-xs q-mb-xs">
+          <div class="row q-col-gutter-xs q-mb-xs items-end">
             <div class="col-4">
-              <div class="text-caption text-grey-7 q-mb-xs">
-                Дата
-              </div>
               <q-input
                 v-model="newConstructionPayment.date"
+                label="Дата"
                 outlined
                 dense
                 type="date"
@@ -2137,13 +2135,11 @@
               @click="materialsForm.payments.splice(idx, 1)"
             />
           </div>
-          <div class="row q-col-gutter-xs q-mb-xs">
+          <div class="row q-col-gutter-xs q-mb-xs items-end">
             <div class="col-3">
-              <div class="text-caption text-grey-7 q-mb-xs">
-                Дата
-              </div>
               <q-input
                 v-model="newMaterialsPayment.date"
+                label="Дата"
                 outlined
                 dense
                 type="date"
