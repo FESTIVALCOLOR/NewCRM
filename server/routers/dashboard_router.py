@@ -1810,15 +1810,17 @@ async def get_supervision_analytics(
 
         # --- Комиссии по стадиям и агентам (все карточки: активные + архивные) ---
         def _entry_in_period(actual_date_str) -> bool:
-            """True если дата попадает в выбранный период (или период не задан)."""
+            """True если дата попадает в выбранный период (или период не задан, или дата не указана)."""
             if not (year or quarter or month):
                 return True
             if not actual_date_str:
-                return False
+                # actual_date не заполнена — этап ещё не завершён, но комиссия уже записана.
+                # Включаем всегда, т.к. привязать к периоду невозможно.
+                return True
             try:
                 d = datetime.strptime(str(actual_date_str)[:10], "%Y-%m-%d")
             except (ValueError, TypeError):
-                return False
+                return True
             if year and d.year != year:
                 return False
             if month and d.month != month:
