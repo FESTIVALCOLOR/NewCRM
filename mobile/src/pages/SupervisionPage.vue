@@ -456,13 +456,15 @@ const moveCard = ref(null)
 
 const SUPERVISION_COLUMNS = [
   'Новый заказ', 'В ожидании',
-  'Стадия 1: Закупка керамогранита', 'Стадия 2: Закупка сантехники',
-  'Стадия 3: Закупка оборудования', 'Стадия 4: Закупка дверей и окон',
-  'Стадия 5: Закупка настенных материалов', 'Стадия 6: Закупка напольных материалов',
-  'Стадия 7: Лепной декор', 'Стадия 8: Освещение',
-  'Стадия 9: Закупка потолочных материалов', 'Стадия 10: Бытовая техника',
-  'Стадия 11: Закупка заказной мебели', 'Стадия 12: Закупка фабричной мебели',
-  'Стадия 13: Закупка декора',
+  'Стадия 1: Демонтаж/Монтаж/Штукатурные работы',
+  'Стадия 2: Электрика/Сантехника/Звукоизоляция',
+  'Стадия 3: Монтаж Пола/Потолков/Шпатлевание стен',
+  'Стадия 4: Плиточные работы',
+  'Стадия 5: Финишные отделочные работы',
+  'Стадия 6: Чистовая электрика/сантехника',
+  'Стадия 7: Монтаж Заказной мебели',
+  'Стадия 8: Монтаж фабричной мебели/зеркал и стекл',
+  'Стадия 9: Финишные доп. работы/декорирование',
   'Выполненный проект',
 ]
 
@@ -470,7 +472,7 @@ const columns = computed(() => {
   const grouped = {}
   for (const col of SUPERVISION_COLUMNS) grouped[col] = []
   for (const card of cards.value) { const col = card.column_name || 'Новый заказ'; if (!grouped[col]) grouped[col] = []; grouped[col].push(card) }
-  return SUPERVISION_COLUMNS.filter(c => grouped[c]).map(c => ({ name: c, shortName: c.replace(/^Стадия \d+: (Закупка )?/, '').substring(0, 15), cards: grouped[c], count: grouped[c].length }))
+  return SUPERVISION_COLUMNS.filter(c => grouped[c]).map(c => ({ name: c, shortName: c.replace(/^Стадия \d+: /, '').substring(0, 18), cards: grouped[c], count: grouped[c].length }))
 })
 
 watch(columns, (cols) => { if (cols.length > 0 && currentSlide.value >= cols.length) currentSlide.value = 0 })

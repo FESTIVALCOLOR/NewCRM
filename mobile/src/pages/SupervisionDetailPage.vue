@@ -2373,6 +2373,8 @@ const cameraInput = ref(null)
 const fileInput = ref(null)
 const nadzorFileInput = ref(null)
 const visitForm = ref({ visit_date: new Date().toISOString().split('T')[0], stage_code: '', notes: '', executor_name: '', visit_type: 'На объект', executor_role: 'ДАН', extra_visit: false })
+// Сбрасываем стадию при смене типа выезда — опции меняются
+watch(() => visitForm.value.visit_type, () => { visitForm.value.stage_code = '' })
 const visitExecutorPick = ref(null)
 const executorOptions = ref([])
 const executorNameOptions = ref([])
@@ -2516,23 +2518,19 @@ const filteredSvPayments = computed(() => {
   return svPayments.value.filter(p => Number(p.employee_id) === Number(authStore.user?.id))
 })
 
-// Стадии надзора (порядок соответствует серверу)
+// Стадии надзора (колонки доски) — строительные работы
 const SUPERVISION_STAGES = [
   'Новый заказ',
   'В ожидании',
-  'Стадия 1: Закупка керамогранита',
-  'Стадия 2: Закупка сантехники',
-  'Стадия 3: Закупка оборудования',
-  'Стадия 4: Закупка дверей и окон',
-  'Стадия 5: Закупка настенных материалов',
-  'Стадия 6: Закупка напольных материалов',
-  'Стадия 7: Лепной декор',
-  'Стадия 8: Освещение',
-  'Стадия 9: Закупка потолочных материалов',
-  'Стадия 10: Бытовая техника',
-  'Стадия 11: Закупка заказной мебели',
-  'Стадия 12: Закупка фабричной мебели',
-  'Стадия 13: Закупка декора',
+  'Стадия 1: Демонтаж/Монтаж/Штукатурные работы',
+  'Стадия 2: Электрика/Сантехника/Звукоизоляция',
+  'Стадия 3: Монтаж Пола/Потолков/Шпатлевание стен',
+  'Стадия 4: Плиточные работы',
+  'Стадия 5: Финишные отделочные работы',
+  'Стадия 6: Чистовая электрика/сантехника',
+  'Стадия 7: Монтаж Заказной мебели',
+  'Стадия 8: Монтаж фабричной мебели/зеркал и стекл',
+  'Стадия 9: Финишные доп. работы/декорирование',
   'Выполненный проект',
 ]
 
@@ -2688,7 +2686,8 @@ const supervisionColumns = [
   { label: 'Выполненный проект', value: 'Выполненный проект' },
 ]
 
-const stageCodesForVisit = [
+// Стадии закупок (для выездов "К поставщику" и таймлайна закупок)
+const PURCHASE_STAGE_CODES = [
   { label: 'Ст. 1: Закупка керамогранита', value: 'STAGE_1_CERAMIC' },
   { label: 'Ст. 2: Закупка сантехники', value: 'STAGE_2_PLUMBING' },
   { label: 'Ст. 3: Закупка оборудования', value: 'STAGE_3_EQUIPMENT' },
@@ -2703,6 +2702,24 @@ const stageCodesForVisit = [
   { label: 'Ст. 12: Фабричная мебель', value: 'STAGE_11_FACTORY_FURNITURE' },
   { label: 'Ст. 13: Декор', value: 'STAGE_12_DECOR' },
 ]
+
+// Стадии строительных работ (для выездов "На объект")
+const WORK_STAGE_CODES = [
+  { label: 'Ст. 1: Демонтаж/Монтаж/Штукатурные работы', value: 'WORK_1' },
+  { label: 'Ст. 2: Электрика/Сантехника/Звукоизоляция', value: 'WORK_2' },
+  { label: 'Ст. 3: Монтаж Пола/Потолков/Шпатлевание стен', value: 'WORK_3' },
+  { label: 'Ст. 4: Плиточные работы', value: 'WORK_4' },
+  { label: 'Ст. 5: Финишные отделочные работы', value: 'WORK_5' },
+  { label: 'Ст. 6: Чистовая электрика/сантехника', value: 'WORK_6' },
+  { label: 'Ст. 7: Монтаж Заказной мебели', value: 'WORK_7' },
+  { label: 'Ст. 8: Монтаж фабричной мебели/зеркал и стекл', value: 'WORK_8' },
+  { label: 'Ст. 9: Финишные доп. работы/декорирование', value: 'WORK_9' },
+]
+
+// Опции стадий для формы выезда — зависят от типа выезда
+const stageCodesForVisit = computed(() =>
+  visitForm.value.visit_type === 'К поставщику' ? PURCHASE_STAGE_CODES : WORK_STAGE_CODES,
+)
 
 function stageIcon(status) {
   const icons = {
@@ -3193,7 +3210,7 @@ async function saveVisit() {
     }
   }
   try {
-    const stageLabel = stageCodesForVisit.find(s => s.value === visitForm.value.stage_code)?.label || ''
+    const stageLabel = stageCodesForVisit.value.find(s => s.value === visitForm.value.stage_code)?.label || ''
     const isEditing = !!editingVisitId.value
     const payload = {
       stage_code: visitForm.value.stage_code,
