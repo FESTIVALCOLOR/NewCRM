@@ -216,9 +216,11 @@
                 type="email"
               />
               <q-input v-model="editForm.address" label="Адрес проживания" outlined dense />
+              <div class="text-caption text-grey-7 q-mb-xs">
+                Дата рождения
+              </div>
               <q-input
                 v-model="editForm.birth_date"
-                label="Дата рождения"
                 outlined
                 dense
                 type="date"
@@ -556,9 +558,11 @@
               :rules="[v => !!v || 'Обязательно']"
             />
             <q-input v-model="form.address" label="Адрес проживания" outlined dense />
+            <div class="text-caption text-grey-7 q-mb-xs">
+              Дата рождения
+            </div>
             <q-input
               v-model="form.birth_date"
-              label="Дата рождения"
               outlined
               dense
               type="date"

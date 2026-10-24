@@ -159,9 +159,11 @@
         />
 
         <!-- Дата замера -->
+        <div class="text-caption text-grey-7 q-mb-xs">
+          Дата замера
+        </div>
         <q-input
           v-model="measurementDate"
-          label="Дата замера"
           outlined
           dense
           type="date"

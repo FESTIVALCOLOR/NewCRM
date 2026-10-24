@@ -1119,9 +1119,11 @@
           </div>
         </q-card-section>
         <q-card-section>
+          <div class="text-caption text-grey-7 q-mb-xs">
+            Дата выезда
+          </div>
           <q-input
             v-model="visitForm.visit_date"
-            label="Дата выезда"
             outlined
             dense
             type="date"
@@ -1197,17 +1199,21 @@
           </div>
         </q-card-section>
         <q-card-section v-if="editEntry" class="q-pt-none">
+          <div class="text-caption text-grey-7 q-mb-xs">
+            Плановая дата
+          </div>
           <q-input
             v-model="editEntry.plan_date"
-            label="Плановая дата"
             outlined
             dense
             type="date"
             class="q-mb-sm"
           />
+          <div class="text-caption text-grey-7 q-mb-xs">
+            Фактическая дата
+          </div>
           <q-input
             v-model="editEntry.actual_date"
-            label="Фактическая дата"
             outlined
             dense
             type="date"
@@ -1998,9 +2004,11 @@
           </div>
           <div class="row q-col-gutter-xs q-mb-xs">
             <div class="col-4">
+              <div class="text-caption text-grey-7 q-mb-xs">
+                Дата
+              </div>
               <q-input
                 v-model="newConstructionPayment.date"
-                label="Дата"
                 outlined
                 dense
                 type="date"
@@ -2094,9 +2102,11 @@
           </div>
           <div class="row q-col-gutter-xs q-mb-xs">
             <div class="col-3">
+              <div class="text-caption text-grey-7 q-mb-xs">
+                Дата
+              </div>
               <q-input
                 v-model="newMaterialsPayment.date"
-                label="Дата"
                 outlined
                 dense
                 type="date"

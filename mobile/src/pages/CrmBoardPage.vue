@@ -305,9 +305,11 @@
               class="q-mb-sm"
               @filter="filterMoveEmps"
             />
+            <div class="text-caption text-grey-7 q-mb-xs">
+              Дедлайн
+            </div>
             <q-input
               v-model="moveDeadline"
-              label="Дедлайн"
               outlined
               dense
               type="date"

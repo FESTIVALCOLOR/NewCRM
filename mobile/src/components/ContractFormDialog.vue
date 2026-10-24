@@ -148,9 +148,11 @@
           />
 
           <!-- Дата договора -->
+          <div class="text-caption text-grey-7 q-mb-xs">
+            Дата договора
+          </div>
           <q-input
             v-model="form.contract_date"
-            label="Дата договора"
             outlined
             dense
             type="date"

@@ -45,9 +45,11 @@
         <q-separator class="q-my-sm" />
 
         <!-- Дата ТЗ -->
+        <div class="text-caption text-grey-7 q-mb-xs">
+          Дата ТЗ
+        </div>
         <q-input
           v-model="techTaskDate"
-          label="Дата ТЗ"
           outlined
           dense
           type="date"

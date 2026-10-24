@@ -1671,9 +1671,11 @@
               class="q-mb-sm"
               :hint="`Стандарт: ${timelineEditEntry?.norm_days || 0} дн.`"
             />
+            <div class="text-caption text-grey-7 q-mb-xs">
+              Дата выполнения
+            </div>
             <q-input
               v-model="timelineEditActualDate"
-              label="Дата выполнения"
               outlined
               dense
               type="date"

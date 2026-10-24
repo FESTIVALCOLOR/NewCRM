@@ -149,9 +149,11 @@
             </div>
 
             <q-input v-model="form.passport_issued_by" label="Кем выдан" outlined dense />
+            <div class="text-caption text-grey-7 q-mb-xs">
+              Дата выдачи
+            </div>
             <q-input
               v-model="form.passport_issued_date"
-              label="Дата выдачи"
               outlined
               dense
               type="date"

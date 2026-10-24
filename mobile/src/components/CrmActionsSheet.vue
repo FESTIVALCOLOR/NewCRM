@@ -55,9 +55,11 @@
               map-options
               class="q-mb-sm"
             />
+            <div class="text-caption text-grey-7 q-mb-xs">
+              Дедлайн
+            </div>
             <q-input
               v-model="assignForm.deadline"
-              label="Дедлайн"
               outlined
               dense
               type="date"
@@ -78,9 +80,11 @@
         <!-- Изменить дедлайн -->
         <q-expansion-item v-if="can('crm_cards.deadlines')" icon="event" label="Изменить дедлайн" dense>
           <div class="q-pa-md">
+            <div class="text-caption text-grey-7 q-mb-xs">
+              Новый дедлайн
+            </div>
             <q-input
               v-model="newDeadline"
-              label="Новый дедлайн"
               outlined
               dense
               type="date"
