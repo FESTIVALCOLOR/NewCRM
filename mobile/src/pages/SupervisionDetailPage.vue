@@ -469,38 +469,37 @@
                   <q-item-label v-if="entry.commission > 0" caption style="color: #2e7d32; font-weight: 500">
                     Комиссия: {{ formatMoney(entry.commission) }}
                   </q-item-label>
-                  <!-- Файлы стадии — кнопка папки ЯД -->
-                  <div v-if="stageFiles(entry.stage_code).length > 0" class="q-mt-xs">
-                    <q-btn
-                      flat
-                      dense
-                      size="xs"
-                      icon="folder_open"
-                      :label="`${stageFiles(entry.stage_code).length} файл(ов)`"
-                      color="blue"
-                      no-caps
-                      style="font-size: 10px"
-                      @click.stop="openStageFolder(entry)"
-                    />
-                  </div>
                 </q-item-section>
                 <q-item-section side>
                   <div class="column items-end q-gutter-xs">
                     <q-badge :color="stageColor(entry.status)" :label="entry.status" dense />
-                    <!-- Кнопка загрузки файлов для этой стадии -->
-                    <q-btn
-                      v-if="can('supervision.files_upload')"
-                      unelevated
-                      dense
-                      no-caps
-                      size="xs"
-                      icon="attach_file"
-                      label="Файл"
-                      color="blue-1"
-                      text-color="blue-8"
-                      style="font-size: 10px; border-radius: 4px; padding: 0 5px"
-                      @click.stop="uploadStageFile(entry.stage_code)"
-                    />
+                    <div class="row q-gutter-xs items-center">
+                      <q-btn
+                        v-if="stageFiles(entry.stage_code).length > 0"
+                        flat
+                        dense
+                        no-caps
+                        size="xs"
+                        icon="folder_open"
+                        :label="`${stageFiles(entry.stage_code).length} файл(ов)`"
+                        color="blue"
+                        style="font-size: 10px"
+                        @click.stop="openStageFolder(entry)"
+                      />
+                      <q-btn
+                        v-if="can('supervision.files_upload')"
+                        unelevated
+                        dense
+                        no-caps
+                        size="xs"
+                        icon="attach_file"
+                        label="Файл"
+                        color="blue-1"
+                        text-color="blue-8"
+                        style="font-size: 10px; border-radius: 4px; padding: 0 5px"
+                        @click.stop="uploadStageFile(entry.stage_code)"
+                      />
+                    </div>
                   </div>
                 </q-item-section>
               </q-item>
