@@ -31,19 +31,56 @@
           Архив пуст
         </div>
         <div v-else class="archive-grid">
-          <q-card v-for="card in cards" :key="card.id" class="is-card cursor-pointer q-mb-none" @click="openCard(card)">
-            <q-card-section class="q-pa-md">
+          <q-card
+            v-for="card in cards"
+            :key="card.id"
+            class="is-card cursor-pointer q-mb-none"
+            :style="{ borderLeft: card.contract_status === 'РАСТОРГНУТ' ? '4px solid #E74C3C' : '4px solid #27AE60' }"
+            @click="openCard(card)"
+          >
+            <q-card-section class="q-pa-sm">
+              <!-- Номер + статус договора -->
               <div class="row items-center justify-between q-mb-xs">
-                <div class="text-subtitle2 text-weight-bold" style="color: #333">
+                <div style="color: #888; font-size: 10px">
                   {{ card.contract_number || `#${card.id}` }}
                 </div>
-                <q-badge :color="sColor(card)" :label="card.column_name || 'Архив'" dense />
+                <q-badge :color="sColor(card)" :label="card.contract_status || card.column_name || 'Архив'" dense />
               </div>
-              <div class="text-body2" style="color: #333">
+              <!-- Адрес -->
+              <div class="text-weight-bold q-mb-xs" style="font-size: 13px; color: #222">
                 {{ card.address || 'Без адреса' }}
               </div>
-              <div class="row q-gutter-sm text-caption" style="color: #888">
-                <span v-if="card.area">{{ card.area }} м²</span><span v-if="card.city">{{ card.city }}</span>
+              <!-- Площадь + город + агент -->
+              <div class="row items-center justify-between q-mb-xs">
+                <div style="font-size: 11px; color: #888">
+                  <span v-if="card.area">{{ card.area }} м²</span>
+                  <span v-if="card.area && card.city"> | </span>
+                  <span v-if="card.city">{{ card.city }}</span>
+                </div>
+                <span
+                  v-if="card.agent_type"
+                  :style="{ background: agentColorFor(card.agent_type), color: 'white', fontSize: '10px', fontWeight: 'bold', padding: '3px 8px', borderRadius: '4px' }"
+                >{{ card.agent_type }}</span>
+              </div>
+              <!-- Теги -->
+              <div v-if="card.tags" class="row q-gutter-xs q-mb-xs">
+                <span
+                  v-for="(tag, tidx) in parseSvTags(card.tags)"
+                  :key="tidx"
+                  :style="{ display: 'inline-block', background: tag.color, color: 'white', borderRadius: '4px', padding: '2px 8px', fontSize: '10px', fontWeight: '600' }"
+                >{{ tag.text }}</span>
+              </div>
+              <!-- Кнопка -->
+              <div style="border-top: 1px solid #E0E0E0; padding-top: 6px">
+                <q-btn
+                  flat
+                  dense
+                  no-caps
+                  icon="open_in_new"
+                  label="Данные карточки"
+                  style="color: #333; font-size: 11px; height: 28px; width: 100%; background: #F5F5F5; border-radius: 4px"
+                  @click.stop="openCard(card)"
+                />
               </div>
             </q-card-section>
           </q-card>
@@ -409,7 +446,15 @@ const columns = computed(() => {
 watch(columns, (cols) => { if (cols.length > 0 && currentSlide.value >= cols.length) currentSlide.value = 0 })
 watch(currentSlide, (v) => { sessionStorage.setItem('sv_slide', String(v)) })
 
-function sColor(card) { const s = card.column_name || ''; if (s.includes('Стадия')) return 'orange'; if (s.includes('Выполненный')) return 'positive'; return 'blue' }
+function sColor(card) {
+  const cs = card.contract_status || ''
+  if (cs === 'РАСТОРГНУТ') return 'negative'
+  if (cs === 'СДАН') return 'positive'
+  const s = card.column_name || ''
+  if (s.includes('Стадия')) return 'orange'
+  if (s.includes('Выполненный')) return 'positive'
+  return 'blue'
+}
 function dlColor(d) { const days = Math.ceil((new Date(d) - new Date()) / 86400000); if (days < 0) return '#8B0000'; if (days <= 2) return '#F39C12'; return '#888' }
 function openCard(card) { router.push(`/supervision/${card.id}`) }
 function parseSvTags(tagsStr) {

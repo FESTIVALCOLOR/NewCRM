@@ -474,7 +474,7 @@
               />
               <!-- В архив (Индивидуальный и Шаблонный) — с проверкой оплат и актов -->
               <q-btn
-                v-if="card.column_name === 'Выполненный проект' && !card.is_archived && contractData !== null && contractData?.status !== 'СДАН' && contractData?.status !== 'РАСТОРГНУТ'"
+                v-if="card.column_name === 'Выполненный проект' && !card.is_archived && contractData !== null && contractData?.status !== 'СДАН' && contractData?.status !== 'РАСТОРГНУТ' && contractData?.status !== 'АВТОРСКИЙ НАДЗОР'"
                 unelevated
                 dense
                 no-caps
