@@ -117,6 +117,8 @@
         <div class="landscape-header">
           <span class="lh-num">№</span>
           <span class="lh-addr">Адрес</span>
+          <span class="lh-amount">Сумма, ₽</span>
+          <span class="lh-paid" />
           <span class="lh-type">Тип</span>
           <span class="lh-subtype">Подтип</span>
           <span class="lh-status">Статус</span>
@@ -131,6 +133,10 @@
         >
           <span class="lh-num ls-num">{{ contract.contract_number }}</span>
           <span class="lh-addr ls-addr">{{ contract.address || '—' }}</span>
+          <span class="lh-amount ls-amount">{{ formatAmount(contract.total_amount) }}</span>
+          <span class="lh-paid">
+            <q-icon v-if="isFullyPaid(contract)" name="check_circle" color="positive" size="15px" />
+          </span>
           <span class="lh-type ls-meta">{{ shortType(contract.project_type) }}</span>
           <span class="lh-subtype ls-meta">{{ contract.project_subtype || '—' }}</span>
           <span class="lh-status">
@@ -249,6 +255,19 @@ const filtered = computed(() => {
   return items
 })
 
+function formatAmount(amount) {
+  if (!amount) return '—'
+  return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(amount)
+}
+
+function isFullyPaid(contract) {
+  const parts = []
+  if (contract.advance_payment) parts.push(!!contract.advance_payment_paid_date)
+  if (contract.additional_payment) parts.push(!!contract.additional_payment_paid_date)
+  if (contract.third_payment) parts.push(!!contract.third_payment_paid_date)
+  return parts.length > 0 && parts.every(Boolean)
+}
+
 function shortType(type) {
   if (type === 'Индивидуальный') return 'Инд.'
   if (type === 'Шаблонный') return 'Шабл.'
@@ -317,16 +336,19 @@ onMounted(() => loadContracts())
 .contract-row-ls:last-of-type { border-radius: 0 0 8px 8px; }
 .contract-row-ls:hover { background: #F9F9F9; }
 /* колонки ландшафта */
-.lh-num     { width: 72px; flex-shrink: 0; font-size: 11px; }
+.lh-num     { width: 96px; flex-shrink: 0; font-size: 11px; white-space: nowrap; overflow: hidden; }
 .lh-addr    { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.lh-amount  { width: 80px; flex-shrink: 0; font-size: 10px; text-align: right; white-space: nowrap; }
+.lh-paid    { width: 24px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
 .lh-type    { width: 40px; flex-shrink: 0; font-size: 11px; }
 .lh-subtype { width: 160px; flex-shrink: 0; font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lh-status  { width: 100px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
 .lh-agent   { width: 80px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
 /* значения в строках */
-.ls-num   { font-weight: bold; color: #333; }
-.ls-addr  { color: #444; }
-.ls-meta  { color: #888; }
+.ls-num    { font-weight: bold; color: #333; line-height: 1; }
+.ls-addr   { color: #444; }
+.ls-meta   { color: #888; }
+.ls-amount { color: #555; font-weight: 500; }
 
 /* Портретные карточки договоров */
 .contract-card {
