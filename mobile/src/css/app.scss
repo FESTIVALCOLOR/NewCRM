@@ -360,19 +360,29 @@ body {
   .q-btn--unelevated.bg-accent,
   .btn-primary {
     color: #333333 !important;
+    .q-btn__content, .q-btn__wrapper, i { color: #333333 !important; }
   }
   // Inline-стили с accent-фоном — тёмный текст поверх жёлтого
+  // !important на родителе не наследуется через явный color Quasar на дочерних span,
+  // поэтому дублируем явно на детей
   [style*="background: var(--fc-accent)"],
   [style*="background:var(--fc-accent)"] {
     color: #333333 !important;
+    .q-btn__content, .q-btn__wrapper, i, span { color: #333333 !important; }
   }
 
-  // ---- Зелёные Quasar-утилиты → тёмные оттенки ----
+  // ---- Зелёные и красные Quasar-утилиты → тёмные оттенки ----
   .bg-green-1 {
     background: rgba(39, 174, 96, 0.18) !important;
   }
   .text-green-9 {
     color: #81C784 !important;
+  }
+  .bg-red-1 {
+    background: rgba(183, 28, 28, 0.18) !important;
+  }
+  .text-red-9 {
+    color: #EF9A9A !important;
   }
 
   // ---- Чат: скошенные цвета → тёмные аналоги ----

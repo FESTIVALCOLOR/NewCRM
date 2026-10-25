@@ -255,11 +255,13 @@
 
 <script setup>
 import { ref, computed } from 'vue'
+import { useQuasar } from 'quasar'
 import { useReferencesStore } from 'src/stores/references'
 import { useAuthStore } from 'src/stores/auth'
 import { usePermission } from 'src/composables/usePermission'
 import { addWorkingDays, countWorkingDaysUntil } from 'src/composables/useDeadline'
 
+const $q = useQuasar()
 const props = defineProps({
   card: { type: Object, required: true },
   isMuted: { type: Boolean, default: false },
@@ -288,9 +290,13 @@ const isArchived = computed(() => ARCHIVE_COLUMNS.includes(props.card.column_nam
 const archiveCardStyle = computed(() => {
   const col = props.card.column_name || ''
   const cs = props.card.contract_status || ''
-  if (col === 'РАСТОРГНУТ' || cs === 'РАСТОРГНУТ') return { background: '#FADBD8', borderColor: '#E74C3C' }
-  if (col.includes('НАДЗОР') || cs === 'АВТОРСКИЙ НАДЗОР') return { background: 'var(--fc-selected-bg)', borderColor: 'var(--fc-link)' }
-  if (col === 'Выполненный проект' || col === 'СДАН') return { background: '#E8F8F5', borderColor: '#27AE60' }
+  const dark = $q.dark.isActive
+  if (col === 'РАСТОРГНУТ' || cs === 'РАСТОРГНУТ')
+    return { background: dark ? 'rgba(231, 76, 60, 0.2)' : '#FADBD8', borderColor: '#E74C3C' }
+  if (col.includes('НАДЗОР') || cs === 'АВТОРСКИЙ НАДЗОР')
+    return { background: 'var(--fc-selected-bg)', borderColor: 'var(--fc-link)' }
+  if (col === 'Выполненный проект' || col === 'СДАН')
+    return { background: dark ? 'rgba(39, 174, 96, 0.2)' : '#E8F8F5', borderColor: '#27AE60' }
   return {}
 })
 

@@ -80,13 +80,13 @@
                   {{ showTeamMap[card.id] ? '▲' : '▼' }}
                 </div>
                 <div v-if="showTeamMap[card.id]">
-                  <div v-if="card.studio_director_name" style="font-size: 10px; color: var(--fc-text); padding: 1px 4px; border-radius: 2px; margin-top: 1px; background: #E8F4FD">
+                  <div v-if="card.studio_director_name" :style="{ fontSize: '10px', color: 'var(--fc-text)', padding: '1px 4px', borderRadius: '2px', marginTop: '1px', background: $q.dark.isActive ? 'rgba(21, 101, 192, 0.2)' : '#E8F4FD' }">
                     РС: {{ card.studio_director_name }}
                   </div>
-                  <div v-if="card.senior_manager_name" style="font-size: 10px; color: var(--fc-text); padding: 1px 4px; border-radius: 2px; margin-top: 1px; background: #EAF7F0">
+                  <div v-if="card.senior_manager_name" :style="{ fontSize: '10px', color: 'var(--fc-text)', padding: '1px 4px', borderRadius: '2px', marginTop: '1px', background: $q.dark.isActive ? 'rgba(39, 174, 96, 0.2)' : '#EAF7F0' }">
                     СМ: {{ card.senior_manager_name }}
                   </div>
-                  <div v-if="card.dan_name" style="font-size: 10px; color: var(--fc-text); padding: 1px 4px; border-radius: 2px; margin-top: 1px; background: #FEF9E7">
+                  <div v-if="card.dan_name" :style="{ fontSize: '10px', color: 'var(--fc-text)', padding: '1px 4px', borderRadius: '2px', marginTop: '1px', background: $q.dark.isActive ? 'rgba(180, 136, 36, 0.2)' : '#FEF9E7' }">
                     ДАН: {{ card.dan_name }}
                   </div>
                 </div>
@@ -489,8 +489,10 @@ function sColor(card) {
 }
 function svArchiveCardStyle(card) {
   const cs = card.contract_status || ''
-  if (cs === 'РАСТОРГНУТ') return { background: '#FADBD8', borderColor: '#E74C3C' }
-  return { background: '#E8F8F5', borderColor: '#27AE60' }
+  const dark = $q.dark.isActive
+  if (cs === 'РАСТОРГНУТ')
+    return { background: dark ? 'rgba(231, 76, 60, 0.2)' : '#FADBD8', borderColor: '#E74C3C' }
+  return { background: dark ? 'rgba(39, 174, 96, 0.2)' : '#E8F8F5', borderColor: '#27AE60' }
 }
 function dlColor(d) { const days = Math.ceil((new Date(d) - new Date()) / 86400000); if (days < 0) return '#8B0000'; if (days <= 2) return '#F39C12'; return 'var(--fc-text-light)' }
 function openCard(card) { router.push(`/supervision/${card.id}`) }
@@ -665,7 +667,7 @@ onMounted(() => { loadCards(); cardMutes.load(); if (can('supervision.view_archi
 .landscape-board { position: fixed; left: var(--drawer-offset, 0px); right: 0; top: calc(var(--q-header-height, 48px) + 41px); bottom: var(--q-footer-height, 56px); display: flex; flex-direction: row; overflow-x: auto; overflow-y: hidden; gap: 8px; padding: 8px; background: var(--fc-bg); z-index: 1; -webkit-overflow-scrolling: touch; transition: left 0.3s ease; }
 .landscape-column { flex: 1 1 280px; min-width: 280px; display: flex; flex-direction: column; height: 100%; }
 .col-count-badge { border-radius: 50%; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; flex-shrink: 0; background: var(--fc-border-light); color: var(--fc-text-light); }
-.col-count-badge.has-cards { background: var(--fc-accent); color: var(--fc-text); }
+.col-count-badge.has-cards { background: var(--fc-accent); color: #333333; }
 .landscape-column .column-frame { flex: 1; margin: 0; display: flex; flex-direction: column; overflow: hidden; height: 100%; }
 .landscape-column .column-body { overflow-y: auto; flex: 1; }
 

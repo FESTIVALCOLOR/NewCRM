@@ -319,6 +319,24 @@
         </q-item-section>
       </q-item>
       <q-separator />
+      <!-- Переключатель темы -->
+      <q-item v-ripple clickable style="color: var(--fc-text-medium)" @click="toggleTheme">
+        <q-item-section avatar>
+          <q-icon :name="$q.dark.isActive ? 'light_mode' : 'dark_mode'" />
+        </q-item-section>
+        <q-item-section style="font-size: 13px">
+          {{ $q.dark.isActive ? 'Светлая тема' : 'Тёмная тема' }}
+        </q-item-section>
+        <q-item-section side>
+          <q-toggle
+            :model-value="$q.dark.isActive"
+            color="accent"
+            dense
+            @update:model-value="toggleTheme"
+          />
+        </q-item-section>
+      </q-item>
+      <q-separator />
       <q-list padding>
         <q-item v-ripple clickable @click="handleLogout">
           <q-item-section avatar>
@@ -1241,6 +1259,12 @@ async function saveNotifSettings() {
 }
 
 async function handleLogout() { await authStore.logout() }
+
+function toggleTheme() {
+  const newVal = !$q.dark.isActive
+  $q.dark.set(newVal)
+  localStorage.setItem('crm-theme', newVal ? 'dark' : 'light')
+}
 
 // === Онлайн счётчик (heartbeat как десктоп) ===
 const onlineUsers = ref([])

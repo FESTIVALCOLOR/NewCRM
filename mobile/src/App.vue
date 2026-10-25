@@ -8,8 +8,13 @@ import { useMeta, useQuasar } from 'quasar'
 
 const $q = useQuasar()
 
-// Автоматическое переключение темы по системному режиму
-$q.dark.set('auto')
+// Восстанавливаем сохранённую тему (ручной выбор приоритетнее системного)
+const savedTheme = localStorage.getItem('crm-theme')
+if (savedTheme) {
+  $q.dark.set(savedTheme === 'dark')
+} else {
+  $q.dark.set('auto')
+}
 
 useMeta({
   title: 'Interior Studio CRM',

@@ -1279,7 +1279,7 @@ onMounted(async () => {
 }
 .col-count-badge.has-cards {
   background: var(--fc-accent);
-  color: var(--fc-text);
+  color: #333333;
 }
 .landscape-column .column-frame {
   flex: 1;
