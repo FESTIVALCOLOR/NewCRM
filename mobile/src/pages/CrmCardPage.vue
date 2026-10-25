@@ -1193,6 +1193,9 @@
                   <q-item-label v-else-if="p.payment_status === 'to_pay'" caption style="color: #F39C12; font-size: 10px">
                     к оплате
                   </q-item-label>
+                  <q-item-label v-else-if="p.payment_status === 'pending_stage'" caption style="color: #9575CD; font-size: 10px">
+                    в ожидании
+                  </q-item-label>
                   <q-item-label v-else caption style="color: #bbb; font-size: 10px">
                     в работе
                   </q-item-label>
@@ -1717,6 +1720,57 @@
               no-caps
               style="background: #4CAF50; color: white; border-radius: 4px"
               @click="saveTimelineEntry"
+            />
+          </q-card-actions>
+        </q-card>
+      </q-dialog>
+
+      <!-- Диалог редактирования оплаты (сумма + месяц) -->
+      <q-dialog v-model="editPaymentDialogVisible">
+        <q-card style="min-width: 300px; border-radius: 10px">
+          <q-toolbar style="background: #ffd93c; color: #333">
+            <q-toolbar-title class="text-weight-bold" style="font-size: 13px">
+              Редактировать оплату
+            </q-toolbar-title>
+            <q-btn
+              flat
+              round
+              dense
+              icon="close"
+              @click="editPaymentDialogVisible = false"
+            />
+          </q-toolbar>
+          <q-card-section class="q-pt-md">
+            <div class="text-caption q-mb-sm" style="color: #888">
+              {{ editPaymentData.employee_name }} — {{ editPaymentData.payment_type }}
+            </div>
+            <q-input
+              v-model.number="editPaymentData.final_amount"
+              label="Сумма *"
+              outlined
+              dense
+              type="number"
+              prefix="₽"
+              class="q-mb-sm"
+            />
+            <q-input
+              v-model="editPaymentData.report_month"
+              label="Месяц оплаты"
+              outlined
+              dense
+              type="month"
+              class="q-mb-sm"
+            />
+          </q-card-section>
+          <q-card-actions align="right">
+            <q-btn flat label="Отмена" no-caps @click="editPaymentDialogVisible = false" />
+            <q-btn
+              unelevated
+              label="Сохранить"
+              no-caps
+              style="background: #4CAF50; color: white; border-radius: 4px"
+              :loading="editPaymentSaving"
+              @click="saveEditedPayment"
             />
           </q-card-actions>
         </q-card>
@@ -2782,6 +2836,7 @@ const paymentTotal = computed(() => {
 function paymentRowStyle(p) {
   if (p.is_paid || p.payment_status === 'paid') return { background: '#E8F5E9' }
   if (p.payment_status === 'to_pay') return { background: '#FFF8E1' }
+  if (p.payment_status === 'pending_stage') return { background: '#EDE7F6' }
   return {}
 }
 
@@ -3121,20 +3176,31 @@ async function updateBalanceFromTimeline(savedEntry) {
   }
 }
 
-// Устанавливает месяц АВАНСА когда карточка входит в стадию (подэтап 1 стадии стал активным)
+// Устанавливает месяц АВАНСА когда карточка входит в стадию (подэтап 1 стадии стал активным).
+// Также снимает pending_stage с Доплаты — стадия стала активной, работа началась.
 async function triggerAdvanceForStageStart(stageName) {
   try {
     if (!card.value || card.value.project_type !== 'Индивидуальный') return
     const stageColumns = ['Стадия 1: планировочные решения', 'Стадия 2: концепция дизайна', 'Стадия 3: рабочие чертежи']
     if (!stageColumns.includes(stageName)) return
     const month = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
+    const { api: ax } = await import('src/boot/axios')
+    // Аванс: установить месяц
     const advance = cardPayments.value.find(p =>
       p.stage_name === stageName && p.payment_type === 'Аванс' && !p.report_month && !p.reassigned,
     )
-    if (!advance) return
-    const { api: ax } = await import('src/boot/axios')
-    await ax.patch(`/api/v1/payments/${advance.id}`, { report_month: month })
-    advance.report_month = month
+    if (advance) {
+      await ax.patch(`/api/v1/payments/${advance.id}`, { report_month: month, payment_status: null })
+      advance.report_month = month; advance.payment_status = null
+    }
+    // Доплата: снять pending_stage (стадия активна — работа в процессе)
+    const balance = cardPayments.value.find(p =>
+      p.stage_name === stageName && p.payment_type === 'Доплата' && p.payment_status === 'pending_stage' && !p.reassigned,
+    )
+    if (balance) {
+      await ax.patch(`/api/v1/payments/${balance.id}`, { payment_status: null })
+      balance.payment_status = null
+    }
   } catch (e) {
     console.warn('[Payments] Аванс при старте стадии:', e)
   }
@@ -3561,12 +3627,12 @@ async function doAssign() {
             const isCurrentStage = card.value.column_name === (stageName || '')
             const nowMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
             if (isTemplate) {
-              await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, stage_name: stageName || undefined, payment_type: 'Полная оплата', crm_card_id: card.value.id, calculated_amount: fullAmount, final_amount: fullAmount, report_month: null })
+              await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, stage_name: stageName || undefined, payment_type: 'Полная оплата', crm_card_id: card.value.id, calculated_amount: fullAmount, final_amount: fullAmount, report_month: null, payment_status: isCurrentStage ? null : 'pending_stage' })
             } else {
               const advance = Math.round(fullAmount / 2)
               const balance = fullAmount - advance
-              await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, stage_name: stageName || undefined, payment_type: 'Аванс', crm_card_id: card.value.id, calculated_amount: advance, final_amount: advance, report_month: isCurrentStage ? nowMonth : null })
-              await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, stage_name: stageName || undefined, payment_type: 'Доплата', crm_card_id: card.value.id, calculated_amount: balance, final_amount: balance, report_month: null })
+              await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, stage_name: stageName || undefined, payment_type: 'Аванс', crm_card_id: card.value.id, calculated_amount: advance, final_amount: advance, report_month: isCurrentStage ? nowMonth : null, payment_status: isCurrentStage ? null : 'pending_stage' })
+              await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, stage_name: stageName || undefined, payment_type: 'Доплата', crm_card_id: card.value.id, calculated_amount: balance, final_amount: balance, report_month: null, payment_status: isCurrentStage ? null : 'pending_stage' })
             }
           }
         } catch (e) { console.warn('Ошибка создания оплат при переназначении:', e) }
@@ -3596,12 +3662,12 @@ async function doAssign() {
             const isCurrentStage = card.value.column_name === stageName
             const nowMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
             if (isTemplate) {
-              await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, stage_name: stageName, payment_type: 'Полная оплата', crm_card_id: card.value.id, calculated_amount: fullAmount, final_amount: fullAmount, report_month: null })
+              await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, stage_name: stageName, payment_type: 'Полная оплата', crm_card_id: card.value.id, calculated_amount: fullAmount, final_amount: fullAmount, report_month: null, payment_status: isCurrentStage ? null : 'pending_stage' })
             } else {
               const advance = Math.round(fullAmount / 2)
               const balance = fullAmount - advance
-              await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, stage_name: stageName, payment_type: 'Аванс', crm_card_id: card.value.id, calculated_amount: advance, final_amount: advance, report_month: isCurrentStage ? nowMonth : null })
-              await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, stage_name: stageName, payment_type: 'Доплата', crm_card_id: card.value.id, calculated_amount: balance, final_amount: balance, report_month: null })
+              await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, stage_name: stageName, payment_type: 'Аванс', crm_card_id: card.value.id, calculated_amount: advance, final_amount: advance, report_month: isCurrentStage ? nowMonth : null, payment_status: isCurrentStage ? null : 'pending_stage' })
+              await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, stage_name: stageName, payment_type: 'Доплата', crm_card_id: card.value.id, calculated_amount: balance, final_amount: balance, report_month: null, payment_status: isCurrentStage ? null : 'pending_stage' })
             }
           }
         } catch (e) { console.warn('Ошибка создания оплаты при назначении:', e) }
@@ -3656,11 +3722,38 @@ async function removeTeamMember(member) {
   })
 }
 
+const editPaymentDialogVisible = ref(false)
+const editPaymentSaving = ref(false)
+const editPaymentData = ref({ id: null, employee_name: '', payment_type: '', final_amount: 0, report_month: '' })
+
 function editPaymentAmount(p) {
-  $q.dialog({ title: 'Изменить сумму', prompt: { model: String(p.final_amount || p.amount || 0), type: 'number' }, cancel: { label: 'Отмена', flat: true, noCaps: true }, ok: { label: 'Сохранить', noCaps: true, color: 'positive' } }).onOk(async (val) => {
-    try { await paymentsApi.update(p.id, { final_amount: parseFloat(val) }); p.final_amount = parseFloat(val); $q.notify({ type: 'positive', message: 'Сумма обновлена' }) }
-    catch (err) { $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' }) }
-  })
+  editPaymentData.value = {
+    id: p.id,
+    employee_name: p.employee_name || '',
+    payment_type: p.payment_type || '',
+    final_amount: p.final_amount || p.amount || 0,
+    report_month: p.report_month || '',
+  }
+  editPaymentDialogVisible.value = true
+}
+
+async function saveEditedPayment() {
+  if (!editPaymentData.value.final_amount) { $q.notify({ type: 'warning', message: 'Укажите сумму' }); return }
+  editPaymentSaving.value = true
+  try {
+    const update = {
+      final_amount: parseFloat(editPaymentData.value.final_amount),
+      amount: parseFloat(editPaymentData.value.final_amount),
+      report_month: editPaymentData.value.report_month || null,
+    }
+    await paymentsApi.update(editPaymentData.value.id, update)
+    const p = cardPayments.value.find(x => x.id === editPaymentData.value.id)
+    if (p) { p.final_amount = update.final_amount; p.report_month = update.report_month }
+    editPaymentDialogVisible.value = false
+    $q.notify({ type: 'positive', message: 'Оплата обновлена' })
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
+  } finally { editPaymentSaving.value = false }
 }
 
 async function deletePayment(p) {

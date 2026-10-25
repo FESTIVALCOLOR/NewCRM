@@ -244,6 +244,9 @@
               <div class="stat-pill pending">
                 {{ toPayCount }} к оплате
               </div>
+              <div v-if="pendingStageCount > 0" class="stat-pill waiting">
+                {{ pendingStageCount }} в ожидании
+              </div>
               <div class="stat-pill inwork">
                 {{ inWorkCount }} в работе
               </div>
@@ -363,8 +366,8 @@
                           {{ formatMoney(p.final_amount || p.amount) }}
                         </div>
                         <div style="width: 1px; height: 16px; background: #ddd; margin: 0 6px" />
-                        <div class="text-caption" :style="{ color: fmtMonth(p.report_month) !== 'в работе' ? '#333' : '#bbb' }">
-                          {{ fmtMonth(p.report_month) }}
+                        <div class="text-caption" :style="{ color: p.payment_status === 'pending_stage' ? '#9575CD' : fmtMonth(p.report_month) !== 'в работе' ? '#333' : '#bbb' }">
+                          {{ p.payment_status === 'pending_stage' ? 'в ожидании' : fmtMonth(p.report_month) }}
                         </div>
                       </div>
                       <div class="row items-center justify-end q-gutter-xs q-mt-xs" style="flex-wrap: wrap">
@@ -377,6 +380,10 @@
                           v-else-if="p.payment_status === 'to_pay'"
                           style="display:inline-flex;align-items:center;height:26px;padding:0 8px;border-radius:4px;font-size:10px;background:#F2C037;color:#333;white-space:nowrap"
                         >К оплате</span>
+                        <span
+                          v-else-if="p.payment_status === 'pending_stage'"
+                          style="display:inline-flex;align-items:center;height:26px;padding:0 8px;border-radius:4px;font-size:10px;background:#EDE7F6;color:#7B1FA2;white-space:nowrap"
+                        >В ожидании</span>
                         <span
                           v-else
                           style="display:inline-flex;align-items:center;height:26px;padding:0 8px;border-radius:4px;font-size:10px;background:#EEEEEE;color:#666;white-space:nowrap"
@@ -397,7 +404,7 @@
                           <span class="material-icons" style="font-size:12px;line-height:1">check</span> Оплатить
                         </button>
                         <button
-                          v-else-if="can('salaries.mark_to_pay') && !p.is_paid && p.payment_status !== 'paid' && p.payment_status !== 'to_pay'"
+                          v-else-if="can('salaries.mark_to_pay') && !p.is_paid && p.payment_status !== 'paid' && p.payment_status !== 'to_pay' && p.payment_status !== 'pending_stage'"
                           class="sal-act-btn sal-act-orange"
                           @click.stop="setPayStatus(p)"
                         >
@@ -781,7 +788,7 @@ function filterEmployees(val, update) {
 }
 
 const periodOptions = [{ label: 'Все', value: 'all' }, { label: 'Месяц', value: 'month' }, { label: 'Квартал', value: 'quarter' }, { label: 'Год', value: 'year' }]
-const statusOptions = [{ label: 'Все', value: null }, { label: 'В работе', value: 'in_work' }, { label: 'К оплате', value: 'to_pay' }, { label: 'Оплачено', value: 'paid' }]
+const statusOptions = [{ label: 'Все', value: null }, { label: 'В ожидании', value: 'pending_stage' }, { label: 'В работе', value: 'in_work' }, { label: 'К оплате', value: 'to_pay' }, { label: 'Оплачено', value: 'paid' }]
 const years = Array.from({ length: 10 }, (_, i) => currentYear - i)
 const monthOpts = Array.from({ length: 12 }, (_, i) => ({ label: new Date(2000, i).toLocaleDateString('ru-RU', { month: 'long' }), value: i + 1 }))
 const quarterOpts = [{ label: 'Q1', value: 1 }, { label: 'Q2', value: 2 }, { label: 'Q3', value: 3 }, { label: 'Q4', value: 4 }]
@@ -790,7 +797,8 @@ const paymentTypeMap = { all: '', individual: 'Индивидуальный', te
 const totalAmount = computed(() => payments.value.reduce((sum, p) => sum + (p.final_amount || p.amount || 0), 0))
 const paidCount = computed(() => payments.value.filter(p => p.is_paid).length)
 const toPayCount = computed(() => payments.value.filter(p => !p.is_paid && p.payment_status === 'to_pay').length)
-const inWorkCount = computed(() => payments.value.filter(p => !p.is_paid && p.payment_status !== 'to_pay').length)
+const pendingStageCount = computed(() => payments.value.filter(p => !p.is_paid && p.payment_status === 'pending_stage').length)
+const inWorkCount = computed(() => payments.value.filter(p => !p.is_paid && p.payment_status !== 'to_pay' && p.payment_status !== 'pending_stage').length)
 
 const groupedPayments = computed(() => {
   const map = {}
@@ -823,6 +831,7 @@ function fmtMonth(m) {
 function payRowStyle(p) {
   if (p.is_paid || p.payment_status === 'paid') return { background: '#E8F5E9' }
   if (p.payment_status === 'to_pay') return { background: '#FFF8E1' }
+  if (p.payment_status === 'pending_stage') return { background: '#EDE7F6' }
   return {}
 }
 
@@ -888,10 +897,11 @@ async function loadData() {
     if (filters.value.role) filtered = filtered.filter(p => (p.role || '').includes(filters.value.role) || (p.position || '').includes(filters.value.role))
     // Фильтр по агенту
     if (filters.value.agent_type) filtered = filtered.filter(p => (p.agent_type || '').includes(filters.value.agent_type))
-    // Фильтр по статусу (серверные значения: 'paid', 'to_pay', 'pending'/null)
-    if (filters.value.status === 'in_work') filtered = filtered.filter(p => !p.is_paid && p.payment_status !== 'paid' && p.payment_status !== 'to_pay')
+    // Фильтр по статусу (серверные значения: 'paid', 'to_pay', 'pending_stage', null)
+    if (filters.value.status === 'in_work') filtered = filtered.filter(p => !p.is_paid && p.payment_status !== 'paid' && p.payment_status !== 'to_pay' && p.payment_status !== 'pending_stage')
     else if (filters.value.status === 'to_pay') filtered = filtered.filter(p => !p.is_paid && p.payment_status === 'to_pay')
     else if (filters.value.status === 'paid') filtered = filtered.filter(p => p.is_paid || p.payment_status === 'paid')
+    else if (filters.value.status === 'pending_stage') filtered = filtered.filter(p => !p.is_paid && p.payment_status === 'pending_stage')
     // Фильтр по типу выплаты
     if (filters.value.payment_type) {
       filtered = filtered.filter(p => p.payment_type === filters.value.payment_type || p.payment_subtype === filters.value.payment_type)
@@ -1089,8 +1099,8 @@ function exportSalariesPDF() {
     else if (f.period==='year') period=`${f.year} год`
     const tab = tabLabels[paymentTab.value] || ''
     const now = new Date().toLocaleDateString('ru-RU')
-    const statusColor = p => (p.is_paid||p.payment_status==='paid') ? '#27AE60' : p.payment_status==='to_pay' ? '#F39C12' : '#888'
-    const fmtStatus = p => (p.is_paid||p.payment_status==='paid') ? 'Оплачено' : p.payment_status==='to_pay' ? 'К оплате' : 'В работе'
+    const statusColor = p => (p.is_paid||p.payment_status==='paid') ? '#27AE60' : p.payment_status==='to_pay' ? '#F39C12' : p.payment_status==='pending_stage' ? '#7B1FA2' : '#888'
+    const fmtStatus = p => (p.is_paid||p.payment_status==='paid') ? 'Оплачено' : p.payment_status==='to_pay' ? 'К оплате' : p.payment_status==='pending_stage' ? 'В ожидании' : 'В работе'
     let body = `<div class="sbox">
       <div class="scol"><div class="sl">Итого</div><div class="sv">${_fmtRub(totalAmount.value)}</div></div>
       <div class="scol"><div class="sl">Оплачено</div><div class="sv" style="color:#27AE60">${paidCount.value}</div></div>
@@ -1169,6 +1179,7 @@ onMounted(async () => {
 .stat-pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold }
 .stat-pill.paid { background: #E8F8F5; color: #27AE60 }
 .stat-pill.pending { background: #FFF8E1; color: #F39C12 }
+.stat-pill.waiting { background: #EDE7F6; color: #7B1FA2 }
 .stat-pill.inwork { background: #F5F5F5; color: #888 }
 .employee-group-header { display: flex; align-items: center; padding: 8px 12px; background: white; border: 1px solid #E0E0E0; border-radius: 8px 8px 0 0; cursor: pointer }
 .payment-card { border: none; border-left: 1px solid #E0E0E0; border-right: 1px solid #E0E0E0; border-bottom: 1px solid #F0F0F0; border-radius: 0 }
