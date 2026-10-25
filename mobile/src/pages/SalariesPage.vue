@@ -385,7 +385,7 @@
                         >К оплате</span>
                         <span
                           v-else-if="p.payment_status === 'done'"
-                          style="display:inline-flex;align-items:center;height:26px;padding:0 8px;border-radius:4px;font-size:10px;background:#E0F2F1;color:#00897B;white-space:nowrap"
+                          style="display:inline-flex;align-items:center;height:26px;padding:0 8px;border-radius:4px;font-size:10px;background:transparent;color:#00897B;white-space:nowrap"
                         >Выполнено</span>
                         <span
                           v-else-if="p.payment_status === 'pending_stage'"
@@ -838,7 +838,7 @@ function fmtMonth(m) {
 }
 function payRowStyle(p) {
   if (p.is_paid || p.payment_status === 'paid') return { background: '#E8F5E9' }
-  if (p.payment_status === 'done') return { background: '#E0F2F1' }
+
   if (p.payment_status === 'to_pay') return { background: '#FFF8E1' }
   if (p.payment_status === 'pending_stage') return { background: '#F5F5F5' }
   return {}
@@ -1190,7 +1190,7 @@ onMounted(async () => {
 .stat-pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold }
 .stat-pill.paid { background: #E8F8F5; color: #27AE60 }
 .stat-pill.pending { background: #FFF8E1; color: #F39C12 }
-.stat-pill.done { background: #E0F2F1; color: #00897B }
+.stat-pill.done { background: transparent; color: #00897B }
 .stat-pill.waiting { background: #F5F5F5; color: #aaa }
 .stat-pill.inwork { background: #F5F5F5; color: #888 }
 .employee-group-header { display: flex; align-items: center; padding: 8px 12px; background: white; border: 1px solid #E0E0E0; border-radius: 8px 8px 0 0; cursor: pointer }

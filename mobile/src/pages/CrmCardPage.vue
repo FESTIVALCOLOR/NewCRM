@@ -2838,7 +2838,7 @@ const paymentTotal = computed(() => {
 
 function paymentRowStyle(p) {
   if (p.is_paid || p.payment_status === 'paid') return { background: '#E8F5E9' }
-  if (p.payment_status === 'done') return { background: '#E0F2F1' }
+
   if (p.payment_status === 'to_pay') return { background: '#FFF8E1' }
   if (p.payment_status === 'pending_stage') return { background: '#F5F5F5' }
   return {}
