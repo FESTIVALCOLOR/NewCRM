@@ -1190,6 +1190,9 @@
                   <q-item-label v-if="p.is_paid || p.payment_status === 'paid'" caption style="color: #27AE60; font-size: 10px">
                     оплачено
                   </q-item-label>
+                  <q-item-label v-else-if="p.payment_status === 'done'" caption style="color: #00897B; font-size: 10px">
+                    выполнено
+                  </q-item-label>
                   <q-item-label v-else-if="p.payment_status === 'to_pay'" caption style="color: #F39C12; font-size: 10px">
                     к оплате
                   </q-item-label>
@@ -2835,6 +2838,7 @@ const paymentTotal = computed(() => {
 
 function paymentRowStyle(p) {
   if (p.is_paid || p.payment_status === 'paid') return { background: '#E8F5E9' }
+  if (p.payment_status === 'done') return { background: '#E0F2F1' }
   if (p.payment_status === 'to_pay') return { background: '#FFF8E1' }
   if (p.payment_status === 'pending_stage') return { background: '#F5F5F5' }
   return {}
@@ -3169,11 +3173,43 @@ async function updateBalanceFromTimeline(savedEntry) {
 
     const month = savedEntry.actual_date.substring(0, 7)
     const { api: ax } = await import('src/boot/axios')
-    await ax.patch(`/api/v1/payments/${payment.id}`, { report_month: month })
+    const isExecutorRole = ['Дизайнер', 'Чертёжник'].includes(payment.role)
+    const isMeasurerRole = payment.role === 'Замерщик'
+    const patchData = { report_month: month }
+    if (isExecutorRole || isMeasurerRole) patchData.payment_status = 'done'
+    await ax.patch(`/api/v1/payments/${payment.id}`, patchData)
     payment.report_month = month
+    if (patchData.payment_status) payment.payment_status = patchData.payment_status
+    // Для исполнителей — также ставим 'done' на Аванс (стадия завершена)
+    if (isExecutorRole) {
+      const advance = cardPayments.value.find(p =>
+        p.stage_name === stageInfo.stageName && p.payment_type === 'Аванс' &&
+        !p.reassigned && p.payment_status !== 'paid' && p.payment_status !== 'to_pay',
+      )
+      if (advance) {
+        await ax.patch(`/api/v1/payments/${advance.id}`, { payment_status: 'done' })
+        advance.payment_status = 'done'
+      }
+    }
   } catch (e) {
     console.warn('[Payments] Ошибка обновления доплаты из таймлайна:', e)
   }
+}
+
+const SENIOR_PAYMENT_ROLES = ['Старший менеджер проектов', 'СДП', 'ГАП', 'Менеджер']
+
+async function markSeniorStaffPaymentsDone() {
+  try {
+    const { api: ax } = await import('src/boot/axios')
+    const toMark = cardPayments.value.filter(p =>
+      SENIOR_PAYMENT_ROLES.includes(p.role) && !p.is_paid &&
+      p.payment_status !== 'paid' && p.payment_status !== 'done' && p.payment_status !== 'to_pay' && !p.reassigned,
+    )
+    for (const p of toMark) {
+      await ax.patch(`/api/v1/payments/${p.id}`, { payment_status: 'done' })
+      p.payment_status = 'done'
+    }
+  } catch (e) { console.warn('[Payments] Выполнено для старшего состава:', e) }
 }
 
 // Устанавливает месяц АВАНСА когда карточка входит в стадию (подэтап 1 стадии стал активным).
@@ -3815,6 +3851,7 @@ watch(showCreatePayment, (val) => { if (val) { openCreatePaymentDialog(); showCr
 watch(() => card.value?.column_name, async (newCol, oldCol) => {
   if (!newCol || !oldCol || newCol === oldCol) return
   await triggerAdvanceForStageStart(newCol)
+  if (newCol === 'Выполненный проект') await markSeniorStaffPaymentsDone()
 })
 
 async function deleteFile(f) {
