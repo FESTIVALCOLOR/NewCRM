@@ -875,8 +875,8 @@
                     />
                   </div>
 
-                  <!-- Строка 2: Отчёт и Фото на всю ширину -->
-                  <div v-if="!isArchived" class="row q-gutter-xs q-mt-xs">
+                  <!-- Строка 2: Отчёт + Фото (растягиваются) + edit + delete в одну строку -->
+                  <div v-if="!isArchived" class="row q-gutter-xs q-mt-xs items-center">
                     <q-btn
                       outline
                       dense
@@ -886,7 +886,7 @@
                       no-caps
                       color="orange"
                       class="col"
-                      style="font-size: 10px; padding: 2px 8px; border-radius: 4px"
+                      style="font-size: 10px; padding: 2px 4px; border-radius: 4px"
                       @click="uploadVisitReport(visit)"
                     />
                     <q-btn
@@ -898,12 +898,9 @@
                       no-caps
                       color="blue"
                       class="col"
-                      style="font-size: 10px; padding: 2px 8px; border-radius: 4px"
+                      style="font-size: 10px; padding: 2px 4px; border-radius: 4px"
                       @click="uploadVisitPhoto(visit)"
                     />
-                  </div>
-                  <!-- Строка 3: редактирование и удалить справа -->
-                  <div v-if="!isArchived" class="row justify-end q-gutter-xs q-mt-xs">
                     <q-btn
                       outline
                       dense
@@ -911,7 +908,7 @@
                       icon="edit"
                       no-caps
                       color="grey-7"
-                      style="font-size: 10px; padding: 2px 6px; border-radius: 4px"
+                      style="font-size: 10px; padding: 2px 6px; border-radius: 4px; flex-shrink: 0"
                       @click="editVisit(visit)"
                     />
                     <q-btn
@@ -921,7 +918,7 @@
                       icon="delete"
                       no-caps
                       color="negative"
-                      style="font-size: 10px; padding: 2px 6px; border-radius: 4px"
+                      style="font-size: 10px; padding: 2px 6px; border-radius: 4px; flex-shrink: 0"
                       @click="deleteVisit(visit)"
                     />
                   </div>
