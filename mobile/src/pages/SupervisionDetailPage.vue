@@ -875,8 +875,8 @@
                     />
                   </div>
 
-                  <!-- Строка 2: Отчёт, Фото, редактирование, удалить -->
-                  <div v-if="!isArchived" class="row q-gutter-xs q-mt-xs items-center">
+                  <!-- Строка 2: Отчёт и Фото на всю ширину -->
+                  <div v-if="!isArchived" class="row q-gutter-xs q-mt-xs">
                     <q-btn
                       outline
                       dense
@@ -885,6 +885,7 @@
                       label="Отчёт"
                       no-caps
                       color="orange"
+                      class="col"
                       style="font-size: 10px; padding: 2px 8px; border-radius: 4px"
                       @click="uploadVisitReport(visit)"
                     />
@@ -896,10 +897,13 @@
                       label="Фото"
                       no-caps
                       color="blue"
+                      class="col"
                       style="font-size: 10px; padding: 2px 8px; border-radius: 4px"
                       @click="uploadVisitPhoto(visit)"
                     />
-                    <q-space />
+                  </div>
+                  <!-- Строка 3: редактирование и удалить справа -->
+                  <div v-if="!isArchived" class="row justify-end q-gutter-xs q-mt-xs">
                     <q-btn
                       outline
                       dense
