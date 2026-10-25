@@ -3158,6 +3158,10 @@ async function updateBalanceFromTimeline(savedEntry) {
     const stageInfo = stageMap[sg]
     if (!stageInfo) return
 
+    // Не помечаем оплату пока карточка ещё находится в этой стадии —
+    // исполнительские оплаты помечаются через watch column_name при уходе из стадии
+    if (card.value.column_name === stageInfo.stageName) return
+
     const payType = isTemplate ? 'Полная оплата' : 'Доплата'
     const payment = cardPayments.value.find(p =>
       p.stage_name === stageInfo.stageName && p.payment_type === payType && !p.report_month && !p.reassigned,
@@ -3198,6 +3202,26 @@ async function updateBalanceFromTimeline(savedEntry) {
 }
 
 const SENIOR_PAYMENT_ROLES = ['Старший менеджер проектов', 'СДП', 'ГАП', 'Менеджер']
+const EXECUTOR_PAYMENT_ROLES = ['Чертёжник', 'Дизайнер']
+
+// Помечает оплаты исполнителей (Чертёжник/Дизайнер) как 'done' когда карточка УХОДИТ из стадии.
+// Это основной триггер — надёжнее чем анализ подэтапов таймлайна.
+async function markExecutorPaymentsDoneForStage(completedStageName) {
+  try {
+    if (!completedStageName || !card.value) return
+    const { api: ax } = await import('src/boot/axios')
+    const toMark = cardPayments.value.filter(p =>
+      EXECUTOR_PAYMENT_ROLES.includes(p.role) && !p.is_paid &&
+      p.payment_status !== 'paid' && p.payment_status !== 'done' &&
+      p.payment_status !== 'to_pay' && !p.reassigned &&
+      p.stage_name === completedStageName,
+    )
+    for (const p of toMark) {
+      await ax.patch(`/api/v1/payments/${p.id}`, { payment_status: 'done' })
+      p.payment_status = 'done'
+    }
+  } catch (e) { console.warn('[Payments] Выполнено для исполнителей стадии:', e) }
+}
 
 async function markSeniorStaffPaymentsDone() {
   try {
@@ -3853,6 +3877,8 @@ watch(() => card.value?.column_name, async (newCol, oldCol) => {
   if (!newCol || !oldCol || newCol === oldCol) return
   await triggerAdvanceForStageStart(newCol)
   if (newCol === 'Выполненный проект') await markSeniorStaffPaymentsDone()
+  // Когда карточка уходит из стадии — помечаем оплаты исполнителей за эту стадию как выполненные
+  await markExecutorPaymentsDoneForStage(oldCol)
 })
 
 async function deleteFile(f) {
