@@ -20,29 +20,38 @@
           <q-tooltip>Назад</q-tooltip>
         </q-btn>
         <q-card-section style="background: #F8F9FA; border-radius: 8px 8px 0 0">
-          <div class="row items-start justify-between q-mb-xs">
-            <div style="flex: 1">
+          <div class="row items-start justify-between q-mb-xs" style="gap: 8px">
+            <!-- Левый столбец: номер договора, адрес, тип, площадь, город -->
+            <div style="flex: 1; min-width: 0">
               <div class="text-subtitle1 text-weight-bold" style="color: #333">
                 {{ card.contract_number }}
               </div>
               <div class="text-body2 q-mt-xs" style="color: #333">
                 <a v-if="card.address" :href="'https://yandex.ru/maps/?text=' + encodeURIComponent(card.address)" target="_blank" style="color: #333; text-decoration: none"><q-icon name="location_on" size="14px" color="red" class="q-mr-xs" />{{ card.address }}</a>
               </div>
+              <div class="text-caption q-mt-xs" style="color: #888">
+                <span v-if="card.project_type">{{ card.project_type }}</span>
+                <span v-if="card.project_subtype" style="color: #ccc; margin: 0 4px">|</span><span v-if="card.project_subtype">{{ card.project_subtype }}</span>
+                <span v-if="card.area" style="color: #ccc; margin: 0 4px">|</span><span v-if="card.area">{{ card.area }} м²</span>
+                <span v-if="card.city" style="color: #ccc; margin: 0 4px">|</span><span v-if="card.city"><q-icon name="location_on" size="12px" /> {{ card.city }}</span>
+              </div>
             </div>
-            <div class="column items-end q-gutter-xs q-ml-sm" style="flex-shrink: 0">
+            <!-- Правый столбец: статус стадии (с переносом) + тип агента -->
+            <div class="column items-end q-gutter-xs" style="flex-shrink: 0; max-width: 44%">
               <q-badge
                 :color="card.is_paused ? 'warning' : 'positive'"
                 :label="card.is_paused ? 'Приостановлено' : card.column_name"
-                style="min-width: 100px; justify-content: center; padding: 5px 8px; font-size: 11px"
+                style="text-align: center; padding: 5px 8px; font-size: 11px; white-space: normal; word-break: break-word; max-width: 100%"
+                multi-line
               />
-              <q-badge v-if="card.agent_type" text-color="white" :style="{ background: agentColor, minWidth: '100px', justifyContent: 'center', padding: '5px 8px', fontSize: '11px' }" :label="card.agent_type" />
+              <q-badge
+                v-if="card.agent_type"
+                text-color="white"
+                :style="{ background: agentColor, textAlign: 'center', padding: '5px 8px', fontSize: '11px', whiteSpace: 'normal', wordBreak: 'break-word', maxWidth: '100%' }"
+                :label="card.agent_type"
+                multi-line
+              />
             </div>
-          </div>
-          <div class="row items-center q-gutter-xs text-caption q-mt-xs" style="color: #888">
-            <span v-if="card.project_type">{{ card.project_type }}</span>
-            <span v-if="card.project_subtype" style="color: #ccc; margin: 0 4px">|</span><span v-if="card.project_subtype">{{ card.project_subtype }}</span>
-            <span v-if="card.area" style="color: #ccc; margin: 0 4px">|</span><span v-if="card.area">{{ card.area }} м²</span>
-            <span v-if="card.city" style="color: #ccc; margin: 0 4px">|</span><span v-if="card.city"><q-icon name="location_on" size="12px" /> {{ card.city }}</span>
           </div>
           <div class="row q-gutter-md text-caption q-mt-xs" style="color: #888">
             <span v-if="card.start_date"><q-icon name="play_arrow" size="14px" /> Начало: {{ formatDate(card.start_date) }}</span>
@@ -508,33 +517,31 @@
                 <q-item-section side>
                   <div class="column items-end q-gutter-xs">
                     <q-badge :color="stageColor(entry.status)" :label="entry.status" dense />
-                    <div class="row q-gutter-xs items-center">
-                      <q-btn
-                        v-if="stageFiles(entry.stage_code).length > 0"
-                        flat
-                        dense
-                        no-caps
-                        size="xs"
-                        icon="folder_open"
-                        :label="`${stageFiles(entry.stage_code).length} файл(ов)`"
-                        color="blue"
-                        style="font-size: 10px"
-                        @click.stop="openStageFolder(entry)"
-                      />
-                      <q-btn
-                        v-if="can('supervision.files_upload') && !isArchived"
-                        unelevated
-                        dense
-                        no-caps
-                        size="xs"
-                        icon="attach_file"
-                        label="Файл"
-                        color="blue-1"
-                        text-color="blue-8"
-                        style="font-size: 10px; border-radius: 4px; padding: 0 5px"
-                        @click.stop="uploadStageFile(entry.stage_code)"
-                      />
-                    </div>
+                    <q-btn
+                      v-if="stageFiles(entry.stage_code).length > 0"
+                      flat
+                      dense
+                      no-caps
+                      size="xs"
+                      icon="folder_open"
+                      :label="`${stageFiles(entry.stage_code).length} файл(ов)`"
+                      color="blue"
+                      style="font-size: 10px"
+                      @click.stop="openStageFolder(entry)"
+                    />
+                    <q-btn
+                      v-if="can('supervision.files_upload') && !isArchived"
+                      unelevated
+                      dense
+                      no-caps
+                      size="xs"
+                      icon="attach_file"
+                      label="Файл"
+                      color="blue-1"
+                      text-color="blue-8"
+                      style="font-size: 10px; border-radius: 4px; padding: 0 5px"
+                      @click.stop="uploadStageFile(entry.stage_code)"
+                    />
                   </div>
                 </q-item-section>
               </q-item>
@@ -768,18 +775,25 @@
                 :style="Object.assign({ borderRadius: '6px' }, visit.actual_date ? { background: '#E8F5E9', borderColor: '#A5D6A7' } : {})"
               >
                 <q-card-section class="q-pa-sm">
-                  <div class="row items-center q-mb-xs">
-                    <q-badge :color="visit.visit_type === 'К поставщику' ? 'blue' : 'green'" :label="visit.visit_type || 'На объект'" dense class="q-mr-xs" />
-                    <q-badge
-                      v-if="visit.is_additional"
-                      color="orange"
-                      label="доп."
-                      dense
-                      class="q-mr-xs"
-                    />
-                    <span class="text-caption text-weight-bold" style="color: #333">{{ formatDate(visit.visit_date) }}</span>
-                    <span v-if="visit.actual_date" class="text-caption q-ml-sm" style="color: #27AE60">Факт: {{ formatDate(visit.actual_date) }}</span>
+                  <!-- Строка: бейджи слева, даты справа в столбик -->
+                  <div class="row items-start justify-between q-mb-xs">
+                    <div class="column q-gutter-xs" style="flex: 1">
+                      <div class="row items-center q-gutter-xs">
+                        <q-badge :color="visit.visit_type === 'К поставщику' ? 'blue' : 'green'" :label="visit.visit_type || 'На объект'" dense />
+                        <q-badge
+                          v-if="visit.is_additional"
+                          color="orange"
+                          label="доп."
+                          dense
+                        />
+                      </div>
+                    </div>
+                    <div class="column items-end" style="flex-shrink: 0; text-align: right">
+                      <span class="text-caption text-weight-bold" style="color: #333">План: {{ formatDate(visit.visit_date) }}</span>
+                      <span v-if="visit.actual_date" class="text-caption" style="color: #27AE60">Факт: {{ formatDate(visit.actual_date) }}</span>
+                    </div>
                   </div>
+
                   <div v-if="visit.stage_name" class="text-caption" style="color: #888">
                     {{ visit.stage_name }}
                   </div>
@@ -829,10 +843,9 @@
                     </div>
                   </div>
 
-                  <!-- Кнопки действий + ЯД папка в одной строке -->
-                  <div class="row q-gutter-xs q-mt-sm items-center">
+                  <!-- ЯД папка -->
+                  <div v-if="visit.actual_date || visit.visit_date" class="row q-mt-xs">
                     <q-btn
-                      v-if="visit.actual_date || visit.visit_date"
                       flat
                       dense
                       size="xs"
@@ -843,9 +856,27 @@
                       style="font-size: 10px; padding: 2px 8px; border-radius: 4px"
                       @click.stop="openVisitFolder(visit)"
                     />
-                    <q-space />
+                  </div>
+
+                  <!-- Строка 1: кнопка Факт. выезд (если не проставлена) -->
+                  <div v-if="!isArchived && !visit.actual_date" class="row q-mt-xs">
                     <q-btn
-                      v-if="!isArchived"
+                      outline
+                      dense
+                      size="xs"
+                      icon="event_available"
+                      label="Факт. выезд"
+                      no-caps
+                      color="positive"
+                      class="full-width"
+                      style="font-size: 10px; padding: 2px 8px; border-radius: 4px"
+                      @click="setActualDate(visit)"
+                    />
+                  </div>
+
+                  <!-- Строка 2: Отчёт, Фото, редактирование, удалить -->
+                  <div v-if="!isArchived" class="row q-gutter-xs q-mt-xs items-center">
+                    <q-btn
                       outline
                       dense
                       size="xs"
@@ -857,7 +888,6 @@
                       @click="uploadVisitReport(visit)"
                     />
                     <q-btn
-                      v-if="!isArchived"
                       outline
                       dense
                       size="xs"
@@ -868,20 +898,8 @@
                       style="font-size: 10px; padding: 2px 8px; border-radius: 4px"
                       @click="uploadVisitPhoto(visit)"
                     />
+                    <q-space />
                     <q-btn
-                      v-if="!isArchived && !visit.actual_date"
-                      outline
-                      dense
-                      size="xs"
-                      icon="event_available"
-                      label="Факт. выезд"
-                      no-caps
-                      color="positive"
-                      style="font-size: 10px; padding: 2px 8px; border-radius: 4px"
-                      @click="setActualDate(visit)"
-                    />
-                    <q-btn
-                      v-if="!isArchived"
                       outline
                       dense
                       size="xs"
@@ -892,7 +910,6 @@
                       @click="editVisit(visit)"
                     />
                     <q-btn
-                      v-if="!isArchived"
                       outline
                       dense
                       size="xs"
@@ -1139,6 +1156,7 @@
                 label="Добавить платёж клиента"
                 color="primary"
                 size="sm"
+                class="full-width"
                 @click="showClientPayDialog = true"
               />
             </q-card-section>
@@ -1232,6 +1250,7 @@
                 no-caps
                 icon="add"
                 label="Добавить заметку"
+                class="full-width"
                 style="background: #ffd93c; color: #333; font-size: 12px; height: 36px; border-radius: 4px"
                 :disable="!noteText?.trim()"
                 @click="addTextNote"
@@ -1502,7 +1521,7 @@
         <q-card-section class="q-pt-none q-gutter-y-sm">
           <div v-if="activeMonthlyAssignment" class="q-pa-sm" style="background: #e8f5e9; border-radius: 8px; font-size: 12px">
             Текущая ставка: <b>{{ activeMonthlyAssignment.monthly_amount }} ₽/мес.</b>
-            (с {{ activeMonthlyAssignment.start_date }})
+            (с {{ fmtDMY(activeMonthlyAssignment.start_date) }})
           </div>
           <div class="text-caption" style="color: #aaa">
             Ставка будет начислена за текущий месяц немедленно, затем 1-го числа каждого следующего месяца, пока карточка не переведена в «Выполненный проект».
@@ -2067,8 +2086,8 @@
       @change="handleNadzorFileUpload"
     >
 
-    <!-- FAB меню -->
-    <q-page-sticky position="bottom-right" :offset="[18, 18]">
+    <!-- FAB меню (скрыт на вкладке чата, чтобы не перекрывать кнопку отправки) -->
+    <q-page-sticky v-if="activeTab !== 'sv-chat'" position="bottom-right" :offset="[18, 18]">
       <q-fab
         v-model="fabOpen"
         direction="up"
