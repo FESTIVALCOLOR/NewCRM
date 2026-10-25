@@ -3164,11 +3164,12 @@ async function updateBalanceFromTimeline(savedEntry) {
     )
     if (!payment) return
 
-    // Проверяем только подэтапы роли исполнителя данной стадии
+    // Проверяем ВСЕ подэтапы стадии — стадия должна быть полностью завершена (все роли)
     const stageEntries = timelineEntries.value.filter(e => e.stage_group === sg && e.executor_role !== 'header')
-    const roleEntries = stageEntries.filter(e => e.executor_role === payment.role)
-    const entriesToCheck = roleEntries.length ? roleEntries : stageEntries
-    const allDone = entriesToCheck.every(e => e.actual_date || e.status === 'skipped' || e.is_in_contract_scope === false)
+    if (!stageEntries.length) return
+    // Защита от vacuous truth: нужен хотя бы один подэтап в объёме
+    if (!stageEntries.some(e => e.is_in_contract_scope !== false && e.status !== 'skipped')) return
+    const allDone = stageEntries.every(e => e.actual_date || e.status === 'skipped' || e.is_in_contract_scope === false)
     if (!allDone) return
 
     const month = savedEntry.actual_date.substring(0, 7)
