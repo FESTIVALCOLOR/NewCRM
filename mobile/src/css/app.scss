@@ -368,7 +368,13 @@ body {
   [style*="background: var(--fc-accent)"],
   [style*="background:var(--fc-accent)"] {
     color: #333333 !important;
+    border-color: #b8960e !important;
     .q-btn__content, .q-btn__wrapper, i, span { color: #333333 !important; }
+    // .save-btn и .emp-save-btn внутри жёлтого тулбара — рамка тоже тёмная
+    .save-btn, .emp-save-btn {
+      color: #333333 !important;
+      border-color: #333333 !important;
+    }
   }
 
   // ---- Зелёные и красные Quasar-утилиты → тёмные оттенки ----

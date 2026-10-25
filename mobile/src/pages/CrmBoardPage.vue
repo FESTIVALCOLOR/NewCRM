@@ -1144,7 +1144,7 @@ onMounted(async () => {
 }
 .toggle-pills button.active .pill-count {
   background: var(--fc-accent);
-  color: var(--fc-text);
+  color: #333333;
 }
 
 /* Column navigation mini-bar */

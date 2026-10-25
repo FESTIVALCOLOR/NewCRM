@@ -328,12 +328,15 @@
           {{ $q.dark.isActive ? 'Светлая тема' : 'Тёмная тема' }}
         </q-item-section>
         <q-item-section side>
-          <q-toggle
-            :model-value="$q.dark.isActive"
-            color="accent"
-            dense
-            @update:model-value="toggleTheme"
-          />
+          <!-- @click.stop предотвращает двойной вызов toggleTheme (от q-item @click и q-toggle @update) -->
+          <div @click.stop>
+            <q-toggle
+              :model-value="$q.dark.isActive"
+              color="accent"
+              dense
+              @update:model-value="toggleTheme"
+            />
+          </div>
         </q-item-section>
       </q-item>
       <q-separator />
