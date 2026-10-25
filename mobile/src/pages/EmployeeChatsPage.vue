@@ -356,8 +356,8 @@ onMounted(loadChats)
 }
 
 .admin-chat-item {
-  background: #e8f4fd;
-  border-left: 3px solid #1565c0;
+  background: var(--fc-selected-bg);
+  border-left: 3px solid var(--fc-link);
 }
 
 .pinned-chat-item {

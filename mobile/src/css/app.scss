@@ -355,6 +355,53 @@ body {
   .q-expansion-item__content {
     background: var(--fc-bg-info);
   }
+
+  // ---- Акцент (жёлтый) фон → всегда тёмный текст (жёлтый — светлый цвет) ----
+  .q-btn--unelevated.bg-accent,
+  .btn-primary {
+    color: #333333 !important;
+  }
+  // Inline-стили с accent-фоном — тёмный текст поверх жёлтого
+  [style*="background: var(--fc-accent)"],
+  [style*="background:var(--fc-accent)"] {
+    color: #333333 !important;
+  }
+
+  // ---- Зелёные Quasar-утилиты → тёмные оттенки ----
+  .bg-green-1 {
+    background: rgba(39, 174, 96, 0.18) !important;
+  }
+  .text-green-9 {
+    color: #81C784 !important;
+  }
+
+  // ---- Чат: скошенные цвета → тёмные аналоги ----
+  // EmployeeChatsPage: admin-чат (светло-синий фон → полупрозрачный синий)
+  .admin-chat-item {
+    background: rgba(21, 101, 192, 0.18) !important;
+    border-left-color: #90CAF9 !important;
+  }
+  // InlineChatRoom / CrmCard файловый диалог
+  .cf-stage-hdr {
+    color: var(--fc-link) !important;
+  }
+  .cf-var-hdr {
+    background: var(--fc-bg-alt) !important;
+  }
+  .cf-file-row--checked {
+    background: var(--fc-highlight-yellow) !important;
+  }
+  .cf-btn-send {
+    color: #333333 !important;
+  }
+  // Иконки типов файлов → полупрозрачные тёмные версии
+  .cf-ico-img  { background: rgba(46, 125, 50, 0.25) !important; color: #A5D6A7 !important; }
+  .cf-ico-pdf  { background: rgba(183, 28, 28, 0.25) !important; color: #EF9A9A !important; }
+  .cf-ico-xls  { background: rgba(27, 94, 32, 0.25) !important; color: #A5D6A7 !important; }
+  .cf-ico-doc  { color: #90CAF9 !important; }
+  .cf-ico-zip  { background: rgba(74, 20, 140, 0.25) !important; color: #CE93D8 !important; }
+  .cf-ico-dir  { background: rgba(245, 127, 23, 0.25) !important; color: #FFB74D !important; }
+  .cf-ico-file { color: var(--fc-text-secondary) !important; }
 }
 
 // ===== BADGE агента =====
@@ -392,6 +439,16 @@ body {
   background: var(--fc-bg);
   padding: 12px;
   text-align: center;
+}
+
+// ===== ФОН ЧАТА (паттерн только в светлой теме) =====
+.chat-messages-area {
+  background-image: url('/backgrounds/bg-employee.png');
+  background-repeat: repeat;
+  background-size: 400px auto;
+}
+.body--dark .chat-messages-area {
+  background-image: none;
 }
 
 // ===== PULL TO REFRESH =====

@@ -632,7 +632,7 @@
                           spinner-size="12px"
                         />
                         <div style="min-width: 0">
-                          <div class="text-caption text-weight-bold" style="color: #1565C0; font-size: 11px">
+                          <div class="text-caption text-weight-bold" style="color: var(--fc-link); font-size: 11px">
                             {{ msg.reply_preview.sender_display_name }}
                           </div>
                           <div class="text-caption text-grey-7 ellipsis" style="font-size: 11px">
@@ -867,7 +867,7 @@
     >
       <q-icon name="reply" size="16px" color="blue-7" />
       <div style="flex: 1; min-width: 0">
-        <div class="text-caption text-weight-bold" style="color: #1565C0; font-size: 11px">
+        <div class="text-caption text-weight-bold" style="color: var(--fc-link); font-size: 11px">
           {{ replyingTo.sender_display_name }}
         </div>
         <div class="text-caption text-grey-7" style="font-size: 11px; word-break: break-word; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden">
@@ -1634,7 +1634,8 @@ const $q = useQuasar()
 const { connectEmployee, disconnect, sendMessage, sendTypingStart, sendTypingStop, sendRead, typingUsers } = useChatWebSocket()
 
 const chatBgStyle = computed(() => {
-  return 'overflow-y: auto; overflow-x: hidden; background-color: var(--fc-bg-alt); background-image: url(\'/backgrounds/bg-employee.png\'); background-repeat: repeat; background-size: 400px auto'
+  const base = 'overflow-y: auto; overflow-x: hidden; background-color: var(--fc-bg-alt);'
+  return $q.dark.isActive ? base : base + ' background-image: url(\'/backgrounds/bg-employee.png\'); background-repeat: repeat; background-size: 400px auto'
 })
 
 const loading = ref(false)
@@ -3357,12 +3358,12 @@ onUnmounted(() => {
 /* Файловый диалог карточки — стиль десктопа */
 .cf-stage-hdr {
   padding: 4px 10px; font-size: 11px; font-weight: 700;
-  background: var(--fc-chat-reply-bg); color: #1a3a6b;
+  background: var(--fc-chat-reply-bg); color: var(--fc-link);
   border-bottom: 1px solid #d0daea;
 }
 .cf-var-hdr {
   padding: 3px 20px; font-size: 10px; font-style: italic;
-  background: #F3F3F3; color: var(--fc-text-secondary);
+  background: var(--fc-bg-alt); color: var(--fc-text-secondary);
   border-bottom: 1px solid var(--fc-tab-inactive);
 }
 .cf-file-row {
@@ -3372,7 +3373,7 @@ onUnmounted(() => {
   transition: background 0.1s;
 }
 .cf-file-row:hover { background: var(--fc-bg-alt); }
-.cf-file-row--checked { background: #FFF8DC; }
+.cf-file-row--checked { background: var(--fc-highlight-yellow); }
 .cf-file-row:last-child { border-bottom: none; }
 .cf-thumb {
   width: 56px; height: 42px; flex-shrink: 0;

@@ -305,7 +305,7 @@
                         spinner-size="12px"
                       />
                       <div style="min-width: 0">
-                        <div class="text-caption text-weight-bold" style="color: #1565C0; line-height: 1.2">
+                        <div class="text-caption text-weight-bold" style="color: var(--fc-link); line-height: 1.2">
                           {{ msg.reply_preview.sender_display_name }}
                         </div>
                         <div class="text-caption ellipsis" style="color: var(--fc-text-medium); line-height: 1.3">

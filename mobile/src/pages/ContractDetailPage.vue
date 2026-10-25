@@ -2162,7 +2162,7 @@ onMounted(async () => {
 }
 .contact-chip--tg {
   background: var(--fc-selected-bg);
-  color: #1565C0;
+  color: var(--fc-link);
 }
 
 /* В ландшафте блоки Договор/ТЗ/Доп.соглашения стоят вертикально внутри левой колонки */

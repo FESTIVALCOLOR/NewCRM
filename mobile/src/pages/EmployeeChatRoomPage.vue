@@ -197,8 +197,8 @@
     <!-- Список сообщений -->
     <div
       ref="messagesEl"
-      class="col q-pa-md"
-      style="overflow-y: auto; background-color: var(--fc-bg-alt); background-image: url('/backgrounds/bg-employee.png'); background-repeat: repeat; background-size: 400px auto"
+      class="col q-pa-md chat-messages-area"
+      style="overflow-y: auto; background-color: var(--fc-bg-alt)"
     >
       <!-- Sentinel для Intersection Observer (автозагрузка при скролле вверх) -->
       <div ref="topSentinelEl" style="height: 2px" />
@@ -602,7 +602,7 @@
                           spinner-size="12px"
                         />
                         <div style="min-width: 0; overflow: hidden">
-                          <div class="text-caption text-weight-bold" style="color: #1565C0; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">
+                          <div class="text-caption text-weight-bold" style="color: var(--fc-link); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">
                             {{ msg.reply_preview.sender_display_name }}
                           </div>
                           <div class="text-caption text-grey-7" style="font-size: 11px; word-break: break-word; overflow-wrap: anywhere; white-space: pre-wrap">
@@ -851,7 +851,7 @@
     >
       <q-icon name="reply" size="16px" color="blue-7" />
       <div style="flex: 1; min-width: 0">
-        <div class="text-caption text-weight-bold" style="color: #1565C0; font-size: 11px">
+        <div class="text-caption text-weight-bold" style="color: var(--fc-link); font-size: 11px">
           {{ replyingTo.sender_display_name }}
         </div>
         <div class="text-caption text-grey-7" style="font-size: 11px; word-break: break-word; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden">
@@ -1484,7 +1484,7 @@
               <div
                 v-if="item.type === 'stage'"
                 class="q-px-md q-py-xs text-weight-bold"
-                style="background: var(--fc-chat-reply-bg); color: #1a3a6b; font-size: 11px; letter-spacing: 0.3px"
+                style="background: var(--fc-chat-reply-bg); color: var(--fc-link); font-size: 11px; letter-spacing: 0.3px"
               >
                 {{ item.label }}
               </div>
@@ -1492,7 +1492,7 @@
               <div
                 v-else-if="item.type === 'var'"
                 class="q-px-lg q-py-xs"
-                style="background: #F3F3F3; color: var(--fc-text-secondary); font-style: italic; font-size: 10px"
+                style="background: var(--fc-bg-alt); color: var(--fc-text-secondary); font-style: italic; font-size: 10px"
               >
                 Вариант {{ item.varNum }}
               </div>
