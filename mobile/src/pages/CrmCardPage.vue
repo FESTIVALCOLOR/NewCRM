@@ -3073,13 +3073,16 @@ async function saveTimelineEntry() {
     if ('status' in update) entry.status = update.status ?? ''
     timelineEditVisible.value = false
     $q.notify({ type: 'positive', message: 'Сохранено' })
-    if (update.actual_date) await updatePaymentMonthsFromTimeline(entry)
+    if (update.actual_date) await updateBalanceFromTimeline(entry)
   } catch (err) {
     $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
   }
 }
 
-async function updatePaymentMonthsFromTimeline(savedEntry) {
+// Устанавливает месяц ДОПЛАТЫ (или Полной оплаты для шаблона) когда последний подэтап
+// роли исполнителя в стадии отмечен выполненным. Аванс устанавливается отдельно —
+// через watch column_name (момент входа карточки в стадию).
+async function updateBalanceFromTimeline(savedEntry) {
   try {
     const sg = savedEntry.stage_group
     if (!card.value || !['STAGE1', 'STAGE2', 'STAGE3'].includes(sg)) return
@@ -3095,30 +3098,45 @@ async function updatePaymentMonthsFromTimeline(savedEntry) {
     }
     const stageInfo = stageMap[sg]
     if (!stageInfo) return
+
+    const payType = isTemplate ? 'Полная оплата' : 'Доплата'
+    const payment = cardPayments.value.find(p =>
+      p.stage_name === stageInfo.stageName && p.payment_type === payType && !p.report_month && !p.reassigned,
+    )
+    if (!payment) return
+
+    // Проверяем только подэтапы роли исполнителя данной стадии
     const stageEntries = timelineEntries.value.filter(e => e.stage_group === sg && e.executor_role !== 'header')
-    if (!stageEntries.length) return
+    const roleEntries = stageEntries.filter(e => e.executor_role === payment.role)
+    const entriesToCheck = roleEntries.length ? roleEntries : stageEntries
+    const allDone = entriesToCheck.every(e => e.actual_date || e.status === 'skipped' || e.is_in_contract_scope === false)
+    if (!allDone) return
+
     const month = savedEntry.actual_date.substring(0, 7)
-    const otherDone = stageEntries.filter(e => e.stage_code !== savedEntry.stage_code && e.actual_date)
-    const isFirstFact = otherDone.length === 0
-    const allDone = stageEntries.every(e => e.actual_date || e.status === 'skipped' || e.is_in_contract_scope === false)
     const { api: ax } = await import('src/boot/axios')
-    if (isTemplate) {
-      if (allDone) {
-        const p = cardPayments.value.find(p => p.stage_name === stageInfo.stageName && p.payment_type === 'Полная оплата' && !p.report_month && !p.reassigned)
-        if (p) { await ax.patch(`/api/v1/payments/${p.id}`, { report_month: month }); p.report_month = month }
-      }
-    } else {
-      if (isFirstFact) {
-        const p = cardPayments.value.find(p => p.stage_name === stageInfo.stageName && p.payment_type === 'Аванс' && !p.report_month && !p.reassigned)
-        if (p) { await ax.patch(`/api/v1/payments/${p.id}`, { report_month: month }); p.report_month = month }
-      }
-      if (allDone) {
-        const p = cardPayments.value.find(p => p.stage_name === stageInfo.stageName && p.payment_type === 'Доплата' && !p.report_month && !p.reassigned)
-        if (p) { await ax.patch(`/api/v1/payments/${p.id}`, { report_month: month }); p.report_month = month }
-      }
-    }
+    await ax.patch(`/api/v1/payments/${payment.id}`, { report_month: month })
+    payment.report_month = month
   } catch (e) {
-    console.warn('[Payments] Ошибка обновления месяца из таймлайна:', e)
+    console.warn('[Payments] Ошибка обновления доплаты из таймлайна:', e)
+  }
+}
+
+// Устанавливает месяц АВАНСА когда карточка входит в стадию (подэтап 1 стадии стал активным)
+async function triggerAdvanceForStageStart(stageName) {
+  try {
+    if (!card.value || card.value.project_type !== 'Индивидуальный') return
+    const stageColumns = ['Стадия 1: планировочные решения', 'Стадия 2: концепция дизайна', 'Стадия 3: рабочие чертежи']
+    if (!stageColumns.includes(stageName)) return
+    const month = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
+    const advance = cardPayments.value.find(p =>
+      p.stage_name === stageName && p.payment_type === 'Аванс' && !p.report_month && !p.reassigned,
+    )
+    if (!advance) return
+    const { api: ax } = await import('src/boot/axios')
+    await ax.patch(`/api/v1/payments/${advance.id}`, { report_month: month })
+    advance.report_month = month
+  } catch (e) {
+    console.warn('[Payments] Аванс при старте стадии:', e)
   }
 }
 // Прогресс подэтапов всех стадий (1.x → 2.x → 3.x)
@@ -3539,12 +3557,15 @@ async function doAssign() {
           const calcRes = await paymentsApi.calculate({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, stage_name: stageName || undefined, project_subtype: card.value.project_subtype || undefined })
           const fullAmount = typeof calcRes.data === 'number' ? calcRes.data : (calcRes.data?.amount || 0)
           if (fullAmount > 0) {
+            // Если карточка уже на этой стадии — аванс активен прямо сейчас
+            const isCurrentStage = card.value.column_name === (stageName || '')
+            const nowMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
             if (isTemplate) {
               await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, stage_name: stageName || undefined, payment_type: 'Полная оплата', crm_card_id: card.value.id, calculated_amount: fullAmount, final_amount: fullAmount, report_month: null })
             } else {
               const advance = Math.round(fullAmount / 2)
               const balance = fullAmount - advance
-              await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, stage_name: stageName || undefined, payment_type: 'Аванс', crm_card_id: card.value.id, calculated_amount: advance, final_amount: advance, report_month: null })
+              await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, stage_name: stageName || undefined, payment_type: 'Аванс', crm_card_id: card.value.id, calculated_amount: advance, final_amount: advance, report_month: isCurrentStage ? nowMonth : null })
               await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, stage_name: stageName || undefined, payment_type: 'Доплата', crm_card_id: card.value.id, calculated_amount: balance, final_amount: balance, report_month: null })
             }
           }
@@ -3572,12 +3593,14 @@ async function doAssign() {
           const calcRes = await paymentsApi.calculate({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, stage_name: stageName, project_subtype: card.value.project_subtype || undefined })
           const fullAmount = typeof calcRes.data === 'number' ? calcRes.data : (calcRes.data?.amount || 0)
           if (fullAmount > 0) {
+            const isCurrentStage = card.value.column_name === stageName
+            const nowMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
             if (isTemplate) {
               await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, stage_name: stageName, payment_type: 'Полная оплата', crm_card_id: card.value.id, calculated_amount: fullAmount, final_amount: fullAmount, report_month: null })
             } else {
               const advance = Math.round(fullAmount / 2)
               const balance = fullAmount - advance
-              await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, stage_name: stageName, payment_type: 'Аванс', crm_card_id: card.value.id, calculated_amount: advance, final_amount: advance, report_month: null })
+              await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, stage_name: stageName, payment_type: 'Аванс', crm_card_id: card.value.id, calculated_amount: advance, final_amount: advance, report_month: isCurrentStage ? nowMonth : null })
               await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, stage_name: stageName, payment_type: 'Доплата', crm_card_id: card.value.id, calculated_amount: balance, final_amount: balance, report_month: null })
             }
           }
@@ -3694,6 +3717,12 @@ function openCreatePaymentDialog() {
 
 // Следим за showCreatePayment
 watch(showCreatePayment, (val) => { if (val) { openCreatePaymentDialog(); showCreatePayment.value = false } })
+
+// Аванс — устанавливаем когда карточка переходит в новую стадию (первый подэтап стал активным)
+watch(() => card.value?.column_name, async (newCol, oldCol) => {
+  if (!newCol || !oldCol || newCol === oldCol) return
+  await triggerAdvanceForStageStart(newCol)
+})
 
 async function deleteFile(f) {
   $q.dialog({ title: 'Удалить файл?', message: f.file_name, cancel: { label: 'Нет', flat: true, noCaps: true }, ok: { label: 'Да', noCaps: true, color: 'negative' } }).onOk(async () => {
