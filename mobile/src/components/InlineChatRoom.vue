@@ -1634,7 +1634,7 @@ const $q = useQuasar()
 const { connectEmployee, disconnect, sendMessage, sendTypingStart, sendTypingStop, sendRead, typingUsers } = useChatWebSocket()
 
 const chatBgStyle = computed(() => {
-  return 'overflow-y: auto; background-color: #F5F5F5; background-image: url(\'/backgrounds/bg-employee.png\'); background-repeat: repeat; background-size: 400px auto'
+  return 'overflow-y: auto; overflow-x: hidden; background-color: #F5F5F5; background-image: url(\'/backgrounds/bg-employee.png\'); background-repeat: repeat; background-size: 400px auto'
 })
 
 const loading = ref(false)

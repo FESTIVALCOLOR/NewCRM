@@ -2566,14 +2566,18 @@ const allTeamMembers = computed(() => {
     { stageName: 'Стадия 3: рабочие чертежи', roleKey: 'draftsman', role: 'Чертёжник' },
   ]
 
+  const allStageNames = allStages.map(s => s.stageName)
+  const curIdx = allStageNames.indexOf(curColumn)
+
   for (const stage of allStages) {
     // Ищем последнего назначенного на эту стадию (max id)
     const candidates = se.filter(s => s.stage_name === stage.stageName)
     const executor = candidates.length ? candidates.reduce((a, b) => a.id > b.id ? a : b) : null
+    const stageIdx = allStageNames.indexOf(stage.stageName)
 
-    // Зелёный — стадия завершена; жёлтый — текущая стадия карточки, не завершена
+    // Зелёный — стадия завершена или карточка уже на следующей стадии; жёлтый — активная стадия
     let highlight = null
-    if (executor?.completed) {
+    if (executor?.completed || (executor && curIdx > stageIdx && stageIdx >= 0)) {
       highlight = 'green'
     } else if (stage.stageName === curColumn && executor) {
       highlight = 'yellow'
@@ -3069,8 +3073,52 @@ async function saveTimelineEntry() {
     if ('status' in update) entry.status = update.status ?? ''
     timelineEditVisible.value = false
     $q.notify({ type: 'positive', message: 'Сохранено' })
+    if (update.actual_date) await updatePaymentMonthsFromTimeline(entry)
   } catch (err) {
     $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
+  }
+}
+
+async function updatePaymentMonthsFromTimeline(savedEntry) {
+  try {
+    const sg = savedEntry.stage_group
+    if (!card.value || !['STAGE1', 'STAGE2', 'STAGE3'].includes(sg)) return
+    const isTemplate = card.value.project_type === 'Шаблонный'
+    const stageMap = isTemplate ? {
+      STAGE1: { stageName: 'Стадия 1: планировочные решения' },
+      STAGE2: { stageName: 'Стадия 2: рабочие чертежи' },
+      STAGE3: { stageName: 'Стадия 3: 3д визуализация (Дополнительная)' },
+    } : {
+      STAGE1: { stageName: 'Стадия 1: планировочные решения' },
+      STAGE2: { stageName: 'Стадия 2: концепция дизайна' },
+      STAGE3: { stageName: 'Стадия 3: рабочие чертежи' },
+    }
+    const stageInfo = stageMap[sg]
+    if (!stageInfo) return
+    const stageEntries = timelineEntries.value.filter(e => e.stage_group === sg && e.executor_role !== 'header')
+    if (!stageEntries.length) return
+    const month = savedEntry.actual_date.substring(0, 7)
+    const otherDone = stageEntries.filter(e => e.stage_code !== savedEntry.stage_code && e.actual_date)
+    const isFirstFact = otherDone.length === 0
+    const allDone = stageEntries.every(e => e.actual_date || e.status === 'skipped' || e.is_in_contract_scope === false)
+    const { api: ax } = await import('src/boot/axios')
+    if (isTemplate) {
+      if (allDone) {
+        const p = cardPayments.value.find(p => p.stage_name === stageInfo.stageName && p.payment_type === 'Полная оплата' && !p.report_month && !p.reassigned)
+        if (p) { await ax.patch(`/api/v1/payments/${p.id}`, { report_month: month }); p.report_month = month }
+      }
+    } else {
+      if (isFirstFact) {
+        const p = cardPayments.value.find(p => p.stage_name === stageInfo.stageName && p.payment_type === 'Аванс' && !p.report_month && !p.reassigned)
+        if (p) { await ax.patch(`/api/v1/payments/${p.id}`, { report_month: month }); p.report_month = month }
+      }
+      if (allDone) {
+        const p = cardPayments.value.find(p => p.stage_name === stageInfo.stageName && p.payment_type === 'Доплата' && !p.report_month && !p.reassigned)
+        if (p) { await ax.patch(`/api/v1/payments/${p.id}`, { report_month: month }); p.report_month = month }
+      }
+    }
+  } catch (e) {
+    console.warn('[Payments] Ошибка обновления месяца из таймлайна:', e)
   }
 }
 // Прогресс подэтапов всех стадий (1.x → 2.x → 3.x)
@@ -3491,13 +3539,12 @@ async function doAssign() {
           const calcRes = await paymentsApi.calculate({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, stage_name: stageName || undefined, project_subtype: card.value.project_subtype || undefined })
           const fullAmount = typeof calcRes.data === 'number' ? calcRes.data : (calcRes.data?.amount || 0)
           if (fullAmount > 0) {
-            const month = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
             if (isTemplate) {
               await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, stage_name: stageName || undefined, payment_type: 'Полная оплата', crm_card_id: card.value.id, calculated_amount: fullAmount, final_amount: fullAmount, report_month: null })
             } else {
               const advance = Math.round(fullAmount / 2)
               const balance = fullAmount - advance
-              await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, stage_name: stageName || undefined, payment_type: 'Аванс', crm_card_id: card.value.id, calculated_amount: advance, final_amount: advance, report_month: month })
+              await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, stage_name: stageName || undefined, payment_type: 'Аванс', crm_card_id: card.value.id, calculated_amount: advance, final_amount: advance, report_month: null })
               await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, stage_name: stageName || undefined, payment_type: 'Доплата', crm_card_id: card.value.id, calculated_amount: balance, final_amount: balance, report_month: null })
             }
           }
@@ -3528,10 +3575,9 @@ async function doAssign() {
             if (isTemplate) {
               await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, stage_name: stageName, payment_type: 'Полная оплата', crm_card_id: card.value.id, calculated_amount: fullAmount, final_amount: fullAmount, report_month: null })
             } else {
-              const month = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
               const advance = Math.round(fullAmount / 2)
               const balance = fullAmount - advance
-              await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, stage_name: stageName, payment_type: 'Аванс', crm_card_id: card.value.id, calculated_amount: advance, final_amount: advance, report_month: month })
+              await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, stage_name: stageName, payment_type: 'Аванс', crm_card_id: card.value.id, calculated_amount: advance, final_amount: advance, report_month: null })
               await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, stage_name: stageName, payment_type: 'Доплата', crm_card_id: card.value.id, calculated_amount: balance, final_amount: balance, report_month: null })
             }
           }
@@ -4149,13 +4195,20 @@ async function repairWorkflow() {
 }
 
 async function onMeasurementSaved() {
-  // Перезагружаем данные карточки и файлы после сохранения замера
-  await crmStore.loadCard(card.value.id)
-  if (card.value?.contract_id) {
-    try { const { data } = await contractsApi.getById(card.value.contract_id); contractData.value = data } catch {}
-    try { const { data } = await filesApi.getContractFiles(card.value.contract_id); projectFiles.value = data } catch {}
-  }
+  await reloadCard()
   autoSetStartDate()
+  const surveyDate = card.value?.survey_date
+  if (surveyDate && card.value?.surveyor_id) {
+    try {
+      const month = surveyDate.substring(0, 7)
+      const p = cardPayments.value.find(p => p.role === 'Замерщик' && !p.report_month && !p.reassigned)
+      if (p) {
+        const { api: ax } = await import('src/boot/axios')
+        await ax.patch(`/api/v1/payments/${p.id}`, { report_month: month })
+        p.report_month = month
+      }
+    } catch (e) { console.warn('[Payments] Замерщик месяц:', e) }
+  }
 }
 
 async function syncCrmWithYd() {
