@@ -8,7 +8,7 @@
           flat
           dense
           icon="arrow_back"
-          style="position: absolute; top: -8px; left: -8px; z-index: 10; width: 27px; height: 32px; min-height: 32px; min-width: 27px; max-width: 27px; max-height: 32px; padding: 0; overflow: hidden; background: white; border: 1.5px solid #E0E0E0; box-shadow: 0 2px 8px rgba(0,0,0,0.13); color: #555"
+          style="position: absolute; top: -8px; left: -8px; z-index: 10; width: 27px; height: 32px; min-height: 32px; min-width: 27px; max-width: 27px; max-height: 32px; padding: 0; overflow: hidden; background: var(--fc-bg); border: 1.5px solid var(--fc-border-light); box-shadow: 0 2px 8px var(--fc-shadow-md); color: var(--fc-text-medium)"
           @click="$router.back()"
         >
           <q-tooltip>Назад</q-tooltip>
@@ -32,7 +32,7 @@
             style="display:none"
             @change="handlePhotoUpload"
           >
-          <div class="text-h6 text-weight-bold" style="color: #333">
+          <div class="text-h6 text-weight-bold" style="color: var(--fc-text)">
             <template v-if="client.organization_type === 'ИП'">
               ИП {{ client.full_name }}
             </template>
@@ -43,10 +43,10 @@
               {{ client.organization_name || client.full_name }}
             </template>
           </div>
-          <div v-if="client.organization_name && client.organization_type !== 'ИП'" class="text-body2" style="color: #888">
+          <div v-if="client.organization_name && client.organization_type !== 'ИП'" class="text-body2" style="color: var(--fc-text-light)">
             {{ client.full_name }}
           </div>
-          <div v-if="client.responsible_person" class="text-body2" style="color: #888">
+          <div v-if="client.responsible_person" class="text-body2" style="color: var(--fc-text-light)">
             Ответственное лицо: {{ client.responsible_person }}
           </div>
         </q-card-section>
@@ -57,7 +57,7 @@
         <!-- Контакты: кнопки СЛЕВА вертикально, данные справа -->
         <q-card class="is-card client-contacts-card">
           <q-card-section class="q-pb-none">
-            <div class="text-subtitle2 text-weight-bold" style="color: #333">
+            <div class="text-subtitle2 text-weight-bold" style="color: var(--fc-text)">
               Контакты
             </div>
           </q-card-section>
@@ -70,7 +70,7 @@
                   round
                   dense
                   :icon="client.phone ? 'phone' : 'phone_disabled'"
-                  :style="{ color: client.phone ? '#333' : '#ccc' }"
+                  :style="{ color: client.phone ? 'var(--fc-text)' : 'var(--fc-border-card)' }"
                   @click="client.phone && callPhone(client.phone)"
                 />
               </q-item-section>
@@ -78,7 +78,7 @@
                 <q-item-label caption>
                   Телефон
                 </q-item-label>
-                <q-item-label :style="{ color: client.phone ? '#333' : '#bbb' }">
+                <q-item-label :style="{ color: client.phone ? 'var(--fc-text)' : 'var(--fc-text-disabled)' }">
                   {{ client.phone || 'Не указан' }}
                 </q-item-label>
               </q-item-section>
@@ -91,7 +91,7 @@
                   round
                   dense
                   :icon="client.email ? 'email' : 'mail_outline'"
-                  :style="{ color: client.email ? '#333' : '#ccc' }"
+                  :style="{ color: client.email ? 'var(--fc-text)' : 'var(--fc-border-card)' }"
                   @click="client.email && sendEmail(client.email)"
                 />
               </q-item-section>
@@ -99,7 +99,7 @@
                 <q-item-label caption>
                   Email
                 </q-item-label>
-                <q-item-label :style="{ color: client.email ? '#333' : '#bbb' }">
+                <q-item-label :style="{ color: client.email ? 'var(--fc-text)' : 'var(--fc-text-disabled)' }">
                   {{ client.email || 'Не указан' }}
                 </q-item-label>
               </q-item-section>
@@ -112,7 +112,7 @@
                   round
                   dense
                   icon="send"
-                  :style="{ color: telegramLink ? '#333' : '#ccc' }"
+                  :style="{ color: telegramLink ? 'var(--fc-text)' : 'var(--fc-border-card)' }"
                   @click="telegramLink && openLink(telegramLink)"
                 />
               </q-item-section>
@@ -120,7 +120,7 @@
                 <q-item-label caption>
                   Telegram
                 </q-item-label>
-                <q-item-label :style="{ color: client.telegram_account ? '#333' : '#bbb' }">
+                <q-item-label :style="{ color: client.telegram_account ? 'var(--fc-text)' : 'var(--fc-text-disabled)' }">
                   {{ client.telegram_account || 'Не указан' }}
                 </q-item-label>
               </q-item-section>
@@ -133,7 +133,7 @@
                   round
                   dense
                   :icon="client.registration_address ? 'location_on' : 'location_off'"
-                  :style="{ color: client.registration_address ? '#333' : '#ccc' }"
+                  :style="{ color: client.registration_address ? 'var(--fc-text)' : 'var(--fc-border-card)' }"
                   @click="client.registration_address && openMap(client.registration_address)"
                 />
               </q-item-section>
@@ -141,7 +141,7 @@
                 <q-item-label caption>
                   Адрес
                 </q-item-label>
-                <q-item-label :style="{ color: client.registration_address ? '#333' : '#bbb' }">
+                <q-item-label :style="{ color: client.registration_address ? 'var(--fc-text)' : 'var(--fc-text-disabled)' }">
                   {{ client.registration_address || 'Не указан' }}
                 </q-item-label>
               </q-item-section>
@@ -155,10 +155,10 @@
           <q-card v-if="!client.passport_series && !client.passport_number && !client.inn && !client.ogrn" class="is-card q-mb-md">
             <q-card-section class="text-center q-py-lg">
               <q-icon name="info_outline" size="32px" color="grey-4" class="q-mb-sm" />
-              <div style="color: #999; font-size: 13px">
+              <div style="color: var(--fc-text-muted); font-size: 13px">
                 Данные не заполнены
               </div>
-              <div style="color: #bbb; font-size: 11px; margin-top: 4px">
+              <div style="color: var(--fc-text-disabled); font-size: 11px; margin-top: 4px">
                 Паспорт и реквизиты отсутствуют
               </div>
             </q-card-section>
@@ -166,7 +166,7 @@
           <!-- Паспорт (физ. лицо) -->
           <q-card v-if="client.passport_series || client.passport_number" class="is-card q-mb-md">
             <q-card-section class="q-pb-none">
-              <div class="text-subtitle2 text-weight-bold" style="color: #333">
+              <div class="text-subtitle2 text-weight-bold" style="color: var(--fc-text)">
                 Паспорт
               </div>
             </q-card-section>
@@ -184,7 +184,7 @@
           <!-- Реквизиты (юр. лицо) -->
           <q-card v-if="client.inn || client.ogrn" class="is-card q-mb-md">
             <q-card-section class="q-pb-none">
-              <div class="text-subtitle2 text-weight-bold" style="color: #333">
+              <div class="text-subtitle2 text-weight-bold" style="color: var(--fc-text)">
                 Реквизиты
               </div>
             </q-card-section>
@@ -218,7 +218,7 @@
       <!-- Договоры клиента (всегда на всю ширину) -->
       <q-card class="is-card">
         <q-card-section class="q-pb-none">
-          <div class="text-subtitle2 text-weight-bold" style="color: #333">
+          <div class="text-subtitle2 text-weight-bold" style="color: var(--fc-text)">
             Договоры <q-badge v-if="clientsStore.clientContracts.length" :label="clientsStore.clientContracts.length" class="q-ml-xs" />
           </div>
         </q-card-section>
@@ -249,21 +249,21 @@
             </q-item-section>
           </q-item>
         </q-list>
-        <q-card-section v-else class="text-center" style="color: #999">
+        <q-card-section v-else class="text-center" style="color: var(--fc-text-muted)">
           Нет договоров
         </q-card-section>
       </q-card>
 
       <!-- FAB редактирования -->
       <q-page-sticky v-if="can('clients.update')" position="bottom-right" :offset="[18, 80]">
-        <q-btn fab icon="edit" style="background: #ffd93c; color: #333" @click="showEdit = true" />
+        <q-btn fab icon="edit" style="background: var(--fc-accent); color: var(--fc-text)" @click="showEdit = true" />
       </q-page-sticky>
 
       <client-form-dialog v-model="showEdit" :client="client" @saved="reloadClient" />
       <avatar-crop-dialog v-model="showCrop" :src="cropSrc" @cropped="onCropped" />
     </template>
 
-    <div v-else class="text-center q-pa-xl" style="color: #999">
+    <div v-else class="text-center q-pa-xl" style="color: var(--fc-text-muted)">
       <q-spinner v-if="!loaded" size="40px" color="accent" />
       <template v-else>
         <q-icon name="person_off" size="48px" class="q-mb-sm" /><div>Клиент не найден</div>

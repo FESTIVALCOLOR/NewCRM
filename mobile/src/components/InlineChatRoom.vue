@@ -50,7 +50,7 @@
     <!-- Шапка чата: метка слева | кнопки справа -->
     <div
       class="q-px-md q-py-xs bg-white"
-      style="border-bottom: 1px solid #E0E0E0; flex-shrink: 0; display: flex; align-items: stretch; overflow: hidden; width: 100%; box-sizing: border-box"
+      style="border-bottom: 1px solid var(--fc-border-light); flex-shrink: 0; display: flex; align-items: stretch; overflow: hidden; width: 100%; box-sizing: border-box"
     >
       <!-- Левая часть: метка -->
       <div style="flex: 1; min-width: 0; display: flex; align-items: center; overflow: hidden">
@@ -59,7 +59,7 @@
         </span>
       </div>
       <!-- Вертикальный разделитель -->
-      <div style="align-self: stretch; width: 1px; background: #E0E0E0; flex-shrink: 0; margin: 2px 4px" />
+      <div style="align-self: stretch; width: 1px; background: var(--fc-border-light); flex-shrink: 0; margin: 2px 4px" />
       <!-- Правая часть: кнопки управления -->
       <div class="row no-wrap items-center">
         <q-btn
@@ -119,7 +119,7 @@
     </div>
 
     <!-- Поиск по сообщениям -->
-    <div v-if="showSearch" class="q-px-sm q-py-xs bg-white" style="border-bottom: 1px solid #E0E0E0; flex-shrink: 0">
+    <div v-if="showSearch" class="q-px-sm q-py-xs bg-white" style="border-bottom: 1px solid var(--fc-border-light); flex-shrink: 0">
       <q-input
         v-model="searchQuery"
         dense
@@ -141,7 +141,7 @@
         dense
         separator
         class="q-mt-xs"
-        style="max-height: 180px; overflow-y: auto; background: #fff; border: 1px solid #e0e0e0; border-radius: 4px"
+        style="max-height: 180px; overflow-y: auto; background: var(--fc-bg); border: 1px solid var(--fc-border-light); border-radius: 4px"
       >
         <q-item
           v-for="r in searchResults"
@@ -171,7 +171,7 @@
     <div
       v-if="typingText"
       class="q-px-md q-py-xs text-caption text-grey"
-      style="flex-shrink: 0; background: #FAFAFA"
+      style="flex-shrink: 0; background: var(--fc-bg-hover)"
     >
       {{ typingText }}
     </div>
@@ -188,7 +188,7 @@
     <div
       v-if="pinnedMsgs.length"
       class="row items-center q-px-sm q-py-xs bg-white"
-      style="border-bottom: 1px solid #E0E0E0; flex-shrink: 0; cursor: pointer; gap: 6px"
+      style="border-bottom: 1px solid var(--fc-border-light); flex-shrink: 0; cursor: pointer; gap: 6px"
       @click="cyclePinned"
     >
       <div style="display: flex; flex-direction: column; gap: 2px; flex-shrink: 0; align-self: stretch; justify-content: center">
@@ -199,7 +199,7 @@
             width: '3px',
             height: `${Math.max(4, 28 / pinnedMsgs.length - 2)}px`,
             borderRadius: '2px',
-            background: i === pinnedIdx ? '#E65100' : '#E0E0E0',
+            background: i === pinnedIdx ? '#E65100' : 'var(--fc-border-light)',
             transition: 'background 0.2s',
           }"
         />
@@ -209,7 +209,7 @@
         <div class="text-caption text-weight-bold" style="color: #E65100; font-size: 10px">
           Закреплено{{ pinnedMsgs.length > 1 ? ` • ${pinnedIdx + 1} из ${pinnedMsgs.length}` : '' }}
         </div>
-        <div class="text-caption ellipsis" style="font-size: 11px; color: #333">
+        <div class="text-caption ellipsis" style="font-size: 11px; color: var(--fc-text)">
           {{ pinnedMsgs[pinnedIdx]?.content || pinnedMsgs[pinnedIdx]?.file_name || 'Файл' }}
         </div>
       </div>
@@ -262,7 +262,7 @@
                 <div class="row no-wrap items-center justify-between" style="padding: 5px 8px 3px; min-height: 16px; gap: 2px">
                   <div
                     class="text-caption text-weight-bold"
-                    :style="{ color: isOwn(item.msgs[0]) ? '#999' : '#1565C0' }"
+                    :style="{ color: isOwn(item.msgs[0]) ? 'var(--fc-text-muted)' : '#1565C0' }"
                     style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap"
                   >
                     {{ item.msgs[0].sender_display_name }}
@@ -432,7 +432,7 @@
                     @click.stop="openInGallery(item.msgs.find(m => m.yandex_path))"
                   />
                   <div v-else />
-                  <div class="text-caption" style="color: #888; font-size: 10px">
+                  <div class="text-caption" style="color: var(--fc-text-light); font-size: 10px">
                     {{ formatTime(item.msgs[item.msgs.length - 1].created_at) }}
                   </div>
                 </div>
@@ -497,7 +497,7 @@
                   >
                     <div
                       class="text-caption text-weight-bold"
-                      :style="{ color: isOwn(msg) ? '#999' : (msg.sender_guest_token ? '#2E7D32' : '#1565C0') }"
+                      :style="{ color: isOwn(msg) ? 'var(--fc-text-muted)' : (msg.sender_guest_token ? '#2E7D32' : '#1565C0') }"
                       style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap"
                     >
                       {{ msg.sender_display_name }}
@@ -706,7 +706,7 @@
                           @click="toggleVoice(msg)"
                         />
                         <div class="column" style="flex: 1; min-width: 0; gap: 3px">
-                          <div style="height: 3px; background: #e0e0e0; border-radius: 2px; overflow: hidden">
+                          <div style="height: 3px; background: var(--fc-border-light); border-radius: 2px; overflow: hidden">
                             <div :style="{ width: voiceProgressPct(msg) + '%', background: '#1976d2', height: '100%' }" />
                           </div>
                           <div class="text-caption text-grey-6" style="font-size: 10px">
@@ -766,7 +766,7 @@
                     :style="(msg.message_type === 'image' || (isPdf(msg) && pdfThumbnails[msg.id])) ? 'padding: 2px 10px 6px; margin-top: 0' : 'margin-top: 4px'"
                   >
                     <span v-if="msg.is_edited" class="text-caption text-grey-5 q-mr-xs" style="font-size: 9px">изм.</span>
-                    <div class="text-caption" style="color: #888; font-size: 10px">
+                    <div class="text-caption" style="color: var(--fc-text-light); font-size: 10px">
                       {{ formatTime(msg.created_at) }}
                     </div>
                     <template v-if="isOwn(msg) && !msg.is_deleted && msgReadStatus(msg)">
@@ -778,7 +778,7 @@
                               Прочитано
                             </q-item-label>
                             <q-item v-if="!msgReadStatus(msg).readers.length" dense>
-                              <q-item-section style="font-size:12px; color:#888">
+                              <q-item-section style="font-size:12px; color:var(--fc-text-light)">
                                 Никто не прочитал
                               </q-item-section>
                             </q-item>
@@ -822,7 +822,7 @@
     <div
       v-if="pendingFiles.length"
       class="q-px-sm q-pt-xs q-pb-xs bg-blue-1"
-      style="border-top: 1px solid #BBDEFB; flex-shrink: 0"
+      style="border-top: 1px solid var(--fc-chat-reply-border); flex-shrink: 0"
     >
       <div class="row items-center q-gutter-xs">
         <div
@@ -863,7 +863,7 @@
     <div
       v-if="replyingTo"
       class="row no-wrap items-center q-px-md q-py-xs"
-      style="background: #F3F6FF; border-top: 1px solid #D0D9F0; flex-shrink: 0; gap: 8px"
+      style="background: var(--fc-chat-reply-bg); border-top: 1px solid var(--fc-chat-reply-border); flex-shrink: 0; gap: 8px"
     >
       <q-icon name="reply" size="16px" color="blue-7" />
       <div style="flex: 1; min-width: 0">
@@ -886,7 +886,7 @@
     </div>
 
     <!-- Панель ввода -->
-    <div class="q-pa-sm bg-white" style="border-top: 1px solid #E0E0E0; flex-shrink: 0">
+    <div class="q-pa-sm bg-white" style="border-top: 1px solid var(--fc-border-light); flex-shrink: 0">
       <div class="row items-center q-gutter-xs" style="min-width: 0">
         <q-btn
           round
@@ -1260,7 +1260,7 @@
               <q-item-label
                 v-if="canShowLastLogin && m.member_type === 'employee'"
                 caption
-                style="font-size: 10px; color: #aaa"
+                style="font-size: 10px; color: var(--fc-text-disabled)"
               >
                 {{ m.is_online ? 'В сети' : (m.last_login ? `Был(а): ${fmtLastLogin(m.last_login)}` : 'Не входил(а)') }}
               </q-item-label>
@@ -1344,8 +1344,8 @@
     <q-dialog v-model="showCardFilesDialog" persistent>
       <q-card style="min-width: 340px; max-width: 500px; width: 100%; border-radius: 10px; overflow: hidden">
         <!-- Заголовок — белый с нижней границей, как в десктопе -->
-        <q-card-section class="row items-center" style="background:#fff; border-bottom:1px solid #E0E0E0; padding:10px 16px">
-          <div style="font-size:14px; font-weight:600; color:#222">
+        <q-card-section class="row items-center" style="background:var(--fc-bg); border-bottom:1px solid var(--fc-border-light); padding:10px 16px">
+          <div style="font-size:14px; font-weight:600; color:var(--fc-text)">
             {{ chatType === 'supervision' ? 'Файлы надзора' : 'Файлы из карточки CRM' }}
           </div>
           <q-space />
@@ -1360,12 +1360,12 @@
         </q-card-section>
 
         <!-- Подсказка -->
-        <div style="padding:10px 16px 4px; font-size:11px; color:#555; background:#F9FAFB">
+        <div style="padding:10px 16px 4px; font-size:11px; color:var(--fc-text-medium); background:var(--fc-bg-info)">
           Отметьте файлы для отправки в чат:
         </div>
 
         <!-- Список файлов — стиль QListWidget из десктопа -->
-        <div style="background:#F9FAFB; padding:0 14px 8px">
+        <div style="background:var(--fc-bg-info); padding:0 14px 8px">
           <div v-if="cardFilesLoading" class="flex flex-center q-pa-lg">
             <q-spinner size="28px" color="grey" />
           </div>
@@ -1374,7 +1374,7 @@
           </div>
           <div
             v-else
-            style="border:1px solid #E0E0E0; border-radius:4px; background:#fff; max-height:55vh; overflow-y:auto"
+            style="border:1px solid var(--fc-border-light); border-radius:4px; background:var(--fc-bg); max-height:55vh; overflow-y:auto"
           >
             <template v-for="group in groupedCardFiles" :key="group.stage">
               <!-- Заголовок секции -->
@@ -1425,7 +1425,7 @@
         </div>
 
         <!-- Кнопки -->
-        <q-card-actions align="right" style="background:#F9FAFB; padding:6px 14px 12px; border-top:1px solid #E0E0E0">
+        <q-card-actions align="right" style="background:var(--fc-bg-info); padding:6px 14px 12px; border-top:1px solid var(--fc-border-light)">
           <button class="cf-btn-cancel" @click="showCardFilesDialog = false; selectedCardFiles = new Set()">
             Отмена
           </button>
@@ -1634,7 +1634,7 @@ const $q = useQuasar()
 const { connectEmployee, disconnect, sendMessage, sendTypingStart, sendTypingStop, sendRead, typingUsers } = useChatWebSocket()
 
 const chatBgStyle = computed(() => {
-  return 'overflow-y: auto; overflow-x: hidden; background-color: #F5F5F5; background-image: url(\'/backgrounds/bg-employee.png\'); background-repeat: repeat; background-size: 400px auto'
+  return 'overflow-y: auto; overflow-x: hidden; background-color: var(--fc-bg-alt); background-image: url(\'/backgrounds/bg-employee.png\'); background-repeat: repeat; background-size: 400px auto'
 })
 
 const loading = ref(false)
@@ -3290,33 +3290,33 @@ onUnmounted(() => {
 
 <style scoped>
 .bubble-own {
-  background: #E8F5E9;
+  background: var(--fc-state-success-bg);
   border-radius: 12px 12px 2px 12px;
   padding: 6px 10px;
   max-width: 80%;
 }
 .bubble-forwarded {
-  background: #EEEEEE !important;
+  background: var(--fc-tab-inactive) !important;
 }
 .bubble-other {
-  background: #fff;
+  background: var(--fc-bg);
   border-radius: 12px 12px 12px 2px;
   padding: 6px 10px;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+  box-shadow: 0 1px 2px var(--fc-shadow-sm);
   max-width: 80%;
 }
 .bubble-img-own {
-  background: #E8F5E9;
+  background: var(--fc-state-success-bg);
   border-radius: 12px 12px 2px 12px;
   overflow: hidden;
   min-width: 160px;
   max-width: min(85vw, 440px);
 }
 .bubble-img-other {
-  background: #fff;
+  background: var(--fc-bg);
   border-radius: 12px 12px 12px 2px;
   overflow: hidden;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+  box-shadow: 0 1px 2px var(--fc-shadow-sm);
   min-width: 160px;
   max-width: min(85vw, 440px);
 }
@@ -3346,32 +3346,32 @@ onUnmounted(() => {
 }
 .reaction-chip {
   display: inline-flex; align-items: center; gap: 3px; padding: 2px 7px;
-  border-radius: 12px; border: 1px solid #E0E0E0; background: #F5F5F5;
+  border-radius: 12px; border: 1px solid var(--fc-border-light); background: var(--fc-bg-alt);
   font-size: 13px; cursor: pointer; line-height: 1.4;
 }
-.reaction-chip--own { background: #E3F2FD; border-color: #90CAF9; }
+.reaction-chip--own { background: var(--fc-selected-bg); border-color: #90CAF9; }
 .react-quick-btn { font-size: 20px; background: none; border: none; cursor: pointer; padding: 2px 5px; border-radius: 6px; line-height: 1.3; transition: background 0.15s; }
-.react-quick-btn:hover { background: #F0F0F0; }
-.react-quick-btn--active { background: #E3F2FD; }
+.react-quick-btn:hover { background: var(--fc-tab-hover); }
+.react-quick-btn--active { background: var(--fc-selected-bg); }
 .gallery-open-btn :deep(.q-btn__content) { gap: 3px; }
 /* Файловый диалог карточки — стиль десктопа */
 .cf-stage-hdr {
   padding: 4px 10px; font-size: 11px; font-weight: 700;
-  background: #E8EEF6; color: #1a3a6b;
+  background: var(--fc-chat-reply-bg); color: #1a3a6b;
   border-bottom: 1px solid #d0daea;
 }
 .cf-var-hdr {
   padding: 3px 20px; font-size: 10px; font-style: italic;
-  background: #F3F3F3; color: #666;
-  border-bottom: 1px solid #e8e8e8;
+  background: #F3F3F3; color: var(--fc-text-secondary);
+  border-bottom: 1px solid var(--fc-tab-inactive);
 }
 .cf-file-row {
   display: flex; align-items: center; gap: 10px;
   padding: 4px 8px; cursor: pointer; min-height: 54px;
-  border-bottom: 1px solid #F0F0F0;
+  border-bottom: 1px solid var(--fc-tab-hover);
   transition: background 0.1s;
 }
-.cf-file-row:hover { background: #f5f5f5; }
+.cf-file-row:hover { background: var(--fc-bg-alt); }
 .cf-file-row--checked { background: #FFF8DC; }
 .cf-file-row:last-child { border-bottom: none; }
 .cf-thumb {
@@ -3388,12 +3388,12 @@ onUnmounted(() => {
 .cf-ico-img  { background: #C8E6C9; color: #2E7D32; }
 .cf-ico-pdf  { background: #FFCDD2; color: #B71C1C; }
 .cf-ico-xls  { background: #C8E6C9; color: #1B5E20; }
-.cf-ico-doc  { background: #BBDEFB; color: #0D47A1; }
+.cf-ico-doc  { background: var(--fc-chat-reply-border); color: #0D47A1; }
 .cf-ico-zip  { background: #E1BEE7; color: #4A148C; }
 .cf-ico-dir  { background: #FFF9C4; color: #F57F17; }
-.cf-ico-file { background: #E0E0E0; color: #424242; }
+.cf-ico-file { background: var(--fc-border-light); color: #424242; }
 .cf-fname {
-  flex: 1; min-width: 0; font-size: 12px; color: #333;
+  flex: 1; min-width: 0; font-size: 12px; color: var(--fc-text);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .cf-btn-cancel, .cf-btn-send {
@@ -3401,12 +3401,12 @@ onUnmounted(() => {
   font-size: 12px; cursor: pointer; border: none; outline: none;
 }
 .cf-btn-cancel {
-  background: #fff; border: 1px solid #d9d9d9; color: #333;
+  background: var(--fc-bg); border: 1px solid var(--fc-border); color: var(--fc-text);
 }
-.cf-btn-cancel:hover { background: #f5f5f5; }
+.cf-btn-cancel:hover { background: var(--fc-bg-alt); }
 .cf-btn-send {
-  background: #ffd93c; color: #333; font-weight: 700; margin-left: 8px;
+  background: var(--fc-accent); color: var(--fc-text); font-weight: 700; margin-left: 8px;
 }
 .cf-btn-send:hover { background: #f5c800; }
-.cf-btn-send--disabled { background: #f0f0f0 !important; color: #aaa !important; cursor: default; }
+.cf-btn-send--disabled { background: var(--fc-tab-hover) !important; color: var(--fc-text-disabled) !important; cursor: default; }
 </style>

@@ -5,7 +5,7 @@
         <div class="text-subtitle2 text-weight-bold">
           Обрезать фото
         </div>
-        <div class="text-caption" style="color: #999">
+        <div class="text-caption" style="color: var(--fc-text-muted)">
           Перемещайте и масштабируйте фото
         </div>
       </q-card-section>

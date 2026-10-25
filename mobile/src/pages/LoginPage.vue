@@ -5,10 +5,10 @@
         <!-- Логотип -->
         <q-card-section class="text-center q-pb-none">
           <img src="/festival_logo.png" alt="Festival Color" style="height: 64px; width: auto" class="q-mb-sm">
-          <div class="text-h6 text-weight-bold q-mb-xs" style="color: #333">
+          <div class="text-h6 text-weight-bold q-mb-xs" style="color: var(--fc-text)">
             FESTIVAL COLOR
           </div>
-          <div class="text-caption" style="color: #999">
+          <div class="text-caption" style="color: var(--fc-text-muted)">
             Система управления заказами
           </div>
         </q-card-section>
@@ -47,7 +47,7 @@
             </q-input>
 
             <!-- Запомнить меня -->
-            <q-checkbox v-model="rememberMe" label="Запомнить меня" dense style="color: #666" />
+            <q-checkbox v-model="rememberMe" label="Запомнить меня" dense style="color: var(--fc-text-secondary)" />
 
             <!-- Ошибка -->
             <q-banner v-if="authStore.error" class="bg-negative text-white" dense style="border-radius: 4px">
@@ -74,7 +74,7 @@
         </q-card-section>
 
         <q-card-section class="text-center q-pt-none">
-          <div class="text-caption" style="color: #ccc">
+          <div class="text-caption" style="color: var(--fc-border-card)">
             v1.2.0
           </div>
         </q-card-section>
@@ -116,7 +116,7 @@ async function handleLogin() {
 <style scoped>
 .login-page {
   min-height: 100vh;
-  background: #FFFFFF;
+  background: var(--fc-bg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -130,8 +130,8 @@ async function handleLogin() {
 
 .login-card {
   border-radius: 10px;
-  border: 1px solid #E0E0E0;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  border: 1px solid var(--fc-border-light);
+  box-shadow: 0 2px 12px var(--fc-shadow-xs);
 }
 
 .login-btn-wrap :deep(.q-btn) {

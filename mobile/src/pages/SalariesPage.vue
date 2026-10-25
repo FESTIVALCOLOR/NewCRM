@@ -13,7 +13,7 @@
         no-caps
         label="Пересчёт"
         color="grey-7"
-        style="font-size: 12px; border-color: #d9d9d9; border-radius: 6px; height: 36px; min-height: 36px; padding: 0 10px; margin-left: 6px; color: #E65100"
+        style="font-size: 12px; border-color: var(--fc-border); border-radius: 6px; height: 36px; min-height: 36px; padding: 0 10px; margin-left: 6px; color: #E65100"
         @click="recalculatePayments"
       />
     </div>
@@ -229,10 +229,10 @@
       <q-card-section class="q-pa-md">
         <div class="row items-end justify-between">
           <div>
-            <div class="text-caption" style="color: #888">
+            <div class="text-caption" style="color: var(--fc-text-light)">
               Итого
             </div>
-            <div class="text-h5 text-weight-bold" style="color: #333">
+            <div class="text-h5 text-weight-bold" style="color: var(--fc-text)">
               {{ formatMoney(totalAmount) }}
             </div>
           </div>
@@ -254,7 +254,7 @@
                 {{ inWorkCount }} в работе
               </div>
             </div>
-            <div class="text-caption q-mt-xs" style="color: #999">
+            <div class="text-caption q-mt-xs" style="color: var(--fc-text-muted)">
               {{ payments.length }} записей
             </div>
           </div>
@@ -280,10 +280,10 @@
               </template>
             </q-avatar>
             <div style="flex: 1; margin-left: 8px">
-              <div class="text-weight-bold" style="font-size: 13px; color: #333">
+              <div class="text-weight-bold" style="font-size: 13px; color: var(--fc-text)">
                 {{ group.name }}
               </div>
-              <div class="text-caption" style="color: #888">
+              <div class="text-caption" style="color: var(--fc-text-light)">
                 {{ group.role }}
               </div>
             </div>
@@ -299,46 +299,46 @@
             >
               <q-menu auto-close>
                 <div class="q-pa-md" style="min-width: 220px">
-                  <div class="text-subtitle2 q-mb-sm" style="color: #333">
+                  <div class="text-subtitle2 q-mb-sm" style="color: var(--fc-text)">
                     Реквизиты для оплаты
                   </div>
                   <template v-if="group.paymentInfo && group.paymentInfo.payment_type">
                     <div class="q-mb-xs">
-                      <span class="text-caption" style="color: #888">Способ:</span>
+                      <span class="text-caption" style="color: var(--fc-text-light)">Способ:</span>
                       <span class="text-caption q-ml-xs text-weight-medium">{{ group.paymentInfo.payment_type }}</span>
                     </div>
                     <div v-if="group.paymentInfo.payment_phone" class="q-mb-xs">
-                      <span class="text-caption" style="color: #888">Телефон:</span>
+                      <span class="text-caption" style="color: var(--fc-text-light)">Телефон:</span>
                       <span class="text-caption q-ml-xs">{{ group.paymentInfo.payment_phone }}</span>
                     </div>
                     <div v-if="group.paymentInfo.payment_account" class="q-mb-xs">
-                      <span class="text-caption" style="color: #888">Счёт:</span>
+                      <span class="text-caption" style="color: var(--fc-text-light)">Счёт:</span>
                       <span class="text-caption q-ml-xs">{{ group.paymentInfo.payment_account }}</span>
                     </div>
                     <div v-if="group.paymentInfo.payment_bank_name" class="q-mb-xs">
-                      <span class="text-caption" style="color: #888">Банк:</span>
+                      <span class="text-caption" style="color: var(--fc-text-light)">Банк:</span>
                       <span class="text-caption q-ml-xs">{{ group.paymentInfo.payment_bank_name }}</span>
                     </div>
                     <div v-if="group.paymentInfo.payment_bik" class="q-mb-xs">
-                      <span class="text-caption" style="color: #888">БИК:</span>
+                      <span class="text-caption" style="color: var(--fc-text-light)">БИК:</span>
                       <span class="text-caption q-ml-xs">{{ group.paymentInfo.payment_bik }}</span>
                     </div>
                     <div v-if="group.paymentInfo.payment_corr_account" class="q-mb-xs">
-                      <span class="text-caption" style="color: #888">Кор. счёт:</span>
+                      <span class="text-caption" style="color: var(--fc-text-light)">Кор. счёт:</span>
                       <span class="text-caption q-ml-xs">{{ group.paymentInfo.payment_corr_account }}</span>
                     </div>
                   </template>
-                  <div v-else class="text-caption" style="color: #aaa">
+                  <div v-else class="text-caption" style="color: var(--fc-text-disabled)">
                     Способ оплаты не указан
                   </div>
                 </div>
               </q-menu>
             </q-btn>
             <div class="text-right">
-              <div class="text-weight-bold" style="font-size: 14px; color: #333">
+              <div class="text-weight-bold" style="font-size: 14px; color: var(--fc-text)">
                 {{ formatMoney(group.total) }}
               </div>
-              <div class="text-caption" style="color: #999">
+              <div class="text-caption" style="color: var(--fc-text-muted)">
                 {{ group.items.length }} выплат
               </div>
             </div>
@@ -356,20 +356,20 @@
                 <q-card-section class="q-pa-sm">
                   <div class="row items-center no-wrap">
                     <div style="flex: 1; min-width: 0">
-                      <div class="text-caption ellipsis" style="color: #888">
+                      <div class="text-caption ellipsis" style="color: var(--fc-text-light)">
                         {{ p.contract_number || '' }}<span v-if="p.stage_name"> · {{ p.stage_name }}</span><span v-if="p.payment_subtype"> · {{ p.payment_subtype }}</span>
                       </div>
-                      <div v-if="p.address" class="text-caption ellipsis" style="color: #aaa; font-size: 10px">
+                      <div v-if="p.address" class="text-caption ellipsis" style="color: var(--fc-text-disabled); font-size: 10px">
                         {{ p.address }}
                       </div>
                     </div>
                     <div class="text-right q-ml-sm" style="flex-shrink: 0">
                       <div class="row items-center justify-end no-wrap">
-                        <div class="text-weight-bold" style="font-size: 13px" :style="{ color: p.is_paid ? '#27AE60' : '#333' }">
+                        <div class="text-weight-bold" style="font-size: 13px" :style="{ color: p.is_paid ? '#27AE60' : 'var(--fc-text)' }">
                           {{ formatMoney(p.final_amount || p.amount) }}
                         </div>
-                        <div style="width: 1px; height: 16px; background: #ddd; margin: 0 6px" />
-                        <div class="text-caption" :style="{ color: p.payment_status === 'pending_stage' ? '#aaa' : p.payment_status === 'done' ? '#00897B' : fmtMonth(p.report_month) !== 'в работе' ? '#333' : '#bbb' }">
+                        <div style="width: 1px; height: 16px; background: var(--fc-border); margin: 0 6px" />
+                        <div class="text-caption" :style="{ color: p.payment_status === 'pending_stage' ? 'var(--fc-text-disabled)' : p.payment_status === 'done' ? '#00897B' : fmtMonth(p.report_month) !== 'в работе' ? 'var(--fc-text)' : 'var(--fc-text-disabled)' }">
                           {{ p.payment_status === 'pending_stage' ? 'в ожидании' : p.payment_status === 'done' ? 'выполнено' : fmtMonth(p.report_month) }}
                         </div>
                       </div>
@@ -381,7 +381,7 @@
                         >Оплачено</span>
                         <span
                           v-else-if="p.payment_status === 'to_pay'"
-                          style="display:inline-flex;align-items:center;height:26px;padding:0 8px;border-radius:4px;font-size:10px;background:#F2C037;color:#333;white-space:nowrap"
+                          style="display:inline-flex;align-items:center;height:26px;padding:0 8px;border-radius:4px;font-size:10px;background:#F2C037;color:var(--fc-text);white-space:nowrap"
                         >К оплате</span>
                         <span
                           v-else-if="p.payment_status === 'done'"
@@ -389,11 +389,11 @@
                         >Выполнено</span>
                         <span
                           v-else-if="p.payment_status === 'pending_stage'"
-                          style="display:inline-flex;align-items:center;height:26px;padding:0 8px;border-radius:4px;font-size:10px;background:#F5F5F5;color:#aaa;white-space:nowrap"
+                          style="display:inline-flex;align-items:center;height:26px;padding:0 8px;border-radius:4px;font-size:10px;background:var(--fc-bg-alt);color:var(--fc-text-disabled);white-space:nowrap"
                         >В ожидании</span>
                         <span
                           v-else
-                          style="display:inline-flex;align-items:center;height:26px;padding:0 8px;border-radius:4px;font-size:10px;background:#EEEEEE;color:#666;white-space:nowrap"
+                          style="display:inline-flex;align-items:center;height:26px;padding:0 8px;border-radius:4px;font-size:10px;background:var(--fc-tab-inactive);color:var(--fc-text-secondary);white-space:nowrap"
                         >В работе</span>
                         <!-- Кнопка действия по статусу -->
                         <button
@@ -441,10 +441,10 @@
         </div>
 
         <!-- Итого за год / за всё время -->
-        <q-card v-if="payments.length > 0" class="is-card q-mt-md" style="border-left: 3px solid #ffd93c">
+        <q-card v-if="payments.length > 0" class="is-card q-mt-md" style="border-left: 3px solid var(--fc-accent)">
           <q-card-section class="q-pa-md">
             <div class="row justify-between q-mb-xs">
-              <div class="text-caption" style="color: #888">
+              <div class="text-caption" style="color: var(--fc-text-light)">
                 Итого за год {{ filters.year || '' }}
               </div>
               <div class="text-weight-bold">
@@ -452,7 +452,7 @@
               </div>
             </div>
             <div class="row justify-between">
-              <div class="text-caption" style="color: #888">
+              <div class="text-caption" style="color: var(--fc-text-light)">
                 Всего записей
               </div>
               <div class="text-weight-bold">
@@ -462,7 +462,7 @@
           </q-card-section>
         </q-card>
 
-        <div v-if="payments.length === 0" class="text-center q-pa-xl" style="color: #999">
+        <div v-if="payments.length === 0" class="text-center q-pa-xl" style="color: var(--fc-text-muted)">
           <q-icon name="payments" size="48px" class="q-mb-sm" /><div>Нет платежей по фильтру</div>
         </div>
       </template>
@@ -470,13 +470,13 @@
 
     <!-- FAB создания платежа -->
     <q-page-sticky v-if="can('salaries.create') || can('crm_cards.payments')" position="bottom-right" :offset="[18, 18]">
-      <q-btn fab icon="add" style="background: #ffd93c; color: #333" @click="openCreatePayment" />
+      <q-btn fab icon="add" style="background: var(--fc-accent); color: var(--fc-text)" @click="openCreatePayment" />
     </q-page-sticky>
 
     <!-- Диалог создания оклада -->
     <q-dialog v-model="showCreateDialog">
       <q-card style="min-width: 320px; border-radius: 10px">
-        <q-toolbar style="background: #ffd93c; color: #333">
+        <q-toolbar style="background: var(--fc-accent); color: var(--fc-text)">
           <q-toolbar-title class="text-weight-bold" style="font-size: 14px">
             Новый оклад
           </q-toolbar-title>
@@ -522,7 +522,7 @@
           <q-btn
             unelevated
             label="Создать"
-            style="background: #ffd93c; color: #333; border-radius: 4px"
+            style="background: var(--fc-accent); color: var(--fc-text); border-radius: 4px"
             no-caps
             @click="createSalary"
           />
@@ -533,7 +533,7 @@
     <!-- Диалог редактирования платежа -->
     <q-dialog v-model="showEditDialog">
       <q-card style="min-width: 320px; border-radius: 10px">
-        <q-toolbar style="background: #ffd93c; color: #333">
+        <q-toolbar style="background: var(--fc-accent); color: var(--fc-text)">
           <q-toolbar-title class="text-weight-bold" style="font-size: 14px">
             Редактировать платёж
           </q-toolbar-title>
@@ -546,7 +546,7 @@
           />
         </q-toolbar>
         <q-card-section>
-          <div class="text-caption q-mb-sm" style="color: #888">
+          <div class="text-caption q-mb-sm" style="color: var(--fc-text-light)">
             {{ editPay.employee_name }}
           </div>
           <q-input
@@ -590,7 +590,7 @@
           <q-btn
             unelevated
             label="Сохранить"
-            style="background: #ffd93c; color: #333; border-radius: 4px"
+            style="background: var(--fc-accent); color: var(--fc-text); border-radius: 4px"
             no-caps
             :loading="editSaving"
             @click="saveEdit"
@@ -602,7 +602,7 @@
     <q-dialog v-model="showCreatePaymentDialog">
       <q-card style="min-width: 340px; border-radius: 8px">
         <q-card-section>
-          <div class="text-subtitle1 text-weight-bold" style="color: #333">
+          <div class="text-subtitle1 text-weight-bold" style="color: var(--fc-text)">
             Новый платёж
           </div>
         </q-card-section>
@@ -837,10 +837,10 @@ function fmtMonth(m) {
   try { const [y, mo] = m.split('-'); const months = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь']; return `${months[parseInt(mo)-1]} ${y}` } catch { return m }
 }
 function payRowStyle(p) {
-  if (p.is_paid || p.payment_status === 'paid') return { background: '#E8F5E9' }
+  if (p.is_paid || p.payment_status === 'paid') return { background: 'var(--fc-state-success-bg)' }
 
-  if (p.payment_status === 'to_pay') return { background: '#FFF8E1' }
-  if (p.payment_status === 'pending_stage') return { background: '#F5F5F5' }
+  if (p.payment_status === 'to_pay') return { background: 'var(--fc-state-warning-bg)' }
+  if (p.payment_status === 'pending_stage') return { background: 'var(--fc-bg-alt)' }
   return {}
 }
 
@@ -1109,14 +1109,14 @@ function exportSalariesPDF() {
     else if (f.period==='year') period=`${f.year} год`
     const tab = tabLabels[paymentTab.value] || ''
     const now = new Date().toLocaleDateString('ru-RU')
-    const statusColor = p => (p.is_paid||p.payment_status==='paid') ? '#27AE60' : p.payment_status==='done' ? '#00897B' : p.payment_status==='to_pay' ? '#F39C12' : p.payment_status==='pending_stage' ? '#aaa' : '#888'
+    const statusColor = p => (p.is_paid||p.payment_status==='paid') ? '#27AE60' : p.payment_status==='done' ? '#00897B' : p.payment_status==='to_pay' ? '#F39C12' : p.payment_status==='pending_stage' ? 'var(--fc-text-disabled)' : 'var(--fc-text-light)'
     const fmtStatus = p => (p.is_paid||p.payment_status==='paid') ? 'Оплачено' : p.payment_status==='done' ? 'Выполнено' : p.payment_status==='to_pay' ? 'К оплате' : p.payment_status==='pending_stage' ? 'В ожидании' : 'В работе'
     let body = `<div class="sbox">
       <div class="scol"><div class="sl">Итого</div><div class="sv">${_fmtRub(totalAmount.value)}</div></div>
       <div class="scol"><div class="sl">Оплачено</div><div class="sv" style="color:#27AE60">${paidCount.value}</div></div>
       <div class="scol"><div class="sl">Выполнено</div><div class="sv" style="color:#00897B">${doneCount.value}</div></div>
       <div class="scol"><div class="sl">К оплате</div><div class="sv" style="color:#F39C12">${toPayCount.value}</div></div>
-      <div class="scol"><div class="sl">В работе</div><div class="sv" style="color:#888">${inWorkCount.value}</div></div>
+      <div class="scol"><div class="sl">В работе</div><div class="sv" style="color:var(--fc-text-light)">${inWorkCount.value}</div></div>
     </div>`
     for (const g of groupedPayments.value) {
       body += `<div class="eh">${g.name}<span class="er"> &nbsp;·&nbsp; ${g.role}</span></div>
@@ -1128,16 +1128,16 @@ function exportSalariesPDF() {
       body += `<tr class="tr"><td colspan="3">Итого: ${g.name}</td><td class="num">${_fmtRub(g.total)}</td><td colspan="2"></td></tr></table>`
     }
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Зарплаты</title><style>
-*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;font-size:11px;color:#333;padding:12mm}
-h1{font-size:17px;margin-bottom:3px}.sub{color:#888;font-size:10px;margin-bottom:12px}
-.sbox{display:flex;gap:20px;background:#FFFDE7;border-left:3px solid #ffd93c;padding:10px 14px;border-radius:4px;margin-bottom:16px}
-.scol{display:flex;flex-direction:column;gap:2px;min-width:90px}.sl{font-size:9px;color:#888}.sv{font-size:15px;font-weight:bold;color:#333}
-.eh{font-weight:bold;font-size:12px;background:#F5F5F5;padding:5px 8px;border-radius:4px 4px 0 0;margin-top:14px}
-.er{font-size:10px;font-weight:normal;color:#888}
+*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;font-size:11px;color:var(--fc-text);padding:12mm}
+h1{font-size:17px;margin-bottom:3px}.sub{color:var(--fc-text-light);font-size:10px;margin-bottom:12px}
+.sbox{display:flex;gap:20px;background:var(--fc-highlight-yellow);border-left:3px solid var(--fc-accent);padding:10px 14px;border-radius:4px;margin-bottom:16px}
+.scol{display:flex;flex-direction:column;gap:2px;min-width:90px}.sl{font-size:9px;color:var(--fc-text-light)}.sv{font-size:15px;font-weight:bold;color:var(--fc-text)}
+.eh{font-weight:bold;font-size:12px;background:var(--fc-bg-alt);padding:5px 8px;border-radius:4px 4px 0 0;margin-top:14px}
+.er{font-size:10px;font-weight:normal;color:var(--fc-text-light)}
 table{width:100%;border-collapse:collapse;margin-bottom:0;break-inside:avoid}
-th{background:#F9F9F9;text-align:left;padding:4px 6px;font-size:9px;font-weight:bold;border:1px solid #E0E0E0}
-td{padding:4px 6px;border:1px solid #EEEEEE;font-size:10px;vertical-align:top}.num{text-align:right}
-.addr{font-size:9px;color:#777}.tr td{background:#FFF8E1;font-weight:bold;border-top:1px solid #DDD}
+th{background:#F9F9F9;text-align:left;padding:4px 6px;font-size:9px;font-weight:bold;border:1px solid var(--fc-border-light)}
+td{padding:4px 6px;border:1px solid var(--fc-tab-inactive);font-size:10px;vertical-align:top}.num{text-align:right}
+.addr{font-size:9px;color:var(--fc-text-light)}.tr td{background:var(--fc-state-warning-bg);font-weight:bold;border-top:1px solid var(--fc-border)}
 @media print{@page{size:A4 portrait;margin:10mm}body{padding:0}}
 </style></head><body>
 <h1>Зарплаты и выплаты${tab ? ' — '+tab : ''}</h1>
@@ -1182,42 +1182,42 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.toggle-pills-wide { display: inline-flex; border: 1px solid #d9d9d9; border-radius: 6px; overflow: hidden; width: 100% }
-.toggle-pills-wide button { flex: 1; border: none; background: #F5F5F5; color: #888; font-size: 12px; padding: 7px 6px; cursor: pointer; transition: all 0.2s; font-family: inherit; white-space: nowrap }
-.toggle-pills-wide button.active { background: white; color: #333; font-weight: bold; box-shadow: 0 1px 3px rgba(0,0,0,0.08) }
-.toggle-pills-wide button + button { border-left: 1px solid #d9d9d9 }
-.summary-card { border-left: 3px solid #ffd93c }
+.toggle-pills-wide { display: inline-flex; border: 1px solid var(--fc-border); border-radius: 6px; overflow: hidden; width: 100% }
+.toggle-pills-wide button { flex: 1; border: none; background: var(--fc-bg-alt); color: var(--fc-text-light); font-size: 12px; padding: 7px 6px; cursor: pointer; transition: all 0.2s; font-family: inherit; white-space: nowrap }
+.toggle-pills-wide button.active { background: var(--fc-bg); color: var(--fc-text); font-weight: bold; box-shadow: 0 1px 3px var(--fc-shadow-sm) }
+.toggle-pills-wide button + button { border-left: 1px solid var(--fc-border) }
+.summary-card { border-left: 3px solid var(--fc-accent) }
 .stat-pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold }
 .stat-pill.paid { background: #E8F8F5; color: #27AE60 }
-.stat-pill.pending { background: #FFF8E1; color: #F39C12 }
+.stat-pill.pending { background: var(--fc-state-warning-bg); color: #F39C12 }
 .stat-pill.done { background: transparent; color: #00897B }
-.stat-pill.waiting { background: #F5F5F5; color: #aaa }
-.stat-pill.inwork { background: #F5F5F5; color: #888 }
-.employee-group-header { display: flex; align-items: center; padding: 8px 12px; background: white; border: 1px solid #E0E0E0; border-radius: 8px 8px 0 0; cursor: pointer }
-.payment-card { border: none; border-left: 1px solid #E0E0E0; border-right: 1px solid #E0E0E0; border-bottom: 1px solid #F0F0F0; border-radius: 0 }
-.payment-card:last-child { border-radius: 0 0 8px 8px; border-bottom: 1px solid #E0E0E0 }
+.stat-pill.waiting { background: var(--fc-bg-alt); color: var(--fc-text-disabled) }
+.stat-pill.inwork { background: var(--fc-bg-alt); color: var(--fc-text-light) }
+.employee-group-header { display: flex; align-items: center; padding: 8px 12px; background: var(--fc-bg); border: 1px solid var(--fc-border-light); border-radius: 8px 8px 0 0; cursor: pointer }
+.payment-card { border: none; border-left: 1px solid var(--fc-border-light); border-right: 1px solid var(--fc-border-light); border-bottom: 1px solid var(--fc-tab-hover); border-radius: 0 }
+.payment-card:last-child { border-radius: 0 0 8px 8px; border-bottom: 1px solid var(--fc-border-light) }
 /* Единая высота фильтров */
 .q-col-gutter-xs .q-field--outlined .q-field__control { min-height: 40px; height: 40px; }
 /* Нативная кнопка Сбросить — точная высота как у q-select (40px) */
-.sal-reset-native { display: flex; align-items: center; justify-content: center; height: 100%; min-height: 40px; min-width: 80px; padding: 0 12px; border: 1px solid #bdbdbd; border-radius: 4px; background: white; color: #555; font-size: 12px; cursor: pointer; font-family: inherit; white-space: nowrap; transition: background 0.15s; }
-.sal-reset-native:hover { background: #f5f5f5; }
+.sal-reset-native { display: flex; align-items: center; justify-content: center; height: 100%; min-height: 40px; min-width: 80px; padding: 0 12px; border: 1px solid #bdbdbd; border-radius: 4px; background: var(--fc-bg); color: var(--fc-text-medium); font-size: 12px; cursor: pointer; font-family: inherit; white-space: nowrap; transition: background 0.15s; }
+.sal-reset-native:hover { background: var(--fc-bg-alt); }
 /* Нативные кнопки действий — одинаковая высота 26px со span-чипами */
-.sal-act-btn { display: inline-flex; align-items: center; gap: 2px; height: 26px; padding: 0 8px; border-radius: 4px; border: 1px solid; background: white; font-size: 10px; cursor: pointer; font-family: inherit; white-space: nowrap; line-height: 1; transition: background 0.15s; }
+.sal-act-btn { display: inline-flex; align-items: center; gap: 2px; height: 26px; padding: 0 8px; border-radius: 4px; border: 1px solid; background: var(--fc-bg); font-size: 10px; cursor: pointer; font-family: inherit; white-space: nowrap; line-height: 1; transition: background 0.15s; }
 .sal-act-icon { padding: 0 5px; }
-.sal-act-grey { border-color: #9E9E9E; color: #555; }
-.sal-act-grey:hover { background: #f5f5f5; }
+.sal-act-grey { border-color: #9E9E9E; color: var(--fc-text-medium); }
+.sal-act-grey:hover { background: var(--fc-bg-alt); }
 .sal-act-green { border-color: #21BA45; color: #21BA45; }
 .sal-act-green:hover { background: #f0faf3; }
 .sal-act-orange { border-color: #F2C037; color: #9a6700; }
-.sal-act-orange:hover { background: #fff8e1; }
+.sal-act-orange:hover { background: var(--fc-state-warning-bg); }
 .sal-act-red { border-color: #C10015; color: #C10015; }
 .sal-act-red:hover { background: #fff0f0; }
 .sal-export-btn {
-  height: 40px; padding: 0 12px; border: 1px solid #2196f3; border-radius: 4px;
-  background: white; color: #2196f3; font-size: 12px; font-family: inherit;
+  height: 40px; padding: 0 12px; border: 1px solid var(--fc-link); border-radius: 4px;
+  background: var(--fc-bg); color: var(--fc-link); font-size: 12px; font-family: inherit;
   cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
   gap: 4px; outline: none; white-space: nowrap; flex-shrink: 0;
 }
-.sal-export-btn:hover { background: #e3f2fd; }
+.sal-export-btn:hover { background: var(--fc-selected-bg); }
 .sal-export-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 </style>

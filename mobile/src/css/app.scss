@@ -11,7 +11,7 @@ body {
   font-family: 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
 }
 
-// ===== ЦВЕТА ДЕСКТОПА (ТОЧНЫЕ) =====
+// ===== ЦВЕТА — СВЕТЛАЯ ТЕМА (дефолт) =====
 :root {
   --fc-white: #FFFFFF;
   --fc-bg: #FFFFFF;
@@ -26,8 +26,10 @@ body {
   --fc-border-card: #CCCCCC;
   --fc-text: #333333;
   --fc-text-secondary: #666666;
+  --fc-text-medium: #555555;
   --fc-text-light: #888888;
   --fc-text-muted: #999999;
+  --fc-text-disabled: #BBBBBB;
   --fc-green: #27AE60;
   --fc-red: #E74C3C;
   --fc-orange: #F39C12;
@@ -36,11 +38,108 @@ body {
   --fc-teal: #1ABC9C;
   --fc-tab-inactive: #E8E8E8;
   --fc-tab-hover: #F0F0F0;
+  --fc-highlight-yellow: #FFFDE7;
+  --fc-highlight-green: #F1F8E9;
+  --fc-shadow-xs: rgba(0, 0, 0, 0.06);
+  --fc-shadow-sm: rgba(0, 0, 0, 0.08);
+  --fc-shadow-md: rgba(0, 0, 0, 0.13);
+  --fc-shadow-lg: rgba(0, 0, 0, 0.18);
+  --fc-link: #1677FF;
+  --fc-state-success-bg: #E8F5E9;
+  --fc-state-warning-bg: #FFF8E1;
+  --fc-chat-reply-bg: #F3F6FF;
+  --fc-chat-reply-border: #D0D9F0;
+  --fc-selected-bg: #E3F2FD;
 }
 
-// ===== HEADER (белый, как десктоп title bar) =====
+// ===== ЦВЕТА — ТЁМНАЯ ТЕМА =====
+// CSS media fallback (до загрузки Quasar JS)
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fc-white: #1E1E1E;
+    --fc-bg: #1E1E1E;
+    --fc-bg-info: #252525;
+    --fc-bg-alt: #2A2A2A;
+    --fc-bg-hover: #303030;
+    --fc-accent: #ffd93c;
+    --fc-accent-hover: #f0c929;
+    --fc-accent-border: #d4b520;
+    --fc-border: #3D3D3D;
+    --fc-border-light: #383838;
+    --fc-border-card: #444444;
+    --fc-text: #E8E8E8;
+    --fc-text-secondary: #AAAAAA;
+    --fc-text-medium: #C0C0C0;
+    --fc-text-light: #909090;
+    --fc-text-muted: #787878;
+    --fc-text-disabled: #606060;
+    --fc-green: #2ECC71;
+    --fc-red: #E74C3C;
+    --fc-orange: #F39C12;
+    --fc-blue: #5DADE2;
+    --fc-purple: #A569BD;
+    --fc-teal: #1ABC9C;
+    --fc-tab-inactive: #333333;
+    --fc-tab-hover: #2E2E2E;
+    --fc-highlight-yellow: rgba(255, 217, 60, 0.12);
+    --fc-highlight-green: rgba(39, 174, 96, 0.12);
+    --fc-shadow-xs: rgba(0, 0, 0, 0.3);
+    --fc-shadow-sm: rgba(0, 0, 0, 0.4);
+    --fc-shadow-md: rgba(0, 0, 0, 0.5);
+    --fc-shadow-lg: rgba(0, 0, 0, 0.6);
+    --fc-link: #5B9BD5;
+    --fc-state-success-bg: rgba(46, 204, 113, 0.12);
+    --fc-state-warning-bg: rgba(243, 156, 18, 0.12);
+    --fc-chat-reply-bg: rgba(21, 101, 192, 0.1);
+    --fc-chat-reply-border: rgba(21, 101, 192, 0.25);
+    --fc-selected-bg: rgba(21, 101, 192, 0.12);
+  }
+}
+
+// body--dark — управляется Quasar Dark plugin (точный контроль через JS)
+.body--dark {
+  --fc-white: #1E1E1E;
+  --fc-bg: #1E1E1E;
+  --fc-bg-info: #252525;
+  --fc-bg-alt: #2A2A2A;
+  --fc-bg-hover: #303030;
+  --fc-accent: #ffd93c;
+  --fc-accent-hover: #f0c929;
+  --fc-accent-border: #d4b520;
+  --fc-border: #3D3D3D;
+  --fc-border-light: #383838;
+  --fc-border-card: #444444;
+  --fc-text: #E8E8E8;
+  --fc-text-secondary: #AAAAAA;
+  --fc-text-medium: #C0C0C0;
+  --fc-text-light: #909090;
+  --fc-text-muted: #787878;
+  --fc-text-disabled: #606060;
+  --fc-green: #2ECC71;
+  --fc-red: #E74C3C;
+  --fc-orange: #F39C12;
+  --fc-blue: #5DADE2;
+  --fc-purple: #A569BD;
+  --fc-teal: #1ABC9C;
+  --fc-tab-inactive: #333333;
+  --fc-tab-hover: #2E2E2E;
+  --fc-highlight-yellow: rgba(255, 217, 60, 0.12);
+  --fc-highlight-green: rgba(39, 174, 96, 0.12);
+  --fc-shadow-xs: rgba(0, 0, 0, 0.3);
+  --fc-shadow-sm: rgba(0, 0, 0, 0.4);
+  --fc-shadow-md: rgba(0, 0, 0, 0.5);
+  --fc-shadow-lg: rgba(0, 0, 0, 0.6);
+  --fc-link: #5B9BD5;
+  --fc-state-success-bg: rgba(46, 204, 113, 0.12);
+  --fc-state-warning-bg: rgba(243, 156, 18, 0.12);
+  --fc-chat-reply-bg: rgba(21, 101, 192, 0.1);
+  --fc-chat-reply-border: rgba(21, 101, 192, 0.25);
+  --fc-selected-bg: rgba(21, 101, 192, 0.12);
+}
+
+// ===== HEADER (светлый / тёмный) =====
 .q-header .q-toolbar {
-  background: var(--fc-white) !important;
+  background: var(--fc-bg) !important;
   color: var(--fc-text) !important;
   border-bottom: 1px solid var(--fc-border-light);
   min-height: 48px;
@@ -48,31 +147,40 @@ body {
 
 // ===== PAGES =====
 .q-page {
-  background-color: var(--fc-white);
+  background-color: var(--fc-bg);
 }
 
-// ===== CARDS (CRM карточки — border-radius: 8px, border: 1px) =====
+// Тёмный фон для body и html (Quasar q-layout)
+.body--dark {
+  background: var(--fc-bg);
+
+  .q-page-container {
+    background: var(--fc-bg);
+  }
+}
+
+// ===== CARDS =====
 .is-card {
   border-radius: 8px;
   border: 1px solid var(--fc-border-light);
   box-shadow: none;
-  background: var(--fc-white);
+  background: var(--fc-bg);
 }
 
 // CRM Kanban карточка
 .crm-card {
   border: 2px solid var(--fc-border-card);
   border-radius: 8px;
-  background: var(--fc-white);
+  background: var(--fc-bg);
   padding: 12px;
 
   &:active {
-    border-color: #909090;
+    border-color: var(--fc-text-light);
     background: var(--fc-bg-alt);
   }
 }
 
-// ===== TABS (как десктоп — серый фон, жёлтый border-bottom) =====
+// ===== TABS =====
 .q-tab {
   text-transform: none !important;
   font-weight: bold;
@@ -83,7 +191,7 @@ body {
 
 .q-tab--active {
   color: var(--fc-text) !important;
-  background: var(--fc-white) !important;
+  background: var(--fc-bg) !important;
 }
 
 .q-tabs__content .q-tab__indicator {
@@ -92,7 +200,6 @@ body {
 }
 
 // ===== BUTTONS — СТАНДАРТ 32px =====
-// Все прямоугольные кнопки: 32px высота, border-radius 4px, font-size 12px
 .q-btn:not(.q-btn--fab):not(.q-btn--round) {
   min-height: 32px !important;
   max-height: 32px !important;
@@ -102,7 +209,6 @@ body {
   line-height: 30px;
 }
 
-// Кнопки в toolbars (заголовки диалогов) — допускаем чуть выше
 .q-toolbar .q-btn:not(.q-btn--round) {
   min-height: 28px !important;
   max-height: 28px !important;
@@ -117,7 +223,7 @@ body {
   font-weight: 600;
 }
 
-// Dense кнопки внутри списков (маленькие)
+// Dense кнопки
 .q-btn--dense {
   min-height: 24px !important;
   max-height: 24px !important;
@@ -125,15 +231,17 @@ body {
   padding: 0 8px;
 }
 
-// ===== DIALOGS (border-radius: 10px) =====
+// ===== DIALOGS =====
 .q-dialog .q-card {
   border-radius: 10px;
+  background: var(--fc-bg);
+  color: var(--fc-text);
 }
 
 // ===== DRAWER =====
 .q-drawer {
   border-right: 1px solid var(--fc-border-light) !important;
-  background: var(--fc-white) !important;
+  background: var(--fc-bg) !important;
 
   .q-item {
     border-radius: 4px;
@@ -152,13 +260,100 @@ body {
 // ===== FOOTER (bottom tabs) =====
 .q-footer {
   border-top: 1px solid var(--fc-border-light) !important;
-  background: var(--fc-white) !important;
+  background: var(--fc-bg) !important;
 
   .q-tab--active {
     color: var(--fc-text) !important;
   }
   .q-tab__indicator {
     background: var(--fc-accent) !important;
+  }
+}
+
+// ===== Quasar bg-white и bg-grey-* — оверрайд для тёмной темы =====
+.body--dark {
+  .bg-white {
+    background: var(--fc-bg) !important;
+    color: var(--fc-text) !important;
+  }
+  .bg-grey-1, .bg-grey-2 {
+    background: var(--fc-bg-info) !important;
+  }
+  .bg-grey-3 {
+    background: var(--fc-bg-alt) !important;
+  }
+  .text-grey-6, .text-grey-7, .text-grey-8, .text-grey-9 {
+    color: var(--fc-text-secondary) !important;
+  }
+
+  // Quasar input, select, textarea
+  .q-field__control {
+    background: var(--fc-bg-alt) !important;
+    color: var(--fc-text) !important;
+  }
+  .q-field__label {
+    color: var(--fc-text-secondary) !important;
+  }
+  .q-field__native, .q-field__input {
+    color: var(--fc-text) !important;
+  }
+  .q-field--outlined .q-field__control {
+    border-color: var(--fc-border) !important;
+  }
+  .q-field--outlined.q-field--focused .q-field__control {
+    border-color: var(--fc-accent) !important;
+  }
+
+  // Quasar list items
+  .q-item {
+    color: var(--fc-text);
+  }
+  .q-item__label--caption {
+    color: var(--fc-text-secondary) !important;
+  }
+
+  // Quasar separator
+  .q-separator {
+    background: var(--fc-border-light);
+  }
+
+  // Quasar table
+  .q-table {
+    background: var(--fc-bg);
+    color: var(--fc-text);
+  }
+  .q-table thead tr th {
+    background: var(--fc-bg-alt);
+    color: var(--fc-text-secondary);
+    border-bottom-color: var(--fc-border-light);
+  }
+  .q-table tbody tr:hover td {
+    background: var(--fc-bg-hover);
+  }
+  .q-table tbody tr td {
+    border-bottom-color: var(--fc-border-light);
+  }
+
+  // Quasar chip
+  .q-chip {
+    background: var(--fc-bg-alt);
+    color: var(--fc-text);
+  }
+
+  // Quasar badge
+  .q-badge {
+    &.bg-grey-3 { background: var(--fc-bg-alt) !important; }
+    &.bg-grey-7 { background: var(--fc-text-secondary) !important; }
+  }
+
+  // Quasar scroll area
+  .q-scrollarea__thumb {
+    background: var(--fc-border-card);
+  }
+
+  // Quasar expansion item
+  .q-expansion-item__content {
+    background: var(--fc-bg-info);
   }
 }
 
@@ -175,7 +370,7 @@ body {
 // ===== LOGIN PAGE =====
 .login-page {
   min-height: 100vh;
-  background: var(--fc-white);
+  background: var(--fc-bg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -187,13 +382,14 @@ body {
   max-width: 400px;
   width: 100%;
   padding: 32px 24px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+  background: var(--fc-bg);
+  box-shadow: 0 2px 12px var(--fc-shadow-sm);
 }
 
-// ===== KPI карточка (дашборд/отчёты) =====
+// ===== KPI карточка =====
 .kpi-card {
   border-radius: 8px;
-  background: var(--fc-white);
+  background: var(--fc-bg);
   padding: 12px;
   text-align: center;
 }
@@ -208,7 +404,6 @@ body {
   border-radius: 4px;
 }
 
-// Убрать нативные spin-кнопки (стрелки ↑↓) у всех числовых полей
 input[type='number'] {
   -moz-appearance: textfield;
 
@@ -219,15 +414,12 @@ input[type='number'] {
   }
 }
 
-// Выравниваем крестик clearable по центру с иконкой нативного date-инпута
 .q-field--dense .q-field__append {
   align-self: center;
   padding-top: 0;
   padding-bottom: 0;
 }
 
-// Quasar ставит padding-top на native input для floating label —
-// из-за этого браузерная иконка календаря опускается вниз в dense-полях
 input[type="date"].q-field__native {
   padding-top: 0 !important;
   padding-bottom: 0 !important;
@@ -244,7 +436,6 @@ input[type="date"].q-field__native {
 * { -webkit-tap-highlight-color: transparent; }
 html { scroll-behavior: smooth; -webkit-overflow-scrolling: touch; }
 
-
 // Logo
 .fc-logo {
   height: 24px;
@@ -253,16 +444,13 @@ html { scroll-behavior: smooth; -webkit-overflow-scrolling: touch; }
 
 // ===== PRINT / PDF EXPORT =====
 @media print {
-  // Скрываем навигацию
   .q-header, .q-footer, .q-drawer, .q-page-sticky,
   .q-fab, .q-btn[fab], .q-pull-to-refresh__puller,
   .toggle-pills, .toggle-pills-wide, .column-nav { display: none !important; }
 
-  // Убираем отступы
   .q-page { padding: 8px !important; }
   body { padding: 0 !important; }
 
-  // Карточки без теней и рамок
   .q-card, .is-card {
     box-shadow: none !important;
     border: 1px solid #ddd !important;
@@ -270,14 +458,9 @@ html { scroll-behavior: smooth; -webkit-overflow-scrolling: touch; }
     page-break-inside: avoid;
   }
 
-  // Графики и таблицы не обрезаются
   canvas { max-width: 100% !important; height: auto !important; }
-
-  // Текст чёрный
   * { color: #333 !important; }
   .q-badge { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
-
-  // Размер страницы
   @page { size: A4 portrait; margin: 10mm; }
 }
 

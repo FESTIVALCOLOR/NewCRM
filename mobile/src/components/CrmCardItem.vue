@@ -3,7 +3,7 @@
     <q-card-section class="q-pa-sm">
       <!-- 1. Верхняя строка: номер + статус работы + колокольчик тишины -->
       <div class="row items-center justify-between q-mb-xs">
-        <div style="color: #888; font-size: 10px">
+        <div style="color: var(--fc-text-light); font-size: 10px">
           Договор: {{ card.contract_number || `#${card.id}` }}
         </div>
         <div class="row items-center" style="gap: 4px">
@@ -14,7 +14,7 @@
             ПАУЗА
           </div>
           <button v-if="!isArchived" class="mute-bell-btn" @click.stop="emit('toggle-mute')">
-            <span class="material-icons" :style="{ fontSize: '14px', color: isMuted ? '#333' : '#CCC' }">
+            <span class="material-icons" :style="{ fontSize: '14px', color: isMuted ? 'var(--fc-text)' : 'var(--fc-border-card)' }">
               {{ isMuted ? 'notifications_off' : 'notifications' }}
             </span>
           </button>
@@ -22,12 +22,12 @@
       </div>
 
       <!-- 2. Адрес -->
-      <div class="text-weight-bold q-mb-xs" style="font-size: 14px; color: #222; word-wrap: break-word">
+      <div class="text-weight-bold q-mb-xs" style="font-size: 14px; color: var(--fc-text); word-wrap: break-word">
         {{ card.address || 'Без адреса' }}
       </div>
 
       <!-- 3. Разделитель -->
-      <div style="height: 1px; background: #DDD" class="q-mb-xs" />
+      <div style="height: 1px; background: var(--fc-border)" class="q-mb-xs" />
 
       <!-- 4. Подэтап (ВСЕГДА если есть) -->
       <div v-if="card.current_substep_name" class="q-mb-xs" :style="{ color: substepColor, fontSize: '9px', fontWeight: 'bold', wordWrap: 'break-word' }">
@@ -41,7 +41,7 @@
 
       <!-- 6. Площадь + Город | Агент -->
       <div class="row items-center justify-between q-mb-xs">
-        <div style="font-size: 11px; color: #888">
+        <div style="font-size: 11px; color: var(--fc-text-light)">
           <span v-if="card.area">{{ card.area }} м²</span>
           <span v-if="card.area && card.city"> | </span>
           <span v-if="card.city">{{ card.city }}</span>
@@ -52,12 +52,12 @@
       </div>
 
       <!-- 7. Команда (сворачиваемая) -->
-      <div v-if="teamMembers.length > 0" style="border: 1px solid #E0E0E0; border-radius: 4px; padding: 4px 6px; margin-bottom: 4px; background: #F8F9FA" @click.stop>
-        <div style="font-size: 10px; color: #888; font-weight: bold; cursor: pointer" @click="showTeam = !showTeam">
+      <div v-if="teamMembers.length > 0" style="border: 1px solid var(--fc-border-light); border-radius: 4px; padding: 4px 6px; margin-bottom: 4px; background: var(--fc-bg-info)" @click.stop>
+        <div style="font-size: 10px; color: var(--fc-text-light); font-weight: bold; cursor: pointer" @click="showTeam = !showTeam">
           Команда ({{ teamMembers.length }}) {{ showTeam ? '▲' : '▼' }}
         </div>
         <div v-if="showTeam">
-          <div v-for="m in teamMembers" :key="m.text" style="font-size: 10px; padding: 1px 4px; border-radius: 2px; margin-top: 1px" :style="{ background: m.bg, color: '#333' }">
+          <div v-for="m in teamMembers" :key="m.text" style="font-size: 10px; padding: 1px 4px; border-radius: 2px; margin-top: 1px" :style="{ background: m.bg, color: 'var(--fc-text)' }">
             {{ m.text }}
           </div>
         </div>
@@ -76,7 +76,7 @@
       <div v-if="!isArchived && (generalDeadlineText || substepDeadlineText)" class="q-mb-xs row no-wrap" style="gap: 4px">
         <!-- Общий дедлайн заказа (всегда слева) -->
         <div v-if="generalDeadlineText" :style="{ flex: 1, background: generalDeadlineBg, borderRadius: '4px', padding: '3px 6px', minWidth: 0 }">
-          <div style="font-size: 8px; color: #888; font-weight: bold; line-height: 1.3">
+          <div style="font-size: 8px; color: var(--fc-text-light); font-weight: bold; line-height: 1.3">
             Общий
           </div>
           <div :style="{ fontSize: '10px', color: generalDeadlineColor, fontWeight: 'bold', lineHeight: '1.3', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }">
@@ -85,7 +85,7 @@
         </div>
         <!-- Дедлайн текущего подэтапа (справа, если есть) -->
         <div v-if="substepDeadlineText" :style="{ flex: 1, background: substepDeadlineBg, borderRadius: '4px', padding: '3px 6px', minWidth: 0 }">
-          <div style="font-size: 8px; color: #888; font-weight: bold; line-height: 1.3">
+          <div style="font-size: 8px; color: var(--fc-text-light); font-weight: bold; line-height: 1.3">
             Подэтап
           </div>
           <div :style="{ fontSize: '10px', color: substepDeadlineColor, fontWeight: 'bold', lineHeight: '1.3', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }">
@@ -100,7 +100,7 @@
       </div>
 
       <!-- Кнопки действий (скрыты в архиве) -->
-      <div v-if="!isArchived" class="q-mt-xs" style="border-top: 1px solid #E0E0E0; padding-top: 6px">
+      <div v-if="!isArchived" class="q-mt-xs" style="border-top: 1px solid var(--fc-border-light); padding-top: 6px">
         <!-- Строка 1: Workflow кнопки -->
         <div v-if="canSubmitWork" class="q-mb-xs">
           <q-btn
@@ -146,7 +146,7 @@
         </div>
         <!-- Решение после согласования клиента (pending_decision) -->
         <div v-if="canPendingDecision" class="q-mb-xs">
-          <div style="font-size: 9px; color: #888; text-align: center; margin-bottom: 3px">
+          <div style="font-size: 9px; color: var(--fc-text-light); text-align: center; margin-bottom: 3px">
             Клиент согласовал. Выберите действие:
           </div>
           <div class="row q-gutter-xs q-mb-xs">
@@ -175,7 +175,7 @@
             no-caps
             icon="add_circle_outline"
             label="Доп. круг"
-            style="background: #D5D8DC; color: #333; font-size: 10px; font-weight: bold; height: 28px; border-radius: 4px; width: 100%"
+            style="background: #D5D8DC; color: var(--fc-text); font-size: 10px; font-weight: bold; height: 28px; border-radius: 4px; width: 100%"
             @click.stop="emit('add-extra-round')"
           />
         </div>
@@ -218,7 +218,7 @@
             no-caps
             icon="open_in_new"
             label="Данные карточки"
-            style="color: #333; font-size: 11px; height: 28px; width: 100%; background: #F5F5F5; border-radius: 4px"
+            style="color: var(--fc-text); font-size: 11px; height: 28px; width: 100%; background: var(--fc-bg-alt); border-radius: 4px"
             @click="emit('click')"
           />
         </div>
@@ -231,21 +231,21 @@
             no-caps
             icon="swap_horiz"
             label="Переместить"
-            style="color: #888; font-size: 10px; height: 24px; width: 100%"
+            style="color: var(--fc-text-light); font-size: 10px; height: 24px; width: 100%"
             @click="emit('longpress')"
           />
         </div>
       </div>
 
       <!-- Архив: только кнопка открытия -->
-      <div v-else class="q-mt-xs" style="border-top: 1px solid #E0E0E0; padding-top: 6px">
+      <div v-else class="q-mt-xs" style="border-top: 1px solid var(--fc-border-light); padding-top: 6px">
         <q-btn
           flat
           dense
           no-caps
           icon="open_in_new"
           label="Данные карточки"
-          style="color: #333; font-size: 11px; height: 28px; width: 100%; background: #F5F5F5; border-radius: 4px"
+          style="color: var(--fc-text); font-size: 11px; height: 28px; width: 100%; background: var(--fc-bg-alt); border-radius: 4px"
           @click="emit('click')"
         />
       </div>
@@ -289,7 +289,7 @@ const archiveCardStyle = computed(() => {
   const col = props.card.column_name || ''
   const cs = props.card.contract_status || ''
   if (col === 'РАСТОРГНУТ' || cs === 'РАСТОРГНУТ') return { background: '#FADBD8', borderColor: '#E74C3C' }
-  if (col.includes('НАДЗОР') || cs === 'АВТОРСКИЙ НАДЗОР') return { background: '#E3F2FD', borderColor: '#2196F3' }
+  if (col.includes('НАДЗОР') || cs === 'АВТОРСКИЙ НАДЗОР') return { background: 'var(--fc-selected-bg)', borderColor: 'var(--fc-link)' }
   if (col === 'Выполненный проект' || col === 'СДАН') return { background: '#E8F8F5', borderColor: '#27AE60' }
   return {}
 })
@@ -302,7 +302,7 @@ const workStatusText = computed(() => {
 })
 const workStatusColor = computed(() => {
   const m = { pending_review: '#8E44AD', revision: '#E74C3C', client_approval: '#3498DB', act_signing: '#9B59B6', stage_completed: '#27AE60', in_progress: '#F39C12' }
-  return m[ws.value] || '#888'
+  return m[ws.value] || 'var(--fc-text-light)'
 })
 const isPaused = computed(() => props.card.column_name === 'В ожидании')
 
@@ -366,18 +366,18 @@ const teamMembers = computed(() => {
 
 // Вспомогательные функции форматирования
 function _deadlineDaysColor(days) {
-  if (days === null) return '#888'
+  if (days === null) return 'var(--fc-text-light)'
   if (days < 0) return '#8B0000'
   if (days === 0) return '#DC143C'
   if (days <= 1) return '#E74C3C'
   if (days <= 2) return '#F39C12'
-  return '#888'
+  return 'var(--fc-text-light)'
 }
 function _deadlineDaysBg(days) {
-  if (days === null) return '#F5F5F5'
+  if (days === null) return 'var(--fc-bg-alt)'
   if (days < 0) return '#FFEBEE'
-  if (days <= 2) return '#FFF8E1'
-  return '#F5F5F5'
+  if (days <= 2) return 'var(--fc-state-warning-bg)'
+  return 'var(--fc-bg-alt)'
 }
 
 // Левый блок: Общий дедлайн заказа.
@@ -487,8 +487,8 @@ const showAddTechTask = computed(() => {
 </script>
 
 <style scoped>
-.crm-card { border: 2px solid #CCCCCC; border-radius: 8px; background: white; }
-.crm-card:active { border-color: #909090; background: #f5f5f5; }
+.crm-card { border: 2px solid var(--fc-border-card); border-radius: 8px; background: var(--fc-bg); }
+.crm-card:active { border-color: #909090; background: var(--fc-bg-alt); }
 
 .crm-add-btn {
   display: inline-flex;

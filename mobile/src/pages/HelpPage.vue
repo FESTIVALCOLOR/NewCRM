@@ -4,10 +4,10 @@
     <div class="row items-center q-mb-md q-mt-xs">
       <q-icon name="menu_book" size="24px" color="accent" class="q-mr-sm" />
       <div>
-        <div style="font-size: 17px; font-weight: 700; color: #222">
+        <div style="font-size: 17px; font-weight: 700; color: var(--fc-text)">
           Инструкция
         </div>
-        <div style="font-size: 11px; color: #888">
+        <div style="font-size: 11px; color: var(--fc-text-light)">
           Interior Studio CRM · полное руководство
         </div>
       </div>
@@ -18,25 +18,25 @@
       v-if="myRoleKey"
       rounded
       class="q-mb-md"
-      style="background: #fffde7; border: 1px solid #ffe082"
+      style="background: var(--fc-highlight-yellow); border: 1px solid #ffe082"
     >
       <template #avatar>
         <q-icon name="person_pin" color="amber-8" size="22px" />
       </template>
-      <div style="font-size: 13px; color: #444">
-        Ваша должность: <b style="color: #222">{{ authStore.userPosition }}</b>
+      <div style="font-size: 13px; color: var(--fc-text-medium)">
+        Ваша должность: <b style="color: var(--fc-text)">{{ authStore.userPosition }}</b>
       </div>
-      <div style="font-size: 12px; color: #777; margin-top: 2px">
+      <div style="font-size: 12px; color: var(--fc-text-light); margin-top: 2px">
         Ваш раздел открыт первым — прокрутите вниз для детальных справок
       </div>
     </q-banner>
 
     <!-- Примечание о разных видах -->
-    <q-banner rounded class="q-mb-lg" style="background: #e8f5e9; border: 1px solid #a5d6a7">
+    <q-banner rounded class="q-mb-lg" style="background: var(--fc-state-success-bg); border: 1px solid #a5d6a7">
       <template #avatar>
         <q-icon name="info" color="green-7" size="18px" />
       </template>
-      <div style="font-size: 12px; color: #444">
+      <div style="font-size: 12px; color: var(--fc-text-medium)">
         Ваше меню может отличаться от скриншотов — набор разделов зависит от вашей должности и прав
       </div>
     </q-banner>
@@ -47,7 +47,7 @@
            ══════════════════════════════════════════ -->
 
       <!-- МЕНЕДЖЕР -->
-      <q-expansion-item v-model="expanded.manager" :header-style="myRoleKey==='manager' ? 'background:#fffde7' : ''">
+      <q-expansion-item v-model="expanded.manager" :header-style="myRoleKey==='manager' ? 'background:var(--fc-highlight-yellow)' : ''">
         <template #header>
           <q-item-section avatar>
             <q-icon name="manage_accounts" :color="myRoleKey==='manager' ? 'amber-8' : 'grey-6'" size="22px" />
@@ -56,7 +56,7 @@
             <div class="text-weight-medium" style="font-size: 14px">
               Менеджер — порядок работы
             </div>
-            <div style="font-size: 11px; color: #888">
+            <div style="font-size: 11px; color: var(--fc-text-light)">
               Новый заказ → согласование → завершение
             </div>
           </q-item-section>
@@ -256,7 +256,7 @@
       </q-expansion-item>
 
       <!-- ДИЗАЙНЕР -->
-      <q-expansion-item v-model="expanded.designer" :header-style="myRoleKey==='designer' ? 'background:#fffde7' : ''">
+      <q-expansion-item v-model="expanded.designer" :header-style="myRoleKey==='designer' ? 'background:var(--fc-highlight-yellow)' : ''">
         <template #header>
           <q-item-section avatar>
             <q-icon name="palette" :color="myRoleKey==='designer' ? 'amber-8' : 'grey-6'" size="22px" />
@@ -265,7 +265,7 @@
             <div class="text-weight-medium" style="font-size: 14px">
               Дизайнер — порядок работы
             </div>
-            <div style="font-size: 11px; color: #888">
+            <div style="font-size: 11px; color: var(--fc-text-light)">
               Задание → выполнение → сдача → правки
             </div>
           </q-item-section>
@@ -463,7 +463,7 @@
       </q-expansion-item>
 
       <!-- ЧЕРТЁЖНИК -->
-      <q-expansion-item v-model="expanded.draftsman" :header-style="myRoleKey==='draftsman' ? 'background:#fffde7' : ''">
+      <q-expansion-item v-model="expanded.draftsman" :header-style="myRoleKey==='draftsman' ? 'background:var(--fc-highlight-yellow)' : ''">
         <template #header>
           <q-item-section avatar>
             <q-icon name="architecture" :color="myRoleKey==='draftsman' ? 'amber-8' : 'grey-6'" size="22px" />
@@ -472,7 +472,7 @@
             <div class="text-weight-medium" style="font-size: 14px">
               Чертёжник — порядок работы
             </div>
-            <div style="font-size: 11px; color: #888">
+            <div style="font-size: 11px; color: var(--fc-text-light)">
               Назначение → изучение концепции → чертежи → сдача
             </div>
           </q-item-section>
@@ -581,7 +581,7 @@
       </q-expansion-item>
 
       <!-- СДП / ГАП -->
-      <q-expansion-item v-model="expanded.sdp" :header-style="myRoleKey==='sdp' ? 'background:#fffde7' : ''">
+      <q-expansion-item v-model="expanded.sdp" :header-style="myRoleKey==='sdp' ? 'background:var(--fc-highlight-yellow)' : ''">
         <template #header>
           <q-item-section avatar>
             <q-icon name="rate_review" :color="myRoleKey==='sdp' ? 'amber-8' : 'grey-6'" size="22px" />
@@ -590,7 +590,7 @@
             <div class="text-weight-medium" style="font-size: 14px">
               СДП / ГАП — приёмка работ
             </div>
-            <div style="font-size: 11px; color: #888">
+            <div style="font-size: 11px; color: var(--fc-text-light)">
               Проверка → принять или отклонить с причиной
             </div>
           </q-item-section>
@@ -727,7 +727,7 @@
       </q-expansion-item>
 
       <!-- ДАН -->
-      <q-expansion-item v-model="expanded.dan" :header-style="myRoleKey==='dan' ? 'background:#fffde7' : ''">
+      <q-expansion-item v-model="expanded.dan" :header-style="myRoleKey==='dan' ? 'background:var(--fc-highlight-yellow)' : ''">
         <template #header>
           <q-item-section avatar>
             <q-icon name="engineering" :color="myRoleKey==='dan' ? 'amber-8' : 'grey-6'" size="22px" />
@@ -736,7 +736,7 @@
             <div class="text-weight-medium" style="font-size: 14px">
               ДАН — авторский надзор на объекте
             </div>
-            <div style="font-size: 11px; color: #888">
+            <div style="font-size: 11px; color: var(--fc-text-light)">
               Объекты → выезды → журнал → этапы
             </div>
           </q-item-section>
@@ -889,7 +889,7 @@
       </q-expansion-item>
 
       <!-- ЗАМЕРЩИК -->
-      <q-expansion-item v-model="expanded.measurer" :header-style="myRoleKey==='measurer' ? 'background:#fffde7' : ''">
+      <q-expansion-item v-model="expanded.measurer" :header-style="myRoleKey==='measurer' ? 'background:var(--fc-highlight-yellow)' : ''">
         <template #header>
           <q-item-section avatar>
             <q-icon name="straighten" :color="myRoleKey==='measurer' ? 'amber-8' : 'grey-6'" size="22px" />
@@ -898,7 +898,7 @@
             <div class="text-weight-medium" style="font-size: 14px">
               Замерщик — порядок работы
             </div>
-            <div style="font-size: 11px; color: #888">
+            <div style="font-size: 11px; color: var(--fc-text-light)">
               Назначение → выезд → внести площадь → отчёт
             </div>
           </q-item-section>
@@ -1011,7 +1011,7 @@
       </q-expansion-item>
 
       <!-- РУКОВОДИТЕЛЬ / СТАРШИЙ МЕНЕДЖЕР -->
-      <q-expansion-item v-model="expanded.director" :header-style="myRoleKey==='director' ? 'background:#fffde7' : ''">
+      <q-expansion-item v-model="expanded.director" :header-style="myRoleKey==='director' ? 'background:var(--fc-highlight-yellow)' : ''">
         <template #header>
           <q-item-section avatar>
             <q-icon name="admin_panel_settings" :color="myRoleKey==='director' ? 'amber-8' : 'grey-6'" size="22px" />
@@ -1020,7 +1020,7 @@
             <div class="text-weight-medium" style="font-size: 14px">
               Руководитель / Старший менеджер
             </div>
-            <div style="font-size: 11px; color: #888">
+            <div style="font-size: 11px; color: var(--fc-text-light)">
               Контроль, аналитика, управление командой
             </div>
           </q-item-section>
@@ -1231,9 +1231,9 @@
            СПРАВОЧНЫЕ РАЗДЕЛЫ
            ══════════════════════════════════════════ -->
 
-      <q-item class="q-mt-sm" style="background: #f5f5f5; min-height: 36px">
+      <q-item class="q-mt-sm" style="background: var(--fc-bg-alt); min-height: 36px">
         <q-item-section>
-          <div style="font-size: 11px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.5px">
+          <div style="font-size: 11px; font-weight: 600; color: var(--fc-text-light); text-transform: uppercase; letter-spacing: 0.5px">
             Детальные справки по разделам системы
           </div>
         </q-item-section>
@@ -1422,13 +1422,13 @@
               <div class="help-note">
                 Индивидуальный проект:
               </div>
-              <div style="font-size: 12px; color: #444; margin-top: 4px; line-height: 1.8">
+              <div style="font-size: 12px; color: var(--fc-text-medium); margin-top: 4px; line-height: 1.8">
                 Новый заказ → В ожидании → <b>Стадия 1:</b> планировочные решения → <b>Стадия 2:</b> концепция дизайна → <b>Стадия 3:</b> рабочие чертежи → Выполненный проект
               </div>
               <div class="help-note q-mt-sm">
                 Шаблонный проект:
               </div>
-              <div style="font-size: 12px; color: #444; margin-top: 4px; line-height: 1.8">
+              <div style="font-size: 12px; color: var(--fc-text-medium); margin-top: 4px; line-height: 1.8">
                 Новый заказ → В ожидании → <b>Стадия 1:</b> планировочные решения → <b>Стадия 2:</b> рабочие чертежи → <b>Стадия 3:</b> 3D визуализация → Выполненный проект
               </div>
             </div>
@@ -1812,7 +1812,7 @@
       >
         <q-card flat>
           <q-card-section class="q-pa-md q-gutter-sm">
-            <q-banner rounded style="background: #fff3e0; border: 1px solid #ffcc80; font-size: 12px; color: #444">
+            <q-banner rounded style="background: #fff3e0; border: 1px solid #ffcc80; font-size: 12px; color: var(--fc-text-medium)">
               <template #avatar>
                 <q-icon name="info" color="orange-8" size="16px" />
               </template>
@@ -1826,7 +1826,7 @@
               <div class="help-topic__title">
                 <q-icon name="view_kanban" size="15px" class="q-mr-xs" />Файлы в CRM карточке — вкладка «Данные»
               </div>
-              <div style="font-size: 12px; color: #555; margin-bottom: 6px">
+              <div style="font-size: 12px; color: var(--fc-text-medium); margin-bottom: 6px">
                 Карточка CRM → открыть → вкладка <b>Данные</b>
               </div>
               <ul class="help-ul">
@@ -1849,7 +1849,7 @@
               <div class="help-topic__title">
                 <q-icon name="engineering" size="15px" class="q-mr-xs" />Файлы в карточке Надзора — вкладка «Выезды»
               </div>
-              <div style="font-size: 12px; color: #555; margin-bottom: 6px">
+              <div style="font-size: 12px; color: var(--fc-text-medium); margin-bottom: 6px">
                 Надзор → открыть карточку → вкладка <b>Выезды</b>
               </div>
               <ul class="help-ul">
@@ -1867,7 +1867,7 @@
               <div class="help-topic__title">
                 <q-icon name="shopping_cart" size="15px" class="q-mr-xs" />Файлы в карточке Надзора — вкладка «Закупки»
               </div>
-              <div style="font-size: 12px; color: #555; margin-bottom: 6px">
+              <div style="font-size: 12px; color: var(--fc-text-medium); margin-bottom: 6px">
                 Надзор → открыть карточку → вкладка <b>Закупки</b>
               </div>
               <ul class="help-ul">
@@ -1920,7 +1920,7 @@
       >
         <q-card flat>
           <q-card-section class="q-pa-md q-gutter-sm">
-            <q-banner rounded style="background: #fff3e0; border: 1px solid #ffcc80; font-size: 12px; color: #444">
+            <q-banner rounded style="background: #fff3e0; border: 1px solid #ffcc80; font-size: 12px; color: var(--fc-text-medium)">
               <template #avatar>
                 <q-icon name="info" color="orange-8" size="16px" />
               </template>
@@ -2142,7 +2142,7 @@
       </q-expansion-item>
     </q-list>
 
-    <div class="text-center q-mt-lg" style="font-size: 11px; color: #ccc">
+    <div class="text-center q-mt-lg" style="font-size: 11px; color: var(--fc-border-card)">
       Interior Studio CRM · crm.festivalcolor.ru
     </div>
   </q-page>
@@ -2214,7 +2214,7 @@ onMounted(() => {
 .role-block__title {
   font-size: 13px;
   font-weight: 700;
-  color: #333;
+  color: var(--fc-text);
   display: flex;
   align-items: center;
   margin-bottom: 6px;
@@ -2227,13 +2227,13 @@ onMounted(() => {
 }
 .rt-step {
   font-size: 13px;
-  color: #333;
+  color: var(--fc-text);
   line-height: 1.6;
   padding: 1px 0;
 }
 .rt-branch {
   padding-left: 16px;
-  border-left: 2px solid #e0e0e0;
+  border-left: 2px solid var(--fc-border-light);
   margin: 2px 0 2px 8px;
   display: flex;
   flex-direction: column;
@@ -2241,7 +2241,7 @@ onMounted(() => {
 }
 .rt-leaf {
   font-size: 12px;
-  color: #555;
+  color: var(--fc-text-medium);
   line-height: 1.6;
 }
 .rt-ok {
@@ -2262,7 +2262,7 @@ onMounted(() => {
 .help-topic__title {
   font-size: 13px;
   font-weight: 600;
-  color: #333;
+  color: var(--fc-text);
   display: flex;
   align-items: center;
 }
@@ -2270,7 +2270,7 @@ onMounted(() => {
   margin: 0;
   padding-left: 18px;
   font-size: 13px;
-  color: #444;
+  color: var(--fc-text-medium);
   line-height: 1.75;
 }
 .help-ul li {
@@ -2279,13 +2279,13 @@ onMounted(() => {
 .help-img {
   width: 100%;
   border-radius: 10px;
-  border: 1px solid #E0E0E0;
+  border: 1px solid var(--fc-border-light);
   box-shadow: 0 2px 6px rgba(0,0,0,0.07);
   display: block;
 }
 .help-note {
   font-size: 12px;
-  color: #666;
+  color: var(--fc-text-secondary);
   font-style: italic;
 }
 </style>

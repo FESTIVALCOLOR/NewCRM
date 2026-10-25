@@ -33,7 +33,7 @@
           <div class="text-caption text-weight-bold q-mb-xs">
             Изображение замера:
           </div>
-          <div v-if="selectedFile" class="q-mb-sm" style="background: #F8F9FA; border: 1px solid #E0E0E0; padding: 6px 10px; border-radius: 4px; font-size: 12px">
+          <div v-if="selectedFile" class="q-mb-sm" style="background: var(--fc-bg-info); border: 1px solid var(--fc-border-light); padding: 6px 10px; border-radius: 4px; font-size: 12px">
             {{ selectedFile.name.length > 25 ? selectedFile.name.slice(0, 12) + '...' + selectedFile.name.slice(-10) : selectedFile.name }}
           </div>
           <q-btn
@@ -73,7 +73,7 @@
               unelevated
               no-caps
               label="Получить файлы"
-              style="background: #E0E0E0; color: #333; height: 40px; border-radius: 4px"
+              style="background: var(--fc-border-light); color: var(--fc-text); height: 40px; border-radius: 4px"
               :loading="fetching"
               @click="fetchFiles"
             />
@@ -101,7 +101,7 @@
                   dense
                   outlined
                   options-dense
-                  :style="{ color: props.row.destination === 'Замер' ? '#1677FF' : '#52C41A', fontSize: '11px', width: '130px' }"
+                  :style="{ color: props.row.destination === 'Замер' ? 'var(--fc-link)' : '#52C41A', fontSize: '11px', width: '130px' }"
                   popup-content-style="font-size: 12px"
                 />
               </q-td>
@@ -124,7 +124,7 @@
 
           <!-- Статус + кнопка загрузки -->
           <div v-if="fetchedFiles.length > 0" class="q-mb-sm">
-            <div class="text-caption q-mb-xs" style="color: #888">
+            <div class="text-caption q-mb-xs" style="color: var(--fc-text-light)">
               Найдено файлов: {{ fetchedFiles.length }}
               (замер: {{ fetchedFiles.filter(f => f.destination === 'Замер').length }},
               фото: {{ fetchedFiles.filter(f => f.destination === 'Фотофиксация').length }})
@@ -134,7 +134,7 @@
               no-caps
               icon="cloud_upload"
               label="Загрузить на Яндекс.Диск"
-              style="background: #1677FF; color: white; border-radius: 4px; width: 100%; height: 36px"
+              style="background: var(--fc-link); color: white; border-radius: 4px; width: 100%; height: 36px"
               :loading="uploading"
               @click="uploadFromLink"
             />
@@ -177,7 +177,7 @@
           unelevated
           label="Сохранить"
           no-caps
-          style="background: #ffd93c; color: #333; border-radius: 4px"
+          style="background: var(--fc-accent); color: var(--fc-text); border-radius: 4px"
           :loading="saving"
           :disable="!canSave"
           @click="save"

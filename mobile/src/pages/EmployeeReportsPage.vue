@@ -62,7 +62,7 @@
       indicator-color="accent"
       no-caps
       class="q-mb-md"
-      style="color: #666"
+      style="color: var(--fc-text-secondary)"
       align="left"
     >
       <q-tab name="individual" label="Индивидуальные" />
@@ -76,10 +76,10 @@
         <div v-for="kpi in dashboardKpi" :key="kpi.label" class="col-4">
           <q-card class="is-card">
             <q-card-section class="q-pa-sm text-center">
-              <div class="text-h6 text-weight-bold" style="color: #333">
+              <div class="text-h6 text-weight-bold" style="color: var(--fc-text)">
                 {{ kpi.value }}
               </div>
-              <div class="text-caption" style="color: #888; font-size: 10px">
+              <div class="text-caption" style="color: var(--fc-text-light); font-size: 10px">
                 {{ kpi.label }}
               </div>
             </q-card-section>
@@ -95,7 +95,7 @@
         indicator-color="accent"
         no-caps
         class="q-mb-md"
-        style="color: #666"
+        style="color: var(--fc-text-secondary)"
         align="left"
       >
         <q-tab v-for="r in roleTabs" :key="r.code" :name="r.code" :label="r.label" />
@@ -104,35 +104,35 @@
       <!-- Рейтинг по роли -->
       <q-card v-if="roleRating.length > 0" class="is-card q-mb-md">
         <q-card-section class="q-pb-xs">
-          <div class="text-subtitle2 text-weight-bold" style="color: #333">
+          <div class="text-subtitle2 text-weight-bold" style="color: var(--fc-text)">
             Рейтинг эффективности
           </div>
-          <div class="text-caption q-mb-sm" style="color: #888">
+          <div class="text-caption q-mb-sm" style="color: var(--fc-text-light)">
             50% KPI · 25% Объём · 25% Пунктуальность{{ roleRating.some(e => e.clientScore !== null) ? ' · ±10% Клиент' : '' }}
           </div>
           <div
             v-for="(emp, idx) in roleRating"
             :key="emp.name"
             class="row items-center q-py-xs"
-            style="border-bottom: 1px solid #f0f0f0; cursor: pointer"
+            style="border-bottom: 1px solid var(--fc-tab-hover); cursor: pointer"
             @click="selectedEmp = emp._emp"
           >
             <div
               class="text-weight-bold q-mr-sm"
               style="width: 22px; text-align: center; font-size: 13px"
-              :style="{ color: idx === 0 ? '#F5A623' : idx === roleRating.length - 1 && roleRating.length > 2 ? '#E53935' : '#888' }"
+              :style="{ color: idx === 0 ? '#F5A623' : idx === roleRating.length - 1 && roleRating.length > 2 ? '#E53935' : 'var(--fc-text-light)' }"
             >
               {{ idx + 1 }}
             </div>
             <div style="flex: 1; min-width: 0">
-              <div class="text-weight-medium" style="font-size: 13px; color: #333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">
+              <div class="text-weight-medium" style="font-size: 13px; color: var(--fc-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">
                 {{ emp.name.split(' ').slice(0, 2).join(' ') }}
               </div>
               <div class="row q-gutter-xs q-mt-xs" style="flex-wrap: wrap; gap: 2px 6px">
                 <div style="font-size: 10px; color: #27AE60">
                   KPI {{ emp.kpi }}%
                 </div>
-                <div style="font-size: 10px; color: #2196F3">
+                <div style="font-size: 10px; color: var(--fc-link)">
                   Объём {{ emp.volume }}%
                 </div>
                 <div style="font-size: 10px" :style="{ color: emp.punctuality >= 80 ? '#27AE60' : emp.punctuality >= 50 ? '#F5A623' : '#E53935' }">
@@ -151,7 +151,7 @@
               >
                 {{ emp.score }}
               </div>
-              <div style="font-size: 10px; color: #aaa">
+              <div style="font-size: 10px; color: var(--fc-text-disabled)">
                 / 100
               </div>
             </div>
@@ -165,16 +165,16 @@
         <div class="col-12 col-sm-4">
           <q-card class="is-card" style="height: 100%">
             <q-card-section class="q-pa-sm">
-              <div class="text-caption text-weight-bold q-mb-xs" style="color: #333">
+              <div class="text-caption text-weight-bold q-mb-xs" style="color: var(--fc-text)">
                 Нагрузка
               </div>
-              <div v-if="roleExecutorLoad.length === 0" class="text-caption text-center q-pt-sm" style="color: #aaa; font-size: 10px">
+              <div v-if="roleExecutorLoad.length === 0" class="text-caption text-center q-pt-sm" style="color: var(--fc-text-disabled); font-size: 10px">
                 нет данных
               </div>
               <bar-chart
                 v-else
                 :labels="roleExecutorLoad.map(e => e.name.split(' ').slice(0, 2).join(' '))"
-                :datasets="[{ label: 'Стадий', data: roleExecutorLoad.map(e => e.active_stages), color: '#ffd93c' }]"
+                :datasets="[{ label: 'Стадий', data: roleExecutorLoad.map(e => e.active_stages), color: 'var(--fc-accent)' }]"
                 horizontal
               />
             </q-card-section>
@@ -183,7 +183,7 @@
         <div class="col-12 col-sm-4">
           <q-card class="is-card" style="height: 100%">
             <q-card-section class="q-pa-sm">
-              <div class="text-caption text-weight-bold q-mb-xs" style="color: #333">
+              <div class="text-caption text-weight-bold q-mb-xs" style="color: var(--fc-text)">
                 KPI %
               </div>
               <bar-chart
@@ -197,7 +197,7 @@
         <div class="col-12 col-sm-4">
           <q-card class="is-card" style="height: 100%">
             <q-card-section class="q-pa-sm">
-              <div class="text-caption text-weight-bold q-mb-xs" style="color: #333">
+              <div class="text-caption text-weight-bold q-mb-xs" style="color: var(--fc-text)">
                 Просрочки
               </div>
               <div v-if="roleOverdueChartData.labels.length === 0" class="text-caption text-center q-pt-sm" style="color: #27AE60; font-size: 10px">
@@ -217,10 +217,10 @@
       <!-- Опросы клиентов — KPI качества -->
       <q-card v-if="surveyStats" class="is-card q-mb-md">
         <q-card-section class="q-pb-none">
-          <div class="text-subtitle2 text-weight-bold" style="color: #333">
+          <div class="text-subtitle2 text-weight-bold" style="color: var(--fc-text)">
             Качество проектов (опросы клиентов)
           </div>
-          <div class="text-caption" style="color: #888">
+          <div class="text-caption" style="color: var(--fc-text-light)">
             {{ surveyStats.completed }}/{{ surveyStats.total }} завершённых опросов
           </div>
         </q-card-section>
@@ -228,13 +228,13 @@
           <div class="row q-col-gutter-sm">
             <div v-for="kpi in surveyKpis" :key="kpi.label" class="col-6 col-sm-4">
               <q-card flat bordered class="q-pa-sm text-center" style="border-radius: 8px">
-                <div class="text-caption" style="color: #888; font-size: 10px">
+                <div class="text-caption" style="color: var(--fc-text-light); font-size: 10px">
                   {{ kpi.label }}
                 </div>
                 <div class="text-weight-bold q-mt-xs" :style="{ color: kpiColor(kpi.value), fontSize: '18px' }">
                   {{ kpi.value != null ? kpi.value.toFixed(1) : '—' }}
                 </div>
-                <div class="text-caption" style="color: #ccc; font-size: 9px">
+                <div class="text-caption" style="color: var(--fc-border-card); font-size: 9px">
                   из {{ kpi.scale }}
                 </div>
               </q-card>
@@ -243,7 +243,7 @@
         </q-card-section>
       </q-card>
 
-      <div v-if="!dashboard && !loading" class="text-center q-pa-xl" style="color: #999">
+      <div v-if="!dashboard && !loading" class="text-center q-pa-xl" style="color: var(--fc-text-muted)">
         <q-icon name="analytics" size="48px" class="q-mb-sm" />
         <div>Нет данных</div>
       </div>
@@ -258,10 +258,10 @@
               {{ selectedEmp.full_name?.[0] || '?' }}
             </q-avatar>
             <div>
-              <div class="text-subtitle1 text-weight-bold" style="color: #333">
+              <div class="text-subtitle1 text-weight-bold" style="color: var(--fc-text)">
                 {{ selectedEmp.full_name || selectedEmp.name }}
               </div>
-              <div class="text-caption" style="color: #888">
+              <div class="text-caption" style="color: var(--fc-text-light)">
                 {{ selectedEmp.position }}
               </div>
             </div>
@@ -273,7 +273,7 @@
           <div class="row q-col-gutter-sm">
             <div class="col-6">
               <q-card flat bordered class="q-pa-sm text-center" style="border-radius: 8px">
-                <div class="text-caption" style="color: #888; font-size: 10px">
+                <div class="text-caption" style="color: var(--fc-text-light); font-size: 10px">
                   KPI выполнения
                 </div>
                 <div class="text-h6 text-weight-bold q-mt-xs" :style="{ color: kpiColor((selectedEmp.completion_rate || 0) / 10) }">
@@ -283,10 +283,10 @@
             </div>
             <div class="col-6">
               <q-card flat bordered class="q-pa-sm text-center" style="border-radius: 8px">
-                <div class="text-caption" style="color: #888; font-size: 10px">
+                <div class="text-caption" style="color: var(--fc-text-light); font-size: 10px">
                   Этапы
                 </div>
-                <div class="text-h6 text-weight-bold q-mt-xs" style="color: #333">
+                <div class="text-h6 text-weight-bold q-mt-xs" style="color: var(--fc-text)">
                   {{ selectedEmp.completed_stages || 0 }}/{{ selectedEmp.total_stages || 0 }}
                 </div>
               </q-card>
@@ -304,13 +304,13 @@
             <div class="row q-gutter-xs">
               <div v-for="sc in empSurveyScores(selectedEmp)" :key="sc.label" class="col">
                 <q-card flat bordered class="q-pa-sm text-center" style="border-radius: 8px; min-width: 60px">
-                  <div class="text-caption" style="color: #888; font-size: 10px">
+                  <div class="text-caption" style="color: var(--fc-text-light); font-size: 10px">
                     {{ sc.label }}
                   </div>
-                  <div class="text-weight-bold q-mt-xs" :style="{ color: sc.value != null ? kpiColor(sc.value) : '#ccc', fontSize: '18px' }">
+                  <div class="text-weight-bold q-mt-xs" :style="{ color: sc.value != null ? kpiColor(sc.value) : 'var(--fc-border-card)', fontSize: '18px' }">
                     {{ sc.value != null ? sc.value.toFixed(1) : '—' }}
                   </div>
-                  <div class="text-caption" style="color: #ccc; font-size: 9px">
+                  <div class="text-caption" style="color: var(--fc-border-card); font-size: 9px">
                     из {{ sc.scale }}
                   </div>
                 </q-card>
@@ -319,33 +319,33 @@
           </div>
           <!-- Выезды на объекты (ДАН и Менеджер) -->
           <div v-if="showVisitStats(selectedEmp)" class="q-mt-md">
-            <div class="text-caption q-mb-xs" style="color: #666; font-weight: 600; font-size: 11px">
+            <div class="text-caption q-mb-xs" style="color: var(--fc-text-secondary); font-weight: 600; font-size: 11px">
               Выезды на объекты
             </div>
             <div class="row q-gutter-xs">
               <div class="col">
                 <q-card flat bordered class="q-pa-sm text-center" style="border-radius: 8px">
-                  <div class="text-caption" style="color: #888; font-size: 10px">
+                  <div class="text-caption" style="color: var(--fc-text-light); font-size: 10px">
                     На объект
                   </div>
-                  <div class="text-weight-bold q-mt-xs" style="font-size: 18px; color: #333">
+                  <div class="text-weight-bold q-mt-xs" style="font-size: 18px; color: var(--fc-text)">
                     {{ selectedEmp.visits_object ?? 0 }}
                   </div>
                 </q-card>
               </div>
               <div class="col">
                 <q-card flat bordered class="q-pa-sm text-center" style="border-radius: 8px">
-                  <div class="text-caption" style="color: #888; font-size: 10px">
+                  <div class="text-caption" style="color: var(--fc-text-light); font-size: 10px">
                     К поставщику
                   </div>
-                  <div class="text-weight-bold q-mt-xs" style="font-size: 18px; color: #333">
+                  <div class="text-weight-bold q-mt-xs" style="font-size: 18px; color: var(--fc-text)">
                     {{ selectedEmp.visits_supplier ?? 0 }}
                   </div>
                 </q-card>
               </div>
               <div class="col">
                 <q-card flat bordered class="q-pa-sm text-center" style="border-radius: 8px">
-                  <div class="text-caption" style="color: #888; font-size: 10px">
+                  <div class="text-caption" style="color: var(--fc-text-light); font-size: 10px">
                     Просрочено
                   </div>
                   <div
@@ -361,7 +361,7 @@
 
           <!-- Просрочки этапов — inline, без второго диалога -->
           <div class="q-mt-md">
-            <div class="text-caption q-mb-xs" style="color: #666; font-weight: 600; font-size: 11px">
+            <div class="text-caption q-mb-xs" style="color: var(--fc-text-secondary); font-weight: 600; font-size: 11px">
               Просрочки этапов за период
             </div>
             <template v-if="overdueByName[selectedEmp.full_name || selectedEmp.name]">
@@ -387,17 +387,17 @@
                   v-for="(stage, idx) in overdueByName[selectedEmp.full_name || selectedEmp.name].stages"
                   :key="idx"
                   class="row items-start justify-between q-pa-xs"
-                  :style="{ background: idx % 2 ? '#fff' : '#fafafa', borderRadius: '4px', marginBottom: '2px' }"
+                  :style="{ background: idx % 2 ? '#fff' : 'var(--fc-bg-hover)', borderRadius: '4px', marginBottom: '2px' }"
                 >
                   <div style="flex: 1; min-width: 0">
-                    <div class="text-weight-medium" style="color: #333; font-size: 12px">
+                    <div class="text-weight-medium" style="color: var(--fc-text); font-size: 12px">
                       {{ stage.contract_number }}
-                      <span v-if="stage.address" style="color: #888; font-weight: 400"> · {{ stage.address }}</span>
+                      <span v-if="stage.address" style="color: var(--fc-text-light); font-weight: 400"> · {{ stage.address }}</span>
                     </div>
-                    <div style="color: #666; font-size: 11px">
+                    <div style="color: var(--fc-text-secondary); font-size: 11px">
                       {{ stage.stage_name }}
                     </div>
-                    <div style="color: #aaa; font-size: 10px">
+                    <div style="color: var(--fc-text-disabled); font-size: 10px">
                       Факт: {{ stage.actual_date }}
                     </div>
                   </div>
@@ -405,7 +405,7 @@
                 </div>
               </div>
             </template>
-            <div v-else class="text-caption q-pa-sm" style="background: #E8F5E9; color: #27AE60; border-radius: 8px">
+            <div v-else class="text-caption q-pa-sm" style="background: var(--fc-state-success-bg); color: #27AE60; border-radius: 8px">
               Все этапы сданы в срок
             </div>
           </div>
@@ -642,7 +642,7 @@ function empSurveyScores(emp) {
 }
 
 function kpiColor(v) {
-  if (v == null) return '#888'
+  if (v == null) return 'var(--fc-text-light)'
   if (v >= 8) return '#27AE60'
   if (v >= 6) return '#F39C12'
   return '#E74C3C'
@@ -661,7 +661,7 @@ async function exportPDF() {
   const popup = window.open('', '_blank', 'width=1200,height=800')
   if (!popup) { pdfLoading.value = false; return }
   try { popup.moveTo(0, 0); popup.resizeTo(screen.width, screen.height) } catch(_e) {}
-  popup.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Загрузка...</title></head><body style="font-family:Arial;padding:40px;color:#555;text-align:center"><p style="font-size:18px">&#8987; Формирование отчёта...</p></body></html>')
+  popup.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Загрузка...</title></head><body style="font-family:Arial;padding:40px;color:var(--fc-text-medium);text-align:center"><p style="font-size:18px">&#8987; Формирование отчёта...</p></body></html>')
   popup.document.close()
 
   try {
@@ -691,7 +691,7 @@ async function exportPDF() {
     else if (filters.value.quarter) periodLabel += ' · Q' + filters.value.quarter
 
     function shortN(n) { if (!n) return '?'; const p = n.split(' '); return p.length >= 2 ? p[0] + ' ' + p[1] : n }
-    function kHex(v) { if (v === null || v === undefined) return '#888'; if (v >= 8) return '#27AE60'; if (v >= 6) return '#F39C12'; return '#E74C3C' }
+    function kHex(v) { if (v === null || v === undefined) return 'var(--fc-text-light)'; if (v >= 8) return '#27AE60'; if (v >= 6) return '#F39C12'; return '#E74C3C' }
 
     function filterRole(emps, rt) {
       const _p = (e) => e.position || ''; const _s = (e) => e.secondary_position || ''
@@ -743,9 +743,9 @@ async function exportPDF() {
         { label: 'Ср. KPI', value: totalEmps ? `${avgKpi}%` : '—' },
         { label: 'С активными этапами', value: activeEmps },
       ].map(k =>
-        '<td style="text-align:center;padding:8px 14px;border:1px solid #eee">' +
-        `<div style="font-size:20px;font-weight:700;color:#333">${k.value}</div>` +
-        `<div style="font-size:9px;color:#888;margin-top:2px">${k.label}</div></td>`,
+        '<td style="text-align:center;padding:8px 14px;border:1px solid var(--fc-border-light)">' +
+        `<div style="font-size:20px;font-weight:700;color:var(--fc-text)">${k.value}</div>` +
+        `<div style="font-size:9px;color:var(--fc-text-light);margin-top:2px">${k.label}</div></td>`,
       ).join('')
 
       let roleHtml = ''
@@ -753,7 +753,7 @@ async function exportPDF() {
       for (const role of roles) {
         const rEmps = filterRole(emps, role.code).sort((a, b) => b.completion_rate - a.completion_rate)
         if (!rEmps.length) continue
-        const roleDivider = roleIndex > 0 ? '<hr style="border:none;border-top:2px solid #ddd;margin:18px 0 14px">' : ''
+        const roleDivider = roleIndex > 0 ? '<hr style="border:none;border-top:2px solid var(--fc-border);margin:18px 0 14px">' : ''
         roleIndex++
 
         const kpiKey = `kpi_${key}_${role.code}`
@@ -773,9 +773,9 @@ async function exportPDF() {
           const scoreItems = empSurveyScores(e)
           const scoresCells = scoreItems.map(s => {
             if (s.value === null || s.value === undefined) {
-              return `<span style="color:#ccc;font-size:9px;white-space:nowrap">${s.label}: —</span>`
+              return `<span style="color:var(--fc-border-card);font-size:9px;white-space:nowrap">${s.label}: —</span>`
             }
-            return `<span style="color:${kHex(s.value)};font-size:9px;font-weight:600;white-space:nowrap">${s.label}: ${s.value.toFixed(1)}<span style="color:#aaa;font-weight:400">/${s.scale}</span></span>`
+            return `<span style="color:${kHex(s.value)};font-size:9px;font-weight:600;white-space:nowrap">${s.label}: ${s.value.toFixed(1)}<span style="color:var(--fc-text-disabled);font-weight:400">/${s.scale}</span></span>`
           }).join(' &nbsp;')
           let visitsTd = ''
           if (hasVisits) {
@@ -790,9 +790,9 @@ async function exportPDF() {
               visitsTd = '<td style="padding:5px 8px"></td>'
             }
           }
-          return `<tr style="background:${i % 2 ? '#fff' : '#fafafa'}">` +
+          return `<tr style="background:${i % 2 ? '#fff' : 'var(--fc-bg-hover)'}">` +
             `<td style="padding:5px 8px">${e.full_name || e.name || ''}</td>` +
-            `<td style="padding:5px 8px;color:#888;font-size:10px">${e.position || ''}</td>` +
+            `<td style="padding:5px 8px;color:var(--fc-text-light);font-size:10px">${e.position || ''}</td>` +
             `<td style="padding:5px 8px;text-align:right;font-weight:700;color:${clr}">${kpi.toFixed(0)}%</td>` +
             `<td style="padding:5px 8px;text-align:right">${e.completed_stages || 0}/${e.total_stages || 0}</td>` +
             `<td style="padding:5px 8px">${scoresCells}</td>` +
@@ -804,7 +804,7 @@ async function exportPDF() {
         roleHtml += `${roleDivider}<div class="ct">${role.label} — сравнение KPI</div>
         <canvas id="${kpiKey}" width="700" height="${canvH}" style="break-inside:avoid;margin-bottom:6px"></canvas>
         <table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:14px">
-          <thead><tr style="background:#f5f5f5">
+          <thead><tr style="background:var(--fc-bg-alt)">
             <th style="padding:5px 8px;text-align:left">Сотрудник</th>
             <th style="padding:5px 8px;text-align:left">Должность</th>
             <th style="padding:5px 8px;text-align:right">KPI%</th>
@@ -827,9 +827,9 @@ async function exportPDF() {
         ].filter(k => k.value !== null && k.value !== undefined)
         if (kpis.length) {
           const cells = kpis.map(k =>
-            '<td style="text-align:center;padding:6px 10px;border:1px solid #eee">' +
+            '<td style="text-align:center;padding:6px 10px;border:1px solid var(--fc-border-light)">' +
             `<div style="font-size:15px;font-weight:700;color:${kHex(k.value)}">${k.value.toFixed(1)}</div>` +
-            `<div style="font-size:9px;color:#888">${k.label} / ${k.scale}</div></td>`,
+            `<div style="font-size:9px;color:var(--fc-text-light)">${k.label} / ${k.scale}</div></td>`,
           ).join('')
           survHtml = `<div class="ct">Опросы клиентов (${survey.completed}/${survey.total} завершено)</div>
           <table style="border-collapse:collapse;margin-bottom:14px"><tr>${cells}</tr></table>`
@@ -837,7 +837,7 @@ async function exportPDF() {
       }
 
       const loadCanvH = Math.max(60, loadData.length * 24)
-      body += `<h2 style="margin:24px 0 8px;font-size:15px;color:#333;border-bottom:2px solid #eee;padding-bottom:4px;${pageBreak}">${title}</h2>
+      body += `<h2 style="margin:24px 0 8px;font-size:15px;color:var(--fc-text);border-bottom:2px solid var(--fc-border-light);padding-bottom:4px;${pageBreak}">${title}</h2>
       <table style="border-collapse:collapse;margin-bottom:10px"><tr>${kpiRowHtml}</tr></table>
       ${loadData.length ? `<div class="ct">Нагрузка исполнителей (активных стадий)</div>
       <canvas id="load_${key}" width="700" height="${loadCanvH}" style="break-inside:avoid;margin-bottom:12px"></canvas>` : ''}
@@ -847,7 +847,7 @@ async function exportPDF() {
     let chartCalls = ''
     for (const sec of sections) {
       if (cd[`load_${sec.key}`]) {
-        chartCalls += `try{hBar('load_${sec.key}',cd.load_${sec.key}.labels,cd.load_${sec.key}.data,'Стадий','#ffd93c');}catch(e){}\n`
+        chartCalls += `try{hBar('load_${sec.key}',cd.load_${sec.key}.labels,cd.load_${sec.key}.data,'Стадий','var(--fc-accent)');}catch(e){}\n`
       }
       for (const role of sec.roles) {
         const k = `kpi_${sec.key}_${role.code}`
@@ -860,7 +860,7 @@ async function exportPDF() {
     chartCalls = ''
     for (const sec of sections) {
       if (cd[`load_${sec.key}`]) {
-        chartCalls += `try{hBar('load_${sec.key}',cd['load_${sec.key}'].labels,cd['load_${sec.key}'].data,'Стадий','#ffd93c');}catch(e){}\n`
+        chartCalls += `try{hBar('load_${sec.key}',cd['load_${sec.key}'].labels,cd['load_${sec.key}'].data,'Стадий','var(--fc-accent)');}catch(e){}\n`
       }
       for (const role of sec.roles) {
         const k = `kpi_${sec.key}_${role.code}`
@@ -876,10 +876,10 @@ async function exportPDF() {
     const html = `<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8">
     <title>Отчёты по сотрудникам</title>
     <style>
-      body { font-family: Arial, sans-serif; padding: 16px; color: #333; font-size: 12px; }
+      body { font-family: Arial, sans-serif; padding: 16px; color: var(--fc-text); font-size: 12px; }
       h1 { font-size: 18px; margin: 0 0 3px; }
-      .sub { color: #888; font-size: 11px; margin-bottom: 14px; }
-      .ct { font-size: 11px; color: #555; font-weight: bold; margin: 10px 0 4px; }
+      .sub { color: var(--fc-text-light); font-size: 11px; margin-bottom: 14px; }
+      .ct { font-size: 11px; color: var(--fc-text-medium); font-weight: bold; margin: 10px 0 4px; }
       canvas { display: block; max-width: 100%; break-inside: avoid; }
       @page { size: A4 portrait; margin: 10mm; }
       @media print { body { padding: 0; } }
@@ -936,8 +936,8 @@ onMounted(() => loadData())
 .reset-btn {
   height: 40px;
   padding: 0 12px;
-  background: #ffd93c;
-  color: #333;
+  background: var(--fc-accent);
+  color: var(--fc-text);
   border: none;
   border-radius: 4px;
   cursor: pointer;
@@ -957,10 +957,10 @@ onMounted(() => loadData())
 .emp-pdf-btn {
   height: 40px;
   padding: 0 14px;
-  border: 1px solid #2196f3;
+  border: 1px solid var(--fc-link);
   border-radius: 4px;
-  background: white;
-  color: #2196f3;
+  background: var(--fc-bg);
+  color: var(--fc-link);
   font-size: 12px;
   font-family: inherit;
   cursor: pointer;
@@ -972,6 +972,6 @@ onMounted(() => loadData())
   white-space: nowrap;
 }
 
-.emp-pdf-btn:hover { background: #e3f2fd; }
+.emp-pdf-btn:hover { background: var(--fc-selected-bg); }
 .emp-pdf-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 </style>

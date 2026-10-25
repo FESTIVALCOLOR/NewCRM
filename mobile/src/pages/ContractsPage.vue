@@ -71,7 +71,7 @@
         </div>
       </div>
 
-      <div v-if="!loading" class="text-caption" style="color: #888">
+      <div v-if="!loading" class="text-caption" style="color: var(--fc-text-light)">
         Договоров: {{ filtered.length }}
       </div>
 
@@ -164,7 +164,7 @@
     </q-pull-to-refresh>
     <!-- FAB создания (если есть право) -->
     <q-page-sticky v-if="canCreate" position="bottom-right" :offset="[18, 80]">
-      <q-btn fab icon="add" style="background: #ffd93c; color: #333" @click="showForm = true" />
+      <q-btn fab icon="add" style="background: var(--fc-accent); color: var(--fc-text)" @click="showForm = true" />
     </q-page-sticky>
 
     <contract-form-dialog v-model="showForm" @saved="loadContracts" />
@@ -234,11 +234,11 @@ function agentColor(agentName) {
 
 function cardBgStyle(contract) {
   const s = contract.status || ''
-  if (s.includes('СДАН') || s.includes('Сдан')) return { background: '#E8F5E9' }
-  if (s.includes('НАДЗОР') || s.includes('надзор')) return { background: '#E3F2FD' }
+  if (s.includes('СДАН') || s.includes('Сдан')) return { background: 'var(--fc-state-success-bg)' }
+  if (s.includes('НАДЗОР') || s.includes('надзор')) return { background: 'var(--fc-selected-bg)' }
   if (s.includes('РАСТОРГНУТ') || s.includes('Расторгнут')) return { background: '#FFEBEE' }
-  if (s === 'В работе') return { background: '#F5F5F5' }
-  if (s === 'Новый заказ' || s === 'Новый') return { background: '#FFFFFF' }
+  if (s === 'В работе') return { background: 'var(--fc-bg-alt)' }
+  if (s === 'Новый заказ' || s === 'Новый') return { background: 'var(--fc-bg)' }
   return {}
 }
 
@@ -326,23 +326,23 @@ onMounted(() => loadContracts())
   display: flex;
   align-items: center;
   padding: 4px 10px;
-  background: #F5F5F5;
-  border: 1px solid #E0E0E0;
+  background: var(--fc-bg-alt);
+  border: 1px solid var(--fc-border-light);
   border-radius: 8px 8px 0 0;
   font-size: 10px;
   font-weight: bold;
-  color: #888;
+  color: var(--fc-text-light);
   gap: 6px;
 }
 .contract-row-ls {
   display: flex;
   align-items: center;
   padding: 5px 10px;
-  border: 1px solid #E0E0E0;
+  border: 1px solid var(--fc-border-light);
   border-top: none;
   gap: 6px;
   cursor: pointer;
-  background: #fff;
+  background: var(--fc-bg);
   min-height: 32px;
 }
 .contract-row-ls:last-of-type { border-radius: 0 0 8px 8px; }
@@ -357,21 +357,21 @@ onMounted(() => loadContracts())
 .lh-status  { width: 100px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
 .lh-agent   { width: 80px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
 /* значения в строках */
-.ls-num    { font-weight: bold; color: #333; line-height: 1; }
-.ls-addr   { color: #444; }
-.ls-meta   { color: #888; }
-.ls-amount { color: #555; font-weight: 500; }
+.ls-num    { font-weight: bold; color: var(--fc-text); line-height: 1; }
+.ls-addr   { color: var(--fc-text-medium); }
+.ls-meta   { color: var(--fc-text-light); }
+.ls-amount { color: var(--fc-text-medium); font-weight: 500; }
 
 /* Портретные карточки договоров */
 .contract-card {
-  border: 1px solid #E0E0E0;
+  border: 1px solid var(--fc-border-light);
   border-radius: 8px;
   margin-bottom: 6px;
   padding: 8px 12px;
   cursor: pointer;
-  background: #fff;
+  background: var(--fc-bg);
 }
-.contract-card:active { background: #f5f5f5; }
+.contract-card:active { background: var(--fc-bg-alt); }
 .contract-row1 {
   display: flex;
   align-items: center;
@@ -381,7 +381,7 @@ onMounted(() => loadContracts())
 .contract-num {
   font-size: 12px;
   font-weight: bold;
-  color: #333;
+  color: var(--fc-text);
 }
 .contract-row2 {
   display: flex;
@@ -391,7 +391,7 @@ onMounted(() => loadContracts())
 }
 .contract-addr {
   font-size: 12px;
-  color: #555;
+  color: var(--fc-text-medium);
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -415,7 +415,7 @@ onMounted(() => loadContracts())
 }
 .contract-type-info {
   font-size: 10px;
-  color: #999;
+  color: var(--fc-text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -428,7 +428,7 @@ onMounted(() => loadContracts())
 }
 .contract-amount {
   font-size: 10px;
-  color: #555;
+  color: var(--fc-text-medium);
   font-weight: 500;
   white-space: nowrap;
 }

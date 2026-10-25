@@ -5,17 +5,17 @@
         <q-icon name="add_to_home_screen" size="22px" color="green-7" class="pwa-banner__icon" />
 
         <div class="pwa-banner__text">
-          <div style="font-size: 13px; font-weight: 600; line-height: 1.3; color: #222">
+          <div style="font-size: 13px; font-weight: 600; line-height: 1.3; color: var(--fc-text)">
             Добавить на главный экран
           </div>
           <!-- iOS: ручные инструкции (Safari Share → «На экран "Домой"») -->
-          <div v-if="isIos" class="text-caption" style="margin-top: 2px; line-height: 1.4; color: #555">
+          <div v-if="isIos" class="text-caption" style="margin-top: 2px; line-height: 1.4; color: var(--fc-text-medium)">
             В Safari нажмите
             <q-icon name="ios_share" size="13px" color="blue-7" style="vertical-align: middle" />
             → «На экран "Домой"» — нужно для push-уведомлений
           </div>
           <!-- Android/Chrome: одна кнопка -->
-          <div v-else class="text-caption" style="margin-top: 2px; color: #777">
+          <div v-else class="text-caption" style="margin-top: 2px; color: var(--fc-text-light)">
             Быстрый доступ без браузера
           </div>
         </div>
@@ -80,8 +80,8 @@ async function doInstall() {
   left: 0;
   right: 0;
   z-index: 9999;
-  background: #fff;
-  border-top: 1px solid #e0e0e0;
+  background: var(--fc-bg);
+  border-top: 1px solid var(--fc-border-light);
   box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.10);
   padding: 10px 14px 16px;
 }

@@ -48,7 +48,7 @@
       </div>
 
       <!-- Счётчик -->
-      <div v-if="!clientsStore.loading" class="text-caption" style="color: #888">
+      <div v-if="!clientsStore.loading" class="text-caption" style="color: var(--fc-text-light)">
         Найдено: {{ displayedClients.length }}
         <span v-if="clientsStore.totalCount"> из {{ clientsStore.totalCount }}</span>
       </div>
@@ -143,7 +143,7 @@
 
     <!-- Круглая жёлтая кнопка добавления (если есть право) -->
     <q-page-sticky v-if="canCreate" position="bottom-right" :offset="[18, 80]">
-      <q-btn fab icon="add" style="background: #ffd93c; color: #333" @click="showForm = true" />
+      <q-btn fab icon="add" style="background: var(--fc-accent); color: var(--fc-text)" @click="showForm = true" />
     </q-page-sticky>
 
     <!-- Форма создания/редактирования -->
@@ -169,7 +169,7 @@ const canCreate = computed(() => can('clients.create'))
 const showForm = ref(false)
 
 const dashItems = computed(() => [
-  { label: 'Всего клиентов', value: clientsStore.items?.length || 0, color: '#333' },
+  { label: 'Всего клиентов', value: clientsStore.items?.length || 0, color: 'var(--fc-text)' },
   { label: 'Физ. лица', value: clientsStore.items?.filter(c => !c.organization_name).length || 0, color: '#27AE60' },
   { label: 'Юр. лица', value: clientsStore.items?.filter(c => c.organization_name).length || 0, color: '#3498DB' },
 ])
@@ -263,23 +263,23 @@ onMounted(() => {
   display: flex;
   align-items: center;
   padding: 4px 10px;
-  background: #F5F5F5;
-  border: 1px solid #E0E0E0;
+  background: var(--fc-bg-alt);
+  border: 1px solid var(--fc-border-light);
   border-radius: 8px 8px 0 0;
   font-size: 10px;
   font-weight: bold;
-  color: #888;
+  color: var(--fc-text-light);
   gap: 6px;
 }
 .client-row-ls {
   display: flex;
   align-items: center;
   padding: 5px 10px;
-  border: 1px solid #E0E0E0;
+  border: 1px solid var(--fc-border-light);
   border-top: none;
   gap: 6px;
   cursor: pointer;
-  background: #fff;
+  background: var(--fc-bg);
   min-height: 32px;
 }
 .client-row-ls:last-of-type { border-radius: 0 0 8px 8px; }
@@ -290,19 +290,19 @@ onMounted(() => {
 .clh-email { width: 160px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
 .clh-type  { width: 46px; flex-shrink: 0; }
 /* значения */
-.cls-name  { font-size: 12px; font-weight: 500; color: #333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cls-meta  { color: #666; }
+.cls-name  { font-size: 12px; font-weight: 500; color: var(--fc-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cls-meta  { color: var(--fc-text-secondary); }
 
 /* Портретные карточки клиентов */
 .client-card {
-  border: 1px solid #E0E0E0;
+  border: 1px solid var(--fc-border-light);
   border-radius: 8px;
   margin-bottom: 6px;
   padding: 8px 12px;
   cursor: pointer;
-  background: #fff;
+  background: var(--fc-bg);
 }
-.client-card:active { background: #f5f5f5; }
+.client-card:active { background: var(--fc-bg-alt); }
 .client-row1 {
   display: flex;
   align-items: center;
@@ -312,7 +312,7 @@ onMounted(() => {
 .client-name {
   font-size: 13px;
   font-weight: 500;
-  color: #333;
+  color: var(--fc-text);
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -325,11 +325,11 @@ onMounted(() => {
 }
 .client-phone {
   font-size: 11px;
-  color: #666;
+  color: var(--fc-text-secondary);
 }
 .client-email {
   font-size: 11px;
-  color: #888;
+  color: var(--fc-text-light);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

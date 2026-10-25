@@ -1,8 +1,8 @@
 <template>
   <q-page padding>
-    <q-card class="q-mb-md" style="border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.08)">
+    <q-card class="q-mb-md" style="border-radius: 8px; box-shadow: 0 1px 3px var(--fc-shadow-sm)">
       <q-card-section>
-        <div class="text-subtitle1 text-weight-bold" style="color: #333">
+        <div class="text-subtitle1 text-weight-bold" style="color: var(--fc-text)">
           Настройки уведомлений
         </div>
         <div class="text-caption text-grey-7">
@@ -17,9 +17,9 @@
 
     <template v-else>
       <!-- Каналы -->
-      <q-card class="q-mb-md" style="border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.08)">
+      <q-card class="q-mb-md" style="border-radius: 8px; box-shadow: 0 1px 3px var(--fc-shadow-sm)">
         <q-card-section class="q-pb-xs">
-          <div class="text-subtitle2 text-weight-bold" style="color: #333">
+          <div class="text-subtitle2 text-weight-bold" style="color: var(--fc-text)">
             Каналы
           </div>
         </q-card-section>
@@ -47,7 +47,7 @@
             </q-item-section>
           </q-item>
           <!-- iOS: подсказка добавить на экран «Домой» -->
-          <q-item v-if="isIosSafari" style="background: #fff8e1; border-radius: 0 0 8px 8px">
+          <q-item v-if="isIosSafari" style="background: var(--fc-state-warning-bg); border-radius: 0 0 8px 8px">
             <q-item-section avatar>
               <q-icon name="ios_share" color="orange-8" size="22px" />
             </q-item-section>
@@ -66,9 +66,9 @@
       </q-card>
 
       <!-- Типы событий -->
-      <q-card class="q-mb-md" style="border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.08)">
+      <q-card class="q-mb-md" style="border-radius: 8px; box-shadow: 0 1px 3px var(--fc-shadow-sm)">
         <q-card-section class="q-pb-xs">
-          <div class="text-subtitle2 text-weight-bold" style="color: #333">
+          <div class="text-subtitle2 text-weight-bold" style="color: var(--fc-text)">
             Типы событий
           </div>
         </q-card-section>
@@ -143,9 +143,9 @@
       </q-card>
 
       <!-- Типы проектов -->
-      <q-card class="q-mb-md" style="border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.08)">
+      <q-card class="q-mb-md" style="border-radius: 8px; box-shadow: 0 1px 3px var(--fc-shadow-sm)">
         <q-card-section class="q-pb-xs">
-          <div class="text-subtitle2 text-weight-bold" style="color: #333">
+          <div class="text-subtitle2 text-weight-bold" style="color: var(--fc-text)">
             Типы проектов
           </div>
         </q-card-section>
@@ -170,9 +170,9 @@
       </q-card>
 
       <!-- Дополнительно — только для руководства (у исполнителей нет подчинённых) -->
-      <q-card v-if="!isExecutor" class="q-mb-md" style="border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.08)">
+      <q-card v-if="!isExecutor" class="q-mb-md" style="border-radius: 8px; box-shadow: 0 1px 3px var(--fc-shadow-sm)">
         <q-card-section class="q-pb-xs">
-          <div class="text-subtitle2 text-weight-bold" style="color: #333">
+          <div class="text-subtitle2 text-weight-bold" style="color: var(--fc-text)">
             Дополнительно
           </div>
         </q-card-section>

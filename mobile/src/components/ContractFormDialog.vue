@@ -7,7 +7,7 @@
     transition-hide="slide-down"
   >
     <q-card>
-      <q-toolbar style="background: #ffd93c; color: #333">
+      <q-toolbar style="background: var(--fc-accent); color: var(--fc-text)">
         <q-btn
           flat
           round
@@ -161,7 +161,7 @@
           <!-- Срок выполнения (авторасчёт / ручной) -->
           <div>
             <div class="row items-center q-gutter-xs q-mb-xs">
-              <div class="text-caption text-weight-bold" style="color: #333">
+              <div class="text-caption text-weight-bold" style="color: var(--fc-text)">
                 Срок выполнения (раб. дней)
               </div>
               <q-badge :color="manualPeriod ? 'orange' : 'positive'" :label="manualPeriod ? 'Ручной' : 'Авто'" dense style="font-size: 9px" />
@@ -171,7 +171,7 @@
                 size="xs"
                 :label="manualPeriod ? 'Авто' : 'Вручную'"
                 no-caps
-                style="font-size: 10px; color: #666"
+                style="font-size: 10px; color: var(--fc-text-secondary)"
                 @click="toggleManualPeriod"
               />
               <q-btn
@@ -195,7 +195,7 @@
             />
           </div>
 
-          <div class="text-subtitle2 text-weight-bold q-mt-md" style="color: #333">
+          <div class="text-subtitle2 text-weight-bold q-mt-md" style="color: var(--fc-text)">
             Финансы
           </div>
 
@@ -251,8 +251,8 @@
   <!-- Диалог: таблица сроков -->
   <q-dialog v-model="showTermTable">
     <q-card style="min-width: 300px; max-width: 520px; width: 92vw">
-      <q-toolbar style="background: #f5f5f5; min-height: 44px">
-        <q-toolbar-title class="text-weight-bold" style="font-size: 13px; color: #333">
+      <q-toolbar style="background: var(--fc-bg-alt); min-height: 44px">
+        <q-toolbar-title class="text-weight-bold" style="font-size: 13px; color: var(--fc-text)">
           {{ form.project_type === 'Шаблонный' ? 'Таблица сроков (шаблонные)' : 'Таблица сроков (индивидуальные)' }}
         </q-toolbar-title>
         <q-btn
@@ -260,7 +260,7 @@
           round
           dense
           icon="close"
-          style="color: #333"
+          style="color: var(--fc-text)"
           @click="showTermTable = false"
         />
       </q-toolbar>
@@ -268,39 +268,39 @@
       <q-card-section class="q-pa-sm">
         <!-- Индивидуальный -->
         <template v-if="form.project_type !== 'Шаблонный'">
-          <div class="text-caption q-mb-sm" style="color: #666">
+          <div class="text-caption q-mb-sm" style="color: var(--fc-text-secondary)">
             Срок договора (рабочих дней) в зависимости от площади и подтипа:
           </div>
           <div style="overflow-x: auto">
             <table style="width: 100%; border-collapse: collapse; font-size: 12px">
               <thead>
                 <tr>
-                  <th style="background:#f5f5f5; border:1px solid #e0e0e0; padding:5px 6px; text-align:center; white-space:nowrap">
+                  <th style="background:var(--fc-bg-alt); border:1px solid var(--fc-border-light); padding:5px 6px; text-align:center; white-space:nowrap">
                     Площадь (м²)
                   </th>
-                  <th style="background:#f5f5f5; border:1px solid #e0e0e0; padding:5px 6px; text-align:center">
+                  <th style="background:var(--fc-bg-alt); border:1px solid var(--fc-border-light); padding:5px 6px; text-align:center">
                     Полный
                   </th>
-                  <th style="background:#f5f5f5; border:1px solid #e0e0e0; padding:5px 6px; text-align:center">
+                  <th style="background:var(--fc-bg-alt); border:1px solid var(--fc-border-light); padding:5px 6px; text-align:center">
                     Эскизный
                   </th>
-                  <th style="background:#f5f5f5; border:1px solid #e0e0e0; padding:5px 6px; text-align:center">
+                  <th style="background:var(--fc-bg-alt); border:1px solid var(--fc-border-light); padding:5px 6px; text-align:center">
                     Планировочный
                   </th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="row in individualTableRows" :key="row.label">
-                  <td style="border:1px solid #e0e0e0; padding:4px 6px; text-align:center; white-space:nowrap">
+                  <td style="border:1px solid var(--fc-border-light); padding:4px 6px; text-align:center; white-space:nowrap">
                     {{ row.label }}
                   </td>
-                  <td style="border:1px solid #e0e0e0; padding:4px 6px; text-align:center">
+                  <td style="border:1px solid var(--fc-border-light); padding:4px 6px; text-align:center">
                     {{ row.full }}
                   </td>
-                  <td style="border:1px solid #e0e0e0; padding:4px 6px; text-align:center">
+                  <td style="border:1px solid var(--fc-border-light); padding:4px 6px; text-align:center">
                     {{ row.sketch }}
                   </td>
-                  <td style="border:1px solid #e0e0e0; padding:4px 6px; text-align:center">
+                  <td style="border:1px solid var(--fc-border-light); padding:4px 6px; text-align:center">
                     {{ row.plan }}
                   </td>
                 </tr>
@@ -311,48 +311,48 @@
 
         <!-- Шаблонный -->
         <template v-else>
-          <div class="text-caption q-mb-sm" style="color: #666; line-height: 1.5">
+          <div class="text-caption q-mb-sm" style="color: var(--fc-text-secondary); line-height: 1.5">
             Срок договора (рабочих дней) для шаблонных проектов.<br>
             Стандарт и Стандарт с визуализацией зависят от площади и этажей.<br>
             Ванная комната — фиксированный срок.<br>
-            <span style="color:#888">Этажность: Стандарт +10 раб.дн. / Стандарт+Визуал. +20 раб.дн. за каждый доп. этаж.</span>
+            <span style="color:var(--fc-text-light)">Этажность: Стандарт +10 раб.дн. / Стандарт+Визуал. +20 раб.дн. за каждый доп. этаж.</span>
           </div>
           <div style="overflow-x: auto">
             <table style="width: 100%; border-collapse: collapse; font-size: 11px">
               <thead>
                 <tr>
-                  <th style="background:#f5f5f5; border:1px solid #e0e0e0; padding:5px 4px; text-align:center; white-space:nowrap">
+                  <th style="background:var(--fc-bg-alt); border:1px solid var(--fc-border-light); padding:5px 4px; text-align:center; white-space:nowrap">
                     Площадь (м²)
                   </th>
-                  <th style="background:#f5f5f5; border:1px solid #e0e0e0; padding:5px 4px; text-align:center">
+                  <th style="background:var(--fc-bg-alt); border:1px solid var(--fc-border-light); padding:5px 4px; text-align:center">
                     Стандарт
                   </th>
-                  <th style="background:#f5f5f5; border:1px solid #e0e0e0; padding:5px 4px; text-align:center">
+                  <th style="background:var(--fc-bg-alt); border:1px solid var(--fc-border-light); padding:5px 4px; text-align:center">
                     Ст.+Визуал.
                   </th>
-                  <th style="background:#f5f5f5; border:1px solid #e0e0e0; padding:5px 4px; text-align:center">
+                  <th style="background:var(--fc-bg-alt); border:1px solid var(--fc-border-light); padding:5px 4px; text-align:center">
                     Ванная
                   </th>
-                  <th style="background:#f5f5f5; border:1px solid #e0e0e0; padding:5px 4px; text-align:center">
+                  <th style="background:var(--fc-bg-alt); border:1px solid var(--fc-border-light); padding:5px 4px; text-align:center">
                     Ванная+Виз.
                   </th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="row in templateTableRows" :key="row.label">
-                  <td style="border:1px solid #e0e0e0; padding:4px 4px; text-align:center; white-space:nowrap">
+                  <td style="border:1px solid var(--fc-border-light); padding:4px 4px; text-align:center; white-space:nowrap">
                     {{ row.label }}
                   </td>
-                  <td style="border:1px solid #e0e0e0; padding:4px 4px; text-align:center">
+                  <td style="border:1px solid var(--fc-border-light); padding:4px 4px; text-align:center">
                     {{ row.std }}
                   </td>
-                  <td style="border:1px solid #e0e0e0; padding:4px 4px; text-align:center">
+                  <td style="border:1px solid var(--fc-border-light); padding:4px 4px; text-align:center">
                     {{ row.stdViz }}
                   </td>
-                  <td style="border:1px solid #e0e0e0; padding:4px 4px; text-align:center">
+                  <td style="border:1px solid var(--fc-border-light); padding:4px 4px; text-align:center">
                     {{ row.bath }}
                   </td>
-                  <td style="border:1px solid #e0e0e0; padding:4px 4px; text-align:center">
+                  <td style="border:1px solid var(--fc-border-light); padding:4px 4px; text-align:center">
                     {{ row.bathViz }}
                   </td>
                 </tr>
@@ -635,20 +635,20 @@ async function save() {
 }
 
 .client-add-btn:hover {
-  background: rgba(0, 0, 0, 0.06);
+  background: var(--fc-shadow-xs);
 }
 
 .client-add-btn:active {
-  background: rgba(0, 0, 0, 0.12);
+  background: var(--fc-shadow-sm);
 }
 
 .save-btn {
   height: 34px;
   padding: 0 14px;
-  border: 1px solid #333;
+  border: 1px solid var(--fc-text);
   border-radius: 8px;
   background: transparent;
-  color: #333;
+  color: var(--fc-text);
   font-size: 13px;
   font-family: inherit;
   cursor: pointer;

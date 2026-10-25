@@ -1,7 +1,7 @@
 <template>
   <q-page>
     <!-- Тулбар — pill toggle как в CRM -->
-    <div style="border-bottom: 1px solid #E0E0E0; padding: 6px 8px">
+    <div style="border-bottom: 1px solid var(--fc-border-light); padding: 6px 8px">
       <div class="row items-center no-wrap">
         <div class="toggle-pills">
           <button :class="{ active: !showArchive }" @click="showArchive = false; loadCards()">
@@ -12,7 +12,7 @@
           </button>
         </div>
         <q-space />
-        <div class="text-caption" style="color: #888">
+        <div class="text-caption" style="color: var(--fc-text-light)">
           {{ cards.length }} объектов
         </div>
       </div>
@@ -27,7 +27,7 @@
     <template v-else>
       <!-- Архив -->
       <div v-if="showArchive" class="q-pa-sm">
-        <div v-if="cards.length === 0" class="text-center q-py-xl" style="color: #999">
+        <div v-if="cards.length === 0" class="text-center q-py-xl" style="color: var(--fc-text-muted)">
           Архив пуст
         </div>
         <div v-else class="archive-grid">
@@ -43,20 +43,20 @@
             <q-card-section class="q-pa-sm">
               <!-- Номер договора + бейдж статуса -->
               <div class="row items-center justify-between q-mb-xs">
-                <div style="color: #888; font-size: 10px">
+                <div style="color: var(--fc-text-light); font-size: 10px">
                   Договор: {{ card.contract_number || `#${card.id}` }}
                 </div>
                 <q-badge :color="sColor(card)" :label="card.contract_status || card.column_name || 'Архив'" dense style="font-size: 9px" />
               </div>
               <!-- Адрес -->
-              <div class="text-weight-bold q-mb-xs" style="font-size: 14px; color: #222; word-wrap: break-word">
+              <div class="text-weight-bold q-mb-xs" style="font-size: 14px; color: var(--fc-text); word-wrap: break-word">
                 {{ card.address || 'Без адреса' }}
               </div>
               <!-- Разделитель -->
-              <div style="height: 1px; background: #DDD" class="q-mb-xs" />
+              <div style="height: 1px; background: var(--fc-border)" class="q-mb-xs" />
               <!-- Площадь + город + агент -->
               <div class="row items-center justify-between q-mb-xs">
-                <div style="font-size: 11px; color: #888">
+                <div style="font-size: 11px; color: var(--fc-text-light)">
                   <span v-if="card.area">{{ card.area }} м²</span>
                   <span v-if="card.area && card.city"> | </span>
                   <span v-if="card.city">{{ card.city }}</span>
@@ -69,24 +69,24 @@
               <!-- Команда (сворачиваемая) -->
               <div
                 v-if="card.senior_manager_name || card.dan_name || card.studio_director_name"
-                style="border: 1px solid #E0E0E0; border-radius: 4px; padding: 4px 6px; margin-bottom: 4px; background: #F8F9FA"
+                style="border: 1px solid var(--fc-border-light); border-radius: 4px; padding: 4px 6px; margin-bottom: 4px; background: var(--fc-bg-info)"
                 @click.stop
               >
                 <div
-                  style="font-size: 10px; color: #888; font-weight: bold; cursor: pointer"
+                  style="font-size: 10px; color: var(--fc-text-light); font-weight: bold; cursor: pointer"
                   @click="showTeamMap[card.id] = !showTeamMap[card.id]"
                 >
                   Команда ({{ [card.studio_director_name, card.senior_manager_name, card.dan_name].filter(Boolean).length }})
                   {{ showTeamMap[card.id] ? '▲' : '▼' }}
                 </div>
                 <div v-if="showTeamMap[card.id]">
-                  <div v-if="card.studio_director_name" style="font-size: 10px; color: #333; padding: 1px 4px; border-radius: 2px; margin-top: 1px; background: #E8F4FD">
+                  <div v-if="card.studio_director_name" style="font-size: 10px; color: var(--fc-text); padding: 1px 4px; border-radius: 2px; margin-top: 1px; background: #E8F4FD">
                     РС: {{ card.studio_director_name }}
                   </div>
-                  <div v-if="card.senior_manager_name" style="font-size: 10px; color: #333; padding: 1px 4px; border-radius: 2px; margin-top: 1px; background: #EAF7F0">
+                  <div v-if="card.senior_manager_name" style="font-size: 10px; color: var(--fc-text); padding: 1px 4px; border-radius: 2px; margin-top: 1px; background: #EAF7F0">
                     СМ: {{ card.senior_manager_name }}
                   </div>
-                  <div v-if="card.dan_name" style="font-size: 10px; color: #333; padding: 1px 4px; border-radius: 2px; margin-top: 1px; background: #FEF9E7">
+                  <div v-if="card.dan_name" style="font-size: 10px; color: var(--fc-text); padding: 1px 4px; border-radius: 2px; margin-top: 1px; background: #FEF9E7">
                     ДАН: {{ card.dan_name }}
                   </div>
                 </div>
@@ -100,14 +100,14 @@
                 >{{ tag.text }}</span>
               </div>
               <!-- Кнопка -->
-              <div style="border-top: 1px solid #E0E0E0; padding-top: 6px">
+              <div style="border-top: 1px solid var(--fc-border-light); padding-top: 6px">
                 <q-btn
                   flat
                   dense
                   no-caps
                   icon="open_in_new"
                   label="Данные карточки"
-                  style="color: #333; font-size: 11px; height: 28px; width: 100%; background: #F5F5F5; border-radius: 4px"
+                  style="color: var(--fc-text); font-size: 11px; height: 28px; width: 100%; background: var(--fc-bg-alt); border-radius: 4px"
                   @click.stop="openCard(card)"
                 />
               </div>
@@ -143,10 +143,10 @@
                   @pointercancel="onSvDragEnd"
                   @click.capture="suppressSvAfterDrag"
                 >
-                  <q-card class="crm-card q-mb-sm" :style="card.is_paused ? { background: '#FFF8E1', borderColor: '#F39C12' } : {}">
+                  <q-card class="crm-card q-mb-sm" :style="card.is_paused ? { background: 'var(--fc-state-warning-bg)', borderColor: '#F39C12' } : {}">
                     <q-card-section class="q-pa-sm">
                       <div class="row items-center justify-between q-mb-xs">
-                        <div style="color: #888; font-size: 10px">
+                        <div style="color: var(--fc-text-light); font-size: 10px">
                           {{ card.contract_number || `#${card.id}` }}
                         </div>
                         <div class="row items-center" style="gap: 4px">
@@ -166,17 +166,17 @@
                             style="font-size: 9px"
                           />
                           <button class="sv-mute-bell-btn" @click.stop="cardMutes.toggleMute('supervision_card', card.id)">
-                            <span class="material-icons" :style="{ fontSize: '14px', color: cardMutes.isMuted('supervision_card', card.id) ? '#333' : '#CCC' }">
+                            <span class="material-icons" :style="{ fontSize: '14px', color: cardMutes.isMuted('supervision_card', card.id) ? 'var(--fc-text)' : 'var(--fc-border-card)' }">
                               {{ cardMutes.isMuted('supervision_card', card.id) ? 'notifications_off' : 'notifications' }}
                             </span>
                           </button>
                         </div>
                       </div>
-                      <div class="text-weight-bold q-mb-xs" style="font-size: 13px; color: #222">
+                      <div class="text-weight-bold q-mb-xs" style="font-size: 13px; color: var(--fc-text)">
                         {{ card.address || 'Без адреса' }}
                       </div>
                       <div class="row items-center justify-between q-mb-xs">
-                        <div style="font-size: 11px; color: #888">
+                        <div style="font-size: 11px; color: var(--fc-text-light)">
                           <span v-if="card.area">{{ card.area }} м²</span>
                           <span v-if="card.area && card.city"> | </span>
                           <span v-if="card.city">{{ card.city }}</span>
@@ -190,14 +190,14 @@
                           :style="{ display: 'inline-block', background: tag.color, color: 'white', borderRadius: '4px', padding: '2px 8px', fontSize: '10px', fontWeight: '600' }"
                         >{{ tag.text }}</span>
                       </div>
-                      <div style="border-top: 1px solid #E0E0E0; padding-top: 6px">
+                      <div style="border-top: 1px solid var(--fc-border-light); padding-top: 6px">
                         <q-btn
                           flat
                           dense
                           no-caps
                           icon="open_in_new"
                           label="Данные карточки"
-                          style="color: #333; font-size: 11px; height: 28px; width: 100%; background: #F5F5F5; border-radius: 4px"
+                          style="color: var(--fc-text); font-size: 11px; height: 28px; width: 100%; background: var(--fc-bg-alt); border-radius: 4px"
                           @click="openCard(card)"
                         />
                       </div>
@@ -235,11 +235,11 @@
                 <span :class="['col-count-badge', { 'has-cards': col.count > 0 }]">{{ col.count }}</span>
               </div>
               <div v-if="col.cards.length > 0" class="column-body">
-                <q-card v-for="card in col.cards" :key="card.id" class="crm-card q-mb-sm" :style="card.is_paused ? { background: '#FFF8E1', borderColor: '#F39C12' } : {}">
+                <q-card v-for="card in col.cards" :key="card.id" class="crm-card q-mb-sm" :style="card.is_paused ? { background: 'var(--fc-state-warning-bg)', borderColor: '#F39C12' } : {}">
                   <q-card-section class="q-pa-sm">
                     <!-- 1. Номер договора (слева) + Стадия + Тишина (справа) -->
                     <div class="row items-center justify-between q-mb-xs">
-                      <div style="color: #888; font-size: 10px">
+                      <div style="color: var(--fc-text-light); font-size: 10px">
                         {{ card.contract_number || `#${card.id}` }}
                       </div>
                       <div class="row items-center" style="gap: 4px">
@@ -259,7 +259,7 @@
                           style="font-size: 9px"
                         />
                         <button class="sv-mute-bell-btn" @click.stop="cardMutes.toggleMute('supervision_card', card.id)">
-                          <span class="material-icons" :style="{ fontSize: '14px', color: cardMutes.isMuted('supervision_card', card.id) ? '#333' : '#CCC' }">
+                          <span class="material-icons" :style="{ fontSize: '14px', color: cardMutes.isMuted('supervision_card', card.id) ? 'var(--fc-text)' : 'var(--fc-border-card)' }">
                             {{ cardMutes.isMuted('supervision_card', card.id) ? 'notifications_off' : 'notifications' }}
                           </span>
                         </button>
@@ -276,12 +276,12 @@
                       />
                     </div>
                     <!-- 2. Адрес -->
-                    <div class="text-weight-bold q-mb-xs" style="font-size: 13px; color: #222">
+                    <div class="text-weight-bold q-mb-xs" style="font-size: 13px; color: var(--fc-text)">
                       {{ card.address || 'Без адреса' }}
                     </div>
                     <!-- 3. Площадь/город (слева) + Тип агента badge (справа) -->
                     <div class="row items-center justify-between q-mb-xs">
-                      <div style="font-size: 11px; color: #888">
+                      <div style="font-size: 11px; color: var(--fc-text-light)">
                         <span v-if="card.area">{{ card.area }} м²</span>
                         <span v-if="card.area && card.city"> | </span>
                         <span v-if="card.city">{{ card.city }}</span>
@@ -325,14 +325,14 @@
                       />
                     </div>
                     <!-- 6. Кнопки -->
-                    <div style="border-top: 1px solid #E0E0E0; padding-top: 6px">
+                    <div style="border-top: 1px solid var(--fc-border-light); padding-top: 6px">
                       <q-btn
                         flat
                         dense
                         no-caps
                         icon="open_in_new"
                         label="Данные карточки"
-                        style="color: #333; font-size: 11px; height: 28px; width: 100%; background: #F5F5F5; border-radius: 4px"
+                        style="color: var(--fc-text); font-size: 11px; height: 28px; width: 100%; background: var(--fc-bg-alt); border-radius: 4px"
                         class="q-mb-xs"
                         @click="openCard(card)"
                       />
@@ -342,7 +342,7 @@
                         no-caps
                         icon="swap_horiz"
                         label="Переместить"
-                        style="color: #888; font-size: 10px; height: 24px; width: 100%"
+                        style="color: var(--fc-text-light); font-size: 10px; height: 24px; width: 100%"
                         @click.stop="showMoveDialog(card)"
                       />
                     </div>
@@ -360,7 +360,7 @@
     <!-- Диалог перемещения надзорной карточки -->
     <q-dialog v-model="moveDialogVisible">
       <q-card style="min-width: 320px; border-radius: 10px">
-        <q-toolbar style="background: #ffd93c; color: #333">
+        <q-toolbar style="background: var(--fc-accent); color: var(--fc-text)">
           <q-toolbar-title class="text-weight-bold" style="font-size: 14px">
             Переместить
           </q-toolbar-title>
@@ -376,7 +376,7 @@
           <div class="text-weight-bold" style="font-size: 12px">
             {{ moveCard.contract_number }} — {{ moveCard.address }}
           </div>
-          <div class="text-caption q-mt-xs" style="color: #888">
+          <div class="text-caption q-mt-xs" style="color: var(--fc-text-light)">
             Текущая: {{ moveCard.column_name }}
           </div>
         </q-card-section>
@@ -390,7 +390,7 @@
             @click="doMove(col)"
           >
             <q-item-section>
-              <q-item-label :style="{ color: moveCard?.column_name === col ? '#ccc' : '#333', fontSize: '13px' }">
+              <q-item-label :style="{ color: moveCard?.column_name === col ? 'var(--fc-border-card)' : 'var(--fc-text)', fontSize: '13px' }">
                 {{ col }}
               </q-item-label>
             </q-item-section>
@@ -492,7 +492,7 @@ function svArchiveCardStyle(card) {
   if (cs === 'РАСТОРГНУТ') return { background: '#FADBD8', borderColor: '#E74C3C' }
   return { background: '#E8F8F5', borderColor: '#27AE60' }
 }
-function dlColor(d) { const days = Math.ceil((new Date(d) - new Date()) / 86400000); if (days < 0) return '#8B0000'; if (days <= 2) return '#F39C12'; return '#888' }
+function dlColor(d) { const days = Math.ceil((new Date(d) - new Date()) / 86400000); if (days < 0) return '#8B0000'; if (days <= 2) return '#F39C12'; return 'var(--fc-text-light)' }
 function openCard(card) { router.push(`/supervision/${card.id}`) }
 function parseSvTags(tagsStr) {
   if (!tagsStr) return []
@@ -583,7 +583,7 @@ function onSvDragMove(e) {
     try { _svDragEl?.setPointerCapture(_svDragPointerId) } catch {}
     const src = _svDragEl
     _svDragGhost = src.cloneNode(true)
-    _svDragGhost.style.cssText = `position:fixed;pointer-events:none;opacity:0.75;z-index:9999;width:${src.offsetWidth}px;box-shadow:0 6px 24px rgba(0,0,0,0.25);transform:rotate(2deg) scale(1.03);border-radius:8px;background:#fff;`
+    _svDragGhost.style.cssText = `position:fixed;pointer-events:none;opacity:0.75;z-index:9999;width:${src.offsetWidth}px;box-shadow:0 6px 24px rgba(0,0,0,0.25);transform:rotate(2deg) scale(1.03);border-radius:8px;background:var(--fc-bg);`
     document.body.appendChild(_svDragGhost)
   }
   if (_svDragGhost) {
@@ -645,27 +645,27 @@ onMounted(() => { loadCards(); cardMutes.load(); if (can('supervision.view_archi
   gap: 8px;
 }
 
-.toggle-pills { display: inline-flex; border: 1px solid #d9d9d9; border-radius: 6px; overflow: hidden }
-.toggle-pills button { border: none; background: #F0F0F0; color: #666; font-size: 11px; padding: 5px 12px; cursor: pointer; transition: all 0.2s; font-family: inherit }
-.toggle-pills button.active { background: white; color: #333; font-weight: bold; box-shadow: 0 1px 3px rgba(0,0,0,0.08) }
-.toggle-pills button + button { border-left: 1px solid #d9d9d9 }
-.pill-count { display: inline-block; background: rgba(0,0,0,0.12); border-radius: 8px; padding: 0 5px; margin-left: 3px; font-size: 10px; min-width: 16px; text-align: center; }
-.toggle-pills button.active .pill-count { background: #ffd93c; color: #333; }
-.column-nav { display: flex; overflow-x: auto; padding: 6px 8px; gap: 4px; border-bottom: 1px solid #E0E0E0; -webkit-overflow-scrolling: touch; scrollbar-width: none }
+.toggle-pills { display: inline-flex; border: 1px solid var(--fc-border); border-radius: 6px; overflow: hidden }
+.toggle-pills button { border: none; background: var(--fc-tab-hover); color: var(--fc-text-secondary); font-size: 11px; padding: 5px 12px; cursor: pointer; transition: all 0.2s; font-family: inherit }
+.toggle-pills button.active { background: var(--fc-bg); color: var(--fc-text); font-weight: bold; box-shadow: 0 1px 3px var(--fc-shadow-sm) }
+.toggle-pills button + button { border-left: 1px solid var(--fc-border) }
+.pill-count { display: inline-block; background: var(--fc-shadow-sm); border-radius: 8px; padding: 0 5px; margin-left: 3px; font-size: 10px; min-width: 16px; text-align: center; }
+.toggle-pills button.active .pill-count { background: var(--fc-accent); color: var(--fc-text); }
+.column-nav { display: flex; overflow-x: auto; padding: 6px 8px; gap: 4px; border-bottom: 1px solid var(--fc-border-light); -webkit-overflow-scrolling: touch; scrollbar-width: none }
 .column-nav::-webkit-scrollbar { display: none }
-.column-nav button { border: 1px solid #d9d9d9; border-radius: 16px; background: #F5F5F5; color: #888; font-size: 10px; padding: 3px 10px; white-space: nowrap; cursor: pointer; font-family: inherit; transition: all 0.2s; flex-shrink: 0 }
-.column-nav button.active { background: #333; color: white; border-color: #333; font-weight: bold }
+.column-nav button { border: 1px solid var(--fc-border); border-radius: 16px; background: var(--fc-bg-alt); color: var(--fc-text-light); font-size: 10px; padding: 3px 10px; white-space: nowrap; cursor: pointer; font-family: inherit; transition: all 0.2s; flex-shrink: 0 }
+.column-nav button.active { background: var(--fc-text); color: white; border-color: var(--fc-text); font-weight: bold }
 .column-nav button .count { display: inline-block; background: rgba(255,255,255,0.2); border-radius: 8px; padding: 0 4px; margin-left: 3px; font-size: 9px }
 .column-nav button.active .count { background: rgba(255,255,255,0.3) }
-.column-frame { border: 1px solid #d9d9d9; border-radius: 8px; margin: 8px; background: #FAFAFA; min-height: calc(100vh - 260px); display: flex; flex-direction: column }
-.column-header { display: flex; align-items: flex-start; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #E0E0E0; background: white; border-radius: 8px 8px 0 0; min-height: 52px; box-sizing: border-box; }
-.column-title { font-size: 13px; font-weight: bold; color: #333; flex: 1; white-space: normal; line-height: 1.35; }
+.column-frame { border: 1px solid var(--fc-border); border-radius: 8px; margin: 8px; background: var(--fc-bg-hover); min-height: calc(100vh - 260px); display: flex; flex-direction: column }
+.column-header { display: flex; align-items: flex-start; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid var(--fc-border-light); background: var(--fc-bg); border-radius: 8px 8px 0 0; min-height: 52px; box-sizing: border-box; }
+.column-title { font-size: 13px; font-weight: bold; color: var(--fc-text); flex: 1; white-space: normal; line-height: 1.35; }
 .column-body { padding: 8px; flex: 1; overflow-y: auto }
-.column-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #bbb; font-size: 12px; padding: 40px 0 }
-.landscape-board { position: fixed; left: var(--drawer-offset, 0px); right: 0; top: calc(var(--q-header-height, 48px) + 41px); bottom: var(--q-footer-height, 56px); display: flex; flex-direction: row; overflow-x: auto; overflow-y: hidden; gap: 8px; padding: 8px; background: #fff; z-index: 1; -webkit-overflow-scrolling: touch; transition: left 0.3s ease; }
+.column-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--fc-text-disabled); font-size: 12px; padding: 40px 0 }
+.landscape-board { position: fixed; left: var(--drawer-offset, 0px); right: 0; top: calc(var(--q-header-height, 48px) + 41px); bottom: var(--q-footer-height, 56px); display: flex; flex-direction: row; overflow-x: auto; overflow-y: hidden; gap: 8px; padding: 8px; background: var(--fc-bg); z-index: 1; -webkit-overflow-scrolling: touch; transition: left 0.3s ease; }
 .landscape-column { flex: 1 1 280px; min-width: 280px; display: flex; flex-direction: column; height: 100%; }
-.col-count-badge { border-radius: 50%; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; flex-shrink: 0; background: #E0E0E0; color: #888; }
-.col-count-badge.has-cards { background: #ffd93c; color: #333; }
+.col-count-badge { border-radius: 50%; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; flex-shrink: 0; background: var(--fc-border-light); color: var(--fc-text-light); }
+.col-count-badge.has-cards { background: var(--fc-accent); color: var(--fc-text); }
 .landscape-column .column-frame { flex: 1; margin: 0; display: flex; flex-direction: column; overflow: hidden; height: 100%; }
 .landscape-column .column-body { overflow-y: auto; flex: 1; }
 
@@ -684,9 +684,9 @@ onMounted(() => { loadCards(); cardMutes.load(); if (can('supervision.view_archi
   pointer-events: none;
 }
 .landscape-column.drag-over > .column-frame {
-  border-color: #ffd93c;
-  box-shadow: 0 0 0 2px #ffd93c;
-  background: #fffde7;
+  border-color: var(--fc-accent);
+  box-shadow: 0 0 0 2px var(--fc-accent);
+  background: var(--fc-highlight-yellow);
 }
 .sv-mute-bell-btn {
   display: flex;

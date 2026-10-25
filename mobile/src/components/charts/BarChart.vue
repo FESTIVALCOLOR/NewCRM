@@ -50,7 +50,7 @@ const stageSeparatorsPlugin = {
 
       // Горизонтальная линия с вертикальными засечками на концах
       ctx.save()
-      ctx.strokeStyle = '#999'
+      ctx.strokeStyle = 'var(--fc-text-muted)'
       ctx.lineWidth = 1.5
       ctx.beginPath()
       // левая засечка
@@ -65,7 +65,7 @@ const stageSeparatorsPlugin = {
 
       // Подпись стадии по центру
       ctx.save()
-      ctx.fillStyle = '#444'
+      ctx.fillStyle = 'var(--fc-text-medium)'
       ctx.font = 'bold 9px Arial, sans-serif'
       ctx.textAlign = 'center'
       // Обрезаем до 28 символов
@@ -83,7 +83,7 @@ const chartData = computed(() => ({
   datasets: props.datasets.map(ds => ({
     label: ds.label,
     data: ds.data,
-    backgroundColor: Array.isArray(ds.color) ? ds.color : (ds.color || '#ffd93c'),
+    backgroundColor: Array.isArray(ds.color) ? ds.color : (ds.color || 'var(--fc-accent)'),
     borderRadius: 4,
     barThickness: props.horizontal ? 16 : undefined,
   })),
@@ -110,7 +110,7 @@ const chartOptions = computed(() => ({
         minRotation: props.rotateLabels || 0,
       },
     },
-    y: { stacked: props.stacked, grid: { color: '#f0f0f0' }, ticks: { font: { size: 10 } } },
+    y: { stacked: props.stacked, grid: { color: 'var(--fc-tab-hover)' }, ticks: { font: { size: 10 } } },
   },
 }))
 </script>

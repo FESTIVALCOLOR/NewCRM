@@ -20,7 +20,7 @@
         <div class="text-caption text-weight-bold q-mb-xs">
           Файл ТЗ:
         </div>
-        <div v-if="selectedFile" class="q-mb-sm" style="background: #F8F9FA; border: 1px solid #E0E0E0; padding: 6px 10px; border-radius: 4px; font-size: 12px">
+        <div v-if="selectedFile" class="q-mb-sm" style="background: var(--fc-bg-info); border: 1px solid var(--fc-border-light); padding: 6px 10px; border-radius: 4px; font-size: 12px">
           {{ selectedFile.name.length > 25 ? selectedFile.name.slice(0, 12) + '...' + selectedFile.name.slice(-10) : selectedFile.name }}
         </div>
         <q-btn

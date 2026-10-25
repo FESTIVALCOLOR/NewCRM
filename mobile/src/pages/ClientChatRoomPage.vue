@@ -19,7 +19,7 @@
       </div>
     </div>
     <!-- Шапка -->
-    <div class="bg-white" style="border-bottom: 1px solid #E0E0E0; flex-shrink: 0">
+    <div class="bg-white" style="border-bottom: 1px solid var(--fc-border-light); flex-shrink: 0">
       <!-- Шапка: адрес+бейдж слева | кнопки+онлайн справа -->
       <div class="row no-wrap q-px-md q-pt-sm q-pb-sm" style="align-items: stretch">
         <!-- Левая часть: кнопка назад + адрес + бейдж -->
@@ -55,7 +55,7 @@
           </div>
         </div>
         <!-- Вертикальный разделитель -->
-        <div style="align-self: stretch; width: 1px; background: #E0E0E0; flex-shrink: 0; margin: 2px 4px" />
+        <div style="align-self: stretch; width: 1px; background: var(--fc-border-light); flex-shrink: 0; margin: 2px 4px" />
         <!-- Правая часть: кнопки + онлайн -->
         <div style="flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 2px 0">
           <div class="row no-wrap">
@@ -103,7 +103,7 @@
             <q-icon v-else name="wifi_off" size="10px" color="negative" />
             {{ isConnected ? 'онлайн' : 'оффлайн' }}
             <template v-if="members.length">
-              <span style="color: #ccc">•</span>
+              <span style="color: var(--fc-border-card)">•</span>
               <q-icon name="people" size="10px" />{{ members.length }}
             </template>
           </div>
@@ -115,7 +115,7 @@
     <div
       v-if="showSearch"
       class="q-px-md q-py-xs bg-white"
-      style="border-bottom: 1px solid #E0E0E0; flex-shrink: 0"
+      style="border-bottom: 1px solid var(--fc-border-light); flex-shrink: 0"
     >
       <q-input
         v-model="searchQuery"
@@ -166,7 +166,7 @@
     <div
       v-if="pinnedMsgs.length"
       class="row items-center q-px-md q-py-xs bg-white"
-      style="border-bottom: 1px solid #E0E0E0; flex-shrink: 0; cursor: pointer; gap: 8px"
+      style="border-bottom: 1px solid var(--fc-border-light); flex-shrink: 0; cursor: pointer; gap: 8px"
       @click="cyclePinned"
     >
       <div style="display: flex; flex-direction: column; gap: 2px; flex-shrink: 0; align-self: stretch; justify-content: center">
@@ -177,7 +177,7 @@
             width: '3px',
             height: `${Math.max(4, 28 / pinnedMsgs.length - 2)}px`,
             borderRadius: '2px',
-            background: i === pinnedIdx ? '#E65100' : '#E0E0E0',
+            background: i === pinnedIdx ? '#E65100' : 'var(--fc-border-light)',
             transition: 'background 0.2s',
           }"
         />
@@ -187,7 +187,7 @@
         <div class="text-caption text-weight-bold" style="color: #E65100; font-size: 10px">
           Закреплено{{ pinnedMsgs.length > 1 ? ` • ${pinnedIdx + 1} из ${pinnedMsgs.length}` : '' }}
         </div>
-        <div class="text-caption ellipsis" style="font-size: 11px; color: #333">
+        <div class="text-caption ellipsis" style="font-size: 11px; color: var(--fc-text)">
           {{ pinnedMsgs[pinnedIdx]?.content || pinnedMsgs[pinnedIdx]?.file_name || 'Файл' }}
         </div>
       </div>
@@ -206,7 +206,7 @@
     <div
       ref="messagesEl"
       class="col q-pa-md"
-      style="overflow-y: auto; background-color: #F5F5F5; background-image: url('/backgrounds/bg-employee.png'); background-repeat: repeat; background-size: 400px auto"
+      style="overflow-y: auto; background-color: var(--fc-bg-alt); background-image: url('/backgrounds/bg-employee.png'); background-repeat: repeat; background-size: 400px auto"
     >
       <!-- Sentinel для Intersection Observer (автозагрузка при скролле вверх) -->
       <div ref="topSentinelEl" style="height: 2px" />
@@ -241,7 +241,7 @@
                 <div class="row no-wrap items-center justify-between" style="padding: 6px 10px 4px; min-height: 16px; gap: 2px">
                   <div
                     class="text-caption text-weight-bold"
-                    :style="{ color: isOwn(item.msgs[0]) ? '#999' : (isGuest(item.msgs[0]) ? '#2E7D32' : '#1565C0') }"
+                    :style="{ color: isOwn(item.msgs[0]) ? 'var(--fc-text-muted)' : (isGuest(item.msgs[0]) ? '#2E7D32' : '#1565C0') }"
                     style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap"
                   >
                     {{ item.msgs[0].sender_display_name }}
@@ -380,7 +380,7 @@
                     </div>
                   </div>
                 </template>
-                <div class="row no-wrap items-center justify-between" style="padding: 2px 8px 4px; color: #888; font-size: 10px">
+                <div class="row no-wrap items-center justify-between" style="padding: 2px 8px 4px; color: var(--fc-text-light); font-size: 10px">
                   <q-btn
                     v-if="item.msgs.some(m => m.yandex_path)"
                     flat
@@ -457,7 +457,7 @@
                   >
                     <div
                       class="text-caption text-weight-bold"
-                      :style="{ color: isOwn(msg) ? '#999' : (isGuest(msg) ? '#2E7D32' : '#1565C0') }"
+                      :style="{ color: isOwn(msg) ? 'var(--fc-text-muted)' : (isGuest(msg) ? '#2E7D32' : '#1565C0') }"
                       style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: default"
                     >
                       {{ msg.sender_display_name }}
@@ -671,7 +671,7 @@
                           @click="toggleVoice(msg)"
                         />
                         <div class="column" style="flex: 1; min-width: 0; gap: 3px">
-                          <div style="height: 3px; background: #e0e0e0; border-radius: 2px; overflow: hidden">
+                          <div style="height: 3px; background: var(--fc-border-light); border-radius: 2px; overflow: hidden">
                             <div :style="{ width: voiceProgressPct(msg) + '%', background: '#1976d2', height: '100%' }" />
                           </div>
                           <div class="text-caption text-grey-6" style="font-size: 10px">
@@ -727,7 +727,7 @@
                   <div
                     class="row no-wrap items-center"
                     :class="isOwn(msg) ? 'justify-end' : 'justify-start'"
-                    :style="(msg.message_type === 'image' || (isPdf(msg) && pdfThumbnails[msg.id])) ? 'padding:2px 10px 6px;color:#888;font-size:10px' : 'margin-top:4px;color:#888;font-size:10px'"
+                    :style="(msg.message_type === 'image' || (isPdf(msg) && pdfThumbnails[msg.id])) ? 'padding:2px 10px 6px;color:var(--fc-text-light);font-size:10px' : 'margin-top:4px;color:var(--fc-text-light);font-size:10px'"
                   >
                     <span v-if="msg.is_edited" class="text-caption text-grey-5 q-mr-xs" style="font-size: 9px">изм.</span>
                     <span class="text-caption">{{ formatTime(msg.created_at) }}</span>
@@ -740,7 +740,7 @@
                               Прочитано
                             </q-item-label>
                             <q-item v-if="!msgReadStatus(msg).readers.length" dense>
-                              <q-item-section style="font-size:12px; color:#888">
+                              <q-item-section style="font-size:12px; color:var(--fc-text-light)">
                                 Никто не прочитал
                               </q-item-section>
                             </q-item>
@@ -796,7 +796,7 @@
     <div
       v-if="pendingFiles.length"
       class="q-px-sm q-pt-xs q-pb-xs bg-blue-1"
-      style="border-top: 1px solid #BBDEFB; flex-shrink: 0"
+      style="border-top: 1px solid var(--fc-chat-reply-border); flex-shrink: 0"
     >
       <div class="row items-center q-gutter-xs">
         <div
@@ -837,7 +837,7 @@
     <div
       v-if="replyingTo"
       class="row no-wrap items-center q-px-md q-py-xs"
-      style="background: #F3F6FF; border-top: 1px solid #D0D9F0; flex-shrink: 0; gap: 8px"
+      style="background: var(--fc-chat-reply-bg); border-top: 1px solid var(--fc-chat-reply-border); flex-shrink: 0; gap: 8px"
     >
       <q-icon name="reply" size="16px" color="blue-7" />
       <div style="flex: 1; min-width: 0">
@@ -860,7 +860,7 @@
     </div>
 
     <!-- Панель ввода -->
-    <div class="q-pa-sm bg-white" style="border-top: 1px solid #E0E0E0; flex-shrink: 0">
+    <div class="q-pa-sm bg-white" style="border-top: 1px solid var(--fc-border-light); flex-shrink: 0">
       <div class="row no-wrap items-end q-gutter-xs">
         <q-btn
           round
@@ -1268,7 +1268,7 @@
               <q-item-label
                 v-if="canShowLastLogin && (m.member_type === 'employee' || m.last_login)"
                 caption
-                style="font-size: 10px; color: #aaa"
+                style="font-size: 10px; color: var(--fc-text-disabled)"
               >
                 {{ m.is_online ? 'В сети' : (m.last_login ? `Был(а): ${fmtLastLogin(m.last_login)}` : 'Не входил(а)') }}
               </q-item-label>
@@ -1530,7 +1530,7 @@
               <div
                 v-if="item.type === 'stage'"
                 class="q-px-md q-py-xs text-weight-bold"
-                style="background: #E8EEF6; color: #1a3a6b; font-size: 11px; letter-spacing: 0.3px"
+                style="background: var(--fc-chat-reply-bg); color: #1a3a6b; font-size: 11px; letter-spacing: 0.3px"
               >
                 {{ item.label }}
               </div>
@@ -1538,7 +1538,7 @@
               <div
                 v-else-if="item.type === 'var'"
                 class="q-px-lg q-py-xs"
-                style="background: #F3F3F3; color: #666; font-style: italic; font-size: 10px"
+                style="background: #F3F3F3; color: var(--fc-text-secondary); font-style: italic; font-size: 10px"
               >
                 Вариант {{ item.varNum }}
               </div>
@@ -1548,7 +1548,7 @@
                 clickable
                 :disable="sendingCardFile"
                 style="min-height: 52px"
-                :style="isCardFileSelected(item.file) ? 'background: #EBF2FF' : ''"
+                :style="isCardFileSelected(item.file) ? 'background: var(--fc-selected-bg)' : ''"
                 @click="toggleCardFileSelection(item.file)"
               >
                 <!-- Чекбокс -->
@@ -1599,7 +1599,7 @@
           </template>
         </q-card-section>
 
-        <q-card-actions style="flex-shrink: 0; border-top: 1px solid #eee; justify-content: space-between; padding: 8px 12px">
+        <q-card-actions style="flex-shrink: 0; border-top: 1px solid var(--fc-border-light); justify-content: space-between; padding: 8px 12px">
           <q-btn
             v-close-popup
             flat
@@ -2535,9 +2535,9 @@ const _CF_PALETTE = {
   img:  { bg: '#C8E6C9', text: '#2E7D32' },
   pdf:  { bg: '#FFCDD2', text: '#B71C1C' },
   xls:  { bg: '#C8E6C9', text: '#1B5E20' },
-  doc:  { bg: '#BBDEFB', text: '#0D47A1' },
+  doc:  { bg: 'var(--fc-chat-reply-border)', text: '#0D47A1' },
   zip:  { bg: '#E1BEE7', text: '#4A148C' },
-  def:  { bg: '#E0E0E0', text: '#424242' },
+  def:  { bg: 'var(--fc-border-light)', text: '#424242' },
 }
 function _cfExt(name) { const d = (name || '').lastIndexOf('.'); return d >= 0 ? name.slice(d + 1).toLowerCase() : '' }
 function cfBadgeColor(f) {
@@ -3336,33 +3336,33 @@ onUnmounted(() => {
 
 <style scoped>
 .bubble-own {
-  background: #E8F5E9;
+  background: var(--fc-state-success-bg);
   border-radius: 12px 12px 2px 12px;
   padding: 8px 12px;
   max-width: 75%;
 }
 .bubble-forwarded {
-  background: #EEEEEE !important;
+  background: var(--fc-tab-inactive) !important;
 }
 .bubble-other {
-  background: #fff;
+  background: var(--fc-bg);
   border-radius: 12px 12px 12px 2px;
   padding: 8px 12px;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+  box-shadow: 0 1px 2px var(--fc-shadow-sm);
   max-width: 75%;
 }
 .bubble-img-own {
-  background: #E8F5E9;
+  background: var(--fc-state-success-bg);
   border-radius: 12px 12px 2px 12px;
   overflow: hidden;
   min-width: 160px;
   max-width: min(85vw, 440px);
 }
 .bubble-img-other {
-  background: #fff;
+  background: var(--fc-bg);
   border-radius: 12px 12px 12px 2px;
   overflow: hidden;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+  box-shadow: 0 1px 2px var(--fc-shadow-sm);
   min-width: 160px;
   max-width: min(85vw, 440px);
 }
@@ -3390,14 +3390,14 @@ onUnmounted(() => {
   gap: 3px;
   padding: 2px 7px;
   border-radius: 12px;
-  border: 1px solid #E0E0E0;
-  background: #F5F5F5;
+  border: 1px solid var(--fc-border-light);
+  background: var(--fc-bg-alt);
   font-size: 13px;
   cursor: pointer;
   line-height: 1.4;
 }
 .reaction-chip--own {
-  background: #E3F2FD;
+  background: var(--fc-selected-bg);
   border-color: #90CAF9;
 }
 .react-quick-btn {
@@ -3410,6 +3410,6 @@ onUnmounted(() => {
   line-height: 1.3;
   transition: background 0.15s;
 }
-.react-quick-btn:hover { background: #F0F0F0; }
-.react-quick-btn--active { background: #E3F2FD; }
+.react-quick-btn:hover { background: var(--fc-tab-hover); }
+.react-quick-btn--active { background: var(--fc-selected-bg); }
 </style>

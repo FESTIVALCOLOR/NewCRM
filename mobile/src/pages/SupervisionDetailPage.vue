@@ -14,26 +14,26 @@
           flat
           dense
           icon="arrow_back"
-          style="position: absolute; top: -8px; left: -8px; z-index: 10; width: 27px; height: 32px; min-height: 32px; min-width: 27px; max-width: 27px; max-height: 32px; padding: 0; overflow: hidden; background: white; border: 1.5px solid #E0E0E0; box-shadow: 0 2px 8px rgba(0,0,0,0.13); color: #555"
+          style="position: absolute; top: -8px; left: -8px; z-index: 10; width: 27px; height: 32px; min-height: 32px; min-width: 27px; max-width: 27px; max-height: 32px; padding: 0; overflow: hidden; background: var(--fc-bg); border: 1.5px solid var(--fc-border-light); box-shadow: 0 2px 8px var(--fc-shadow-md); color: var(--fc-text-medium)"
           @click="$router.back()"
         >
           <q-tooltip>Назад</q-tooltip>
         </q-btn>
-        <q-card-section style="background: #F8F9FA; border-radius: 8px 8px 0 0">
+        <q-card-section style="background: var(--fc-bg-info); border-radius: 8px 8px 0 0">
           <div class="row items-start justify-between q-mb-xs" style="gap: 8px">
             <!-- Левый столбец: номер договора, адрес, тип, площадь, город -->
             <div style="flex: 1; min-width: 0">
-              <div class="text-subtitle1 text-weight-bold" style="color: #333">
+              <div class="text-subtitle1 text-weight-bold" style="color: var(--fc-text)">
                 {{ card.contract_number }}
               </div>
-              <div class="text-body2 q-mt-xs" style="color: #333">
-                <a v-if="card.address" :href="'https://yandex.ru/maps/?text=' + encodeURIComponent(card.address)" target="_blank" style="color: #333; text-decoration: none"><q-icon name="location_on" size="14px" color="red" class="q-mr-xs" />{{ card.address }}</a>
+              <div class="text-body2 q-mt-xs" style="color: var(--fc-text)">
+                <a v-if="card.address" :href="'https://yandex.ru/maps/?text=' + encodeURIComponent(card.address)" target="_blank" style="color: var(--fc-text); text-decoration: none"><q-icon name="location_on" size="14px" color="red" class="q-mr-xs" />{{ card.address }}</a>
               </div>
-              <div class="text-caption q-mt-xs" style="color: #888">
+              <div class="text-caption q-mt-xs" style="color: var(--fc-text-light)">
                 <span v-if="card.project_type">{{ card.project_type }}</span>
-                <span v-if="card.project_subtype" style="color: #ccc; margin: 0 4px">|</span><span v-if="card.project_subtype">{{ card.project_subtype }}</span>
-                <span v-if="card.area" style="color: #ccc; margin: 0 4px">|</span><span v-if="card.area">{{ card.area }} м²</span>
-                <span v-if="card.city" style="color: #ccc; margin: 0 4px">|</span><span v-if="card.city"><q-icon name="location_on" size="12px" /> {{ card.city }}</span>
+                <span v-if="card.project_subtype" style="color: var(--fc-border-card); margin: 0 4px">|</span><span v-if="card.project_subtype">{{ card.project_subtype }}</span>
+                <span v-if="card.area" style="color: var(--fc-border-card); margin: 0 4px">|</span><span v-if="card.area">{{ card.area }} м²</span>
+                <span v-if="card.city" style="color: var(--fc-border-card); margin: 0 4px">|</span><span v-if="card.city"><q-icon name="location_on" size="12px" /> {{ card.city }}</span>
               </div>
             </div>
             <!-- Правый столбец: статус стадии (с переносом) + тип агента -->
@@ -53,7 +53,7 @@
               />
             </div>
           </div>
-          <div class="row q-gutter-md text-caption q-mt-xs" style="color: #888">
+          <div class="row q-gutter-md text-caption q-mt-xs" style="color: var(--fc-text-light)">
             <span v-if="card.start_date"><q-icon name="play_arrow" size="14px" /> Начало: {{ formatDate(card.start_date) }}</span>
             <span v-if="card.deadline"><q-icon name="flag" size="14px" :style="{ color: dlColor(card.deadline) }" /> Дедлайн: {{ formatDate(card.deadline) }}</span>
           </div>
@@ -69,11 +69,11 @@
         <!-- Таймлайн стадий надзора -->
         <q-card-section class="q-pt-none q-pb-sm">
           <div class="row items-center q-mb-xs">
-            <span class="text-caption" style="color: #888">
+            <span class="text-caption" style="color: var(--fc-text-light)">
               Стадия {{ currentStageIndex + 1 }}/{{ SUPERVISION_STAGES.length }}
             </span>
             <q-space />
-            <span class="text-caption text-weight-medium" style="color: #555; max-width: 180px; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
+            <span class="text-caption text-weight-medium" style="color: var(--fc-text-medium); max-width: 180px; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
               {{ card?.column_name }}
             </span>
           </div>
@@ -90,11 +90,11 @@
                 height: '8px',
                 borderRadius: '4px',
                 minWidth: '6px',
-                background: idx < currentStageIndex ? '#4CAF50' : idx === currentStageIndex ? '#1976D2' : '#E0E0E0',
+                background: idx < currentStageIndex ? '#4CAF50' : idx === currentStageIndex ? '#1976D2' : 'var(--fc-border-light)',
               }"
             />
           </div>
-          <div class="text-caption q-mt-xs" style="color: #aaa">
+          <div class="text-caption q-mt-xs" style="color: var(--fc-text-disabled)">
             Нажмите для просмотра стадий
           </div>
         </q-card-section>
@@ -102,9 +102,9 @@
         <!-- Прогресс закупок -->
         <q-card-section v-if="timeline.length > 0" class="q-pt-none q-pb-sm">
           <div class="row items-center q-mb-xs">
-            <span class="text-caption" style="color: #888">Закупки: {{ svStageProgress.done }}/{{ svStageProgress.total }} завершено</span>
+            <span class="text-caption" style="color: var(--fc-text-light)">Закупки: {{ svStageProgress.done }}/{{ svStageProgress.total }} завершено</span>
             <q-space />
-            <span class="text-caption text-weight-bold" style="color: #333">{{ svStageProgress.percent }}%</span>
+            <span class="text-caption text-weight-bold" style="color: var(--fc-text)">{{ svStageProgress.percent }}%</span>
           </div>
           <q-linear-progress
             :value="svStageProgress.percent / 100"
@@ -117,7 +117,7 @@
         <!-- Прогресс выездов текущего месяца -->
         <q-card-section v-if="visitProgress" class="q-pt-none q-pb-sm">
           <div class="row items-center q-mb-xs">
-            <span class="text-caption" style="color: #888">
+            <span class="text-caption" style="color: var(--fc-text-light)">
               Выезды (месяц): {{ visitProgress.regular }}/{{ visitProgress.minVisits }}
               <span v-if="visitProgress.additional > 0" style="color: #e65100"> + {{ visitProgress.additional }} доп.</span>
             </span>
@@ -137,7 +137,7 @@
             style="border-radius: 4px; cursor: pointer"
             @click="showVisitStatsDialog = true"
           />
-          <div class="text-caption q-mt-xs" style="color: #aaa">
+          <div class="text-caption q-mt-xs" style="color: var(--fc-text-disabled)">
             Нажмите для статистики по месяцам
           </div>
         </q-card-section>
@@ -151,7 +151,7 @@
         indicator-color="accent"
         no-caps
         class="q-mb-md"
-        style="color: #666"
+        style="color: var(--fc-text-secondary)"
         align="left"
         :breakpoint="0"
       >
@@ -170,7 +170,7 @@
           <!-- Информация о проекте -->
           <q-card class="is-card q-mb-md">
             <q-card-section class="q-pb-none">
-              <div class="text-subtitle2 text-weight-bold" style="color: #333">
+              <div class="text-subtitle2 text-weight-bold" style="color: var(--fc-text)">
                 Информация
               </div>
             </q-card-section>
@@ -219,7 +219,7 @@
           <!-- Команда -->
           <q-card class="is-card q-mb-md">
             <q-card-section class="q-pb-none">
-              <div class="text-subtitle2 text-weight-bold" style="color: #333">
+              <div class="text-subtitle2 text-weight-bold" style="color: var(--fc-text)">
                 Команда
               </div>
             </q-card-section>
@@ -334,7 +334,7 @@
           <!-- Действия -->
           <q-card class="is-card q-mb-md">
             <q-card-section class="q-pb-none">
-              <div class="text-subtitle2 text-weight-bold" style="color: #333">
+              <div class="text-subtitle2 text-weight-bold" style="color: var(--fc-text)">
                 Действия
               </div>
             </q-card-section>
@@ -423,7 +423,7 @@
               <div
                 v-if="isArchived && (card.contract_status === 'СДАН' || card.contract_status === 'РАСТОРГНУТ')"
                 class="text-center"
-                style="color: #999; font-size: 12px; padding: 4px 0"
+                style="color: var(--fc-text-muted); font-size: 12px; padding: 4px 0"
               >
                 Карточка в архиве
               </div>
@@ -437,7 +437,7 @@
           <q-card class="is-card q-mb-md">
             <q-card-section class="q-pb-none">
               <div class="row items-center justify-between">
-                <div class="text-subtitle2 text-weight-bold" style="color: #333">
+                <div class="text-subtitle2 text-weight-bold" style="color: var(--fc-text)">
                   Стадии закупок
                 </div>
                 <div class="row q-gutter-xs items-center">
@@ -500,16 +500,16 @@
                     <q-item-label caption>
                       План: {{ entry.plan_date ? formatDate(entry.plan_date) : '—' }} | Факт: {{ entry.actual_date ? formatDate(entry.actual_date) : '—' }}
                     </q-item-label>
-                    <q-item-label caption style="color: #888">
+                    <q-item-label caption style="color: var(--fc-text-light)">
                       {{ entry.supplier || '—' }}
                     </q-item-label>
-                    <q-item-label caption style="color: #888">
+                    <q-item-label caption style="color: var(--fc-text-light)">
                       Факт. {{ formatMoney(entry.budget_actual || 0) }} / План {{ entry.budget_planned > 0 ? formatMoney(entry.budget_planned) : '—' }}
                     </q-item-label>
-                    <q-item-label caption style="color: #555">
+                    <q-item-label caption style="color: var(--fc-text-medium)">
                       Исполнитель: {{ entry.executor || '—' }}
                     </q-item-label>
-                    <q-item-label caption :style="entry.commission > 0 ? 'color: #2e7d32; font-weight: 500' : 'color: #999'">
+                    <q-item-label caption :style="entry.commission > 0 ? 'color: #2e7d32; font-weight: 500' : 'color: var(--fc-text-muted)'">
                       Комиссия: {{ entry.commission > 0 ? formatMoney(entry.commission) : '—' }}
                     </q-item-label>
                   </template>
@@ -590,7 +590,7 @@
           <!-- Бюджет -->
           <q-card v-if="summary && summary.total_budget_planned > 0" class="is-card q-mb-md">
             <q-card-section>
-              <div class="text-subtitle2 text-weight-bold q-mb-sm" style="color: #333">
+              <div class="text-subtitle2 text-weight-bold q-mb-sm" style="color: var(--fc-text)">
                 Бюджет (итого)
               </div>
               <div class="row q-col-gutter-sm">
@@ -634,7 +634,7 @@
           <q-card class="is-card q-mb-md">
             <q-card-section>
               <div class="row items-center justify-between q-mb-sm">
-                <div class="text-subtitle2 text-weight-bold" style="color: #333">
+                <div class="text-subtitle2 text-weight-bold" style="color: var(--fc-text)">
                   Строительные работы
                 </div>
                 <q-btn
@@ -668,13 +668,13 @@
                   </div>
                 </div>
                 <div v-if="budgetExtra.construction_contractor" class="text-caption q-mb-xs">
-                  Подрядчик: <span style="color: #333; font-weight: 500">{{ budgetExtra.construction_contractor }}</span>
+                  Подрядчик: <span style="color: var(--fc-text); font-weight: 500">{{ budgetExtra.construction_contractor }}</span>
                 </div>
                 <div v-if="budgetExtra.construction_payments?.length" class="q-mt-xs">
                   <div class="text-caption text-grey-7 q-mb-xs">
                     Оплаты:
                   </div>
-                  <div v-for="(p, idx) in budgetExtra.construction_payments" :key="idx" class="text-caption q-mb-xs" style="color: #555">
+                  <div v-for="(p, idx) in budgetExtra.construction_payments" :key="idx" class="text-caption q-mb-xs" style="color: var(--fc-text-medium)">
                     {{ fmtDMY(p.date) }} — {{ formatMoney(p.amount) }}<span v-if="p.commission > 0" style="color: #2e7d32"> (ком. {{ formatMoney(p.commission) }})</span>
                   </div>
                 </div>
@@ -690,7 +690,7 @@
           <q-card class="is-card q-mb-md">
             <q-card-section>
               <div class="row items-center justify-between q-mb-sm">
-                <div class="text-subtitle2 text-weight-bold" style="color: #333">
+                <div class="text-subtitle2 text-weight-bold" style="color: var(--fc-text)">
                   Черновые материалы
                 </div>
                 <q-btn
@@ -724,14 +724,14 @@
                   </div>
                 </div>
                 <div v-if="budgetExtra.materials_supplier" class="text-caption q-mb-xs">
-                  Поставщик: <span style="color: #333; font-weight: 500">{{ budgetExtra.materials_supplier }}</span>
+                  Поставщик: <span style="color: var(--fc-text); font-weight: 500">{{ budgetExtra.materials_supplier }}</span>
                 </div>
                 <div v-if="budgetExtra.materials_payments?.length" class="q-mt-xs">
                   <div class="text-caption text-grey-7 q-mb-xs">
                     Заказы:
                   </div>
-                  <div v-for="(p, idx) in budgetExtra.materials_payments" :key="idx" class="text-caption q-mb-xs" style="color: #555">
-                    {{ fmtDMY(p.date) }} — {{ formatMoney(p.amount) }}<span v-if="p.supplier" style="color: #888"> ({{ p.supplier }})</span><span v-if="p.commission > 0" style="color: #2e7d32"> ком. {{ formatMoney(p.commission) }}</span>
+                  <div v-for="(p, idx) in budgetExtra.materials_payments" :key="idx" class="text-caption q-mb-xs" style="color: var(--fc-text-medium)">
+                    {{ fmtDMY(p.date) }} — {{ formatMoney(p.amount) }}<span v-if="p.supplier" style="color: var(--fc-text-light)"> ({{ p.supplier }})</span><span v-if="p.commission > 0" style="color: #2e7d32"> ком. {{ formatMoney(p.commission) }}</span>
                   </div>
                 </div>
               </template>
@@ -749,7 +749,7 @@
           <q-card class="is-card q-mb-md">
             <q-card-section class="q-pb-xs">
               <div class="row items-center justify-between">
-                <div class="text-subtitle2 text-weight-bold" style="color: #333">
+                <div class="text-subtitle2 text-weight-bold" style="color: var(--fc-text)">
                   Выезды
                 </div>
                 <q-btn
@@ -759,7 +759,7 @@
                   no-caps
                   icon="add"
                   label="Новый выезд"
-                  style="background: #ffd93c; color: #333; font-size: 11px; height: 32px; border-radius: 4px"
+                  style="background: var(--fc-accent); color: var(--fc-text); font-size: 11px; height: 32px; border-radius: 4px"
                   @click="showAddVisit = true"
                 />
               </div>
@@ -773,7 +773,7 @@
                 flat
                 bordered
                 class="q-mb-sm"
-                :style="Object.assign({ borderRadius: '6px' }, visit.actual_date ? { background: '#E8F5E9', borderColor: '#A5D6A7' } : {})"
+                :style="Object.assign({ borderRadius: '6px' }, visit.actual_date ? { background: 'var(--fc-state-success-bg)', borderColor: '#A5D6A7' } : {})"
               >
                 <q-card-section class="q-pa-sm">
                   <!-- Строка: бейджи слева, даты справа в столбик -->
@@ -790,26 +790,26 @@
                       </div>
                     </div>
                     <div class="column items-end" style="flex-shrink: 0; text-align: right">
-                      <span class="text-caption text-weight-bold" style="color: #333">План: {{ formatDate(visit.visit_date) }}</span>
+                      <span class="text-caption text-weight-bold" style="color: var(--fc-text)">План: {{ formatDate(visit.visit_date) }}</span>
                       <span v-if="visit.actual_date" class="text-caption" style="color: #27AE60">Факт: {{ formatDate(visit.actual_date) }}</span>
                     </div>
                   </div>
 
-                  <div v-if="visit.stage_name" class="text-caption" style="color: #888">
+                  <div v-if="visit.stage_name" class="text-caption" style="color: var(--fc-text-light)">
                     {{ visit.stage_name }}
                   </div>
-                  <div v-if="visit.notes" class="text-caption q-mt-xs" style="color: #666">
+                  <div v-if="visit.notes" class="text-caption q-mt-xs" style="color: var(--fc-text-secondary)">
                     {{ visit.notes }}
                   </div>
 
                   <!-- Файлы отчёта -->
                   <div v-if="visit.report_files && visit.report_files.length > 0" class="q-mt-xs">
-                    <div class="text-caption text-weight-bold" style="color: #555">
+                    <div class="text-caption text-weight-bold" style="color: var(--fc-text-medium)">
                       Отчёт:
                     </div>
                     <div v-for="f in visit.report_files" :key="f.id" class="row items-center q-gutter-xs">
                       <q-icon name="description" size="14px" color="orange" />
-                      <a :href="f.public_link || '#'" target="_blank" style="color: #1677FF; text-decoration: none; font-size: 11px">{{ f.file_name }}</a>
+                      <a :href="f.public_link || '#'" target="_blank" style="color: var(--fc-link); text-decoration: none; font-size: 11px">{{ f.file_name }}</a>
                       <q-btn
                         v-if="!isArchived"
                         flat
@@ -825,12 +825,12 @@
 
                   <!-- Фото -->
                   <div v-if="visit.photo_files && visit.photo_files.length > 0" class="q-mt-xs">
-                    <div class="text-caption text-weight-bold" style="color: #555">
+                    <div class="text-caption text-weight-bold" style="color: var(--fc-text-medium)">
                       Фото:
                     </div>
                     <div v-for="f in visit.photo_files" :key="f.id" class="row items-center q-gutter-xs">
                       <q-icon name="image" size="14px" color="blue" />
-                      <a :href="f.public_link || '#'" target="_blank" style="color: #1677FF; text-decoration: none; font-size: 11px">{{ f.file_name }}</a>
+                      <a :href="f.public_link || '#'" target="_blank" style="color: var(--fc-link); text-decoration: none; font-size: 11px">{{ f.file_name }}</a>
                       <q-btn
                         v-if="!isArchived"
                         flat
@@ -935,7 +935,7 @@
           <q-card class="is-card q-mb-md">
             <q-card-section class="q-pb-xs">
               <div class="row items-center justify-between">
-                <div class="text-subtitle2 text-weight-bold" style="color: #333">
+                <div class="text-subtitle2 text-weight-bold" style="color: var(--fc-text)">
                   Общие отчёты
                 </div>
                 <div class="row q-gutter-xs">
@@ -973,12 +973,12 @@
                 </q-item-section>
                 <q-item-section style="min-width: 0">
                   <q-item-label style="font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
-                    <a :href="f.public_link || '#'" target="_blank" style="color: #1677FF; text-decoration: none">{{ f.file_name }}</a>
+                    <a :href="f.public_link || '#'" target="_blank" style="color: var(--fc-link); text-decoration: none">{{ f.file_name }}</a>
                   </q-item-label>
                 </q-item-section>
               </q-item>
             </q-list>
-            <q-card-section v-else class="q-py-sm text-center" style="color: #bbb; font-size: 11px">
+            <q-card-section v-else class="q-py-sm text-center" style="color: var(--fc-text-disabled); font-size: 11px">
               Нет файлов
             </q-card-section>
           </q-card>
@@ -990,7 +990,7 @@
           <q-card class="is-card q-mb-md">
             <q-card-section class="q-pb-none">
               <div class="row items-center justify-between">
-                <div class="text-subtitle2 text-weight-bold" style="color: #333">
+                <div class="text-subtitle2 text-weight-bold" style="color: var(--fc-text)">
                   История проекта
                 </div>
                 <q-btn
@@ -1000,7 +1000,7 @@
                   no-caps
                   icon="add"
                   label="Добавить запись"
-                  style="background: #ffd93c; color: #333; font-size: 11px; height: 32px; border-radius: 4px"
+                  style="background: var(--fc-accent); color: var(--fc-text); font-size: 11px; height: 32px; border-radius: 4px"
                   @click="showAddHistoryDlg = true"
                 />
               </div>
@@ -1028,10 +1028,10 @@
                   <q-icon :name="historyIcon(h.entry_type)" :color="historyColor(h.entry_type)" size="18px" />
                 </q-item-section>
                 <q-item-section>
-                  <q-item-label style="font-size: 12px; color: #333">
+                  <q-item-label style="font-size: 12px; color: var(--fc-text)">
                     {{ cleanNoteText(h) }}
                   </q-item-label>
-                  <q-item-label caption style="color: #888">
+                  <q-item-label caption style="color: var(--fc-text-light)">
                     <span v-if="h.entry_type" style="font-weight: bold">{{ historyLabel(h.entry_type) }}</span>
                     <span v-if="h.created_by_name"> · {{ h.created_by_name }}</span>
                     <span> · {{ formatDate(h.created_at) }}</span>
@@ -1039,7 +1039,7 @@
                 </q-item-section>
               </q-item>
             </q-list>
-            <q-card-section v-else class="text-center" style="color: #999; font-size: 12px">
+            <q-card-section v-else class="text-center" style="color: var(--fc-text-muted); font-size: 12px">
               Нет записей
             </q-card-section>
           </q-card>
@@ -1051,7 +1051,7 @@
           <q-card class="is-card q-mb-md">
             <q-card-section class="q-pb-xs">
               <div class="row items-center">
-                <div class="text-subtitle2 text-weight-bold col" style="color: #333">
+                <div class="text-subtitle2 text-weight-bold col" style="color: var(--fc-text)">
                   Оплата надзора клиентом
                 </div>
                 <q-btn
@@ -1066,18 +1066,18 @@
                   <q-tooltip>{{ clientPaymentSettings.notification_enabled ? 'Уведомления включены' : 'Уведомления отключены' }}</q-tooltip>
                 </q-btn>
               </div>
-              <div v-if="clientPaymentSettings.notification_enabled" class="text-caption" style="color: #888">
+              <div v-if="clientPaymentSettings.notification_enabled" class="text-caption" style="color: var(--fc-text-light)">
                 Напоминание {{ clientPaymentSettings.notification_day }}-го числа каждого месяца
               </div>
             </q-card-section>
 
             <q-list v-if="clientPayments.length > 0" dense separator>
-              <q-item v-for="cp in clientPayments" :key="cp.id" :style="cp.payment_date ? { background: '#E8F5E9' } : {}">
+              <q-item v-for="cp in clientPayments" :key="cp.id" :style="cp.payment_date ? { background: 'var(--fc-state-success-bg)' } : {}">
                 <q-item-section>
                   <q-item-label class="text-weight-medium" style="font-size: 13px">
                     {{ formatReportMonth(cp.payment_month) }}
                   </q-item-label>
-                  <q-item-label caption :style="{ color: cp.payment_date ? '#27AE60' : '#888' }">
+                  <q-item-label caption :style="{ color: cp.payment_date ? '#27AE60' : 'var(--fc-text-light)' }">
                     {{ cp.payment_date ? `Оплачено ${fmtDMY(cp.payment_date)}` : 'Не оплачено' }}
                   </q-item-label>
                   <div v-if="!isArchived" class="row items-center q-gutter-xs q-mt-xs">
@@ -1093,7 +1093,7 @@
                   </div>
                 </q-item-section>
                 <q-item-section side>
-                  <div class="text-weight-bold" :style="{ color: cp.payment_date ? '#27AE60' : '#333' }">
+                  <div class="text-weight-bold" :style="{ color: cp.payment_date ? '#27AE60' : 'var(--fc-text)' }">
                     {{ formatMoney(cp.amount) }}
                   </div>
                   <div class="column q-gutter-xs items-stretch q-mt-xs">
@@ -1145,7 +1145,7 @@
               </q-item>
             </q-list>
 
-            <q-card-section v-if="clientPayments.length === 0" class="text-center" style="color: #999; font-size: 12px">
+            <q-card-section v-if="clientPayments.length === 0" class="text-center" style="color: var(--fc-text-muted); font-size: 12px">
               Нет платежей клиента
             </q-card-section>
 
@@ -1167,12 +1167,12 @@
 
           <q-card class="is-card q-mb-md">
             <q-card-section class="q-pb-none">
-              <div class="text-subtitle2 text-weight-bold" style="color: #333">
+              <div class="text-subtitle2 text-weight-bold" style="color: var(--fc-text)">
                 Оплаты надзора
               </div>
             </q-card-section>
             <q-list v-if="filteredSvPayments.length > 0" dense separator>
-              <q-item v-for="p in filteredSvPayments" :key="p.id" :style="p.is_paid ? { background: '#E8F5E9' } : {}">
+              <q-item v-for="p in filteredSvPayments" :key="p.id" :style="p.is_paid ? { background: 'var(--fc-state-success-bg)' } : {}">
                 <q-item-section>
                   <q-item-label style="font-size: 12px">
                     {{ p.employee_name || 'Не указан' }}
@@ -1205,20 +1205,20 @@
                   </div>
                 </q-item-section>
                 <q-item-section side>
-                  <div class="text-weight-bold" :style="{ color: p.is_paid ? '#27AE60' : '#333' }">
+                  <div class="text-weight-bold" :style="{ color: p.is_paid ? '#27AE60' : 'var(--fc-text)' }">
                     {{ formatMoney(p.final_amount || p.amount || 0) }}
                   </div>
-                  <div class="text-caption" style="color: #888">
+                  <div class="text-caption" style="color: var(--fc-text-light)">
                     {{ p.is_paid ? 'оплачено' : p.payment_status === 'to_pay' ? 'к оплате' : 'в работе' }}
                   </div>
                 </q-item-section>
               </q-item>
             </q-list>
-            <div v-if="filteredSvPayments.length > 0" class="row items-center q-px-md q-py-xs" style="background: #F5F5F5; border-top: 1px solid #E0E0E0">
-              <span style="font-size: 12px; font-weight: bold; color: #333; flex: 1">Итого</span>
-              <span style="font-size: 13px; font-weight: bold; color: #333">{{ formatMoney(filteredSvPayments.reduce((s, p) => s + (p.final_amount || p.amount || 0), 0)) }}</span>
+            <div v-if="filteredSvPayments.length > 0" class="row items-center q-px-md q-py-xs" style="background: var(--fc-bg-alt); border-top: 1px solid var(--fc-border-light)">
+              <span style="font-size: 12px; font-weight: bold; color: var(--fc-text); flex: 1">Итого</span>
+              <span style="font-size: 13px; font-weight: bold; color: var(--fc-text)">{{ formatMoney(filteredSvPayments.reduce((s, p) => s + (p.final_amount || p.amount || 0), 0)) }}</span>
             </div>
-            <q-card-section v-if="filteredSvPayments.length === 0" class="text-center" style="color: #999; font-size: 12px">
+            <q-card-section v-if="filteredSvPayments.length === 0" class="text-center" style="color: var(--fc-text-muted); font-size: 12px">
               Нет оплат
             </q-card-section>
           </q-card>
@@ -1230,7 +1230,7 @@
           <q-card class="is-card q-mb-md">
             <q-card-section class="q-pb-none">
               <div class="row items-center justify-between">
-                <div class="text-subtitle2 text-weight-bold" style="color: #333">
+                <div class="text-subtitle2 text-weight-bold" style="color: var(--fc-text)">
                   Новая заметка
                 </div>
                 <VoiceRecorder :yandex-folder-path="svContractYdPath ? svContractYdPath + '/Авторский надзор' : ''" @recorded="onVoiceRecorded" />
@@ -1253,7 +1253,7 @@
                 icon="add"
                 label="Добавить заметку"
                 class="full-width"
-                style="background: #ffd93c; color: #333; font-size: 12px; height: 36px; border-radius: 4px"
+                style="background: var(--fc-accent); color: var(--fc-text); font-size: 12px; height: 36px; border-radius: 4px"
                 :disable="!noteText?.trim()"
                 @click="addTextNote"
               />
@@ -1263,7 +1263,7 @@
           <!-- Список заметок -->
           <q-card class="is-card">
             <q-card-section class="q-pb-none">
-              <div class="text-subtitle2 text-weight-bold" style="color: #333">
+              <div class="text-subtitle2 text-weight-bold" style="color: var(--fc-text)">
                 Все заметки
               </div>
             </q-card-section>
@@ -1273,10 +1273,10 @@
                   <q-icon :name="h.entry_type === 'voice_note' ? 'mic' : 'comment'" :color="h.entry_type === 'voice_note' ? 'purple' : 'blue-grey'" size="18px" />
                 </q-item-section>
                 <q-item-section>
-                  <q-item-label style="font-size: 12px; color: #333">
+                  <q-item-label style="font-size: 12px; color: var(--fc-text)">
                     {{ cleanNoteText(h) }}
                   </q-item-label>
-                  <q-item-label caption style="color: #888">
+                  <q-item-label caption style="color: var(--fc-text-light)">
                     {{ h.created_by_name || 'Неизвестный' }}
                   </q-item-label>
                 </q-item-section>
@@ -1284,13 +1284,13 @@
                   <audio :src="voiceStreamUrl(extractVoiceUrl(h))" controls preload="none" style="height: 36px; width: 120px" />
                 </q-item-section>
                 <q-item-section side>
-                  <div class="text-caption" style="color: #888">
+                  <div class="text-caption" style="color: var(--fc-text-light)">
                     {{ formatDate(h.created_at) }}
                   </div>
                 </q-item-section>
               </q-item>
             </q-list>
-            <q-card-section v-else class="text-center" style="color: #999; padding: 24px">
+            <q-card-section v-else class="text-center" style="color: var(--fc-text-muted); padding: 24px">
               <q-icon name="speaker_notes_off" size="32px" color="grey-4" class="q-mb-sm" /><div>Нет заметок</div>
             </q-card-section>
           </q-card>
@@ -1298,7 +1298,7 @@
 
         <!-- ====== ВКЛАДКА 7: Чат надзора (InlineChatRoom) ====== -->
         <q-tab-panel name="sv-chat" class="q-pa-sm">
-          <div style="border: 1px solid #E0E0E0; border-radius: 8px; overflow: hidden">
+          <div style="border: 1px solid var(--fc-border-light); border-radius: 8px; overflow: hidden">
             <InlineChatRoom
               v-if="svChatTabVisited && card?.id"
               chat-type="supervision"
@@ -1516,16 +1516,16 @@
           <div class="text-subtitle2 text-weight-bold">
             Ежемесячная ставка
           </div>
-          <div class="text-caption" style="color: #888">
+          <div class="text-caption" style="color: var(--fc-text-light)">
             {{ monthlyRateTarget.employee_name }} ({{ monthlyRateTarget.role }})
           </div>
         </q-card-section>
         <q-card-section class="q-pt-none q-gutter-y-sm">
-          <div v-if="activeMonthlyAssignment" class="q-pa-sm" style="background: #e8f5e9; border-radius: 8px; font-size: 12px">
+          <div v-if="activeMonthlyAssignment" class="q-pa-sm" style="background: var(--fc-state-success-bg); border-radius: 8px; font-size: 12px">
             Текущая ставка: <b>{{ activeMonthlyAssignment.monthly_amount }} ₽/мес.</b>
             (с {{ fmtDMY(activeMonthlyAssignment.start_date) }})
           </div>
-          <div class="text-caption" style="color: #aaa">
+          <div class="text-caption" style="color: var(--fc-text-disabled)">
             Ставка будет начислена за текущий месяц немедленно, затем 1-го числа каждого следующего месяца, пока карточка не переведена в «Выполненный проект».
           </div>
           <q-input
@@ -1559,7 +1559,7 @@
             unelevated
             no-caps
             label="Установить"
-            style="background: #ffd93c; color: #333"
+            style="background: var(--fc-accent); color: var(--fc-text)"
             :disable="!monthlyRateAmount || monthlyRateAmount <= 0"
             @click="saveMonthlyRate"
           />
@@ -1597,7 +1597,7 @@
               <q-item-label
                 :style="{
                   fontSize: '12px',
-                  color: idx < currentStageIndex ? '#2e7d32' : idx === currentStageIndex ? '#1565C0' : '#999',
+                  color: idx < currentStageIndex ? '#2e7d32' : idx === currentStageIndex ? '#1565C0' : 'var(--fc-text-muted)',
                   fontWeight: idx === currentStageIndex ? '600' : '400',
                 }"
               >
@@ -1616,7 +1616,7 @@
             <div class="text-subtitle2 text-weight-bold">
               Статистика выездов
             </div>
-            <div class="text-caption" style="color: #888">
+            <div class="text-caption" style="color: var(--fc-text-light)">
               Норма: {{ card?.min_visits_per_month ?? '—' }} выездов/мес.
             </div>
           </div>
@@ -1631,7 +1631,7 @@
         </q-card-section>
         <q-separator />
         <q-card-section class="q-pt-sm q-pb-md">
-          <div v-if="visitStatsByMonth.length === 0" class="text-caption text-center" style="color: #bbb; padding: 16px 0">
+          <div v-if="visitStatsByMonth.length === 0" class="text-caption text-center" style="color: var(--fc-text-disabled); padding: 16px 0">
             Выездов пока нет
           </div>
           <div v-for="row in visitStatsByMonth" :key="row.ym" class="q-mb-sm">
@@ -1668,14 +1668,14 @@
                 в норме
               </q-chip>
             </div>
-            <div class="row q-gutter-x-sm" style="font-size: 12px; color: #555">
+            <div class="row q-gutter-x-sm" style="font-size: 12px; color: var(--fc-text-medium)">
               <span>Плановых: <b>{{ row.regular }}</b></span>
               <span v-if="row.additional > 0">Доп.: <b style="color: #e65100">{{ row.additional }}</b></span>
               <span>Итого: <b>{{ row.total }}</b></span>
             </div>
           </div>
           <q-separator v-if="visitStatsByMonth.length > 0" class="q-my-sm" />
-          <div v-if="visitStatsByMonth.length > 0" class="row q-gutter-x-md" style="font-size: 12px; color: #333">
+          <div v-if="visitStatsByMonth.length > 0" class="row q-gutter-x-md" style="font-size: 12px; color: var(--fc-text)">
             <span>Всего плановых: <b>{{ visitStatsByMonth.reduce((s, r) => s + r.regular, 0) }}</b></span>
             <span>Всего доп.: <b style="color: #e65100">{{ visitStatsByMonth.reduce((s, r) => s + r.additional, 0) }}</b></span>
           </div>
@@ -1812,7 +1812,7 @@
     <!-- Диалог добавления записи -->
     <q-dialog v-model="showAddHistoryDlg">
       <q-card style="min-width: 320px; border-radius: 10px">
-        <q-toolbar style="background: #ffd93c; color: #333">
+        <q-toolbar style="background: var(--fc-accent); color: var(--fc-text)">
           <q-toolbar-title class="text-weight-bold" style="font-size: 14px">
             Добавить запись
           </q-toolbar-title>
@@ -1840,7 +1840,7 @@
             unelevated
             label="Добавить"
             no-caps
-            style="background: #ffd93c; color: #333; border-radius: 4px"
+            style="background: var(--fc-accent); color: var(--fc-text); border-radius: 4px"
             :disable="!historyNote"
             @click="doAddHistory"
           />
@@ -1851,7 +1851,7 @@
     <!-- Диалог создания Telegram-чата надзора -->
     <q-dialog v-model="showCreateSvChatDlg" persistent>
       <q-card style="min-width: 320px; border-radius: 10px">
-        <q-toolbar style="background: #ffd93c; color: #333">
+        <q-toolbar style="background: var(--fc-accent); color: var(--fc-text)">
           <q-toolbar-title class="text-weight-bold" style="font-size: 14px">
             Создать Telegram-чат
           </q-toolbar-title>
@@ -1878,7 +1878,7 @@
           <q-btn
             unelevated
             label="Создать"
-            style="background: #ffd93c; color: #333; border-radius: 4px"
+            style="background: var(--fc-accent); color: var(--fc-text); border-radius: 4px"
             no-caps
             :loading="svChatCreating"
             :disable="!newSvChatTitle.trim()"
@@ -2005,7 +2005,7 @@
             </q-item-section>
           </q-item>
         </q-list>
-        <q-card-section v-else class="text-center" style="color: #999">
+        <q-card-section v-else class="text-center" style="color: var(--fc-text-muted)">
           Нет доступных скриптов
         </q-card-section>
       </q-card>
@@ -2093,13 +2093,13 @@
       <q-fab
         v-model="fabOpen"
         direction="up"
-        style="background: #ffd93c; color: #333"
+        style="background: var(--fc-accent); color: var(--fc-text)"
         icon="more_horiz"
         active-icon="close"
       >
         <q-fab-action
           icon="label"
-          style="background: #ffd93c; color: #333"
+          style="background: var(--fc-accent); color: var(--fc-text)"
           label="Теги"
           external-label
           label-position="left"
@@ -2169,7 +2169,7 @@
             <div
               v-for="c in tagPresetColors"
               :key="c"
-              :style="{ width: '26px', height: '26px', borderRadius: '6px', background: c, cursor: 'pointer', border: newTagColor === c ? '3px solid #333' : '2px solid transparent', boxSizing: 'border-box' }"
+              :style="{ width: '26px', height: '26px', borderRadius: '6px', background: c, cursor: 'pointer', border: newTagColor === c ? '3px solid var(--fc-text)' : '2px solid transparent', boxSizing: 'border-box' }"
               @click="newTagColor = c"
             />
             <div style="position: relative; width: 26px; height: 26px; flex-shrink: 0">
@@ -2179,7 +2179,7 @@
                 style="position: absolute; top: 0; left: 0; width: 26px; height: 26px; border: none; padding: 0; cursor: pointer; opacity: 0"
                 @change="newTagColor = $event.target.value"
               >
-              <div :style="{ width: '26px', height: '26px', borderRadius: '6px', background: newTagColor, border: '2px dashed #999', boxSizing: 'border-box', pointerEvents: 'none' }" />
+              <div :style="{ width: '26px', height: '26px', borderRadius: '6px', background: newTagColor, border: '2px dashed var(--fc-text-muted)', boxSizing: 'border-box', pointerEvents: 'none' }" />
             </div>
           </div>
           <div v-if="newTagText" class="q-mt-xs">
@@ -2217,7 +2217,7 @@
     <!-- Диалог: Добавить платёж клиента -->
     <q-dialog v-model="showClientPayDialog" persistent>
       <q-card style="min-width: 300px; max-width: 420px; border-radius: 10px">
-        <q-card-section style="background: #F8F9FA; border-radius: 10px 10px 0 0">
+        <q-card-section style="background: var(--fc-bg-info); border-radius: 10px 10px 0 0">
           <div class="text-subtitle1 text-weight-bold">
             Ежемесячный платёж клиента
           </div>
@@ -2280,7 +2280,7 @@
     <!-- Диалог: Строительные работы -->
     <q-dialog v-model="showConstructionDialog" persistent>
       <q-card style="min-width: 320px; max-width: 480px; border-radius: 10px">
-        <q-card-section style="background: #F8F9FA; border-radius: 10px 10px 0 0">
+        <q-card-section style="background: var(--fc-bg-info); border-radius: 10px 10px 0 0">
           <div class="text-subtitle1 text-weight-bold">
             Строительные работы
           </div>
@@ -2303,11 +2303,11 @@
             class="q-mb-sm"
           />
           <q-separator class="q-my-sm" />
-          <div class="text-caption text-weight-bold q-mb-xs" style="color: #333">
+          <div class="text-caption text-weight-bold q-mb-xs" style="color: var(--fc-text)">
             Фактические оплаты
           </div>
           <div v-for="(p, idx) in constructionForm.payments" :key="idx" class="row items-center q-mb-xs">
-            <div class="col text-caption" style="color: #555">
+            <div class="col text-caption" style="color: var(--fc-text-medium)">
               {{ p.date }} — {{ formatMoney(p.amount) }}<span v-if="p.commission > 0"> (ком. {{ formatMoney(p.commission) }})</span>
             </div>
             <q-btn
@@ -2359,7 +2359,7 @@
             dense
             no-caps
             label="+ Добавить оплату"
-            style="background: #ffd93c; color: #333; font-size: 11px"
+            style="background: var(--fc-accent); color: var(--fc-text); font-size: 11px"
             @click="addConstructionPayment"
           />
         </q-card-section>
@@ -2379,7 +2379,7 @@
     <!-- Диалог: Черновые материалы -->
     <q-dialog v-model="showMaterialsDialog" persistent>
       <q-card style="min-width: 320px; max-width: 480px; border-radius: 10px">
-        <q-card-section style="background: #F8F9FA; border-radius: 10px 10px 0 0">
+        <q-card-section style="background: var(--fc-bg-info); border-radius: 10px 10px 0 0">
           <div class="text-subtitle1 text-weight-bold">
             Черновые материалы
           </div>
@@ -2402,12 +2402,12 @@
             class="q-mb-sm"
           />
           <q-separator class="q-my-sm" />
-          <div class="text-caption text-weight-bold q-mb-xs" style="color: #333">
+          <div class="text-caption text-weight-bold q-mb-xs" style="color: var(--fc-text)">
             Фактические заказы
           </div>
           <div v-for="(p, idx) in materialsForm.payments" :key="idx" class="row items-center q-mb-xs">
-            <div class="col text-caption" style="color: #555">
-              {{ p.date }} — {{ formatMoney(p.amount) }}<span v-if="p.supplier" style="color: #888"> ({{ p.supplier }})</span><span v-if="p.commission > 0"> ком. {{ formatMoney(p.commission) }}</span>
+            <div class="col text-caption" style="color: var(--fc-text-medium)">
+              {{ p.date }} — {{ formatMoney(p.amount) }}<span v-if="p.supplier" style="color: var(--fc-text-light)"> ({{ p.supplier }})</span><span v-if="p.commission > 0"> ком. {{ formatMoney(p.commission) }}</span>
             </div>
             <q-btn
               flat
@@ -2467,7 +2467,7 @@
             dense
             no-caps
             label="+ Добавить заказ"
-            style="background: #ffd93c; color: #333; font-size: 11px"
+            style="background: var(--fc-accent); color: var(--fc-text); font-size: 11px"
             @click="addMaterialsPayment"
           />
         </q-card-section>
@@ -2953,7 +2953,7 @@ function stageColor(status) {
 }
 
 function purchaseRowStyle(status) {
-  if (status === 'Закуплено' || status === 'Доставлено') return { background: '#E8F5E9' }
+  if (status === 'Закуплено' || status === 'Доставлено') return { background: 'var(--fc-state-success-bg)' }
   if (status === 'Просрочено') return { background: '#FFEBEE' }
   return {}
 }
@@ -3009,7 +3009,7 @@ function formatReportMonth(m) {
 
 // Цвет дедлайна
 function dlColor(deadline) {
-  if (!deadline) return '#888'
+  if (!deadline) return 'var(--fc-text-light)'
   const d = new Date(deadline)
   const now = new Date()
   const diff = Math.ceil((d - now) / (1000 * 60 * 60 * 24))

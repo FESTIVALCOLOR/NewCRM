@@ -8,15 +8,15 @@
           flat
           dense
           icon="arrow_back"
-          style="position: absolute; top: -8px; left: -8px; z-index: 10; width: 27px; height: 32px; min-height: 32px; min-width: 27px; max-width: 27px; max-height: 32px; padding: 0; overflow: hidden; background: white; border: 1.5px solid #E0E0E0; box-shadow: 0 2px 8px rgba(0,0,0,0.13); color: #555"
+          style="position: absolute; top: -8px; left: -8px; z-index: 10; width: 27px; height: 32px; min-height: 32px; min-width: 27px; max-width: 27px; max-height: 32px; padding: 0; overflow: hidden; background: var(--fc-bg); border: 1.5px solid var(--fc-border-light); box-shadow: 0 2px 8px var(--fc-shadow-md); color: var(--fc-text-medium)"
           @click="$router.back()"
         >
           <q-tooltip>Назад</q-tooltip>
         </q-btn>
-        <q-card-section style="background: #F8F9FA; border-radius: 8px 8px 0 0">
+        <q-card-section style="background: var(--fc-bg-info); border-radius: 8px 8px 0 0">
           <div class="row items-start justify-between q-mb-xs">
             <div style="flex: 1">
-              <div class="text-subtitle1 text-weight-bold" style="color: #555">
+              <div class="text-subtitle1 text-weight-bold" style="color: var(--fc-text-medium)">
                 {{ contract.contract_number }}
               </div>
               <div class="row items-center q-mt-xs">
@@ -28,7 +28,7 @@
                   class="q-mr-xs cursor-pointer"
                   @click="openMap(contract.address)"
                 />
-                <div class="text-body2" style="color: #333; flex: 1">
+                <div class="text-body2" style="color: var(--fc-text); flex: 1">
                   {{ contract.address }}
                 </div>
               </div>
@@ -38,15 +38,15 @@
               <q-badge v-if="contract.agent_type" text-color="white" :style="{ background: agentColor, minWidth: '100px', justifyContent: 'center', padding: '5px 8px', fontSize: '11px' }" :label="contract.agent_type" />
             </div>
           </div>
-          <div class="row items-center text-caption q-mt-xs" style="color: #888; gap: 0">
+          <div class="row items-center text-caption q-mt-xs" style="color: var(--fc-text-light); gap: 0">
             <span v-if="contract.project_type">{{ contract.project_type }}</span>
-            <span v-if="contract.project_subtype" style="color: #ccc; margin: 0 6px">|</span>
+            <span v-if="contract.project_subtype" style="color: var(--fc-border-card); margin: 0 6px">|</span>
             <span v-if="contract.project_subtype">{{ contract.project_subtype }}</span>
-            <span v-if="contract.area" style="color: #ccc; margin: 0 6px">|</span>
+            <span v-if="contract.area" style="color: var(--fc-border-card); margin: 0 6px">|</span>
             <span v-if="contract.area">{{ contract.area }} м²</span>
-            <span v-if="contract.city" style="color: #ccc; margin: 0 6px">|</span>
+            <span v-if="contract.city" style="color: var(--fc-border-card); margin: 0 6px">|</span>
             <span v-if="contract.city">{{ contract.city }}</span>
-            <span v-if="contract.floors" style="color: #ccc; margin: 0 6px">|</span>
+            <span v-if="contract.floors" style="color: var(--fc-border-card); margin: 0 6px">|</span>
             <span v-if="contract.floors">{{ contract.floors }} эт.</span>
           </div>
         </q-card-section>
@@ -66,7 +66,7 @@
                 <q-item-label caption>
                   Клиент
                 </q-item-label>
-                <q-item-label class="text-weight-bold" style="color: #333">
+                <q-item-label class="text-weight-bold" style="color: var(--fc-text)">
                   {{ clientDisplayName }}
                 </q-item-label>
               </q-item-section>
@@ -75,7 +75,7 @@
               </q-item-section>
             </q-item>
             <!-- Контакты клиента -->
-            <div v-if="clientData" class="row q-col-gutter-xs q-px-md q-pb-sm" style="border-top: 1px solid #F5F5F5; padding-top: 8px">
+            <div v-if="clientData" class="row q-col-gutter-xs q-px-md q-pb-sm" style="border-top: 1px solid var(--fc-bg-alt); padding-top: 8px">
               <div v-if="clientData.phone" class="col-auto">
                 <a :href="`tel:${clientData.phone}`" class="contact-chip">
                   <q-icon name="phone" size="12px" />
@@ -100,35 +100,35 @@
           <!-- Основные данные -->
           <q-card class="is-card q-mb-md">
             <q-card-section class="q-pb-none">
-              <div class="text-subtitle2 text-weight-bold" style="color: #333">
+              <div class="text-subtitle2 text-weight-bold" style="color: var(--fc-text)">
                 Основные данные
               </div>
             </q-card-section>
             <q-card-section>
               <div class="row">
                 <!-- Колонка 1: Дата, Срок -->
-                <div class="col-6" style="padding-right: 12px; border-right: 1px solid #E0E0E0">
+                <div class="col-6" style="padding-right: 12px; border-right: 1px solid var(--fc-border-light)">
                   <div v-if="contract.contract_date" class="q-mb-sm">
-                    <div class="text-caption" style="color: #999">
+                    <div class="text-caption" style="color: var(--fc-text-muted)">
                       Дата договора
                     </div>
-                    <div style="font-size: 13px; color: #333">
+                    <div style="font-size: 13px; color: var(--fc-text)">
                       {{ fmtDate(contract.contract_date) }}
                     </div>
                   </div>
                   <div v-if="contract.contract_period" class="q-mb-sm">
-                    <div class="text-caption" style="color: #999">
+                    <div class="text-caption" style="color: var(--fc-text-muted)">
                       Срок договора
                     </div>
-                    <div style="font-size: 13px; color: #333">
+                    <div style="font-size: 13px; color: var(--fc-text)">
                       {{ contract.contract_period }} раб. дней
                     </div>
                   </div>
                   <div v-if="contract.deadline || crmDeadline" class="q-mb-sm">
-                    <div class="text-caption" style="color: #999">
+                    <div class="text-caption" style="color: var(--fc-text-muted)">
                       Дедлайн проекта
                     </div>
-                    <div style="font-size: 13px; color: #333">
+                    <div style="font-size: 13px; color: var(--fc-text)">
                       {{ fmtDate(contract.deadline || crmDeadline) }}
                     </div>
                   </div>
@@ -136,37 +136,37 @@
                 <!-- Колонка 2: Сумма, Площадь, Город -->
                 <div class="col-6" style="padding-left: 12px">
                   <div v-if="contract.total_amount" class="q-mb-sm">
-                    <div class="text-caption" style="color: #999">
+                    <div class="text-caption" style="color: var(--fc-text-muted)">
                       Сумма договора
                     </div>
-                    <div style="font-size: 13px; color: #333; font-weight: bold">
+                    <div style="font-size: 13px; color: var(--fc-text); font-weight: bold">
                       {{ fmtMoney(contract.total_amount) }}
                     </div>
                   </div>
                   <div v-if="contract.area" class="q-mb-sm">
-                    <div class="text-caption" style="color: #999">
+                    <div class="text-caption" style="color: var(--fc-text-muted)">
                       Площадь
                     </div>
-                    <div style="font-size: 13px; color: #333">
+                    <div style="font-size: 13px; color: var(--fc-text)">
                       {{ contract.area }} м²
                     </div>
                   </div>
                   <div v-if="contract.city">
-                    <div class="text-caption" style="color: #999">
+                    <div class="text-caption" style="color: var(--fc-text-muted)">
                       Город
                     </div>
-                    <div style="font-size: 13px; color: #333">
+                    <div style="font-size: 13px; color: var(--fc-text)">
                       {{ contract.city }}
                     </div>
                   </div>
                 </div>
               </div>
               <!-- Комментарий — на всю ширину -->
-              <div v-if="contract.comments" class="q-mt-md" style="border-top: 1px solid #F0F0F0; padding-top: 8px">
-                <div class="text-caption" style="color: #999">
+              <div v-if="contract.comments" class="q-mt-md" style="border-top: 1px solid var(--fc-tab-hover); padding-top: 8px">
+                <div class="text-caption" style="color: var(--fc-text-muted)">
                   Комментарий
                 </div>
-                <div style="font-size: 13px; color: #333">
+                <div style="font-size: 13px; color: var(--fc-text)">
                   {{ contract.comments }}
                 </div>
               </div>
@@ -176,7 +176,7 @@
           <!-- Платежи от клиента (индивидуальный) -->
           <q-card v-if="contract.project_type === 'Индивидуальный'" class="is-card q-mb-md">
             <q-card-section class="q-pb-none">
-              <div class="text-subtitle2 text-weight-bold" style="color: #333">
+              <div class="text-subtitle2 text-weight-bold" style="color: var(--fc-text)">
                 Платежи от клиента
               </div>
             </q-card-section>
@@ -186,13 +186,13 @@
                   <q-item-label class="text-weight-medium">
                     {{ pay.label }}
                   </q-item-label>
-                  <q-item-label class="text-weight-bold" style="color: #333">
+                  <q-item-label class="text-weight-bold" style="color: var(--fc-text)">
                     {{ fmtMoney(pay.amount) }}
                     <span v-if="pay.amount && contract.total_amount" class="text-caption text-grey-6 q-ml-xs">
                       ({{ Math.round(pay.amount / contract.total_amount * 100) }}%)
                     </span>
                   </q-item-label>
-                  <q-item-label caption :style="{ color: pay.paidDate ? '#27AE60' : '#888' }">
+                  <q-item-label caption :style="{ color: pay.paidDate ? '#27AE60' : 'var(--fc-text-light)' }">
                     {{ pay.paidDate ? `Оплачено ${fmtDate(pay.paidDate)}` : 'Не оплачено' }}
                   </q-item-label>
                 </q-item-section>
@@ -231,7 +231,7 @@
                       icon="upload_file"
                       label="Чек"
                       no-caps
-                      style="color: #333; border-color: #ffd93c; border-radius: 4px; min-width: 105px; height: 30px"
+                      style="color: var(--fc-text); border-color: var(--fc-accent); border-radius: 4px; min-width: 105px; height: 30px"
                       @click="uploadReceipt(pay.key)"
                     />
                   </div>
@@ -243,17 +243,17 @@
           <!-- Шаблонный — 1 платёж -->
           <q-card v-if="contract.project_type === 'Шаблонный'" class="is-card q-mb-md">
             <q-card-section class="q-pb-none">
-              <div class="text-subtitle2 text-weight-bold" style="color: #333">
+              <div class="text-subtitle2 text-weight-bold" style="color: var(--fc-text)">
                 Оплата
               </div>
             </q-card-section>
             <q-list dense>
               <q-item>
                 <q-item-section>
-                  <q-item-label class="text-weight-bold" style="color: #333">
+                  <q-item-label class="text-weight-bold" style="color: var(--fc-text)">
                     {{ fmtMoney(contract.advance_payment || contract.total_amount) }}
                   </q-item-label>
-                  <q-item-label caption :style="{ color: contract.advance_payment_paid_date ? '#27AE60' : '#888' }">
+                  <q-item-label caption :style="{ color: contract.advance_payment_paid_date ? '#27AE60' : 'var(--fc-text-light)' }">
                     {{ contract.advance_payment_paid_date ? `Оплачено ${fmtDate(contract.advance_payment_paid_date)}` : 'Не оплачено' }}
                   </q-item-label>
                 </q-item-section>
@@ -292,7 +292,7 @@
           <q-card v-if="(contract.project_type === 'Авторский надзор' || contract.status === 'АВТОРСКИЙ НАДЗОР') && contract.supervision_card_id" class="is-card q-mb-md">
             <q-card-section class="q-pb-xs">
               <div class="row items-center">
-                <div class="text-subtitle2 text-weight-bold col" style="color: #333">
+                <div class="text-subtitle2 text-weight-bold col" style="color: var(--fc-text)">
                   Оплата надзора клиентом
                 </div>
                 <q-btn
@@ -307,18 +307,18 @@
                   <q-tooltip>{{ svClientPaymentSettings.notification_enabled ? 'Уведомления включены' : 'Уведомления отключены' }}</q-tooltip>
                 </q-btn>
               </div>
-              <div v-if="svClientPaymentSettings.notification_enabled" class="text-caption" style="color: #888">
+              <div v-if="svClientPaymentSettings.notification_enabled" class="text-caption" style="color: var(--fc-text-light)">
                 Напоминание {{ svClientPaymentSettings.notification_day }}-го числа каждого месяца
               </div>
             </q-card-section>
 
             <q-list v-if="svClientPayments.length > 0" dense separator>
-              <q-item v-for="cp in svClientPayments" :key="cp.id" :style="cp.payment_date ? { background: '#E8F5E9' } : {}">
+              <q-item v-for="cp in svClientPayments" :key="cp.id" :style="cp.payment_date ? { background: 'var(--fc-state-success-bg)' } : {}">
                 <q-item-section>
                   <q-item-label class="text-weight-medium" style="font-size: 13px">
                     {{ fmtMonth(cp.payment_month) }}
                   </q-item-label>
-                  <q-item-label caption :style="{ color: cp.payment_date ? '#27AE60' : '#888' }">
+                  <q-item-label caption :style="{ color: cp.payment_date ? '#27AE60' : 'var(--fc-text-light)' }">
                     {{ cp.payment_date ? `Оплачено ${fmtDMY(cp.payment_date)}` : 'Не оплачено' }}
                   </q-item-label>
                   <div class="row items-center q-gutter-xs q-mt-xs">
@@ -334,7 +334,7 @@
                   </div>
                 </q-item-section>
                 <q-item-section side>
-                  <div class="text-weight-bold" :style="{ color: cp.payment_date ? '#27AE60' : '#333' }">
+                  <div class="text-weight-bold" :style="{ color: cp.payment_date ? '#27AE60' : 'var(--fc-text)' }">
                     {{ fmtMoney(cp.amount) }}
                   </div>
                   <div class="column q-gutter-xs items-stretch q-mt-xs">
@@ -383,7 +383,7 @@
                 </q-item-section>
               </q-item>
             </q-list>
-            <q-card-section v-if="svClientPayments.length === 0" class="text-center" style="color: #999; font-size: 12px">
+            <q-card-section v-if="svClientPayments.length === 0" class="text-center" style="color: var(--fc-text-muted); font-size: 12px">
               Нет платежей
             </q-card-section>
             <q-card-section class="q-pt-xs q-pb-sm">
@@ -405,7 +405,7 @@
             <!-- Файлы: Договор -->
             <q-card class="is-card q-mb-md">
               <q-card-section class="q-pb-none">
-                <div class="text-subtitle2 text-weight-bold" style="color: #333">
+                <div class="text-subtitle2 text-weight-bold" style="color: var(--fc-text)">
                   Договор
                 </div>
               </q-card-section>
@@ -464,7 +464,7 @@
             <!-- Файлы: ТЗ -->
             <q-card class="is-card q-mb-md">
               <q-card-section class="q-pb-none">
-                <div class="text-subtitle2 text-weight-bold" style="color: #333">
+                <div class="text-subtitle2 text-weight-bold" style="color: var(--fc-text)">
                   Техническое задание
                 </div>
               </q-card-section>
@@ -523,7 +523,7 @@
             <!-- Файлы: Доп. соглашения -->
             <q-card class="is-card q-mb-md">
               <q-card-section class="q-pb-none">
-                <div class="text-subtitle2 text-weight-bold" style="color: #333">
+                <div class="text-subtitle2 text-weight-bold" style="color: var(--fc-text)">
                   Доп. соглашения
                 </div>
               </q-card-section>
@@ -583,17 +583,17 @@
           <!-- Файлы: Акты без подписи -->
           <q-card class="is-card q-mb-md">
             <q-card-section class="q-pb-none">
-              <div class="text-subtitle2 text-weight-bold" style="color: #333">
+              <div class="text-subtitle2 text-weight-bold" style="color: var(--fc-text)">
                 Акты (без подписи)
               </div>
             </q-card-section>
             <div v-if="filesByGroup.acts.length > 0" class="row q-col-gutter-sm q-pa-sm">
               <div v-for="f in filesByGroup.acts" :key="f.id" class="col-xs-12 col-sm-4">
                 <q-card flat bordered class="q-pa-sm" style="border-radius: 4px">
-                  <div style="font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #333">
+                  <div style="font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fc-text)">
                     {{ f.file_name }}
                   </div>
-                  <div class="text-caption" style="color: #888">
+                  <div class="text-caption" style="color: var(--fc-text-light)">
                     {{ stageLabel(f.stage) }}
                   </div>
                   <div class="row q-gutter-xs q-mt-xs">
@@ -664,17 +664,17 @@
           <!-- Файлы: Акты с подписью -->
           <q-card class="is-card q-mb-md">
             <q-card-section class="q-pb-none">
-              <div class="text-subtitle2 text-weight-bold" style="color: #333">
+              <div class="text-subtitle2 text-weight-bold" style="color: var(--fc-text)">
                 Акты (с подписью)
               </div>
             </q-card-section>
             <div v-if="filesByGroup.actsSigned.length > 0" class="row q-col-gutter-sm q-pa-sm">
               <div v-for="f in filesByGroup.actsSigned" :key="f.id" class="col-xs-12 col-sm-4">
                 <q-card flat bordered class="q-pa-sm" style="border-radius: 4px">
-                  <div style="font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #333">
+                  <div style="font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fc-text)">
                     {{ f.file_name }}
                   </div>
-                  <div class="text-caption" style="color: #888">
+                  <div class="text-caption" style="color: var(--fc-text-light)">
                     {{ stageLabel(f.stage) }}
                   </div>
                   <div class="row q-gutter-xs q-mt-xs">
@@ -746,7 +746,7 @@
           <q-card class="is-card q-mb-md">
             <q-card-section class="q-pb-none">
               <div class="row items-center justify-between">
-                <div class="text-subtitle2 text-weight-bold" style="color: #333">
+                <div class="text-subtitle2 text-weight-bold" style="color: var(--fc-text)">
                   Опрос клиента
                 </div>
                 <q-btn
@@ -756,7 +756,7 @@
                   no-caps
                   icon="add_task"
                   label="Создать опрос"
-                  style="background: #ffd93c; color: #333; font-size: 11px; height: 32px; border-radius: 4px"
+                  style="background: var(--fc-accent); color: var(--fc-text); font-size: 11px; height: 32px; border-radius: 4px"
                   :loading="surveysLoading"
                   @click="createSurvey"
                 />
@@ -779,47 +779,47 @@
                     <!-- Результаты опроса -->
                     <template v-if="s.status === 'completed'">
                       <div class="row q-gutter-xs q-mt-xs" style="flex-wrap: wrap">
-                        <div v-if="s.nps_score != null" class="text-caption" style="color: #333">
+                        <div v-if="s.nps_score != null" class="text-caption" style="color: var(--fc-text)">
                           NPS: <b>{{ s.nps_score }}</b>/10
                         </div>
-                        <div v-if="s.csat_score != null" class="text-caption" style="color: #888">
+                        <div v-if="s.csat_score != null" class="text-caption" style="color: var(--fc-text-light)">
                           ·
                         </div>
-                        <div v-if="s.csat_score != null" class="text-caption" style="color: #333">
+                        <div v-if="s.csat_score != null" class="text-caption" style="color: var(--fc-text)">
                           CSAT: <b>{{ s.csat_score }}</b>/5
                         </div>
-                        <div v-if="s.design_score != null" class="text-caption" style="color: #888">
+                        <div v-if="s.design_score != null" class="text-caption" style="color: var(--fc-text-light)">
                           ·
                         </div>
-                        <div v-if="s.design_score != null" class="text-caption" style="color: #333">
+                        <div v-if="s.design_score != null" class="text-caption" style="color: var(--fc-text)">
                           Дизайн: <b>{{ s.design_score }}</b>/5
                         </div>
-                        <div v-if="s.deadline_score != null" class="text-caption" style="color: #888">
+                        <div v-if="s.deadline_score != null" class="text-caption" style="color: var(--fc-text-light)">
                           ·
                         </div>
-                        <div v-if="s.deadline_score != null" class="text-caption" style="color: #333">
+                        <div v-if="s.deadline_score != null" class="text-caption" style="color: var(--fc-text)">
                           Сроки: <b>{{ s.deadline_score }}</b>/5
                         </div>
-                        <div v-if="s.communication_score != null" class="text-caption" style="color: #888">
+                        <div v-if="s.communication_score != null" class="text-caption" style="color: var(--fc-text-light)">
                           ·
                         </div>
-                        <div v-if="s.communication_score != null" class="text-caption" style="color: #333">
+                        <div v-if="s.communication_score != null" class="text-caption" style="color: var(--fc-text)">
                           Общение: <b>{{ s.communication_score }}</b>/5
                         </div>
-                        <div v-if="s.expectations_score != null" class="text-caption" style="color: #888">
+                        <div v-if="s.expectations_score != null" class="text-caption" style="color: var(--fc-text-light)">
                           ·
                         </div>
-                        <div v-if="s.expectations_score != null" class="text-caption" style="color: #333">
+                        <div v-if="s.expectations_score != null" class="text-caption" style="color: var(--fc-text)">
                           Ожидания: <b>{{ s.expectations_score }}</b>/5
                         </div>
                       </div>
-                      <div v-if="s.comment" class="text-caption q-mt-xs" style="color: #666; font-style: italic">
+                      <div v-if="s.comment" class="text-caption q-mt-xs" style="color: var(--fc-text-secondary); font-style: italic">
                         "{{ s.comment }}"
                       </div>
                     </template>
                     <!-- Ссылка на опрос (если не завершён) -->
                     <div v-if="s.survey_link && s.status !== 'completed'" class="q-mt-xs">
-                      <a :href="s.survey_link" target="_blank" style="color: #1677FF; font-size: 11px; word-break: break-all">{{ s.survey_link }}</a>
+                      <a :href="s.survey_link" target="_blank" style="color: var(--fc-link); font-size: 11px; word-break: break-all">{{ s.survey_link }}</a>
                     </div>
                   </q-item-section>
                   <q-item-section side style="flex-shrink: 0">
@@ -839,7 +839,7 @@
                 </q-item>
               </q-list>
             </template>
-            <q-card-section v-else class="text-center" style="color: #999; font-size: 12px">
+            <q-card-section v-else class="text-center" style="color: var(--fc-text-muted); font-size: 12px">
               Опросов нет
             </q-card-section>
           </q-card>
@@ -850,7 +850,7 @@
           <!-- Таблица сроков -->
           <q-card class="is-card">
             <div style="padding: 8px 16px; display: flex; align-items: center; gap: 8px">
-              <span style="flex: 1; font-weight: 600; font-size: 14px; color: #333">Таблица сроков</span>
+              <span style="flex: 1; font-weight: 600; font-size: 14px; color: var(--fc-text)">Таблица сроков</span>
               <template v-if="timeline.length > 0">
                 <button type="button" class="tl-export-btn" @click="exportTimelineExcel">
                   Excel
@@ -862,10 +862,10 @@
             </div>
             <q-card-section v-if="timeline.length === 0" class="text-center q-py-lg">
               <q-icon name="schedule" size="36px" color="grey-4" class="q-mb-sm" />
-              <div style="color: #999; font-size: 13px">
+              <div style="color: var(--fc-text-muted); font-size: 13px">
                 Таблица сроков не создана
               </div>
-              <div style="color: #bbb; font-size: 11px; margin-top: 4px">
+              <div style="color: var(--fc-text-disabled); font-size: 11px; margin-top: 4px">
                 Создайте её в CRM-карточке проекта
               </div>
             </q-card-section>
@@ -878,10 +878,10 @@
                   'bg-red-1': entry.actual_date && !entry.stage_code?.endsWith('_HDR') && entry.executor_role !== 'header' && (entry.actual_days || 0) > (entry.norm_days || 0) && (entry.norm_days || 0) > 0
                 }"
                 :style="entry.executor_role === 'header'
-                  ? { background: '#EEEEEE', fontWeight: 'bold' }
+                  ? { background: 'var(--fc-tab-inactive)', fontWeight: 'bold' }
                   : (entry.stage_code?.endsWith('_HDR')
-                    ? { background: '#F5F5F5', fontWeight: '600' }
-                    : (entry.status === 'skipped' ? { background: '#FAFAFA', opacity: 0.7 } : {}))"
+                    ? { background: 'var(--fc-bg-alt)', fontWeight: '600' }
+                    : (entry.status === 'skipped' ? { background: 'var(--fc-bg-hover)', opacity: 0.7 } : {}))"
               >
                 <q-item-section avatar>
                   <q-icon
@@ -891,15 +891,15 @@
                   />
                 </q-item-section>
                 <q-item-section>
-                  <q-item-label style="font-size: 11px; color: #333" :class="{ 'text-weight-bold': entry.stage_code?.endsWith('_HDR') || entry.executor_role === 'header' }">
+                  <q-item-label style="font-size: 11px; color: var(--fc-text)" :class="{ 'text-weight-bold': entry.stage_code?.endsWith('_HDR') || entry.executor_role === 'header' }">
                     {{ entry.stage_name }}
                   </q-item-label>
-                  <q-item-label caption style="color: #888">
+                  <q-item-label caption style="color: var(--fc-text-light)">
                     <span v-if="entry.norm_days">Норма: {{ entry.custom_norm_days || entry.norm_days }} дн.</span>
                     <span v-if="entry.actual_days"> | Факт: {{ entry.actual_days }} дн.</span>
                     <span v-if="entry.executor_role && entry.executor_role !== 'header'"> | {{ entry.executor_role }}</span>
                     <span v-if="!entry.is_in_contract_scope && entry.executor_role !== 'header' && !entry.stage_code?.endsWith('_HDR')" style="color: #e74c3c; font-style: italic"> | вне объёма</span>
-                    <span v-if="entry.status === 'skipped'" style="color: #bbb; font-style: italic"> | Пропущено</span>
+                    <span v-if="entry.status === 'skipped'" style="color: var(--fc-text-disabled); font-style: italic"> | Пропущено</span>
                     <span v-if="entry.actual_date && !entry.stage_code?.endsWith('_HDR') && entry.executor_role !== 'header' && (entry.actual_days || 0) > (entry.norm_days || 0) && (entry.norm_days || 0) > 0" style="color: #E74C3C; font-weight: bold"> | Просрочен</span>
                   </q-item-label>
                 </q-item-section>
@@ -911,20 +911,20 @@
               </q-item>
             </q-list>
             <!-- ИТОГО таймлайна -->
-            <q-card-section v-if="timeline.length > 0" class="q-pa-sm" style="border-top: 1px solid #eee">
+            <q-card-section v-if="timeline.length > 0" class="q-pa-sm" style="border-top: 1px solid var(--fc-border-light)">
               <div class="row items-center justify-between q-mb-xs">
-                <div class="text-weight-bold" style="font-size: 11px; color: #333">
+                <div class="text-weight-bold" style="font-size: 11px; color: var(--fc-text)">
                   Итого по договору
                 </div>
-                <div class="text-weight-bold" style="font-size: 12px; color: #333">
+                <div class="text-weight-bold" style="font-size: 12px; color: var(--fc-text)">
                   {{ timelineTotalInScope }} дн.
                 </div>
               </div>
               <div v-if="contractDeadline" class="row items-center justify-between q-mb-xs">
-                <div class="text-caption" style="color: #777">
+                <div class="text-caption" style="color: var(--fc-text-light)">
                   Дедлайн
                 </div>
-                <div class="text-caption text-weight-bold" style="color: #777">
+                <div class="text-caption text-weight-bold" style="color: var(--fc-text-light)">
                   {{ fmtDateShort(contractDeadline) }}
                 </div>
               </div>
@@ -945,18 +945,18 @@
                 </div>
               </div>
               <div class="row items-center justify-between q-mb-xs">
-                <div class="text-caption" style="color: #777">
+                <div class="text-caption" style="color: var(--fc-text-light)">
                   Итого с учётом вне объёма
                 </div>
-                <div class="text-caption text-weight-bold" style="color: #777">
+                <div class="text-caption text-weight-bold" style="color: var(--fc-text-light)">
                   {{ timelineTotalAll }} дн.
                 </div>
               </div>
               <div v-if="timelineActualTotal > 0" class="row items-center justify-between q-mb-xs">
-                <div class="text-caption" style="color: #555">
+                <div class="text-caption" style="color: var(--fc-text-medium)">
                   Факт
                 </div>
-                <div class="text-caption text-weight-bold" style="color: #555">
+                <div class="text-caption text-weight-bold" style="color: var(--fc-text-medium)">
                   {{ timelineActualTotal }} дн.
                 </div>
               </div>
@@ -987,18 +987,18 @@
                 </div>
               </div>
               <div v-if="contractPauseInfo.postStart > 0" class="row items-center justify-between">
-                <div class="text-caption" style="color: #888">
+                <div class="text-caption" style="color: var(--fc-text-light)">
                   <q-icon name="pause_circle_outline" size="12px" class="q-mr-xs" />Дни ожидания (добавлены к дедлайну)
                 </div>
-                <div class="text-caption text-weight-bold" style="color: #888">
+                <div class="text-caption text-weight-bold" style="color: var(--fc-text-light)">
                   +{{ contractPauseInfo.postStart }} дн.
                 </div>
               </div>
               <div v-if="contractPauseInfo.preStart > 0" class="row items-center justify-between">
-                <div class="text-caption" style="color: #888">
+                <div class="text-caption" style="color: var(--fc-text-light)">
                   <q-icon name="pause_circle_outline" size="12px" class="q-mr-xs" />Дни ожидания (до начала разработки)
                 </div>
-                <div class="text-caption text-weight-bold" style="color: #888">
+                <div class="text-caption text-weight-bold" style="color: var(--fc-text-light)">
                   +{{ contractPauseInfo.preStart }} дн.
                 </div>
               </div>
@@ -1021,7 +1021,7 @@
 
       <!-- FAB кнопки -->
       <q-page-sticky position="bottom-right" :offset="[18, 18]">
-        <q-fab icon="more_vert" direction="up" style="background: #ffd93c; color: #333" vertical-actions-align="right">
+        <q-fab icon="more_vert" direction="up" style="background: var(--fc-accent); color: var(--fc-text)" vertical-actions-align="right">
           <q-fab-action
             icon="sync"
             style="background: #5DADE2; color: white"
@@ -1034,7 +1034,7 @@
           <q-fab-action
             v-if="can('contracts.update')"
             icon="edit"
-            style="background: #ffd93c; color: #333"
+            style="background: var(--fc-accent); color: var(--fc-text)"
             label="Редактировать"
             external-label
             label-position="left"
@@ -1071,7 +1071,7 @@
       <!-- Диалог: Ежемесячный платёж клиента по надзору -->
       <q-dialog v-model="showSvClientPayDialog" persistent>
         <q-card style="min-width: 300px; max-width: 420px; border-radius: 10px">
-          <q-card-section style="background: #F8F9FA; border-radius: 10px 10px 0 0">
+          <q-card-section style="background: var(--fc-bg-info); border-radius: 10px 10px 0 0">
             <div class="text-subtitle1 text-weight-bold">
               Ежемесячный платёж клиента
             </div>
@@ -1120,7 +1120,7 @@
       </q-dialog>
     </template>
 
-    <div v-else-if="!loading" class="text-center q-pa-xl" style="color: #999">
+    <div v-else-if="!loading" class="text-center q-pa-xl" style="color: var(--fc-text-muted)">
       <q-icon name="description" size="48px" class="q-mb-sm" /><div>Договор не найден</div>
     </div>
     <div v-else class="text-center q-pa-xl">
@@ -1131,7 +1131,7 @@
     <q-dialog v-model="payDialogOpen" persistent>
       <q-card style="min-width: 300px; border-radius: 12px">
         <q-card-section>
-          <div class="text-subtitle1 text-weight-bold" style="color: #333">
+          <div class="text-subtitle1 text-weight-bold" style="color: var(--fc-text)">
             Подтвердить оплату
           </div>
         </q-card-section>
@@ -1149,7 +1149,7 @@
               text-color="grey-7"
               toggle-color="primary"
               toggle-text-color="white"
-              style="border: 1px solid #ccc; border-radius: 6px"
+              style="border: 1px solid var(--fc-border-card); border-radius: 6px"
             />
             <span class="text-caption text-grey-6 q-ml-sm">
               <template v-if="payDialogMode === 'rub' && payDialogCalcPercent !== null">
@@ -1542,22 +1542,22 @@ function exportTimelinePdf() {
   <style>
     body { font-family: Arial, sans-serif; font-size: 10px; color: #222; margin: 16px; }
     h2 { font-size: 13px; margin: 0 0 2px; }
-    .sub { color: #666; margin-bottom: 12px; font-size: 10px; }
+    .sub { color: var(--fc-text-secondary); margin-bottom: 12px; font-size: 10px; }
     table { border-collapse: collapse; width: 100%; }
-    th { background: #ffd93c; color: #333; font-weight: bold; padding: 4px 6px; text-align: left; border: 1px solid #ddd; font-size: 10px; }
-    td { padding: 3px 6px; border: 1px solid #eee; vertical-align: middle; }
+    th { background: var(--fc-accent); color: var(--fc-text); font-weight: bold; padding: 4px 6px; text-align: left; border: 1px solid var(--fc-border); font-size: 10px; }
+    td { padding: 3px 6px; border: 1px solid var(--fc-border-light); vertical-align: middle; }
     .num { text-align: right; white-space: nowrap; }
-    .grp-hdr td { background: #e0e0e0; font-weight: bold; font-size: 10px; }
-    .sub-hdr td { background: #f5f5f5; font-weight: 600; font-size: 10px; }
+    .grp-hdr td { background: var(--fc-border-light); font-weight: bold; font-size: 10px; }
+    .sub-hdr td { background: var(--fc-bg-alt); font-weight: 600; font-size: 10px; }
     .ontime td { background: #f0fff4; }
     .overdue td { background: #fff5f5; }
     .skipped td { opacity: 0.55; }
-    .out-tag { color: #999; font-style: italic; font-size: 9px; }
+    .out-tag { color: var(--fc-text-muted); font-style: italic; font-size: 9px; }
     .tag-ok { color: #27ae60; font-weight: bold; }
     .tag-over { color: #e74c3c; font-weight: bold; }
-    .tag-skip { color: #aaa; }
-    .total-row td { border-top: 2px solid #333; font-size: 11px; }
-    .total-sub td { color: #888; }
+    .tag-skip { color: var(--fc-text-disabled); }
+    .total-row td { border-top: 2px solid var(--fc-text); font-size: 11px; }
+    .total-sub td { color: var(--fc-text-light); }
     @media print { @page { margin: 12mm; size: A4; } }
   </style></head><body>
   <h2>Таблица сроков — Договор №${num}</h2>
@@ -2101,10 +2101,10 @@ onMounted(async () => {
 .tl-export-btn {
   height: 26px;
   padding: 0 10px;
-  border: 1px solid #2196f3;
+  border: 1px solid var(--fc-link);
   border-radius: 4px;
-  background: white;
-  color: #2196f3;
+  background: var(--fc-bg);
+  color: var(--fc-link);
   font-size: 11px;
   font-family: inherit;
   cursor: pointer;
@@ -2116,7 +2116,7 @@ onMounted(async () => {
   justify-content: center;
 }
 .tl-export-btn:hover {
-  background: #e3f2fd;
+  background: var(--fc-selected-bg);
 }
 
 /* Ландшафт: основная сетка — 2 колонки (левая=данные, правая=документы) */
@@ -2155,13 +2155,13 @@ onMounted(async () => {
   padding: 2px 8px;
   border-radius: 12px;
   font-size: 11px;
-  background: #F5F5F5;
-  color: #333;
+  background: var(--fc-bg-alt);
+  color: var(--fc-text);
   text-decoration: none;
   cursor: pointer;
 }
 .contact-chip--tg {
-  background: #E3F2FD;
+  background: var(--fc-selected-bg);
   color: #1565C0;
 }
 

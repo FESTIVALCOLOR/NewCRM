@@ -8,7 +8,7 @@
   >
     <q-card>
       <!-- Жёлтый заголовок, чёрный текст -->
-      <q-toolbar style="background: #ffd93c; color: #333">
+      <q-toolbar style="background: var(--fc-accent); color: var(--fc-text)">
         <q-btn
           flat
           round
@@ -328,10 +328,10 @@ async function save() {
 .save-btn {
   height: 34px;
   padding: 0 14px;
-  border: 1px solid #333;
+  border: 1px solid var(--fc-text);
   border-radius: 8px;
   background: transparent;
-  color: #333;
+  color: var(--fc-text);
   font-size: 13px;
   font-family: inherit;
   cursor: pointer;

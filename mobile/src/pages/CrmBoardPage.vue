@@ -1,7 +1,7 @@
 <template>
   <q-page>
     <!-- Компактный тулбар: Инд/Шабл + Актив/Архив в одну строку -->
-    <div style="border-bottom: 1px solid #E0E0E0; padding: 6px 8px">
+    <div style="border-bottom: 1px solid var(--fc-border-light); padding: 6px 8px">
       <div class="row items-center no-wrap">
         <!-- Тип проекта — pill toggle -->
         <div class="toggle-pills">
@@ -48,7 +48,7 @@
             <q-icon name="search" size="18px" />
           </template>
         </q-input>
-        <div v-if="archiveFiltered.length === 0" class="text-center q-py-xl" style="color: #999">
+        <div v-if="archiveFiltered.length === 0" class="text-center q-py-xl" style="color: var(--fc-text-muted)">
           <q-icon name="archive" size="40px" class="q-mb-sm" />
           <div class="text-caption">
             {{ archiveSearch ? 'Ничего не найдено' : 'Архив пуст' }}
@@ -241,7 +241,7 @@
     <!-- Диалог перемещения карточки (long-press) -->
     <q-dialog v-model="moveDialogVisible">
       <q-card style="min-width: 320px; border-radius: 10px">
-        <q-toolbar style="background: #ffd93c; color: #333">
+        <q-toolbar style="background: var(--fc-accent); color: var(--fc-text)">
           <q-toolbar-title class="text-weight-bold" style="font-size: 14px">
             Переместить карточку
           </q-toolbar-title>
@@ -257,7 +257,7 @@
           <div class="text-weight-bold" style="font-size: 12px">
             {{ moveCard.contract_number }} — {{ moveCard.address }}
           </div>
-          <div class="text-caption q-mt-xs" style="color: #888">
+          <div class="text-caption q-mt-xs" style="color: var(--fc-text-light)">
             Текущая: {{ moveCard.column_name }}
           </div>
         </q-card-section>
@@ -274,7 +274,7 @@
               @click="selectMoveColumn(col)"
             >
               <q-item-section>
-                <q-item-label :style="{ color: moveCard?.column_name === col ? '#ccc' : '#333', fontSize: '13px' }">
+                <q-item-label :style="{ color: moveCard?.column_name === col ? 'var(--fc-border-card)' : 'var(--fc-text)', fontSize: '13px' }">
                   {{ col }}
                 </q-item-label>
               </q-item-section>
@@ -291,7 +291,7 @@
         <!-- Шаг 2: назначение сотрудника (если стадия требует) -->
         <template v-if="moveStep === 2">
           <q-card-section>
-            <div class="text-caption q-mb-sm" style="color: #888">
+            <div class="text-caption q-mb-sm" style="color: var(--fc-text-light)">
               Стадия: {{ moveTargetCol }}
             </div>
             <q-select
@@ -320,7 +320,7 @@
               class="q-mb-xs"
             />
             <div v-if="moveNormDays > 0" style="font-size: 11px; color: #2F5496; font-weight: 600; margin-bottom: 8px">
-              Норма дней: {{ moveNormDays }} раб. дн.<span v-if="moveSubstepName" style="font-weight: 400; color: #666"> · {{ moveSubstepName }}</span>
+              Норма дней: {{ moveNormDays }} раб. дн.<span v-if="moveSubstepName" style="font-weight: 400; color: var(--fc-text-secondary)"> · {{ moveSubstepName }}</span>
             </div>
           </q-card-section>
           <q-card-actions align="right">
@@ -328,7 +328,7 @@
             <q-btn
               unelevated
               label="Переместить"
-              style="background: #ffd93c; color: #333; border-radius: 4px"
+              style="background: var(--fc-accent); color: var(--fc-text); border-radius: 4px"
               no-caps
               :loading="moveLoading"
               @click="doMoveWithAssign"
@@ -339,7 +339,7 @@
         <!-- Шаг 3: Завершение проекта -->
         <template v-if="moveStep === 3">
           <q-card-section>
-            <div class="text-caption q-mb-sm" style="color: #888">
+            <div class="text-caption q-mb-sm" style="color: var(--fc-text-light)">
               Выберите статус завершения проекта
             </div>
             <q-option-group
@@ -368,7 +368,7 @@
             <q-btn
               unelevated
               label="Завершить"
-              style="background: #ffd93c; color: #333; border-radius: 4px"
+              style="background: var(--fc-accent); color: var(--fc-text); border-radius: 4px"
               no-caps
               :loading="moveLoading"
               @click="doCompleteProject"
@@ -421,7 +421,7 @@
           />
           <div v-if="boardRejectSubstage" class="q-mb-sm row items-center q-gutter-xs">
             <q-icon name="subdirectory_arrow_right" color="grey-6" size="16px" />
-            <span style="font-size: 12px; color: #666">Папка правок:</span>
+            <span style="font-size: 12px; color: var(--fc-text-secondary)">Папка правок:</span>
             <q-chip dense color="orange-2" text-color="orange-9" style="font-size: 11px">
               {{ boardRejectSubstage === 'concept' ? 'Концепция-коллажи / Правки' : '3D визуализация / Правки' }}
             </q-chip>
@@ -554,7 +554,7 @@ function onDragMove(e) {
     try { _dragEl?.setPointerCapture(_dragPointerId) } catch {}
     const src = _dragEl
     _dragGhost = src.cloneNode(true)
-    _dragGhost.style.cssText = `position:fixed;pointer-events:none;opacity:0.75;z-index:9999;width:${src.offsetWidth}px;box-shadow:0 6px 24px rgba(0,0,0,0.25);transform:rotate(2deg) scale(1.03);border-radius:8px;background:#fff;`
+    _dragGhost.style.cssText = `position:fixed;pointer-events:none;opacity:0.75;z-index:9999;width:${src.offsetWidth}px;box-shadow:0 6px 24px rgba(0,0,0,0.25);transform:rotate(2deg) scale(1.03);border-radius:8px;background:var(--fc-bg);`
     document.body.appendChild(_dragGhost)
   }
   if (_dragGhost) {
@@ -1108,14 +1108,14 @@ onMounted(async () => {
 /* Toggle pill buttons */
 .toggle-pills {
   display: inline-flex;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--fc-border);
   border-radius: 6px;
   overflow: hidden;
 }
 .toggle-pills button {
   border: none;
-  background: #F0F0F0;
-  color: #666;
+  background: var(--fc-tab-hover);
+  color: var(--fc-text-secondary);
   font-size: 11px;
   padding: 5px 12px;
   cursor: pointer;
@@ -1123,17 +1123,17 @@ onMounted(async () => {
   font-family: inherit;
 }
 .toggle-pills button.active {
-  background: white;
-  color: #333;
+  background: var(--fc-bg);
+  color: var(--fc-text);
   font-weight: bold;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  box-shadow: 0 1px 3px var(--fc-shadow-sm);
 }
 .toggle-pills button + button {
-  border-left: 1px solid #d9d9d9;
+  border-left: 1px solid var(--fc-border);
 }
 .pill-count {
   display: inline-block;
-  background: rgba(0,0,0,0.12);
+  background: var(--fc-shadow-sm);
   border-radius: 8px;
   font-size: 10px;
   font-weight: bold;
@@ -1143,14 +1143,14 @@ onMounted(async () => {
   text-align: center;
 }
 .toggle-pills button.active .pill-count {
-  background: #ffd93c;
-  color: #333;
+  background: var(--fc-accent);
+  color: var(--fc-text);
 }
 
 /* Column navigation mini-bar */
 .column-nav {
   overflow-x: auto;
-  border-bottom: 1px solid #E0E0E0;
+  border-bottom: 1px solid var(--fc-border-light);
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
 }
@@ -1164,10 +1164,10 @@ onMounted(async () => {
   box-sizing: border-box;
 }
 .column-nav button {
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--fc-border);
   border-radius: 16px;
-  background: #F5F5F5;
-  color: #888;
+  background: var(--fc-bg-alt);
+  color: var(--fc-text-light);
   font-size: 10px;
   padding: 3px 10px;
   white-space: nowrap;
@@ -1177,9 +1177,9 @@ onMounted(async () => {
   flex-shrink: 0;
 }
 .column-nav button.active {
-  background: #333;
+  background: var(--fc-text);
   color: white;
-  border-color: #333;
+  border-color: var(--fc-text);
   font-weight: bold;
 }
 .column-nav button .count {
@@ -1196,10 +1196,10 @@ onMounted(async () => {
 
 /* Column frame inside carousel */
 .column-frame {
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--fc-border);
   border-radius: 8px;
   margin: 8px;
-  background: #FAFAFA;
+  background: var(--fc-bg-hover);
   min-height: calc(100vh - 260px);
   display: flex;
   flex-direction: column;
@@ -1209,8 +1209,8 @@ onMounted(async () => {
   align-items: flex-start;
   justify-content: space-between;
   padding: 8px 12px;
-  border-bottom: 1px solid #E0E0E0;
-  background: white;
+  border-bottom: 1px solid var(--fc-border-light);
+  background: var(--fc-bg);
   border-radius: 8px 8px 0 0;
   min-height: 52px;
   box-sizing: border-box;
@@ -1218,7 +1218,7 @@ onMounted(async () => {
 .column-title {
   font-size: 13px;
   font-weight: bold;
-  color: #333;
+  color: var(--fc-text);
   flex: 1;
   white-space: normal;
   line-height: 1.35;
@@ -1234,7 +1234,7 @@ onMounted(async () => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: #bbb;
+  color: var(--fc-text-disabled);
   font-size: 12px;
   padding: 40px 0;
 }
@@ -1253,7 +1253,7 @@ onMounted(async () => {
   overflow-y: hidden;
   gap: 8px;
   padding: 8px;
-  background: #fff;
+  background: var(--fc-bg);
   z-index: 1;
   -webkit-overflow-scrolling: touch;
 }
@@ -1274,12 +1274,12 @@ onMounted(async () => {
   font-size: 11px;
   font-weight: bold;
   flex-shrink: 0;
-  background: #E0E0E0;
-  color: #888;
+  background: var(--fc-border-light);
+  color: var(--fc-text-light);
 }
 .col-count-badge.has-cards {
-  background: #ffd93c;
-  color: #333;
+  background: var(--fc-accent);
+  color: var(--fc-text);
 }
 .landscape-column .column-frame {
   flex: 1;
@@ -1310,8 +1310,8 @@ onMounted(async () => {
   pointer-events: none;
 }
 .landscape-column.drag-over > .column-frame {
-  border-color: #ffd93c;
-  box-shadow: 0 0 0 2px #ffd93c;
-  background: #fffde7;
+  border-color: var(--fc-accent);
+  box-shadow: 0 0 0 2px var(--fc-accent);
+  background: var(--fc-highlight-yellow);
 }
 </style>

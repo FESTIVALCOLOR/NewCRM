@@ -106,7 +106,7 @@
     <!-- Диалог редактирования профиля -->
     <q-dialog v-model="showEditProfile">
       <q-card style="min-width: 320px; border-radius: 10px">
-        <q-toolbar style="background: #ffd93c; color: #333">
+        <q-toolbar style="background: var(--fc-accent); color: var(--fc-text)">
           <q-toolbar-title class="text-weight-bold" style="font-size: 14px">
             Редактировать профиль
           </q-toolbar-title>
@@ -140,7 +140,7 @@
           <q-btn
             unelevated
             label="Сохранить"
-            style="background: #ffd93c; color: #333; border-radius: 4px"
+            style="background: var(--fc-accent); color: var(--fc-text); border-radius: 4px"
             no-caps
             :loading="profileSaving"
             @click="saveProfile"

@@ -41,7 +41,7 @@ onMounted(() => {
     description: 'Чат с дизайн-бюро Festival Color',
     display: 'standalone',
     orientation: 'any',
-    background_color: '#ffffff',
+    background_color: 'var(--fc-bg)',
     theme_color: '#2e7d32',
     lang: 'ru',
     start_url: `/c/${token}`,

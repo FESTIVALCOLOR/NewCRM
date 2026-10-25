@@ -3,10 +3,13 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch, provide } from 'vue'
+import { ref, onMounted, onUnmounted, provide } from 'vue'
 import { useMeta, useQuasar } from 'quasar'
 
 const $q = useQuasar()
+
+// Автоматическое переключение темы по системному режиму
+$q.dark.set('auto')
 
 useMeta({
   title: 'Interior Studio CRM',

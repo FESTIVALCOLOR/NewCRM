@@ -5,7 +5,7 @@
     style="transition: --drawer-offset 0.3s"
   >
     <!-- Header: лого + текст + кнопки (инструкция, настройки, выход) -->
-    <q-header class="bg-white text-dark" style="border-bottom: 1px solid #E0E0E0">
+    <q-header style="background: var(--fc-bg); color: var(--fc-text); border-bottom: 1px solid var(--fc-border-light)">
       <q-toolbar style="min-height: 44px; padding: 0 4px">
         <q-btn
           flat
@@ -18,10 +18,10 @@
         />
         <img src="/logo.png" alt="" style="height: 22px; width: auto" class="q-mr-xs">
         <!-- На мобильном: CRM FESTIVAL COLOR, на планшете: полный текст -->
-        <div class="text-weight-bold ellipsis gt-xs" style="font-size: 11px; color: #333">
+        <div class="text-weight-bold ellipsis gt-xs" style="font-size: 11px; color: var(--fc-text)">
           Система управления заказами FESTIVAL COLOR
         </div>
-        <div class="text-weight-bold ellipsis lt-sm" style="font-size: 11px; color: #333">
+        <div class="text-weight-bold ellipsis lt-sm" style="font-size: 11px; color: var(--fc-text)">
           CRM FESTIVAL COLOR
         </div>
         <q-space />
@@ -149,7 +149,7 @@
           round
           icon="logout"
           size="sm"
-          style="color: #ccc"
+          style="color: var(--fc-border-card)"
           @click="handleLogout"
         >
           <q-tooltip>Выйти</q-tooltip>
@@ -160,7 +160,7 @@
     <!-- Диалог: подробности состояния сервера -->
     <q-dialog v-model="showDiskPopup" position="top">
       <q-card style="min-width: 260px; border-radius: 10px; margin-top: 52px">
-        <q-toolbar style="background: #f5f5f5; border-bottom: 1px solid #E0E0E0; min-height: 40px">
+        <q-toolbar style="background: var(--fc-bg-alt); border-bottom: 1px solid var(--fc-border-light); min-height: 40px">
           <q-toolbar-title style="font-size: 13px; font-weight: 600">
             Состояние сервера
           </q-toolbar-title>
@@ -257,7 +257,8 @@
       :width="260"
       :breakpoint="1024"
       bordered
-      class="bg-white"
+      :dark="$q.dark.isActive"
+      style="background: var(--fc-bg)"
     >
       <div class="q-pa-md">
         <div class="row items-center q-gutter-sm">
@@ -268,10 +269,10 @@
             </template>
           </q-avatar>
           <div>
-            <div class="text-subtitle2 text-weight-bold" style="color: #333">
+            <div class="text-subtitle2 text-weight-bold" style="color: var(--fc-text)">
               {{ authStore.fullName }}
             </div>
-            <div class="text-caption" style="color: #888">
+            <div class="text-caption" style="color: var(--fc-text-light)">
               {{ authStore.userPosition }}
             </div>
           </div>
@@ -304,7 +305,7 @@
         v-if="onlineCount > 0"
         v-ripple
         clickable
-        style="color: #555"
+        style="color: var(--fc-text-medium)"
         @click="showOnlinePopup = true"
       >
         <q-item-section avatar>
@@ -349,7 +350,7 @@
           />
         </q-card-section>
         <q-card-section>
-          <p class="text-body2 q-mb-md" style="color: #555">
+          <p class="text-body2 q-mb-md" style="color: var(--fc-text-medium)">
             Чтобы установить приложение на iOS:
           </p>
           <div class="q-gutter-sm">
@@ -404,10 +405,10 @@
         <q-card-section>
           <!-- Mac Safari (macOS Sonoma+) -->
           <template v-if="isMacSafari">
-            <div class="text-subtitle2 q-mb-xs" style="color: #1a1a1a">
+            <div class="text-subtitle2 q-mb-xs" style="color: var(--fc-text)">
               <q-icon name="laptop_mac" size="16px" class="q-mr-xs" />Mac (Safari)
             </div>
-            <div style="font-size: 13px; color: #444; line-height: 1.8">
+            <div style="font-size: 13px; color: var(--fc-text-medium); line-height: 1.8">
               1. Убедитесь, что используете <b>Safari</b> (macOS Sonoma 14+)<br>
               2. В меню <b>«Файл»</b> выберите <b>«Добавить в Dock»</b><br>
               <span style="font-size: 12px">— или нажмите «Поделиться» → «Добавить в Dock»</span><br>
@@ -423,7 +424,7 @@
             <div class="text-subtitle2 q-mb-xs" style="color: #FF6600">
               <q-icon name="phone_android" size="16px" class="q-mr-xs" />Яндекс Браузер (Android)
             </div>
-            <div style="font-size: 13px; color: #444; line-height: 1.8">
+            <div style="font-size: 13px; color: var(--fc-text-medium); line-height: 1.8">
               1. Три точки <q-icon name="more_vert" size="14px" /> в адресной строке<br>
               2. Выберите <b>«Добавить ярлык на рабочий стол»</b><br>
               3. Нажмите <b>«Добавить»</b> — иконка появится на экране
@@ -435,7 +436,7 @@
             <div class="text-subtitle2 q-mb-xs" style="color: #FF6600">
               <q-icon name="laptop_windows" size="16px" class="q-mr-xs" />Яндекс Браузер
             </div>
-            <div style="font-size: 13px; color: #555; line-height: 1.8">
+            <div style="font-size: 13px; color: var(--fc-text-medium); line-height: 1.8">
               Яндекс Браузер не поддерживает установку PWA-приложений на рабочий стол.<br><br>
               Для автоматической установки откройте этот сайт в:
             </div>
@@ -447,7 +448,7 @@
                 <q-icon name="language" size="15px" class="q-mr-xs" /><b>Microsoft Edge</b> — crm.festivalcolor.ru
               </div>
             </div>
-            <div class="q-mt-sm" style="font-size: 11px; color: #888">
+            <div class="q-mt-sm" style="font-size: 11px; color: var(--fc-text-light)">
               В Chrome/Edge появится иконка установки <b>⊕</b> в адресной строке — нажмите её.
             </div>
           </template>
@@ -457,7 +458,7 @@
             <div class="text-subtitle2 q-mb-xs" style="color: #1976D2">
               <q-icon name="phone_iphone" size="16px" class="q-mr-xs" />iPhone / iPad (Safari)
             </div>
-            <div style="font-size: 13px; color: #444; line-height: 1.8">
+            <div style="font-size: 13px; color: var(--fc-text-medium); line-height: 1.8">
               1. Нажмите <q-icon name="ios_share" color="primary" size="16px" /> <b>«Поделиться»</b> внизу браузера<br>
               2. Прокрутите и выберите <b>«На экран "Домой"»</b><br>
               3. Нажмите <b>«Добавить»</b>
@@ -469,7 +470,7 @@
             <div class="text-subtitle2 q-mb-xs" style="color: #1976D2">
               <q-icon name="phone_android" size="16px" class="q-mr-xs" />Android (Chrome)
             </div>
-            <div style="font-size: 13px; color: #444; line-height: 1.8">
+            <div style="font-size: 13px; color: var(--fc-text-medium); line-height: 1.8">
               1. Три точки <q-icon name="more_vert" size="14px" /> → <b>«Добавить на главный экран»</b><br>
               2. Нажмите <b>«Добавить»</b> — иконка появится на рабочем столе<br>
               <span style="color: #e53935; font-size: 12px">⚠ «Открыть приложение» не создаёт иконку</span>
@@ -481,7 +482,7 @@
             <div class="text-subtitle2 q-mb-xs" style="color: #1976D2">
               <q-icon name="laptop_windows" size="16px" class="q-mr-xs" />Windows (Chrome/Edge)
             </div>
-            <div style="font-size: 13px; color: #444; line-height: 1.8">
+            <div style="font-size: 13px; color: var(--fc-text-medium); line-height: 1.8">
               1. Нажмите иконку <b>⊕</b> в адресной строке (справа)<br>
               2. Нажмите <b>«Установить Interior Studio»</b><br>
               3. Подтвердите — иконка появится на рабочем столе
@@ -499,7 +500,7 @@
     </q-page-container>
 
     <!-- Bottom bar — все кнопки без подписей, порядок как в десктопе -->
-    <q-footer v-if="$q.screen.lt.md" class="bg-white" style="border-top: 1px solid #E0E0E0">
+    <q-footer v-if="$q.screen.lt.md" style="background: var(--fc-bg); border-top: 1px solid var(--fc-border-light)">
       <div class="row justify-around items-center" style="height: 48px">
         <q-btn
           v-for="tab in filteredBottomTabs"
@@ -529,7 +530,7 @@
     <q-dialog v-model="showOnlinePopup" position="bottom">
       <q-card style="width: 100%; max-width: 360px; border-radius: 10px 10px 0 0">
         <q-card-section class="q-pb-xs">
-          <div class="text-subtitle2 text-weight-bold" style="color: #333">
+          <div class="text-subtitle2 text-weight-bold" style="color: var(--fc-text)">
             Пользователи онлайн: {{ onlineCount }}
           </div>
         </q-card-section>
@@ -550,7 +551,7 @@
             </q-item-section>
           </q-item>
         </q-list>
-        <q-card-section v-else class="text-center" style="color: #999; font-size: 12px">
+        <q-card-section v-else class="text-center" style="color: var(--fc-text-muted); font-size: 12px">
           Список доступен только руководящему составу
         </q-card-section>
         <q-card-actions align="center">
@@ -559,7 +560,7 @@
             flat
             label="Закрыть"
             no-caps
-            style="color: #888"
+            style="color: var(--fc-text-light)"
           />
         </q-card-actions>
       </q-card>
@@ -567,7 +568,7 @@
     <!-- Диалог настроек уведомлений -->
     <q-dialog v-model="showNotifDialog">
       <q-card style="min-width: 320px; border-radius: 10px">
-        <q-toolbar style="background: #ffd93c; color: #333">
+        <q-toolbar style="background: var(--fc-accent); color: var(--fc-text)">
           <q-toolbar-title class="text-weight-bold" style="font-size: 14px">
             Настройки уведомлений
           </q-toolbar-title>
@@ -582,7 +583,7 @@
         <q-card-section v-if="notifSettings" style="max-height: 70vh; overflow-y: auto">
           <q-list dense>
             <!-- Канал уведомлений -->
-            <q-item-label header style="font-size: 12px; color: #666; padding-bottom: 2px">
+            <q-item-label header style="font-size: 12px; color: var(--fc-text-secondary); padding-bottom: 2px">
               Канал уведомлений
             </q-item-label>
             <q-item tag="label" clickable @click="setNotifChannel('telegram')">
@@ -697,7 +698,7 @@
             label="Сохранить"
             no-caps
             unelevated
-            style="background: #ffd93c; color: #333; border-radius: 8px; width: 200px"
+            style="background: var(--fc-accent); color: var(--fc-text); border-radius: 8px; width: 200px"
             @click="saveNotifSettings"
           />
           <q-btn
@@ -762,7 +763,7 @@
             </q-item-section>
           </q-item>
         </q-list>
-        <q-card-section v-else-if="globalSearched && globalQuery" class="text-center" style="color: #999; font-size: 12px">
+        <q-card-section v-else-if="globalSearched && globalQuery" class="text-center" style="color: var(--fc-text-muted); font-size: 12px">
           Ничего не найдено
         </q-card-section>
       </q-card>
@@ -935,9 +936,9 @@ async function handleOfflineQueue() {
   const listHtml = items.length
     ? '<ul style="margin:6px 0 0;padding-left:18px;text-align:left">' +
       items.map(op => {
-        const who = op.employee_name ? `<span style="color:#888"> · ${op.employee_name}</span>` : ''
+        const who = op.employee_name ? `<span style="color:var(--fc-text-light)"> · ${op.employee_name}</span>` : ''
         const age = formatAge(op.created_at)
-        const ageStr = age ? `<span style="color:#aaa"> · ${age} назад</span>` : ''
+        const ageStr = age ? `<span style="color:var(--fc-text-disabled)"> · ${age} назад</span>` : ''
         return `<li style="margin:3px 0;font-size:13px">${describeOperation(op)}${who}${ageStr}</li>`
       }).join('') +
       '</ul>'
@@ -945,7 +946,7 @@ async function handleOfflineQueue() {
 
   $q.dialog({
     title: `${offlinePending.value} операций в очереди`,
-    message: `<div style="font-size:13px;color:#666;margin-bottom:4px">Сохранены при отсутствии сети. Будут отправлены автоматически при восстановлении подключения.</div>${listHtml}`,
+    message: `<div style="font-size:13px;color:var(--fc-text-secondary);margin-bottom:4px">Сохранены при отсутствии сети. Будут отправлены автоматически при восстановлении подключения.</div>${listHtml}`,
     html: true,
     options: {
       type: 'radio',
@@ -1378,9 +1379,9 @@ onUnmounted(() => {
 
 <style scoped>
 .drawer-active {
-  color: #333;
+  color: var(--fc-text);
   font-weight: bold;
-  background: #F5F5F5;
-  border-left: 3px solid #ffd93c;
+  background: var(--fc-bg-alt);
+  border-left: 3px solid var(--fc-accent);
 }
 </style>

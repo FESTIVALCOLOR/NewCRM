@@ -42,11 +42,13 @@ export default configure(function (/* ctx */) {
 
     framework: {
       config: {
+        dark: 'auto',
         brand: {
           primary: '#333333',
           secondary: '#F8F9FA',
           accent: '#ffd93c',
-          dark: '#333333',
+          dark: '#1E1E1E',
+          'dark-page': '#1E1E1E',
           positive: '#27AE60',
           negative: '#E74C3C',
           info: '#85C1E9',
@@ -62,6 +64,7 @@ export default configure(function (/* ctx */) {
       plugins: [
         'Notify',
         'Dialog',
+        'Dark',
         'Loading',
         'LocalStorage',
         'SessionStorage',
@@ -105,8 +108,8 @@ export default configure(function (/* ctx */) {
         json.description = 'CRM для интерьерного бюро Festival Color'
         json.display = 'standalone'
         json.orientation = 'any'
-        json.background_color = '#ffffff'
-        json.theme_color = '#2e7d32'
+        json.background_color = '#1E1E1E'
+        json.theme_color = '#ffd93c'
         json.lang = 'ru'
         json.start_url = '/?source=pwa'
         json.scope = '/'

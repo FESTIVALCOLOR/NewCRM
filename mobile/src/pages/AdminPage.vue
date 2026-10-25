@@ -7,7 +7,7 @@
       indicator-color="accent"
       no-caps
       class="q-mb-md"
-      style="color: #666"
+      style="color: var(--fc-text-secondary)"
       align="left"
     >
       <q-tab name="rates" label="Тарифы" />
@@ -30,7 +30,7 @@
           indicator-color="accent"
           no-caps
           class="q-mb-sm"
-          style="color: #888"
+          style="color: var(--fc-text-light)"
           align="left"
         >
           <q-tab name="individual" label="Индивид." />
@@ -44,17 +44,17 @@
           <q-card-section class="q-pa-sm">
             <div class="row items-center justify-between">
               <div style="flex: 1">
-                <div class="text-weight-bold" style="font-size: 12px; color: #333">
+                <div class="text-weight-bold" style="font-size: 12px; color: var(--fc-text)">
                   {{ rate.role }}
                 </div>
-                <div class="text-caption" style="color: #888">
+                <div class="text-caption" style="color: var(--fc-text-light)">
                   <span v-if="rateTab === 'individual'" style="color: #2F5496; font-weight: 600">{{ rate.project_subtype || 'все подтипы' }}</span>
                   <span v-if="rate.stage_name"> | {{ rate.stage_name }}</span>
                   <span v-if="rate.city"> | {{ rate.city }}</span>
                   <span v-if="rate.area_from"> | {{ rate.area_from }}-{{ rate.area_to }} м²</span>
                 </div>
               </div>
-              <div class="text-weight-bold q-mr-sm" style="color: #333">
+              <div class="text-weight-bold q-mr-sm" style="color: var(--fc-text)">
                 <span v-if="rate.rate_per_m2">{{ rate.rate_per_m2 }} ₽/м²</span>
                 <span v-else-if="rate.fixed_price">{{ rate.fixed_price }} ₽</span>
                 <span v-else-if="rate.surveyor_price">{{ rate.surveyor_price }} ₽</span>
@@ -80,27 +80,27 @@
             </div>
           </q-card-section>
         </q-card>
-        <div v-if="filteredRates.length === 0 && rateTab !== 'supervision'" class="text-center q-pa-md" style="color: #999">
+        <div v-if="filteredRates.length === 0 && rateTab !== 'supervision'" class="text-center q-pa-md" style="color: var(--fc-text-muted)">
           Нет тарифов
         </div>
 
         <!-- =================== ВЫЕЗДЫ НАДЗОРА =================== -->
         <div v-if="rateTab === 'supervision'" class="q-mt-md q-mb-xs">
-          <div class="text-caption text-weight-bold q-px-sm q-mb-xs" style="color: #888; text-transform: uppercase; font-size: 11px">
+          <div class="text-caption text-weight-bold q-px-sm q-mb-xs" style="color: var(--fc-text-light); text-transform: uppercase; font-size: 11px">
             Тарифы за выезды
           </div>
           <q-card v-for="vr in visitRates" :key="'v_' + vr.id" class="is-card q-mb-xs">
             <q-card-section class="q-pa-sm">
               <div class="row items-center justify-between">
                 <div style="flex: 1">
-                  <div class="text-weight-bold" style="font-size: 12px; color: #333">
+                  <div class="text-weight-bold" style="font-size: 12px; color: var(--fc-text)">
                     {{ vr.role }}
                   </div>
-                  <div class="text-caption" style="color: #888">
+                  <div class="text-caption" style="color: var(--fc-text-light)">
                     {{ vr.city }}
                   </div>
                 </div>
-                <div class="text-weight-bold q-mr-sm" style="color: #333">
+                <div class="text-weight-bold q-mr-sm" style="color: var(--fc-text)">
                   {{ vr.fixed_price }} ₽
                 </div>
                 <div>
@@ -128,28 +128,28 @@
             unelevated
             no-caps
             label="+ Добавить тариф выезда"
-            style="background: #f5f5f5; color: #555; border-radius: 8px; width: 100%; margin-top: 4px"
+            style="background: var(--fc-bg-alt); color: var(--fc-text-medium); border-radius: 8px; width: 100%; margin-top: 4px"
             @click="addVisitRate"
           />
         </div>
 
         <!-- =================== ТАРИФЫ ПО ЗАКУПКАМ =================== -->
         <div v-if="rateTab === 'supervision'" class="q-mt-md q-mb-xs">
-          <div class="text-caption text-weight-bold q-px-sm q-mb-xs" style="color: #888; text-transform: uppercase; font-size: 11px">
+          <div class="text-caption text-weight-bold q-px-sm q-mb-xs" style="color: var(--fc-text-light); text-transform: uppercase; font-size: 11px">
             Тарифы исполнителя по закупкам
           </div>
           <q-card v-for="pr in purchaseRates" :key="'p_' + pr.id" class="is-card q-mb-xs">
             <q-card-section class="q-pa-sm">
               <div class="row items-center justify-between">
                 <div style="flex: 1">
-                  <div class="text-weight-bold" style="font-size: 12px; color: #333">
+                  <div class="text-weight-bold" style="font-size: 12px; color: var(--fc-text)">
                     {{ pr.role }}
                   </div>
-                  <div class="text-caption" style="color: #888">
+                  <div class="text-caption" style="color: var(--fc-text-light)">
                     {{ pr.stage_name || 'Все закупки' }}
                   </div>
                 </div>
-                <div class="text-weight-bold q-mr-sm" style="color: #333">
+                <div class="text-weight-bold q-mr-sm" style="color: var(--fc-text)">
                   {{ pr.fixed_price }} ₽
                 </div>
                 <div>
@@ -177,31 +177,31 @@
             unelevated
             no-caps
             label="+ Добавить тариф закупки"
-            style="background: #f5f5f5; color: #555; border-radius: 8px; width: 100%; margin-top: 4px"
+            style="background: var(--fc-bg-alt); color: var(--fc-text-medium); border-radius: 8px; width: 100%; margin-top: 4px"
             @click="addPurchaseRate"
           />
         </div>
 
         <!-- =================== ЕЖЕМЕСЯЧНЫЕ ТАРИФЫ НАДЗОРА =================== -->
         <div v-if="rateTab === 'supervision_monthly'" class="q-mt-md q-mb-xs">
-          <div class="text-caption text-weight-bold q-px-sm q-mb-xs" style="color: #888; text-transform: uppercase; font-size: 11px">
+          <div class="text-caption text-weight-bold q-px-sm q-mb-xs" style="color: var(--fc-text-light); text-transform: uppercase; font-size: 11px">
             Ежемесячные тарифы надзора
           </div>
-          <div class="text-caption q-px-sm q-mb-sm" style="color: #aaa; font-size: 11px">
+          <div class="text-caption q-px-sm q-mb-sm" style="color: var(--fc-text-disabled); font-size: 11px">
             Фиксированная ставка назначается сотруднику в карточке надзора. Если город не указан — действует для всех городов.
           </div>
           <q-card v-for="mr in monthlyRates" :key="'m_' + mr.id" class="is-card q-mb-xs">
             <q-card-section class="q-pa-sm">
               <div class="row items-center justify-between">
                 <div style="flex: 1">
-                  <div class="text-weight-bold" style="font-size: 12px; color: #333">
+                  <div class="text-weight-bold" style="font-size: 12px; color: var(--fc-text)">
                     {{ mr.role }}
                   </div>
-                  <div class="text-caption" style="color: #888">
+                  <div class="text-caption" style="color: var(--fc-text-light)">
                     {{ mr.city || 'Все города' }}
                   </div>
                 </div>
-                <div class="text-weight-bold q-mr-sm" style="color: #333">
+                <div class="text-weight-bold q-mr-sm" style="color: var(--fc-text)">
                   {{ mr.fixed_price }} ₽/мес.
                 </div>
                 <div>
@@ -229,7 +229,7 @@
             unelevated
             no-caps
             label="+ Добавить ежемесячный тариф"
-            style="background: #f5f5f5; color: #555; border-radius: 8px; width: 100%; margin-top: 4px"
+            style="background: var(--fc-bg-alt); color: var(--fc-text-medium); border-radius: 8px; width: 100%; margin-top: 4px"
             @click="addMonthlyRate"
           />
         </div>
@@ -239,7 +239,7 @@
             v-if="rateTab !== 'supervision_monthly' && rateTab !== 'supervision'"
             fab
             icon="add"
-            style="background: #ffd93c; color: #333"
+            style="background: var(--fc-accent); color: var(--fc-text)"
             @click="addRate"
           />
         </q-page-sticky>
@@ -255,7 +255,7 @@
                   {{ agent.name?.[0] }}
                 </q-avatar>
               </q-item-section>
-              <q-item-section style="color: #333">
+              <q-item-section style="color: var(--fc-text)">
                 {{ agent.name }}
               </q-item-section>
               <q-item-section side>
@@ -275,7 +275,7 @@
           </q-list>
         </q-card>
         <q-page-sticky position="bottom-right" :offset="[18, 18]">
-          <q-btn fab icon="add" style="background: #ffd93c; color: #333" @click="addAgent" />
+          <q-btn fab icon="add" style="background: var(--fc-accent); color: var(--fc-text)" @click="addAgent" />
         </q-page-sticky>
       </q-tab-panel>
 
@@ -287,7 +287,7 @@
               <q-item-section avatar>
                 <q-icon name="location_on" color="grey-7" />
               </q-item-section>
-              <q-item-section style="color: #333">
+              <q-item-section style="color: var(--fc-text)">
                 {{ city.name }}
               </q-item-section>
               <q-item-section side>
@@ -314,7 +314,7 @@
           </q-list>
         </q-card>
         <q-page-sticky position="bottom-right" :offset="[18, 18]">
-          <q-btn fab icon="add" style="background: #ffd93c; color: #333" @click="addCity" />
+          <q-btn fab icon="add" style="background: var(--fc-accent); color: var(--fc-text)" @click="addCity" />
         </q-page-sticky>
       </q-tab-panel>
 
@@ -322,7 +322,7 @@
       <q-tab-panel name="roles" class="q-pa-none">
         <q-card class="is-card q-mb-md">
           <q-card-section class="q-pb-none">
-            <div class="text-subtitle2 text-weight-bold" style="color: #333">
+            <div class="text-subtitle2 text-weight-bold" style="color: var(--fc-text)">
               Матрица ролей
             </div>
           </q-card-section>
@@ -337,7 +337,7 @@
               <q-item-section avatar>
                 <q-icon name="security" color="grey-7" />
               </q-item-section>
-              <q-item-section style="color: #333">
+              <q-item-section style="color: var(--fc-text)">
                 {{ role }}
               </q-item-section>
               <q-item-section side>
@@ -389,7 +389,7 @@
                   @update:model-value="previewNormDays"
                 />
               </div>
-              <div class="col-auto text-caption" style="color: #555; line-height: 1.8">
+              <div class="col-auto text-caption" style="color: var(--fc-text-medium); line-height: 1.8">
                 <div v-if="ndProjectType === 'Индивидуальный'">
                   K = <b>{{ ndK }}</b>
                 </div>
@@ -468,7 +468,7 @@
                 <!-- Заголовок подэтапа -->
                 <q-item v-if="nd.executor_role === 'header'" class="nd-subheader">
                   <q-item-section>
-                    <q-item-label class="text-weight-bold" style="font-size: 11px; color: #555">
+                    <q-item-label class="text-weight-bold" style="font-size: 11px; color: var(--fc-text-medium)">
                       {{ nd.stage_name }}
                     </q-item-label>
                   </q-item-section>
@@ -476,19 +476,19 @@
                 <!-- Запись нормодней -->
                 <q-item v-else :class="{ 'nd-out-of-scope': !nd.is_in_contract_scope }">
                   <q-item-section>
-                    <q-item-label style="font-size: 11px; color: #333">
+                    <q-item-label style="font-size: 11px; color: var(--fc-text)">
                       {{ nd.stage_name }}
                     </q-item-label>
-                    <q-item-label caption style="color: #888">
+                    <q-item-label caption style="color: var(--fc-text-light)">
                       {{ nd.executor_role }}<span v-if="!nd.is_in_contract_scope" style="color: #e74c3c"> · вне объёма</span>
                     </q-item-label>
                   </q-item-section>
                   <!-- Просмотр -->
                   <q-item-section v-if="!ndEditMode" side style="text-align: right; min-width: 72px">
-                    <div class="text-weight-bold" style="font-size: 12px; color: #333">
+                    <div class="text-weight-bold" style="font-size: 12px; color: var(--fc-text)">
                       {{ ndPreviewMap[nd.stage_code] !== undefined ? ndPreviewMap[nd.stage_code] : (nd.base_norm_days ?? '—') }} дн.
                     </div>
-                    <div v-if="ndProjectType === 'Индивидуальный' && nd.k_multiplier > 0" class="text-caption" style="color: #aaa; font-size: 9px">
+                    <div v-if="ndProjectType === 'Индивидуальный' && nd.k_multiplier > 0" class="text-caption" style="color: var(--fc-text-disabled); font-size: 9px">
                       {{ nd.base_norm_days }} + {{ nd.k_multiplier }}×K
                     </div>
                   </q-item-section>
@@ -522,18 +522,18 @@
           <q-card class="is-card q-mt-xs">
             <q-card-section class="q-pa-sm">
               <div class="row items-center justify-between q-mb-xs">
-                <div class="text-weight-bold" style="font-size: 12px; color: #333">
+                <div class="text-weight-bold" style="font-size: 12px; color: var(--fc-text)">
                   Итого по договору
                 </div>
-                <div class="text-weight-bold" style="font-size: 14px; color: #333">
+                <div class="text-weight-bold" style="font-size: 14px; color: var(--fc-text)">
                   {{ ndContractTerm }} дн.
                 </div>
               </div>
               <div class="row items-center justify-between">
-                <div class="text-caption" style="color: #777">
+                <div class="text-caption" style="color: var(--fc-text-light)">
                   Итого с учётом вне объёма
                 </div>
-                <div class="text-caption text-weight-bold" style="color: #777">
+                <div class="text-caption text-weight-bold" style="color: var(--fc-text-light)">
                   {{ ndTotalAll }} дн.
                 </div>
               </div>
@@ -541,7 +541,7 @@
           </q-card>
         </template>
         <q-card v-else class="is-card">
-          <q-card-section class="text-center" style="color: #999">
+          <q-card-section class="text-center" style="color: var(--fc-text-muted)">
             Выберите тип и подтип проекта
           </q-card-section>
         </q-card>
@@ -594,7 +594,7 @@
             no-caps
             align="left"
             class="q-mb-md"
-            style="border-bottom: 2px solid #e0e0e0"
+            style="border-bottom: 2px solid var(--fc-border-light)"
             active-color="yellow-9"
             indicator-color="yellow-8"
           >
@@ -609,7 +609,7 @@
             <q-tab-panel name="telegram" class="q-pa-none">
               <q-card class="is-card q-mb-md">
                 <q-card-section>
-                  <div class="text-subtitle2 text-weight-bold q-mb-md" style="color: #333">
+                  <div class="text-subtitle2 text-weight-bold q-mb-md" style="color: var(--fc-text)">
                     Настройки Telegram бота
                   </div>
 
@@ -664,7 +664,7 @@
                   />
 
                   <!-- MTProto авторизация -->
-                  <div class="text-caption text-weight-bold q-mb-sm" style="color: #555">
+                  <div class="text-caption text-weight-bold q-mb-sm" style="color: var(--fc-text-medium)">
                     MTProto авторизация
                   </div>
                   <div v-if="!mtprotoCodeSent">
@@ -712,7 +712,7 @@
 
               <q-card class="is-card q-mb-md">
                 <q-card-section>
-                  <div class="text-subtitle2 text-weight-bold q-mb-sm" style="color: #333">
+                  <div class="text-subtitle2 text-weight-bold q-mb-sm" style="color: var(--fc-text)">
                     Тестовое уведомление
                   </div>
                   <q-btn
@@ -720,7 +720,7 @@
                     no-caps
                     label="Отправить тестовое уведомление"
                     icon="send"
-                    style="background: #ffd93c; color: #333; border-radius: 4px"
+                    style="background: var(--fc-accent); color: var(--fc-text); border-radius: 4px"
                     class="full-width"
                     @click="sendTestNotification"
                   />
@@ -733,7 +733,7 @@
                   no-caps
                   label="Сохранить настройки Telegram"
                   icon="save"
-                  style="background: #ffd93c; color: #333; border-radius: 4px"
+                  style="background: var(--fc-accent); color: var(--fc-text); border-radius: 4px"
                   :loading="settingsSaving"
                   @click="saveMessengerSettings"
                 />
@@ -744,7 +744,7 @@
             <q-tab-panel name="smtp" class="q-pa-none">
               <q-card class="is-card q-mb-md">
                 <q-card-section>
-                  <div class="text-subtitle2 text-weight-bold q-mb-md" style="color: #333">
+                  <div class="text-subtitle2 text-weight-bold q-mb-md" style="color: var(--fc-text)">
                     Настройки SMTP
                   </div>
 
@@ -821,7 +821,7 @@
                   no-caps
                   label="Сохранить настройки Email"
                   icon="save"
-                  style="background: #ffd93c; color: #333; border-radius: 4px"
+                  style="background: var(--fc-accent); color: var(--fc-text); border-radius: 4px"
                   :loading="settingsSaving"
                   @click="saveMessengerSettings"
                 />
@@ -832,15 +832,15 @@
             <q-tab-panel name="welcome" class="q-pa-none">
               <q-card class="is-card q-mb-md">
                 <q-card-section>
-                  <div class="text-subtitle2 text-weight-bold q-mb-md" style="color: #333">
+                  <div class="text-subtitle2 text-weight-bold q-mb-md" style="color: var(--fc-text)">
                     Welcome письма
                   </div>
 
                   <!-- Письмо сотруднику -->
-                  <div class="text-caption text-weight-bold q-mb-xs" style="color: #555">
+                  <div class="text-caption text-weight-bold q-mb-xs" style="color: var(--fc-text-medium)">
                     Письмо сотруднику
                   </div>
-                  <div class="text-caption q-mb-sm" style="color: #888">
+                  <div class="text-caption q-mb-sm" style="color: var(--fc-text-light)">
                     Отправляется новому сотруднику при добавлении в систему. Содержит логин, пароль и ссылку на Telegram-бот.
                   </div>
                   <div class="row q-gutter-sm q-mb-lg">
@@ -849,7 +849,7 @@
                       no-caps
                       label="Просмотр"
                       icon="visibility"
-                      style="background: #f5f5f5; color: #333; border: 1px solid #ddd; border-radius: 4px"
+                      style="background: var(--fc-bg-alt); color: var(--fc-text); border: 1px solid var(--fc-border); border-radius: 4px"
                       @click="previewEmail('employee')"
                     />
                     <q-btn
@@ -857,16 +857,16 @@
                       no-caps
                       label="Редактировать"
                       icon="edit"
-                      style="background: #ffd93c; color: #333; border-radius: 4px"
+                      style="background: var(--fc-accent); color: var(--fc-text); border-radius: 4px"
                       @click="editEmail('employee')"
                     />
                   </div>
 
                   <!-- Письмо клиенту -->
-                  <div class="text-caption text-weight-bold q-mb-xs" style="color: #555">
+                  <div class="text-caption text-weight-bold q-mb-xs" style="color: var(--fc-text-medium)">
                     Приглашение клиенту
                   </div>
-                  <div class="text-caption q-mb-sm" style="color: #888">
+                  <div class="text-caption q-mb-sm" style="color: var(--fc-text-light)">
                     Отправляется клиенту при создании проектного Telegram-чата. Содержит ссылку-приглашение и данные проекта.
                   </div>
                   <div class="row q-gutter-sm">
@@ -875,7 +875,7 @@
                       no-caps
                       label="Просмотр"
                       icon="visibility"
-                      style="background: #f5f5f5; color: #333; border: 1px solid #ddd; border-radius: 4px"
+                      style="background: var(--fc-bg-alt); color: var(--fc-text); border: 1px solid var(--fc-border); border-radius: 4px"
                       @click="previewEmail('client')"
                     />
                     <q-btn
@@ -883,7 +883,7 @@
                       no-caps
                       label="Редактировать"
                       icon="edit"
-                      style="background: #ffd93c; color: #333; border-radius: 4px"
+                      style="background: var(--fc-accent); color: var(--fc-text); border-radius: 4px"
                       @click="editEmail('client')"
                     />
                   </div>
@@ -895,10 +895,10 @@
             <q-tab-panel name="invites" class="q-pa-none">
               <q-card class="is-card q-mb-md">
                 <q-card-section>
-                  <div class="text-subtitle2 text-weight-bold q-mb-sm" style="color: #333">
+                  <div class="text-subtitle2 text-weight-bold q-mb-sm" style="color: var(--fc-text)">
                     Приглашения сотрудникам
                   </div>
-                  <div class="text-caption q-mb-md" style="color: #888">
+                  <div class="text-caption q-mb-md" style="color: var(--fc-text-light)">
                     Отправить welcome-email с ссылкой на Telegram бот и временным паролем
                   </div>
                   <q-select
@@ -927,10 +927,10 @@
               <!-- Токены сотрудников для ручного подключения -->
               <q-card class="is-card q-mb-md">
                 <q-card-section>
-                  <div class="text-subtitle2 text-weight-bold q-mb-sm" style="color: #333">
+                  <div class="text-subtitle2 text-weight-bold q-mb-sm" style="color: var(--fc-text)">
                     Telegram-токены сотрудников
                   </div>
-                  <div class="text-caption q-mb-md" style="color: #888">
+                  <div class="text-caption q-mb-md" style="color: var(--fc-text-light)">
                     Если сотрудник не может открыть ссылку — отправьте ему инструкцию вручную
                   </div>
                   <q-select
@@ -953,13 +953,13 @@
                           size="20px"
                           class="q-mr-xs"
                         />
-                        <span style="font-size: 12px; color: #333">{{ tgInfo.telegram_connected ? 'Telegram подключён' : 'Не подключён' }}</span>
+                        <span style="font-size: 12px; color: var(--fc-text)">{{ tgInfo.telegram_connected ? 'Telegram подключён' : 'Не подключён' }}</span>
                       </div>
                       <template v-if="tgInfo.token_command">
-                        <div class="text-caption q-mb-xs" style="color: #888">
+                        <div class="text-caption q-mb-xs" style="color: var(--fc-text-light)">
                           Инструкция для сотрудника:
                         </div>
-                        <div style="background: #F5F5F5; border-radius: 6px; padding: 8px; font-family: monospace; font-size: 11px; color: #333; word-break: break-all">
+                        <div style="background: var(--fc-bg-alt); border-radius: 6px; padding: 8px; font-family: monospace; font-size: 11px; color: var(--fc-text); word-break: break-all">
                           Откройте Telegram → найдите бота @festival_color_crm_bot → отправьте:<br>
                           <strong>{{ tgInfo.token_command }}</strong>
                         </div>
@@ -986,7 +986,7 @@
                           />
                         </div>
                       </template>
-                      <div v-else class="text-caption" style="color: #999">
+                      <div v-else class="text-caption" style="color: var(--fc-text-muted)">
                         {{ tgInfo.telegram_connected ? 'Уже подключён, токен не нужен' : 'Токен не создан — отправьте приглашение' }}
                       </div>
                     </q-card>
@@ -1001,7 +1001,7 @@
       <!-- КОРЗИНА ДОГОВОРОВ -->
       <q-tab-panel name="trash" class="q-pa-none">
         <div class="row items-center justify-between q-mb-sm">
-          <div class="text-subtitle2 text-weight-bold" style="color: #333">
+          <div class="text-subtitle2 text-weight-bold" style="color: var(--fc-text)">
             Удалённые договоры
           </div>
           <q-btn
@@ -1021,7 +1021,7 @@
           <q-spinner size="32px" color="grey-5" />
         </div>
 
-        <div v-else-if="deletedContracts.length === 0" class="text-center q-pa-xl" style="color: #aaa">
+        <div v-else-if="deletedContracts.length === 0" class="text-center q-pa-xl" style="color: var(--fc-text-disabled)">
           <q-icon name="delete_outline" size="48px" class="q-mb-sm" />
           <div>Корзина пуста</div>
         </div>
@@ -1031,14 +1031,14 @@
             <q-card-section class="q-pa-sm">
               <div class="row items-start justify-between no-wrap" style="gap: 8px">
                 <div class="col-grow" style="min-width: 0">
-                  <div class="text-weight-bold" style="font-size: 13px; color: #333">
+                  <div class="text-weight-bold" style="font-size: 13px; color: var(--fc-text)">
                     № {{ item.contract_number || '—' }} · {{ item.client_name }}
                   </div>
-                  <div class="text-caption" style="color: #888">
+                  <div class="text-caption" style="color: var(--fc-text-light)">
                     {{ item.address }} · {{ item.project_type }}
                     <span v-if="item.project_subtype"> ({{ item.project_subtype }})</span>
                   </div>
-                  <div class="text-caption" style="color: #aaa; font-size: 10px; margin-top: 2px">
+                  <div class="text-caption" style="color: var(--fc-text-disabled); font-size: 10px; margin-top: 2px">
                     Удалён: {{ formatTrashDate(item.deleted_at) }}
                   </div>
                 </div>
@@ -1073,7 +1073,7 @@
 
       <!-- БЕКАП -->
       <q-tab-panel name="backup" class="q-pa-none">
-        <div class="text-subtitle2 text-weight-bold q-mb-sm" style="color: #333">
+        <div class="text-subtitle2 text-weight-bold q-mb-sm" style="color: var(--fc-text)">
           Резервное копирование БД
         </div>
 
@@ -1082,10 +1082,10 @@
           <q-card-section class="q-pa-sm">
             <div class="row items-center justify-between q-mb-sm">
               <div>
-                <div style="font-size: 13px; font-weight: 600; color: #333">
+                <div style="font-size: 13px; font-weight: 600; color: var(--fc-text)">
                   PostgreSQL → Яндекс.Диск
                 </div>
-                <div class="text-caption" style="color: #888">
+                <div class="text-caption" style="color: var(--fc-text-light)">
                   disk:/CRM/Бэкапы/PostgreSQL/
                 </div>
               </div>
@@ -1107,7 +1107,7 @@
               <div
                 v-if="lastBackup.status === 'success'"
                 class="rounded-borders q-pa-xs"
-                style="background: #E8F5E9; color: #2E7D32; font-size: 12px"
+                style="background: var(--fc-state-success-bg); color: #2E7D32; font-size: 12px"
               >
                 <q-icon name="check_circle" size="14px" class="q-mr-xs" />
                 {{ lastBackup.filename }} · {{ lastBackup.size_mb }} МБ
@@ -1120,7 +1120,7 @@
                 <q-icon name="error" size="14px" class="q-mr-xs" />
                 Ошибка: {{ lastBackup.error }}
               </div>
-              <div v-if="backupInProgress" class="text-caption q-mt-xs" style="color: #888">
+              <div v-if="backupInProgress" class="text-caption q-mt-xs" style="color: var(--fc-text-light)">
                 <q-spinner size="12px" class="q-mr-xs" />Бекап выполняется...
               </div>
             </div>
@@ -1129,7 +1129,7 @@
 
         <!-- Список существующих бекапов -->
         <div class="row items-center justify-between q-mb-xs">
-          <div class="text-caption text-weight-bold" style="color: #888; text-transform: uppercase">
+          <div class="text-caption text-weight-bold" style="color: var(--fc-text-light); text-transform: uppercase">
             Бекапы на Яндекс.Диске
           </div>
           <q-btn
@@ -1147,7 +1147,7 @@
         <div v-if="backupsLoading" class="text-center q-pa-md">
           <q-spinner size="24px" color="grey-5" />
         </div>
-        <div v-else-if="backupList.length === 0" class="text-center q-pa-md" style="color: #aaa; font-size: 13px">
+        <div v-else-if="backupList.length === 0" class="text-center q-pa-md" style="color: var(--fc-text-disabled); font-size: 13px">
           Бекапов нет
         </div>
         <q-card v-else class="is-card">
@@ -1157,7 +1157,7 @@
                 <q-icon name="storage" color="blue-7" size="20px" />
               </q-item-section>
               <q-item-section>
-                <q-item-label style="font-size: 12px; color: #333">
+                <q-item-label style="font-size: 12px; color: var(--fc-text)">
                   {{ b.name }}
                 </q-item-label>
                 <q-item-label caption>
@@ -1189,7 +1189,7 @@
             <span style="font-size: 13px; color: #e65100">Восстановление БД... не закрывайте страницу</span>
           </div>
         </div>
-        <div v-if="lastRestore" class="q-mt-sm q-pa-sm" style="border-radius: 8px; border: 1px solid" :style="lastRestore.status === 'success' ? 'background:#e8f5e9;border-color:#a5d6a7' : 'background:#ffebee;border-color:#ef9a9a'">
+        <div v-if="lastRestore" class="q-mt-sm q-pa-sm" style="border-radius: 8px; border: 1px solid" :style="lastRestore.status === 'success' ? 'background:var(--fc-state-success-bg);border-color:#a5d6a7' : 'background:#ffebee;border-color:#ef9a9a'">
           <div v-if="lastRestore.status === 'success'" style="font-size: 13px; color: #2e7d32">
             ✓ Восстановление завершено: {{ lastRestore.filename }}
           </div>
@@ -1207,17 +1207,17 @@
           <q-icon name="warning" color="orange-8" size="28px" class="q-mr-sm" />
           <span style="font-size: 16px; font-weight: 600; color: #bf360c">Восстановление БД</span>
         </q-card-section>
-        <q-card-section style="font-size: 14px; color: #333">
+        <q-card-section style="font-size: 14px; color: var(--fc-text)">
           <p class="q-mb-sm">
             Вы собираетесь восстановить базу данных из бекапа:
           </p>
-          <div class="q-pa-sm" style="background: #f5f5f5; border-radius: 6px; font-size: 12px; color: #555; word-break: break-all">
+          <div class="q-pa-sm" style="background: var(--fc-bg-alt); border-radius: 6px; font-size: 12px; color: var(--fc-text-medium); word-break: break-all">
             {{ restoreTarget }}
           </div>
           <p class="q-mt-md" style="color: #b71c1c; font-weight: 500">
             ⚠ ВНИМАНИЕ: Все текущие данные будут удалены и заменены данными из бекапа. Это действие необратимо!
           </p>
-          <p style="color: #666; font-size: 13px">
+          <p style="color: var(--fc-text-secondary); font-size: 13px">
             После восстановления рекомендуется перезагрузить приложение.
           </p>
         </q-card-section>
@@ -1237,7 +1237,7 @@
     <!-- Диалог прав роли — ПО БЛОКАМ -->
     <q-dialog v-model="showRoleDialog" maximized transition-show="slide-up" transition-hide="slide-down">
       <q-card>
-        <q-toolbar style="background: #ffd93c; color: #333">
+        <q-toolbar style="background: var(--fc-accent); color: var(--fc-text)">
           <q-btn
             flat
             round
@@ -1252,19 +1252,19 @@
             label="Сохранить"
             no-caps
             outline
-            style="border: 1px solid #333; border-radius: 8px; color: #333"
+            style="border: 1px solid var(--fc-text); border-radius: 8px; color: var(--fc-text)"
             @click="saveRolePermissions"
           />
         </q-toolbar>
         <q-card-section style="max-height: calc(100vh - 50px); overflow-y: auto">
           <div v-for="(perms, group) in permissionsByGroup" :key="group" class="q-mb-md">
-            <div class="text-subtitle2 text-weight-bold q-mb-xs" style="color: #333; border-bottom: 1px solid #E0E0E0; padding-bottom: 4px">
+            <div class="text-subtitle2 text-weight-bold q-mb-xs" style="color: var(--fc-text); border-bottom: 1px solid var(--fc-border-light); padding-bottom: 4px">
               {{ group }}
             </div>
             <q-list dense>
               <q-item v-for="perm in perms" :key="perm.name" tag="label" dense>
                 <q-item-section>
-                  <q-item-label style="font-size: 11px; color: #333">
+                  <q-item-label style="font-size: 11px; color: var(--fc-text)">
                     {{ perm.description || perm.name }}
                   </q-item-label>
                 </q-item-section>
@@ -1281,7 +1281,7 @@
     <!-- Диалог редактирования тарифа -->
     <q-dialog v-model="showRateDialog">
       <q-card style="min-width: 320px">
-        <q-toolbar style="background: #ffd93c; color: #333">
+        <q-toolbar style="background: var(--fc-accent); color: var(--fc-text)">
           <q-toolbar-title class="text-weight-bold" style="font-size: 14px">
             {{ editingRate?.id ? 'Редактировать' : 'Новый' }} тариф
           </q-toolbar-title>
@@ -1447,7 +1447,7 @@
           <q-btn
             unelevated
             label="Сохранить"
-            style="background: #ffd93c; color: #333; border-radius: 8px"
+            style="background: var(--fc-accent); color: var(--fc-text); border-radius: 8px"
             no-caps
             @click="saveRate"
           />
@@ -1493,7 +1493,7 @@
             unelevated
             no-caps
             label="Сохранить"
-            style="background: #ffd93c; color: #333"
+            style="background: var(--fc-accent); color: var(--fc-text)"
             :disable="!editingMonthlyRate.role || !editingMonthlyRate.fixed_price"
             @click="saveMonthlyRate"
           />
@@ -1504,7 +1504,7 @@
     <!-- Диалог превью email письма -->
     <q-dialog v-model="emailPreviewDialog" maximized>
       <q-card style="display:flex; flex-direction:column; height:100%">
-        <q-bar style="background: #333; color: white">
+        <q-bar style="background: var(--fc-text); color: white">
           <q-icon name="visibility" />
           <div class="q-ml-sm">
             Превью: {{ emailEditorType === 'employee' ? 'Письмо сотруднику' : 'Приглашение клиенту' }}
@@ -1526,7 +1526,7 @@
     <!-- Диалог редактора HTML шаблона -->
     <q-dialog v-model="emailEditorDialog" maximized>
       <q-card style="display:flex; flex-direction:column; height:100%">
-        <q-bar style="background: #333; color: white">
+        <q-bar style="background: var(--fc-text); color: white">
           <q-icon name="edit" />
           <div class="q-ml-sm">
             Редактор: {{ emailEditorType === 'employee' ? 'Письмо сотруднику' : 'Приглашение клиенту' }}
@@ -1535,7 +1535,7 @@
           <q-btn v-close-popup dense flat icon="close" />
         </q-bar>
         <div class="q-pa-sm" style="flex:1; display:flex; flex-direction:column; overflow:hidden">
-          <div class="text-caption q-mb-xs" style="color: #888">
+          <div class="text-caption q-mb-xs" style="color: var(--fc-text-light)">
             Доступные переменные:
             <template v-if="emailEditorType === 'employee'">
               <code>&#123;&#123;first_name&#125;&#125;</code> <code>&#123;&#123;login&#125;&#125;</code> <code>&#123;&#123;password&#125;&#125;</code>
@@ -1546,7 +1546,7 @@
               <code>&#123;&#123;manager_name&#125;&#125;</code> <code>&#123;&#123;invite_link&#125;&#125;</code> <code>&#123;&#123;telegram_link_tg&#125;&#125;</code>
             </template>
           </div>
-          <div class="text-caption q-mb-sm" style="color: #aaa">
+          <div class="text-caption q-mb-sm" style="color: var(--fc-text-disabled)">
             Пустой шаблон = использовать стандартный дизайн.
           </div>
           <q-input
@@ -1559,7 +1559,7 @@
             placeholder="Введите HTML шаблон или оставьте пустым для стандартного..."
           />
         </div>
-        <q-card-actions align="right" style="border-top: 1px solid #e0e0e0">
+        <q-card-actions align="right" style="border-top: 1px solid var(--fc-border-light)">
           <q-btn
             flat
             no-caps
@@ -1573,7 +1573,7 @@
             no-caps
             label="Сохранить"
             icon="save"
-            style="background: #ffd93c; color: #333"
+            style="background: var(--fc-accent); color: var(--fc-text)"
             :loading="emailEditorSaving"
             @click="saveEmailTemplate"
           />
@@ -1917,16 +1917,16 @@ function exportNormDaysPdf() {
   <style>
     body { font-family: Arial, sans-serif; font-size: 11px; color: #222; margin: 20px; }
     h2 { font-size: 14px; margin: 0 0 4px; }
-    .sub { color: #666; margin-bottom: 14px; font-size: 11px; }
+    .sub { color: var(--fc-text-secondary); margin-bottom: 14px; font-size: 11px; }
     table { border-collapse: collapse; width: 100%; }
-    th { background: #ffd93c; color: #333; font-weight: bold; padding: 5px 8px; text-align: left; border: 1px solid #ddd; }
-    td { padding: 4px 8px; border: 1px solid #eee; vertical-align: middle; }
-    .grp { color: #555; font-size: 10px; width: 22%; }
+    th { background: var(--fc-accent); color: var(--fc-text); font-weight: bold; padding: 5px 8px; text-align: left; border: 1px solid var(--fc-border); }
+    td { padding: 4px 8px; border: 1px solid var(--fc-border-light); vertical-align: middle; }
+    .grp { color: var(--fc-text-medium); font-size: 10px; width: 22%; }
     .num { text-align: right; width: 10%; white-space: nowrap; }
-    .sub-hdr td { background: #f0f0f0; font-weight: bold; font-size: 10px; color: #444; }
-    .out td { color: #aaa; }
-    .total-row td { border-top: 2px solid #333; font-size: 12px; }
-    .total-sub td { color: #888; }
+    .sub-hdr td { background: var(--fc-tab-hover); font-weight: bold; font-size: 10px; color: var(--fc-text-medium); }
+    .out td { color: var(--fc-text-disabled); }
+    .total-row td { border-top: 2px solid var(--fc-text); font-size: 12px; }
+    .total-sub td { color: var(--fc-text-light); }
     @media print { @page { margin: 15mm; } }
   </style></head><body>
   <h2>${title}</h2>
@@ -2486,24 +2486,24 @@ onMounted(async () => {
 
 <style scoped>
 .nd-group-header {
-  background: #ffd93c;
-  color: #333;
+  background: var(--fc-accent);
+  color: var(--fc-text);
   font-size: 12px;
   font-weight: 700;
   padding: 5px 12px;
 }
 
 .nd-subheader {
-  background: #f5f5f5 !important;
+  background: var(--fc-bg-alt) !important;
 }
 
 .nd-btn {
   height: 30px;
   padding: 0 10px;
-  border: 1px solid #bbb;
+  border: 1px solid var(--fc-text-disabled);
   border-radius: 4px;
-  background: white;
-  color: #333;
+  background: var(--fc-bg);
+  color: var(--fc-text);
   font-size: 12px;
   font-family: inherit;
   cursor: pointer;
@@ -2531,21 +2531,21 @@ onMounted(async () => {
 }
 
 .nd-btn-cancel {
-  background: #f5f5f5;
-  border-color: #ccc;
+  background: var(--fc-bg-alt);
+  border-color: var(--fc-border-card);
 }
 
 .nd-btn-export {
-  border-color: #2196f3;
-  color: #2196f3;
+  border-color: var(--fc-link);
+  color: var(--fc-link);
 }
 
 .nd-out-of-scope {
-  background: #f5f5f5 !important;
+  background: var(--fc-bg-alt) !important;
 }
 
 .nd-formula-hint {
-  color: #888;
+  color: var(--fc-text-light);
   line-height: 1.7;
 }
 

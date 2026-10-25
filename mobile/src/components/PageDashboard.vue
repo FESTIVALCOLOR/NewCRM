@@ -3,7 +3,7 @@
     <div class="row q-col-gutter-xs">
       <div v-for="item in items" :key="item.label" :class="colClass">
         <div class="dash-item">
-          <div class="dash-value" :style="{ color: item.color || '#333' }">
+          <div class="dash-value" :style="{ color: item.color || 'var(--fc-text)' }">
             {{ item.value }}
           </div>
           <div class="dash-label">
@@ -57,8 +57,8 @@ onUnmounted(() => window.removeEventListener('scroll', onScroll))
   bottom: 48px; /* над нижним меню */
   left: 0;
   right: 0;
-  background: white;
-  border-top: 2px solid #ffd93c;
+  background: var(--fc-bg);
+  border-top: 2px solid var(--fc-accent);
   padding: 4px 8px;
   z-index: 90;
   transition: transform 0.3s ease;
@@ -67,8 +67,8 @@ onUnmounted(() => window.removeEventListener('scroll', onScroll))
   transform: translateY(100%);
 }
 .dash-item { text-align: center; padding: 2px 0 }
-.dash-value { font-size: 14px; font-weight: bold; color: #333 }
-.dash-label { font-size: 9px; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.dash-value { font-size: 14px; font-weight: bold; color: var(--fc-text) }
+.dash-label { font-size: 9px; color: var(--fc-text-light); white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
 
 @media (min-width: 1024px) {
   .page-dashboard { bottom: 0; left: 260px; } /* На десктопе учитываем ширину sidebar */

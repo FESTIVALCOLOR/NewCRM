@@ -5,10 +5,10 @@
 
       <!-- Приветствие -->
       <div class="q-mb-md">
-        <div class="text-h6 text-weight-bold" style="color: #333">
+        <div class="text-h6 text-weight-bold" style="color: var(--fc-text)">
           {{ greeting }}, {{ firstName }}
         </div>
-        <div class="text-caption" style="color: #999">
+        <div class="text-caption" style="color: var(--fc-text-muted)">
           {{ todayDate }}
         </div>
       </div>
@@ -25,11 +25,11 @@
             @click="router.push(kpi.to)"
           >
             <q-card-section class="q-pa-sm text-center">
-              <div class="text-h6 text-weight-bold" style="color: #333">
+              <div class="text-h6 text-weight-bold" style="color: var(--fc-text)">
                 <q-skeleton v-if="dashboard.loading" type="text" width="30px" style="margin: 0 auto" />
                 <span v-else>{{ kpi.value }}</span>
               </div>
-              <div class="text-caption" style="color: #888; font-size: 10px; line-height: 1.2">
+              <div class="text-caption" style="color: var(--fc-text-light); font-size: 10px; line-height: 1.2">
                 {{ kpi.label }}
               </div>
             </q-card-section>
@@ -47,7 +47,7 @@
             no-caps
             unelevated
             class="full-width"
-            style="background: #F5F5F5; color: #333; border: 1px solid #E0E0E0; border-radius: 8px; height: 48px"
+            style="background: var(--fc-bg-alt); color: var(--fc-text); border: 1px solid var(--fc-border-light); border-radius: 8px; height: 48px"
           />
         </div>
       </div>
@@ -55,7 +55,7 @@
       <!-- Мои задачи (ближайшие дедлайны) -->
       <q-card v-if="myTasks.length > 0" class="is-card q-mb-md">
         <q-card-section class="q-pb-none">
-          <div class="text-subtitle2 text-weight-bold" style="color: #333">
+          <div class="text-subtitle2 text-weight-bold" style="color: var(--fc-text)">
             Мои задачи
           </div>
           <div style="height: 1px; background: #222; margin-top: 6px" />
@@ -77,10 +77,10 @@
                 <q-icon :name="task._card_type === 'supervision' ? 'engineering' : 'assignment'" :color="taskColor(task)" size="20px" />
               </q-item-section>
               <q-item-section>
-                <q-item-label style="font-size: 12px; color: #333">
+                <q-item-label style="font-size: 12px; color: var(--fc-text)">
                   {{ task.address || task.contract_number }}
                 </q-item-label>
-                <q-item-label caption style="color: #888">
+                <q-item-label caption style="color: var(--fc-text-light)">
                   {{ task.column_name }}
                 </q-item-label>
               </q-item-section>
@@ -92,7 +92,7 @@
                   >
                     <span
                       class="material-icons"
-                      :style="{ fontSize: '16px', color: cardMutes.isMuted(entityType(task), task.id) ? '#333' : '#CCC' }"
+                      :style="{ fontSize: '16px', color: cardMutes.isMuted(entityType(task), task.id) ? 'var(--fc-text)' : 'var(--fc-border-card)' }"
                     >
                       {{ cardMutes.isMuted(entityType(task), task.id) ? 'notifications_off' : 'notifications' }}
                     </span>
@@ -122,7 +122,7 @@
       <q-card class="is-card">
         <q-card-section class="q-pb-none">
           <div class="row items-center justify-between">
-            <div class="text-subtitle2 text-weight-bold" style="color: #333">
+            <div class="text-subtitle2 text-weight-bold" style="color: var(--fc-text)">
               Уведомления
             </div>
             <div class="row items-center q-gutter-xs">
@@ -155,16 +155,16 @@
               <q-icon :name="notificationIcon(n.notification_type)" :color="n.is_read ? 'grey-5' : 'warning'" size="20px" />
             </q-item-section>
             <q-item-section>
-              <q-item-label :class="{ 'text-weight-bold': !n.is_read }" style="font-size: 13px; color: #333">
+              <q-item-label :class="{ 'text-weight-bold': !n.is_read }" style="font-size: 13px; color: var(--fc-text)">
                 {{ n.title }}
               </q-item-label>
-              <q-item-label caption lines="1" style="color: #888">
+              <q-item-label caption lines="1" style="color: var(--fc-text-light)">
                 {{ n.message }}
               </q-item-label>
             </q-item-section>
           </q-item>
         </q-list>
-        <q-card-section v-else class="text-center q-py-md" style="color: #999">
+        <q-card-section v-else class="text-center q-py-md" style="color: var(--fc-text-muted)">
           <q-icon name="notifications_none" size="28px" class="q-mb-xs" />
           <div class="text-caption">
             Нет уведомлений
@@ -210,7 +210,7 @@ const kpiCards = computed(() => {
   const emp = dashboard.employeesStats || {}
   const totalContracts = (con.individual_orders ?? 0) + (con.template_orders ?? 0)
   return [
-    { label: 'Индивидуальные', value: crm.active_orders ?? '—', border: '#ffd93c', to: '/crm?type=Индивидуальный' },
+    { label: 'Индивидуальные', value: crm.active_orders ?? '—', border: 'var(--fc-accent)', to: '/crm?type=Индивидуальный' },
     { label: 'Шаблонные', value: crmT.active_orders ?? '—', border: '#F39C12', to: '/crm?type=Шаблонный' },
     { label: 'Авт. надзор', value: crmN.active_orders ?? '—', border: '#27AE60', to: '/supervision' },
     { label: 'Клиентов', value: cli.total_clients ?? '—', border: '#9B59B6', to: '/clients' },
@@ -259,9 +259,9 @@ function _taskDeadline(task) {
 }
 
 function taskBg(task) {
-  if (task.column_name === 'В ожидании') return { background: '#FFFDE7' }
-  if (task.is_paused) return { background: '#FFFDE7' }
-  if (task._card_type === 'supervision') return { background: '#E3F2FD' }
+  if (task.column_name === 'В ожидании') return { background: 'var(--fc-highlight-yellow)' }
+  if (task.is_paused) return { background: 'var(--fc-highlight-yellow)' }
+  if (task._card_type === 'supervision') return { background: 'var(--fc-selected-bg)' }
   return {}
 }
 
@@ -281,11 +281,11 @@ function taskColor(task) {
 
 function dlColor(d, task) {
   const days = _workDaysLeft(d)
-  if (days === null) return '#888'
+  if (days === null) return 'var(--fc-text-light)'
   if (task && task.is_client_stage && days < 0) return '#9E9E9E'
   if (days < 0) return '#E74C3C'
   if (days <= 2) return '#F39C12'
-  return '#888'
+  return 'var(--fc-text-light)'
 }
 
 function fmtDeadline(d, task) {

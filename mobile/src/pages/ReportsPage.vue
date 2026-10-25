@@ -1,7 +1,7 @@
 <template>
   <q-page padding>
     <div class="row items-center justify-between q-mb-sm">
-      <div class="text-subtitle1 text-weight-bold" style="color: #333">
+      <div class="text-subtitle1 text-weight-bold" style="color: var(--fc-text)">
         Отчёты и Статистика
       </div>
       <button type="button" class="rep-export-btn" :disabled="pdfLoading" @click="exportPDF">
@@ -63,7 +63,7 @@
         <q-card-section>
           <div class="row q-col-gutter-xs q-mb-sm">
             <div v-for="kpi in kpiCards" :key="kpi.label" class="col-4 col-md-2">
-              <div class="q-pa-xs" :style="{ borderLeft: `3px solid ${kpi.color}`, borderRadius: '6px', background: '#FAFAFA' }">
+              <div class="q-pa-xs" :style="{ borderLeft: `3px solid ${kpi.color}`, borderRadius: '6px', background: 'var(--fc-bg-hover)' }">
                 <div class="text-subtitle1 text-weight-bold">
                   {{ kpi.value }}
                 </div>
@@ -76,7 +76,7 @@
           <!-- По агентам -->
           <div v-if="agentKpi.length > 0" class="row q-col-gutter-xs">
             <div v-for="a in agentKpi" :key="a.label" class="col-6">
-              <div class="q-pa-xs" :style="{ borderLeft: `3px solid ${a.color}`, borderRadius: '6px', background: '#FAFAFA' }">
+              <div class="q-pa-xs" :style="{ borderLeft: `3px solid ${a.color}`, borderRadius: '6px', background: 'var(--fc-bg-hover)' }">
                 <div class="text-subtitle2 text-weight-bold">
                   {{ a.value }}
                 </div>
@@ -97,7 +97,7 @@
           </div>
           <div class="row q-col-gutter-xs q-mb-md">
             <div v-for="m in clientMini" :key="m.label" class="col-4 col-md-2 text-center">
-              <div class="text-subtitle1 text-weight-bold" :style="{ color: m.color || '#333' }">
+              <div class="text-subtitle1 text-weight-bold" :style="{ color: m.color || 'var(--fc-text)' }">
                 {{ m.value }}
               </div>
               <div class="text-caption text-grey-7" style="font-size: 9px">
@@ -144,7 +144,7 @@
           </div>
           <div class="row q-col-gutter-xs q-mb-md">
             <div v-for="m in contractMini" :key="m.label" class="col-4 col-md-2 text-center">
-              <div class="text-subtitle1 text-weight-bold" :style="{ color: m.color || '#333' }">
+              <div class="text-subtitle1 text-weight-bold" :style="{ color: m.color || 'var(--fc-text)' }">
                 {{ m.value }}
               </div>
               <div class="text-caption text-grey-7" style="font-size: 9px">
@@ -232,7 +232,7 @@
           <div v-if="projectStats" class="q-mt-md">
             <div class="row q-col-gutter-xs q-mb-md items-stretch">
               <div v-for="s in projectStatCards" :key="s.label" class="col-3" style="display: flex">
-                <div class="text-center q-pa-xs" style="display: flex; flex-direction: column; justify-content: center; width: 100%" :style="{ border: `1px solid ${s.color || '#E0E0E0'}`, borderRadius: '6px' }">
+                <div class="text-center q-pa-xs" style="display: flex; flex-direction: column; justify-content: center; width: 100%" :style="{ border: `1px solid ${s.color || 'var(--fc-border-light)'}`, borderRadius: '6px' }">
                   <div class="text-subtitle1 text-weight-bold">
                     {{ s.value }}
                   </div>
@@ -291,7 +291,7 @@
           <!-- Строка 1: общие показатели надзора -->
           <div class="row q-col-gutter-xs q-mb-xs">
             <div v-for="s in supervisionMini.slice(0, 4)" :key="s.label" class="col-3 text-center">
-              <div class="text-subtitle1 text-weight-bold" :style="{ color: s.color || '#333' }">
+              <div class="text-subtitle1 text-weight-bold" :style="{ color: s.color || 'var(--fc-text)' }">
                 {{ s.value }}
               </div>
               <div class="text-caption text-grey-7" style="font-size: 9px">
@@ -302,7 +302,7 @@
           <!-- Строка 2: статистика выездов -->
           <div class="row q-col-gutter-xs q-mb-md">
             <div v-for="s in supervisionMini.slice(4)" :key="s.label" class="col text-center">
-              <div class="text-subtitle1 text-weight-bold" :style="{ color: s.color || '#333' }">
+              <div class="text-subtitle1 text-weight-bold" :style="{ color: s.color || 'var(--fc-text)' }">
                 {{ s.value }}
               </div>
               <div class="text-caption text-grey-7" style="font-size: 9px">
@@ -333,7 +333,7 @@
           <div class="text-subtitle2 text-weight-bold text-center q-mb-xs" style="color: #27AE60">
             Комиссии (доход студии из закупок)
           </div>
-          <div v-if="supervisionDetailed?.commission?.total || supervisionDetailed?.commission?.undated_total" class="text-caption text-center q-mb-md" style="color: #555">
+          <div v-if="supervisionDetailed?.commission?.total || supervisionDetailed?.commission?.undated_total" class="text-caption text-center q-mb-md" style="color: var(--fc-text-medium)">
             Итого: {{ fmtMoney((supervisionDetailed.commission.total || 0) + (supervisionDetailed.commission.undated_total || 0)) }}
             <span v-if="supervisionDetailed?.commission?.undated_total > 0" style="color: #F39C12">
               (в т.ч. {{ fmtMoney(supervisionDetailed.commission.undated_total) }} без даты)
@@ -396,7 +396,7 @@ function fmtMoney(v) {
 const kpiCards = computed(() => {
   const s = summary.value || {}
   return [
-    { label: 'Всего клиентов', value: s.total_clients ?? '—', color: '#ffd93c' },
+    { label: 'Всего клиентов', value: s.total_clients ?? '—', color: 'var(--fc-accent)' },
     { label: 'Новых клиентов', value: s.new_clients ?? '—', color: '#27AE60' },
     { label: 'Повторных', value: s.returning_clients ?? '—', color: '#85C1E9' },
     { label: 'Всего договоров', value: s.total_contracts ?? '—', color: '#F39C12' },
@@ -422,7 +422,7 @@ const agentKpi = computed(() => {
       items.push({
         label: `${row.label} — ${a.agent_name}`,
         value: row.fmt(a[row.key], a),
-        color: a.agent_color || '#999',
+        color: a.agent_color || 'var(--fc-text-muted)',
       })
     }
   }
@@ -600,7 +600,7 @@ const funnelChart = computed(() => {
   if (!funnel.value?.funnel) return null
   const f = funnel.value.funnel
   const labels = Object.keys(f)
-  return { labels, datasets: [{ label: 'Проектов', data: labels.map(k => f[k]), color: '#ffd93c' }] }
+  return { labels, datasets: [{ label: 'Проектов', data: labels.map(k => f[k]), color: 'var(--fc-accent)' }] }
 })
 
 const projectStatCards = computed(() => {
@@ -632,7 +632,7 @@ const agentChart = computed(() => {
   if (!p?.by_agents) return null
   const entries = Object.entries(p.by_agents).sort((a, b) => b[1] - a[1]).slice(0, 8)
   if (entries.length === 0) return null
-  return { labels: entries.map(([k]) => k), datasets: [{ label: 'Проектов', data: entries.map(([, v]) => v), color: '#ffd93c' }] }
+  return { labels: entries.map(([k]) => k), datasets: [{ label: 'Проектов', data: entries.map(([, v]) => v), color: 'var(--fc-accent)' }] }
 })
 
 const stageDurationsChart = computed(() => {
@@ -849,7 +849,7 @@ async function exportPDF() {
   const w = window.open('', '_blank', 'width=1200,height=800')
   if (!w) { pdfLoading.value = false; return }
   try { w.moveTo(0, 0); w.resizeTo(screen.width, screen.height) } catch(e) {}
-  w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Загрузка...</title></head><body style="font-family:Arial;padding:40px;color:#555;text-align:center"><p style="font-size:18px">⏳ Формирование отчёта...</p></body></html>')
+  w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Загрузка...</title></head><body style="font-family:Arial;padding:40px;color:var(--fc-text-medium);text-align:center"><p style="font-size:18px">⏳ Формирование отчёта...</p></body></html>')
   w.document.close()
 
   try {
@@ -877,13 +877,13 @@ async function exportPDF() {
 
     const kpiGrid = (items) =>
       `<div class="kpi-grid">${items.map(k =>
-        `<div class="kpi-card" style="border-left-color:${k.color || '#aaa'}">
+        `<div class="kpi-card" style="border-left-color:${k.color || 'var(--fc-text-disabled)'}">
           <div class="kpi-val">${k.value}</div><div class="kpi-lbl">${k.label}</div>
         </div>`).join('')}</div>`
 
     const horzTable = (items) =>
       `<table><tr>${items.map(m => `<th class="tc">${m.label}</th>`).join('')}</tr>
-      <tr>${items.map(m => `<td class="tc fw" style="color:${m.color || '#333'}">${m.value}</td>`).join('')}</tr></table>`
+      <tr>${items.map(m => `<td class="tc fw" style="color:${m.color || 'var(--fc-text)'}">${m.value}</td>`).join('')}</tr></table>`
 
     const listTable = (cols, rows) =>
       `<table><tr>${cols.map(c => `<th${c.r ? ' class="num"' : ''}>${c.label}</th>`).join('')}</tr>
@@ -1034,18 +1034,18 @@ async function exportPDF() {
   <style>
     body { font-family: Arial, sans-serif; font-size: 11px; color: #222; margin: 20px; }
     h1 { font-size: 16px; margin: 0 0 4px; }
-    .sub { color: #888; font-size: 10px; margin-bottom: 16px; }
-    h2 { font-size: 13px; margin: 18px 0 6px; border-bottom: 2px solid #333; padding-bottom: 3px; }
-    h3 { font-size: 11px; margin: 10px 0 4px; color: #555; }
+    .sub { color: var(--fc-text-light); font-size: 10px; margin-bottom: 16px; }
+    h2 { font-size: 13px; margin: 18px 0 6px; border-bottom: 2px solid var(--fc-text); padding-bottom: 3px; }
+    h3 { font-size: 11px; margin: 10px 0 4px; color: var(--fc-text-medium); }
     table { border-collapse: collapse; width: 100%; margin-bottom: 10px; break-inside: avoid; }
-    th { background: #f0f0f0; text-align: left; padding: 4px 8px; border: 1px solid #ccc; font-size: 10px; }
-    td { padding: 3px 8px; border: 1px solid #eee; font-size: 10px; }
+    th { background: var(--fc-tab-hover); text-align: left; padding: 4px 8px; border: 1px solid var(--fc-border-card); font-size: 10px; }
+    td { padding: 3px 8px; border: 1px solid var(--fc-border-light); font-size: 10px; }
     .num { text-align: right; } .tc { text-align: center; } .fw { font-weight: bold; }
     .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 10px; break-inside: avoid; }
-    .kpi-card { border-left: 3px solid #aaa; background: #fafafa; padding: 5px 8px; border-radius: 4px; }
-    .kpi-val { font-size: 15px; font-weight: bold; } .kpi-lbl { font-size: 9px; color: #777; }
+    .kpi-card { border-left: 3px solid var(--fc-text-disabled); background: var(--fc-bg-hover); padding: 5px 8px; border-radius: 4px; }
+    .kpi-val { font-size: 15px; font-weight: bold; } .kpi-lbl { font-size: 9px; color: var(--fc-text-light); }
     .cr { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 8px; break-inside: avoid; }
-    .ct { font-size: 10px; color: #555; font-weight: bold; margin: 8px 0 3px; }
+    .ct { font-size: 10px; color: var(--fc-text-medium); font-weight: bold; margin: 8px 0 3px; }
     canvas { display: block; max-width: 100%; margin-bottom: 8px; break-inside: avoid; }
     @media print { @page { size: A4 portrait; margin: 10mm; } body { margin: 0; } }
   </style>
@@ -1109,7 +1109,7 @@ async function exportPDF() {
     try { if (cd.funnel) hBar('funnel', cd.funnel.labels, cd.funnel.data, 'Проектов', '#F39C12'); } catch(e) {}
     try { if (cd.indStages) hBar2('indStages', cd.indStages.labels, [{ label: 'Норматив', data: cd.indStages.norm, color: '#4CAF50' }, { label: 'Факт', data: cd.indStages.fact, color: '#F39C12' }]); } catch(e) {}
     try { if (cd.indCities) hBar('indCities', cd.indCities.labels, cd.indCities.data, 'Проектов', '#85C1E9'); } catch(e) {}
-    try { if (cd.indAgents) hBar('indAgents', cd.indAgents.labels, cd.indAgents.data, 'Проектов', '#ffd93c'); } catch(e) {}
+    try { if (cd.indAgents) hBar('indAgents', cd.indAgents.labels, cd.indAgents.data, 'Проектов', 'var(--fc-accent)'); } catch(e) {}
     try { if (cd.tmplStages) hBar2('tmplStages', cd.tmplStages.labels, [{ label: 'Норматив', data: cd.tmplStages.norm, color: '#4CAF50' }, { label: 'Факт', data: cd.tmplStages.fact, color: '#C62828' }]); } catch(e) {}
     try { if (cd.tmplCities) hBar('tmplCities', cd.tmplCities.labels, cd.tmplCities.data, 'Проектов', '#85C1E9'); } catch(e) {}
     try { if (cd.tmplAgents) hBar('tmplAgents', cd.tmplAgents.labels, cd.tmplAgents.data, 'Проектов', '#C62828'); } catch(e) {}
@@ -1141,10 +1141,10 @@ onMounted(() => loadData())
 .rep-export-btn {
   height: 26px;
   padding: 0 10px;
-  border: 1px solid #2196f3;
+  border: 1px solid var(--fc-link);
   border-radius: 4px;
-  background: white;
-  color: #2196f3;
+  background: var(--fc-bg);
+  color: var(--fc-link);
   font-size: 11px;
   font-family: inherit;
   cursor: pointer;
@@ -1155,6 +1155,6 @@ onMounted(() => loadData())
   align-items: center;
   justify-content: center;
 }
-.rep-export-btn:hover { background: #e3f2fd; }
+.rep-export-btn:hover { background: var(--fc-selected-bg); }
 .rep-export-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 </style>

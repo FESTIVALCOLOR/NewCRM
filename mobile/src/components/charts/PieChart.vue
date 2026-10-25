@@ -14,7 +14,7 @@ ChartJS.register(ArcElement, Tooltip, Legend)
 const props = defineProps({
   labels: { type: Array, required: true },
   values: { type: Array, required: true },
-  colors: { type: Array, default: () => ['#ffd93c', '#F39C12', '#27AE60', '#E74C3C', '#85C1E9', '#9B59B6', '#1ABC9C', '#E67E22'] },
+  colors: { type: Array, default: () => ['var(--fc-accent)', '#F39C12', '#27AE60', '#E74C3C', '#85C1E9', '#9B59B6', '#1ABC9C', '#E67E22'] },
   title: { type: String, default: '' },
 })
 

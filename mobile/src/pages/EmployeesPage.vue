@@ -146,13 +146,13 @@
     </q-pull-to-refresh>
 
     <q-page-sticky v-if="canCreate" position="bottom-right" :offset="[18, 80]">
-      <q-btn fab icon="add" style="background: #ffd93c; color: #333" @click="showCreate = true" />
+      <q-btn fab icon="add" style="background: var(--fc-accent); color: var(--fc-text)" @click="showCreate = true" />
     </q-page-sticky>
 
     <!-- Диалог просмотра/редактирования -->
     <q-dialog v-model="showDetail" maximized transition-show="slide-up" transition-hide="slide-down">
       <q-card v-if="selected">
-        <q-toolbar :style="editMode ? 'background: #ffd93c; color: #333' : 'background: white; color: #333; border-bottom: 1px solid #E0E0E0'">
+        <q-toolbar :style="editMode ? 'background: var(--fc-accent); color: var(--fc-text)' : 'background: var(--fc-bg); color: var(--fc-text); border-bottom: 1px solid var(--fc-border-light)'">
           <q-btn
             flat
             round
@@ -301,14 +301,14 @@
                 style="display:none"
                 @change="handleEmpPhotoUpload"
               >
-              <div class="text-h6 text-weight-bold q-mt-sm" style="color: #333">
+              <div class="text-h6 text-weight-bold q-mt-sm" style="color: var(--fc-text)">
                 {{ selected.full_name }}
               </div>
-              <div class="text-body2" style="color: #666">
+              <div class="text-body2" style="color: var(--fc-text-secondary)">
                 {{ selected.position }}{{ selected.secondary_position ? ' / ' + selected.secondary_position : '' }}
               </div>
               <q-badge :color="statusColor(selected.status)" :label="selected.status" class="q-mt-xs" />
-              <div v-if="selected.last_login" class="text-caption q-mt-xs" style="color: #999">
+              <div v-if="selected.last_login" class="text-caption q-mt-xs" style="color: var(--fc-text-muted)">
                 последний вход: {{ formatLastLogin(selected.last_login) }}
               </div>
             </div>
@@ -323,14 +323,14 @@
                       round
                       dense
                       :icon="selected.phone ? 'phone' : 'phone_disabled'"
-                      :style="{ color: selected.phone ? '#333' : '#ccc' }"
+                      :style="{ color: selected.phone ? 'var(--fc-text)' : 'var(--fc-border-card)' }"
                       @click="selected.phone && call(selected.phone)"
                     />
                   </q-item-section>
                   <q-item-section>
                     <q-item-label caption>
                       Телефон
-                    </q-item-label><q-item-label :style="{ color: selected.phone ? '#333' : '#bbb' }">
+                    </q-item-label><q-item-label :style="{ color: selected.phone ? 'var(--fc-text)' : 'var(--fc-text-disabled)' }">
                       {{ selected.phone || 'Не указан' }}
                     </q-item-label>
                   </q-item-section>
@@ -342,14 +342,14 @@
                       round
                       dense
                       :icon="selected.email ? 'email' : 'mail_outline'"
-                      :style="{ color: selected.email ? '#333' : '#ccc' }"
+                      :style="{ color: selected.email ? 'var(--fc-text)' : 'var(--fc-border-card)' }"
                       @click="selected.email && sendEmail(selected.email)"
                     />
                   </q-item-section>
                   <q-item-section>
                     <q-item-label caption>
                       Email
-                    </q-item-label><q-item-label :style="{ color: selected.email ? '#333' : '#bbb' }">
+                    </q-item-label><q-item-label :style="{ color: selected.email ? 'var(--fc-text)' : 'var(--fc-text-disabled)' }">
                       {{ selected.email || 'Не указан' }}
                     </q-item-label>
                   </q-item-section>
@@ -361,14 +361,14 @@
                       round
                       dense
                       icon="send"
-                      :style="{ color: selected.telegram_user_id ? '#333' : '#ccc' }"
+                      :style="{ color: selected.telegram_user_id ? 'var(--fc-text)' : 'var(--fc-border-card)' }"
                     />
                   </q-item-section>
                   <q-item-section>
                     <q-item-label caption>
                       Telegram
                     </q-item-label>
-                    <q-item-label :style="{ color: selected.telegram_user_id ? '#27AE60' : '#bbb' }">
+                    <q-item-label :style="{ color: selected.telegram_user_id ? '#27AE60' : 'var(--fc-text-disabled)' }">
                       {{ selected.telegram_user_id ? `Подключён (ID: ${selected.telegram_user_id})` : 'Не подключён' }}
                     </q-item-label>
                   </q-item-section>
@@ -387,7 +387,7 @@
                 </q-item>
                 <q-item v-if="selected.address">
                   <q-item-section avatar>
-                    <q-icon name="home" style="color: #333" />
+                    <q-icon name="home" style="color: var(--fc-text)" />
                   </q-item-section>
                   <q-item-section>
                     <q-item-label caption>
@@ -397,7 +397,7 @@
                 </q-item>
                 <q-item v-if="selected.department">
                   <q-item-section avatar>
-                    <q-icon name="business" style="color: #333" />
+                    <q-icon name="business" style="color: var(--fc-text)" />
                   </q-item-section>
                   <q-item-section>
                     <q-item-label caption>
@@ -407,7 +407,7 @@
                 </q-item>
                 <q-item v-if="selected.birth_date">
                   <q-item-section avatar>
-                    <q-icon name="cake" style="color: #333" />
+                    <q-icon name="cake" style="color: var(--fc-text)" />
                   </q-item-section>
                   <q-item-section>
                     <q-item-label caption>
@@ -471,7 +471,7 @@
                 icon="edit"
                 label="Редактировать"
                 no-caps
-                style="background: #ffd93c; color: #333; border-radius: 8px"
+                style="background: var(--fc-accent); color: var(--fc-text); border-radius: 8px"
                 @click="startEdit"
               />
               <q-btn
@@ -495,7 +495,7 @@
     <!-- Диалог создания -->
     <q-dialog v-model="showCreate" maximized transition-show="slide-up" transition-hide="slide-down">
       <q-card>
-        <q-toolbar style="background: #ffd93c; color: #333">
+        <q-toolbar style="background: var(--fc-accent); color: var(--fc-text)">
           <q-btn
             flat
             round
@@ -845,23 +845,23 @@ onMounted(() => loadEmployees())
   display: flex;
   align-items: center;
   padding: 4px 10px;
-  background: #F5F5F5;
-  border: 1px solid #E0E0E0;
+  background: var(--fc-bg-alt);
+  border: 1px solid var(--fc-border-light);
   border-radius: 8px 8px 0 0;
   font-size: 10px;
   font-weight: bold;
-  color: #888;
+  color: var(--fc-text-light);
   gap: 6px;
 }
 .emp-row-ls {
   display: flex;
   align-items: center;
   padding: 5px 10px;
-  border: 1px solid #E0E0E0;
+  border: 1px solid var(--fc-border-light);
   border-top: none;
   gap: 6px;
   cursor: pointer;
-  background: #fff;
+  background: var(--fc-bg);
   min-height: 34px;
 }
 .emp-row-ls:last-of-type { border-radius: 0 0 8px 8px; }
@@ -871,15 +871,15 @@ onMounted(() => loadEmployees())
 .emph-dept   { width: 110px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
 .emph-status { width: 60px; flex-shrink: 0; }
 .emph-lastlogin { width: 120px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
-.empv-name { font-size: 12px; font-weight: 500; color: #333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.empv-meta { color: #666; }
+.empv-name { font-size: 12px; font-weight: 500; color: var(--fc-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.empv-meta { color: var(--fc-text-secondary); }
 .emp-save-btn {
   height: 34px;
   padding: 0 14px;
-  border: 1px solid #333;
+  border: 1px solid var(--fc-text);
   border-radius: 8px;
   background: transparent;
-  color: #333;
+  color: var(--fc-text);
   font-size: 13px;
   font-family: inherit;
   cursor: pointer;

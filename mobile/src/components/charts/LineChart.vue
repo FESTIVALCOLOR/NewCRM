@@ -21,12 +21,12 @@ const chartData = computed(() => ({
   datasets: props.datasets.map(ds => ({
     label: ds.label,
     data: ds.data,
-    borderColor: ds.color || '#ffd93c',
-    backgroundColor: (ds.color || '#ffd93c') + '20',
+    borderColor: ds.color || 'var(--fc-accent)',
+    backgroundColor: (ds.color || 'var(--fc-accent)') + '20',
     fill: true,
     tension: 0.3,
     pointRadius: 3,
-    pointBackgroundColor: ds.color || '#ffd93c',
+    pointBackgroundColor: ds.color || 'var(--fc-accent)',
   })),
 }))
 
@@ -38,7 +38,7 @@ const chartOptions = {
   },
   scales: {
     x: { grid: { display: false }, ticks: { font: { size: 10 } } },
-    y: { grid: { color: '#f0f0f0' }, ticks: { font: { size: 10 } } },
+    y: { grid: { color: 'var(--fc-tab-hover)' }, ticks: { font: { size: 10 } } },
   },
 }
 </script>

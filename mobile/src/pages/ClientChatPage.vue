@@ -3,7 +3,7 @@
     <!-- Шапка -->
     <div
       class="row items-center q-px-md q-py-sm bg-white"
-      style="border-bottom: 1px solid #E0E0E0; flex-shrink: 0"
+      style="border-bottom: 1px solid var(--fc-border-light); flex-shrink: 0"
     >
       <div class="column" style="flex: 1; min-width: 0">
         <div class="text-subtitle2 text-weight-bold" style="word-break: break-word; line-height: 1.3">
@@ -28,7 +28,7 @@
     <div
       ref="messagesEl"
       class="col q-pa-md"
-      style="overflow-y: auto; background: #F5F5F5"
+      style="overflow-y: auto; background: var(--fc-bg-alt)"
     >
       <!-- Sentinel для Intersection Observer (автозагрузка при скролле вверх) -->
       <div ref="topSentinelEl" style="height: 2px" />
@@ -153,7 +153,7 @@
                     </div>
                   </div>
                 </template>
-                <div class="row no-wrap items-center justify-end" style="padding: 2px 8px 4px; color: #888; font-size: 10px">
+                <div class="row no-wrap items-center justify-end" style="padding: 2px 8px 4px; color: var(--fc-text-light); font-size: 10px">
                   <span class="text-caption">{{ formatTime(item.msgs[item.msgs.length - 1].created_at) }}</span>
                 </div>
                 <!-- Реакции на галерею -->
@@ -308,7 +308,7 @@
                         <div class="text-caption text-weight-bold" style="color: #1565C0; line-height: 1.2">
                           {{ msg.reply_preview.sender_display_name }}
                         </div>
-                        <div class="text-caption ellipsis" style="color: #555; line-height: 1.3">
+                        <div class="text-caption ellipsis" style="color: var(--fc-text-medium); line-height: 1.3">
                           {{ msg.reply_preview.message_type === 'image' ? '[Изображение]' : msg.reply_preview.message_type === 'file' ? '[Файл]' : msg.reply_preview.content }}
                         </div>
                       </div>
@@ -391,7 +391,7 @@
                         @click="toggleVoice(msg)"
                       />
                       <div class="column" style="flex: 1; min-width: 0; gap: 3px">
-                        <div style="height: 3px; background: #e0e0e0; border-radius: 2px; overflow: hidden">
+                        <div style="height: 3px; background: var(--fc-border-light); border-radius: 2px; overflow: hidden">
                           <div :style="{ width: voiceProgressPct(msg) + '%', background: '#1976d2', height: '100%' }" />
                         </div>
                         <div class="text-caption text-grey-6" style="font-size: 10px">
@@ -450,7 +450,7 @@
                     :style="(msg.message_type === 'image' || (isPdf(msg) && pdfThumbnails[msg.id])) ? 'padding:2px 10px 6px;margin-top:0' : 'margin-top:4px'"
                   >
                     <span v-if="msg.is_edited" class="text-caption text-grey-5 q-mr-xs" style="font-size: 9px">изм.</span>
-                    <div class="text-caption" style="color: #888; font-size: 10px">
+                    <div class="text-caption" style="color: var(--fc-text-light); font-size: 10px">
                       {{ formatTime(msg.created_at) }}
                     </div>
                     <template v-if="isOwn(msg) && !msg.is_deleted && msgReadStatus(msg)">
@@ -462,7 +462,7 @@
                               Прочитано
                             </q-item-label>
                             <q-item v-if="!msgReadStatus(msg).readers.length" dense>
-                              <q-item-section style="font-size:12px; color:#888">
+                              <q-item-section style="font-size:12px; color:var(--fc-text-light)">
                                 Никто не прочитал
                               </q-item-section>
                             </q-item>
@@ -518,7 +518,7 @@
     <div
       v-if="replyingTo"
       class="row items-center q-px-md q-py-xs bg-white"
-      style="border-top: 1px solid #E0E0E0; flex-shrink: 0; gap: 8px"
+      style="border-top: 1px solid var(--fc-border-light); flex-shrink: 0; gap: 8px"
     >
       <q-icon name="reply" size="16px" color="grey-5" />
       <div class="col" style="min-width: 0">
@@ -541,7 +541,7 @@
     </div>
 
     <!-- Панель ввода -->
-    <div class="q-pa-sm bg-white" style="border-top: 1px solid #E0E0E0; flex-shrink: 0">
+    <div class="q-pa-sm bg-white" style="border-top: 1px solid var(--fc-border-light); flex-shrink: 0">
       <div class="row items-center q-gutter-xs">
         <q-btn
           flat
@@ -1421,31 +1421,31 @@ async function _uploadGuestVoice(file) {
 
 <style scoped>
 .bubble-own {
-  background: #E8F5E9;
+  background: var(--fc-state-success-bg);
   border-radius: 12px 12px 2px 12px;
   padding: 8px 12px;
 }
 .bubble-forwarded {
-  background: #EEEEEE !important;
+  background: var(--fc-tab-inactive) !important;
 }
 .bubble-staff {
-  background: #fff;
+  background: var(--fc-bg);
   border-radius: 12px 12px 12px 2px;
   padding: 8px 12px;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+  box-shadow: 0 1px 2px var(--fc-shadow-sm);
 }
 .bubble-img-own {
-  background: #E8F5E9;
+  background: var(--fc-state-success-bg);
   border-radius: 12px 12px 2px 12px;
   overflow: hidden;
   min-width: 160px;
   max-width: 280px;
 }
 .bubble-img-staff {
-  background: #fff;
+  background: var(--fc-bg);
   border-radius: 12px 12px 12px 2px;
   overflow: hidden;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+  box-shadow: 0 1px 2px var(--fc-shadow-sm);
   min-width: 160px;
   max-width: 280px;
 }
@@ -1485,14 +1485,14 @@ async function _uploadGuestVoice(file) {
   gap: 3px;
   padding: 2px 7px;
   border-radius: 12px;
-  border: 1px solid #E0E0E0;
-  background: #F5F5F5;
+  border: 1px solid var(--fc-border-light);
+  background: var(--fc-bg-alt);
   font-size: 13px;
   cursor: pointer;
   line-height: 1.4;
 }
 .reaction-chip--own {
-  background: #E3F2FD;
+  background: var(--fc-selected-bg);
   border-color: #90CAF9;
 }
 .react-quick-btn {
@@ -1504,8 +1504,8 @@ async function _uploadGuestVoice(file) {
   border-radius: 6px;
   line-height: 1.3;
 }
-.react-quick-btn:hover { background: #F0F0F0; }
-.react-quick-btn--active { background: #E3F2FD; }
+.react-quick-btn:hover { background: var(--fc-tab-hover); }
+.react-quick-btn--active { background: var(--fc-selected-bg); }
 .hidden { display: none; }
 /* Медиа-галерея (Telegram-стиль) */
 .media-grid-1 { display: block; }

@@ -11,10 +11,10 @@
             class="q-mb-sm"
             @error="logoFailed = true"
           >
-          <div class="text-h6 text-weight-bold q-mb-xs" style="color: #333">
+          <div class="text-h6 text-weight-bold q-mb-xs" style="color: var(--fc-text)">
             Добро пожаловать
           </div>
-          <div class="text-caption" style="color: #999">
+          <div class="text-caption" style="color: var(--fc-text-muted)">
             Представьтесь, чтобы начать общение с нашей командой
           </div>
         </q-card-section>
@@ -68,7 +68,7 @@
         </q-card-section>
 
         <q-card-section class="text-center q-pt-none">
-          <div class="text-caption" style="color: #ccc">
+          <div class="text-caption" style="color: var(--fc-border-card)">
             Данные используются только для идентификации в переписке
           </div>
         </q-card-section>
@@ -129,7 +129,7 @@ async function register() {
 <style scoped>
 .register-page {
   min-height: 100vh;
-  background: #FFFFFF;
+  background: var(--fc-bg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -143,8 +143,8 @@ async function register() {
 
 .register-card {
   border-radius: 10px;
-  border: 1px solid #E0E0E0;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  border: 1px solid var(--fc-border-light);
+  box-shadow: 0 2px 12px var(--fc-shadow-xs);
 }
 
 .register-btn-wrap :deep(.q-btn) {

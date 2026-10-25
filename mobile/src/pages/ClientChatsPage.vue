@@ -443,7 +443,7 @@ onMounted(loadChats)
 
 <style scoped>
 .section-header {
-  background: #f5f5f5;
+  background: var(--fc-bg-alt);
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.5px;
@@ -451,10 +451,10 @@ onMounted(loadChats)
 }
 
 .pinned-chat-item {
-  background: #f1f8e9;
+  background: var(--fc-highlight-green);
 }
 
 .pinned-sv-chat-item {
-  background: #e3f2fd;
+  background: var(--fc-selected-bg);
 }
 </style>
