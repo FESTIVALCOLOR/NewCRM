@@ -1193,7 +1193,7 @@
                   <q-item-label v-else-if="p.payment_status === 'to_pay'" caption style="color: #F39C12; font-size: 10px">
                     к оплате
                   </q-item-label>
-                  <q-item-label v-else-if="p.payment_status === 'pending_stage'" caption style="color: #9575CD; font-size: 10px">
+                  <q-item-label v-else-if="p.payment_status === 'pending_stage'" caption style="color: #aaa; font-size: 10px">
                     в ожидании
                   </q-item-label>
                   <q-item-label v-else caption style="color: #bbb; font-size: 10px">
@@ -2836,7 +2836,7 @@ const paymentTotal = computed(() => {
 function paymentRowStyle(p) {
   if (p.is_paid || p.payment_status === 'paid') return { background: '#E8F5E9' }
   if (p.payment_status === 'to_pay') return { background: '#FFF8E1' }
-  if (p.payment_status === 'pending_stage') return { background: '#EDE7F6' }
+  if (p.payment_status === 'pending_stage') return { background: '#F5F5F5' }
   return {}
 }
 

@@ -366,7 +366,7 @@
                           {{ formatMoney(p.final_amount || p.amount) }}
                         </div>
                         <div style="width: 1px; height: 16px; background: #ddd; margin: 0 6px" />
-                        <div class="text-caption" :style="{ color: p.payment_status === 'pending_stage' ? '#9575CD' : fmtMonth(p.report_month) !== 'в работе' ? '#333' : '#bbb' }">
+                        <div class="text-caption" :style="{ color: p.payment_status === 'pending_stage' ? '#aaa' : fmtMonth(p.report_month) !== 'в работе' ? '#333' : '#bbb' }">
                           {{ p.payment_status === 'pending_stage' ? 'в ожидании' : fmtMonth(p.report_month) }}
                         </div>
                       </div>
@@ -382,7 +382,7 @@
                         >К оплате</span>
                         <span
                           v-else-if="p.payment_status === 'pending_stage'"
-                          style="display:inline-flex;align-items:center;height:26px;padding:0 8px;border-radius:4px;font-size:10px;background:#EDE7F6;color:#7B1FA2;white-space:nowrap"
+                          style="display:inline-flex;align-items:center;height:26px;padding:0 8px;border-radius:4px;font-size:10px;background:#F5F5F5;color:#aaa;white-space:nowrap"
                         >В ожидании</span>
                         <span
                           v-else
@@ -831,7 +831,7 @@ function fmtMonth(m) {
 function payRowStyle(p) {
   if (p.is_paid || p.payment_status === 'paid') return { background: '#E8F5E9' }
   if (p.payment_status === 'to_pay') return { background: '#FFF8E1' }
-  if (p.payment_status === 'pending_stage') return { background: '#EDE7F6' }
+  if (p.payment_status === 'pending_stage') return { background: '#F5F5F5' }
   return {}
 }
 
@@ -1099,7 +1099,7 @@ function exportSalariesPDF() {
     else if (f.period==='year') period=`${f.year} год`
     const tab = tabLabels[paymentTab.value] || ''
     const now = new Date().toLocaleDateString('ru-RU')
-    const statusColor = p => (p.is_paid||p.payment_status==='paid') ? '#27AE60' : p.payment_status==='to_pay' ? '#F39C12' : p.payment_status==='pending_stage' ? '#7B1FA2' : '#888'
+    const statusColor = p => (p.is_paid||p.payment_status==='paid') ? '#27AE60' : p.payment_status==='to_pay' ? '#F39C12' : p.payment_status==='pending_stage' ? '#aaa' : '#888'
     const fmtStatus = p => (p.is_paid||p.payment_status==='paid') ? 'Оплачено' : p.payment_status==='to_pay' ? 'К оплате' : p.payment_status==='pending_stage' ? 'В ожидании' : 'В работе'
     let body = `<div class="sbox">
       <div class="scol"><div class="sl">Итого</div><div class="sv">${_fmtRub(totalAmount.value)}</div></div>
@@ -1179,7 +1179,7 @@ onMounted(async () => {
 .stat-pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold }
 .stat-pill.paid { background: #E8F8F5; color: #27AE60 }
 .stat-pill.pending { background: #FFF8E1; color: #F39C12 }
-.stat-pill.waiting { background: #EDE7F6; color: #7B1FA2 }
+.stat-pill.waiting { background: #F5F5F5; color: #aaa }
 .stat-pill.inwork { background: #F5F5F5; color: #888 }
 .employee-group-header { display: flex; align-items: center; padding: 8px 12px; background: white; border: 1px solid #E0E0E0; border-radius: 8px 8px 0 0; cursor: pointer }
 .payment-card { border: none; border-left: 1px solid #E0E0E0; border-right: 1px solid #E0E0E0; border-bottom: 1px solid #F0F0F0; border-radius: 0 }
