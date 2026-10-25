@@ -96,6 +96,53 @@ body {
   }
 }
 
+// Ручное переключение на светлую тему при тёмной ОС:
+// media-query устанавливает тёмные vars на :root, но body:not(.body--dark)
+// их переопределяет — элементы наследуют от body (ближе в дереве чем :root)
+@media (prefers-color-scheme: dark) {
+  body:not(.body--dark) {
+    --fc-white: #FFFFFF;
+    --fc-bg: #FFFFFF;
+    --fc-bg-info: #F8F9FA;
+    --fc-bg-alt: #F5F5F5;
+    --fc-bg-hover: #FAFAFA;
+    --fc-accent: #ffd93c;
+    --fc-accent-hover: #f0c929;
+    --fc-accent-border: #e6c235;
+    --fc-border: #d9d9d9;
+    --fc-border-light: #E0E0E0;
+    --fc-border-card: #CCCCCC;
+    --fc-text: #333333;
+    --fc-text-secondary: #666666;
+    --fc-text-medium: #555555;
+    --fc-text-light: #888888;
+    --fc-text-muted: #999999;
+    --fc-text-disabled: #BBBBBB;
+    --fc-green: #27AE60;
+    --fc-red: #E74C3C;
+    --fc-orange: #F39C12;
+    --fc-blue: #3498DB;
+    --fc-purple: #8E44AD;
+    --fc-teal: #1ABC9C;
+    --fc-tab-inactive: #E8E8E8;
+    --fc-tab-hover: #F0F0F0;
+    --fc-highlight-yellow: #FFFDE7;
+    --fc-highlight-green: #F1F8E9;
+    --fc-shadow-xs: rgba(0, 0, 0, 0.06);
+    --fc-shadow-sm: rgba(0, 0, 0, 0.08);
+    --fc-shadow-md: rgba(0, 0, 0, 0.13);
+    --fc-shadow-lg: rgba(0, 0, 0, 0.18);
+    --fc-link: #1677FF;
+    --fc-state-success-bg: #E8F5E9;
+    --fc-state-warning-bg: #FFF8E1;
+    --fc-chat-reply-bg: #F3F6FF;
+    --fc-chat-reply-border: #D0D9F0;
+    --fc-selected-bg: #E3F2FD;
+    background: #FFFFFF;
+    color: #333333;
+  }
+}
+
 // body--dark — управляется Quasar Dark plugin (точный контроль через JS)
 .body--dark {
   --fc-white: #1E1E1E;
@@ -418,6 +465,15 @@ body {
   .cf-ico-zip  { background: rgba(74, 20, 140, 0.25) !important; color: #CE93D8 !important; }
   .cf-ico-dir  { background: rgba(245, 127, 23, 0.25) !important; color: #FFB74D !important; }
   .cf-ico-file { color: var(--fc-text-secondary) !important; }
+
+  // ---- Навигация по столбцам — активный столбец ----
+  // Фон = var(--fc-text) = #E8E8E8 (светло-серый) → нужен тёмный текст, не белый
+  .column-nav button.active {
+    color: #333333 !important;
+  }
+  .column-nav button.active .count {
+    color: #333333 !important;
+  }
 }
 
 // ===== BADGE агента =====

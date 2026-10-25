@@ -652,7 +652,7 @@ onMounted(() => { loadCards(); cardMutes.load(); if (can('supervision.view_archi
 .toggle-pills button.active { background: var(--fc-bg); color: var(--fc-text); font-weight: bold; box-shadow: 0 1px 3px var(--fc-shadow-sm) }
 .toggle-pills button + button { border-left: 1px solid var(--fc-border) }
 .pill-count { display: inline-block; background: var(--fc-shadow-sm); border-radius: 8px; padding: 0 5px; margin-left: 3px; font-size: 10px; min-width: 16px; text-align: center; }
-.toggle-pills button.active .pill-count { background: var(--fc-accent); color: var(--fc-text); }
+.toggle-pills button.active .pill-count { background: var(--fc-accent); color: #333333; }
 .column-nav { display: flex; overflow-x: auto; padding: 6px 8px; gap: 4px; border-bottom: 1px solid var(--fc-border-light); -webkit-overflow-scrolling: touch; scrollbar-width: none }
 .column-nav::-webkit-scrollbar { display: none }
 .column-nav button { border: 1px solid var(--fc-border); border-radius: 16px; background: var(--fc-bg-alt); color: var(--fc-text-light); font-size: 10px; padding: 3px 10px; white-space: nowrap; cursor: pointer; font-family: inherit; transition: all 0.2s; flex-shrink: 0 }
