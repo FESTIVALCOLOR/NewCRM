@@ -515,18 +515,19 @@
                   </template>
                 </q-item-section>
                 <q-item-section side>
-                  <div class="column items-end q-gutter-xs">
+                  <div class="column q-gutter-xs" style="align-items: stretch; min-width: 76px">
                     <q-badge :color="stageColor(entry.status)" :label="entry.status" dense />
                     <q-btn
                       v-if="stageFiles(entry.stage_code).length > 0"
-                      flat
+                      unelevated
                       dense
                       no-caps
                       size="xs"
                       icon="folder_open"
                       :label="`${stageFiles(entry.stage_code).length} файл(ов)`"
-                      color="blue"
-                      style="font-size: 10px"
+                      color="blue-1"
+                      text-color="blue-8"
+                      style="font-size: 10px; border-radius: 4px; padding: 0 5px; width: 100%"
                       @click.stop="openStageFolder(entry)"
                     />
                     <q-btn
@@ -539,7 +540,7 @@
                       label="Файл"
                       color="blue-1"
                       text-color="blue-8"
-                      style="font-size: 10px; border-radius: 4px; padding: 0 5px"
+                      style="font-size: 10px; border-radius: 4px; padding: 0 5px; width: 100%"
                       @click.stop="uploadStageFile(entry.stage_code)"
                     />
                   </div>
