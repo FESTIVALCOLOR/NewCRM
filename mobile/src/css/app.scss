@@ -474,6 +474,21 @@ body {
   .column-nav button.active .count {
     color: #333333 !important;
   }
+
+  // ---- Outline-кнопки с тёмным primary (#333333) или grey-7: цвет → светлый ----
+  // primary = #333333 (по quasar.variables.scss) → на тёмном фоне невидим
+  .q-btn--outline.text-primary,
+  .q-btn--outline.text-dark,
+  .q-btn--outline.text-grey-7,
+  .q-btn--outline.text-grey-8,
+  .q-btn--outline.text-grey-9 {
+    color: var(--fc-text) !important;
+  }
+
+  // ---- Заголовки нормодней: жёлтый фон → текст всегда тёмный ----
+  .nd-group-header {
+    color: #333333 !important;
+  }
 }
 
 // ===== BADGE агента =====

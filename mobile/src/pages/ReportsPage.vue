@@ -600,7 +600,7 @@ const funnelChart = computed(() => {
   if (!funnel.value?.funnel) return null
   const f = funnel.value.funnel
   const labels = Object.keys(f)
-  return { labels, datasets: [{ label: 'Проектов', data: labels.map(k => f[k]), color: 'var(--fc-accent)' }] }
+  return { labels, datasets: [{ label: 'Проектов', data: labels.map(k => f[k]), color: '#ffd93c' }] }
 })
 
 const projectStatCards = computed(() => {
@@ -632,7 +632,7 @@ const agentChart = computed(() => {
   if (!p?.by_agents) return null
   const entries = Object.entries(p.by_agents).sort((a, b) => b[1] - a[1]).slice(0, 8)
   if (entries.length === 0) return null
-  return { labels: entries.map(([k]) => k), datasets: [{ label: 'Проектов', data: entries.map(([, v]) => v), color: 'var(--fc-accent)' }] }
+  return { labels: entries.map(([k]) => k), datasets: [{ label: 'Проектов', data: entries.map(([, v]) => v), color: '#ffd93c' }] }
 })
 
 const stageDurationsChart = computed(() => {

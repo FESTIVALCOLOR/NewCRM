@@ -6,6 +6,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import { useQuasar } from 'quasar'
 import { Bar } from 'vue-chartjs'
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Tooltip, Legend } from 'chart.js'
 
@@ -21,6 +22,13 @@ const props = defineProps({
   // [{label: 'Стадия 1: ...', startIndex: 0, endIndex: 7}, ...]
   groups: { type: Array, default: () => [] },
 })
+
+const $q = useQuasar()
+
+// Canvas не поддерживает CSS var() — резолвим в реальные цвета через тему
+const textColor = computed(() => $q.dark.isActive ? '#C0C0C0' : '#555555')
+const mutedColor = computed(() => $q.dark.isActive ? '#787878' : '#999999')
+const gridColor = computed(() => $q.dark.isActive ? '#2E2E2E' : '#F0F0F0')
 
 // Плагин: горизонтальная линия-скобка под каждой группой стадий + подпись
 const stageSeparatorsPlugin = {
@@ -50,7 +58,7 @@ const stageSeparatorsPlugin = {
 
       // Горизонтальная линия с вертикальными засечками на концах
       ctx.save()
-      ctx.strokeStyle = 'var(--fc-text-muted)'
+      ctx.strokeStyle = mutedColor.value  // реальный цвет, не CSS var
       ctx.lineWidth = 1.5
       ctx.beginPath()
       // левая засечка
@@ -65,7 +73,7 @@ const stageSeparatorsPlugin = {
 
       // Подпись стадии по центру
       ctx.save()
-      ctx.fillStyle = 'var(--fc-text-medium)'
+      ctx.fillStyle = textColor.value  // реальный цвет, не CSS var
       ctx.font = 'bold 9px Arial, sans-serif'
       ctx.textAlign = 'center'
       // Обрезаем до 28 символов
@@ -83,7 +91,7 @@ const chartData = computed(() => ({
   datasets: props.datasets.map(ds => ({
     label: ds.label,
     data: ds.data,
-    backgroundColor: Array.isArray(ds.color) ? ds.color : (ds.color || 'var(--fc-accent)'),
+    backgroundColor: Array.isArray(ds.color) ? ds.color : (ds.color || '#ffd93c'),
     borderRadius: 4,
     barThickness: props.horizontal ? 16 : undefined,
   })),
@@ -98,19 +106,28 @@ const chartOptions = computed(() => ({
     padding: { bottom: props.groups?.length ? 36 : 0 },
   },
   plugins: {
-    legend: { display: props.datasets.length > 1, position: 'bottom', labels: { font: { size: 11 } } },
+    legend: {
+      display: props.datasets.length > 1,
+      position: 'bottom',
+      labels: { font: { size: 11 }, color: textColor.value },
+    },
   },
   scales: {
     x: {
       stacked: props.stacked,
       grid: { display: false },
       ticks: {
+        color: textColor.value,
         font: { size: props.rotateLabels ? 8 : 10 },
         maxRotation: props.rotateLabels || 0,
         minRotation: props.rotateLabels || 0,
       },
     },
-    y: { stacked: props.stacked, grid: { color: 'var(--fc-tab-hover)' }, ticks: { font: { size: 10 } } },
+    y: {
+      stacked: props.stacked,
+      grid: { color: gridColor.value },
+      ticks: { color: textColor.value, font: { size: 10 } },
+    },
   },
 }))
 </script>

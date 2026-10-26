@@ -6,6 +6,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import { useQuasar } from 'quasar'
 import { Line } from 'vue-chartjs'
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend, Filler } from 'chart.js'
 
@@ -16,29 +17,33 @@ const props = defineProps({
   datasets: { type: Array, required: true },
 })
 
+const $q = useQuasar()
+const textColor = computed(() => $q.dark.isActive ? '#C0C0C0' : '#555555')
+const gridColor = computed(() => $q.dark.isActive ? '#2E2E2E' : '#F0F0F0')
+
 const chartData = computed(() => ({
   labels: props.labels,
   datasets: props.datasets.map(ds => ({
     label: ds.label,
     data: ds.data,
-    borderColor: ds.color || 'var(--fc-accent)',
-    backgroundColor: (ds.color || 'var(--fc-accent)') + '20',
+    borderColor: ds.color || '#ffd93c',
+    backgroundColor: (ds.color || '#ffd93c') + '20',
     fill: true,
     tension: 0.3,
     pointRadius: 3,
-    pointBackgroundColor: ds.color || 'var(--fc-accent)',
+    pointBackgroundColor: ds.color || '#ffd93c',
   })),
 }))
 
-const chartOptions = {
+const chartOptions = computed(() => ({
   responsive: true,
   maintainAspectRatio: false,
   plugins: {
-    legend: { display: true, position: 'bottom', labels: { font: { size: 11 } } },
+    legend: { display: true, position: 'bottom', labels: { font: { size: 11 }, color: textColor.value } },
   },
   scales: {
-    x: { grid: { display: false }, ticks: { font: { size: 10 } } },
-    y: { grid: { color: 'var(--fc-tab-hover)' }, ticks: { font: { size: 10 } } },
+    x: { grid: { display: false }, ticks: { color: textColor.value, font: { size: 10 } } },
+    y: { grid: { color: gridColor.value }, ticks: { color: textColor.value, font: { size: 10 } } },
   },
-}
+}))
 </script>

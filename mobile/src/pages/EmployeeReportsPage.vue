@@ -174,7 +174,7 @@
               <bar-chart
                 v-else
                 :labels="roleExecutorLoad.map(e => e.name.split(' ').slice(0, 2).join(' '))"
-                :datasets="[{ label: 'Стадий', data: roleExecutorLoad.map(e => e.active_stages), color: 'var(--fc-accent)' }]"
+                :datasets="[{ label: 'Стадий', data: roleExecutorLoad.map(e => e.active_stages), color: '#ffd93c' }]"
                 horizontal
               />
             </q-card-section>
