@@ -343,6 +343,9 @@ async def get_supervision_card(card_id: int, current_user: Employee = Depends(ge
         studio_director_name = card.studio_director.full_name if card.studio_director else None
         contract = card.contract
 
+        # Проверяем, есть ли CRM карточка для этого договора (перевод из основного CRM)
+        source_crm_card = db.query(CRMCard).filter(CRMCard.contract_id == card.contract_id).first()
+
         return {
             "id": card.id,
             "contract_id": card.contract_id,
@@ -370,6 +373,7 @@ async def get_supervision_card(card_id: int, current_user: Employee = Depends(ge
             "project_subtype": contract.project_subtype if contract else None,
             "contract_status": contract.status if contract else None,
             "min_visits_per_month": card.min_visits_per_month,
+            "source_crm_card_id": source_crm_card.id if source_crm_card else None,
             "created_at": card.created_at.isoformat() if card.created_at else None,
             "updated_at": card.updated_at.isoformat() if card.updated_at else None,
         }

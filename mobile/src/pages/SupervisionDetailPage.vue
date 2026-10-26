@@ -216,6 +216,175 @@
             </q-list>
           </q-card>
 
+          <!-- Вводные данные проекта -->
+          <q-card class="is-card q-mb-md">
+            <q-card-section class="q-pb-xs">
+              <div class="row items-center justify-between">
+                <div class="text-subtitle2 text-weight-bold" style="color: var(--fc-text)">
+                  Вводные данные проекта
+                </div>
+                <div v-if="hasCrmCard" class="text-caption" style="color: var(--fc-text-muted)">
+                  из основного CRM
+                </div>
+              </div>
+            </q-card-section>
+
+            <!-- Замер -->
+            <q-separator spaced="xs" />
+            <q-card-section class="q-py-xs">
+              <div class="row items-center justify-between q-mb-xs">
+                <div class="text-weight-medium" style="font-size: 13px; color: var(--fc-text)">
+                  Замер
+                </div>
+                <div v-if="!hasCrmCard && !isArchived" class="row q-gutter-xs">
+                  <q-btn
+                    outline
+                    dense
+                    size="xs"
+                    icon="upload"
+                    label="Загрузить"
+                    no-caps
+                    color="grey-7"
+                    style="border-radius: 4px; padding: 2px 8px"
+                    @click="showIntroMeasurementDlg = true"
+                  />
+                  <q-btn
+                    v-if="introContractData?.measurement_image_link"
+                    outline
+                    dense
+                    size="xs"
+                    icon="delete_outline"
+                    no-caps
+                    color="negative"
+                    style="border-radius: 4px; padding: 2px 6px"
+                    @click="deleteIntroMeasurement"
+                  >
+                    <q-tooltip>Удалить замер</q-tooltip>
+                  </q-btn>
+                </div>
+              </div>
+              <div v-if="introContractData?.measurement_image_link" class="q-mb-xs">
+                <a :href="introContractData.measurement_image_link" target="_blank" style="color: var(--fc-link); font-size: 12px">Открыть папку с замером</a>
+              </div>
+              <div v-else style="color: var(--fc-text-muted); font-size: 12px" class="q-mb-xs">
+                Не загружен
+              </div>
+              <div v-if="introContractData?.measurement_date" class="text-caption" style="color: var(--fc-text-light)">
+                Дата: {{ formatDate(introContractData.measurement_date) }}
+              </div>
+            </q-card-section>
+
+            <!-- Фотофиксация -->
+            <q-separator spaced="xs" />
+            <q-card-section class="q-py-xs">
+              <div class="row items-center justify-between q-mb-xs">
+                <div class="text-weight-medium" style="font-size: 13px; color: var(--fc-text)">
+                  Фотофиксация
+                </div>
+                <div v-if="!hasCrmCard && !isArchived" class="row q-gutter-xs">
+                  <q-btn
+                    v-if="!introContractData?.photo_folder_public_link"
+                    outline
+                    dense
+                    size="xs"
+                    icon="upload"
+                    label="Загрузить"
+                    no-caps
+                    color="grey-7"
+                    style="border-radius: 4px; padding: 2px 8px"
+                    @click="uploadIntroFile('photo_documentation', 'Фотофиксация')"
+                  />
+                  <q-btn
+                    v-if="introContractData?.photo_folder_public_link"
+                    outline
+                    dense
+                    size="xs"
+                    icon="delete_outline"
+                    no-caps
+                    color="negative"
+                    style="border-radius: 4px; padding: 2px 6px"
+                    @click="deleteIntroPhotoFolder"
+                  >
+                    <q-tooltip>Удалить папку</q-tooltip>
+                  </q-btn>
+                </div>
+              </div>
+              <div v-if="introContractData?.photo_folder_public_link || introContractData?.photo_documentation_yandex_path">
+                <a :href="introContractData.photo_folder_public_link || introContractData.photo_documentation_yandex_path" target="_blank" style="color: var(--fc-link); font-size: 12px">Открыть папку с фотофиксацией</a>
+              </div>
+              <div v-else style="color: var(--fc-text-muted); font-size: 12px">
+                Не загружена
+              </div>
+            </q-card-section>
+
+            <!-- Стадии проекта -->
+            <template v-for="stage in introStageCodes" :key="stage.code">
+              <q-separator spaced="xs" />
+              <q-card-section class="q-py-xs">
+                <div class="row items-center justify-between q-mb-xs">
+                  <div class="text-weight-medium" style="font-size: 13px; color: var(--fc-text)">
+                    {{ stage.label }}
+                  </div>
+                  <div v-if="!hasCrmCard && !isArchived" class="row q-gutter-xs">
+                    <q-btn
+                      outline
+                      dense
+                      size="xs"
+                      icon="upload"
+                      label="Загрузить"
+                      no-caps
+                      color="grey-7"
+                      style="border-radius: 4px; padding: 2px 8px"
+                      @click="uploadIntroFile(stage.code, stage.label)"
+                    />
+                  </div>
+                </div>
+                <div v-if="introFilesMap[stage.code]?.length">
+                  <q-list dense>
+                    <q-item v-for="f in introFilesMap[stage.code]" :key="f.id">
+                      <q-item-section avatar style="min-width: 28px">
+                        <q-icon :name="introFileIcon(f)" color="blue-7" size="16px" />
+                      </q-item-section>
+                      <q-item-section style="min-width: 0">
+                        <q-item-label style="font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
+                          <a href="#" style="color: var(--fc-link); text-decoration: none" @click.prevent="openIntroFile(f)">{{ f.file_name }}</a>
+                        </q-item-label>
+                      </q-item-section>
+                      <q-item-section side style="flex-shrink: 0">
+                        <div class="row q-gutter-xs no-wrap">
+                          <q-btn
+                            outline
+                            dense
+                            size="xs"
+                            icon="open_in_new"
+                            no-caps
+                            color="grey-7"
+                            style="padding: 2px 6px; border-radius: 4px"
+                            @click.stop="openIntroFile(f)"
+                          />
+                          <q-btn
+                            v-if="!hasCrmCard && !isArchived"
+                            outline
+                            dense
+                            size="xs"
+                            icon="delete_outline"
+                            no-caps
+                            color="negative"
+                            style="padding: 2px 6px; border-radius: 4px"
+                            @click.stop="deleteIntroFile(f)"
+                          />
+                        </div>
+                      </q-item-section>
+                    </q-item>
+                  </q-list>
+                </div>
+                <div v-else class="text-caption" style="color: var(--fc-text-disabled)">
+                  Нет файлов
+                </div>
+              </q-card-section>
+            </template>
+          </q-card>
+
           <!-- Команда -->
           <q-card class="is-card q-mb-md">
             <q-card-section class="q-pb-none">
@@ -2483,6 +2652,56 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
+
+    <!-- Диалог замера (вводные данные, scratch режим) -->
+    <MeasurementDialog
+      v-model="showIntroMeasurementDlg"
+      :card-id="null"
+      :contract-id="card?.contract_id"
+      :contract-data="introContractData"
+      :card-surveyor-id="null"
+      @saved="loadIntroData"
+    />
+
+    <!-- Диалог загрузки файлов вводных данных (стадии и фото) -->
+    <q-dialog v-model="showIntroUpload">
+      <q-card style="min-width: 320px; max-width: 480px; width: 100%; border-radius: 10px">
+        <q-toolbar style="background: var(--fc-accent); color: var(--fc-text)">
+          <q-toolbar-title style="font-size: 14px; font-weight: 600">
+            Загрузить — {{ introUploadLabel || introUploadStage }}
+          </q-toolbar-title>
+          <q-btn
+            flat
+            round
+            dense
+            icon="close"
+            @click="showIntroUpload = false"
+          />
+        </q-toolbar>
+        <q-card-section>
+          <q-file
+            v-model="introUploadFiles"
+            label="Выберите файлы"
+            multiple
+            outlined
+            dense
+            accept="*/*"
+          />
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat no-caps label="Отмена" @click="showIntroUpload = false" />
+          <q-btn
+            unelevated
+            no-caps
+            label="Загрузить"
+            color="primary"
+            :loading="introUploading"
+            :disable="!introUploadFiles?.length"
+            @click="doUploadIntroFile"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
@@ -2493,6 +2712,7 @@ import { useQuasar } from 'quasar'
 import { supervisionApi, supervisionBudgetApi, supervisionClientPaymentsApi, filesApi, employeesApi, paymentsApi, locksApi, messengerApi } from 'src/services/api'
 import VoiceRecorder from 'src/components/VoiceRecorder.vue'
 import InlineChatRoom from 'src/components/InlineChatRoom.vue'
+import MeasurementDialog from 'src/components/MeasurementDialog.vue'
 import { addToCalendar } from 'src/composables/useCalendar'
 import { usePermission } from 'src/composables/usePermission'
 import { useEmployeeAvatars } from 'src/composables/useEmployeeAvatars'
@@ -2685,6 +2905,35 @@ const showStageFileUpload = ref(false)
 const stageUploadFiles = ref(null)
 const stageUploading = ref(false)
 const uploadStageCode = ref('')
+
+// === Вводные данные проекта ===
+const introContractData = ref(null)
+const introFilesMap = ref({})
+const showIntroMeasurementDlg = ref(false)
+const showIntroUpload = ref(false)
+const introUploadStage = ref('')
+const introUploadLabel = ref('')
+const introUploadFiles = ref(null)
+const introUploading = ref(false)
+
+const hasCrmCard = computed(() => !!card.value?.source_crm_card_id)
+
+const introStageCodes = computed(() => {
+  const pt = card.value?.project_type
+  if (pt === 'Шаблонный') {
+    return [
+      { code: 'stage1', label: 'Стадия 1: Планировочное решение' },
+      { code: 'stage3', label: 'Стадия 2: Чертёжная документация' },
+      { code: 'stage2_3d', label: 'Стадия 3: 3D визуализация (Доп.)' },
+    ]
+  }
+  return [
+    { code: 'stage1', label: 'Стадия 1: Планировочное решение' },
+    { code: 'stage2_concept', label: 'Стадия 2: Мудборды (концепция)' },
+    { code: 'stage2_3d', label: 'Стадия 2: 3D визуализация' },
+    { code: 'stage3', label: 'Стадия 3: Чертёжная документация' },
+  ]
+})
 
 // === Telegram-чат надзора ===
 const svChatData = ref(null)
@@ -3139,6 +3388,9 @@ async function reloadData() {
     await loadStageFiles(cid)
   }
 
+  // Вводные данные проекта (Замер, Фотофиксация, Стадии)
+  await loadIntroData()
+
   // Исполнители
   const names = []
   if (card.value?.dan_name) names.push({ label: `${card.value.dan_name} (ДАН)`, value: card.value.dan_id })
@@ -3162,6 +3414,111 @@ async function loadStageFiles(contractId) {
     }
   } catch { /* нет файлов по стадиям */ }
   svFilesStages.value = stages
+}
+
+// === Вводные данные проекта — загрузка ===
+async function loadIntroData() {
+  if (!card.value) return
+  try {
+    const cid = card.value.contract_id
+    const { contractsApi: cApi } = await import('src/services/api')
+    const { data } = await cApi.getById(cid)
+    introContractData.value = data
+    // Файлы CRM стадий
+    const stageCodes = ['stage1', 'stage2_concept', 'stage2_3d', 'stage3']
+    const fm = {}
+    for (const code of stageCodes) {
+      try {
+        const { data: files } = await filesApi.getContractFiles(cid, code)
+        if (files?.length) fm[code] = files
+      } catch {}
+    }
+    introFilesMap.value = fm
+  } catch {}
+}
+
+function uploadIntroFile(stageCode, stageLabel) {
+  introUploadStage.value = stageCode
+  introUploadLabel.value = stageLabel
+  introUploadFiles.value = null
+  showIntroUpload.value = true
+}
+
+async function doUploadIntroFile() {
+  if (!introUploadFiles.value?.length || !card.value) return
+  introUploading.value = true
+  try {
+    const { api: ax } = await import('src/boot/axios')
+    const cid = card.value.contract_id
+    const contractFolder = (introContractData.value?.yandex_folder_path || '').replace(/^disk:/, '')
+    const STAGE_FOLDERS = {
+      stage1: '1 стадия - Планировочное решение',
+      stage2_concept: '2 стадия - Концепция дизайна/Концепция-коллажи',
+      stage2_3d: '2 стадия - Концепция дизайна/3D визуализация',
+      stage3: '3 стадия - Чертежный проект',
+    }
+    const stageFolder = STAGE_FOLDERS[introUploadStage.value] || introUploadStage.value
+    for (const file of introUploadFiles.value) {
+      if (!contractFolder) { $q.notify({ type: 'negative', message: 'Папка проекта на ЯД не создана' }); break }
+      const yp = `disk:${contractFolder}/Вводные данные/${stageFolder}/${file.name}`
+      try {
+        const { public_link: publicLink, yandex_path: actualYp } = await uploadToYd(file, yp)
+        await ax.post('/api/v1/files/', {
+          contract_id: cid, stage: introUploadStage.value,
+          file_type: file.type?.includes('image') ? 'image' : 'pdf',
+          public_link: publicLink, yandex_path: actualYp, file_name: file.name, file_order: 0, variation: 1,
+        })
+      } catch (e) { console.warn('[IntroUpload]:', e) }
+    }
+    $q.notify({ type: 'positive', message: `Загружено ${introUploadFiles.value.length} файл(ов)` })
+    showIntroUpload.value = false
+    await loadIntroData()
+  } catch { $q.notify({ type: 'negative', message: 'Ошибка загрузки' }) }
+  finally { introUploading.value = false }
+}
+
+async function deleteIntroFile(file) {
+  try {
+    const { api: ax } = await import('src/boot/axios')
+    await ax.delete(`/api/v1/files/${file.id}`)
+    await loadIntroData()
+    $q.notify({ type: 'positive', message: 'Файл удалён' })
+  } catch { $q.notify({ type: 'negative', message: 'Ошибка удаления' }) }
+}
+
+function openIntroFile(f) {
+  const link = f.public_link || (f.yandex_path ? `https://disk.yandex.ru/client/disk/${encodeURIComponent((f.yandex_path || '').replace(/^disk:/, ''))}` : null)
+  if (link) window.open(link, '_blank')
+}
+
+function introFileIcon(f) {
+  const name = (f.file_name || '').toLowerCase()
+  if (name.endsWith('.pdf')) return 'picture_as_pdf'
+  if (/\.(jpg|jpeg|png|gif|bmp|heic|heif|webp)$/.test(name)) return 'image'
+  if (/\.(mp4|mov|avi|mkv)$/.test(name)) return 'videocam'
+  return 'description'
+}
+
+async function deleteIntroMeasurement() {
+  try {
+    const { contractsApi: cApi } = await import('src/services/api')
+    await cApi.update(card.value.contract_id, {
+      measurement_image_link: null, measurement_yandex_path: null, measurement_file_name: null,
+    })
+    await loadIntroData()
+    $q.notify({ type: 'positive', message: 'Замер удалён' })
+  } catch { $q.notify({ type: 'negative', message: 'Ошибка удаления' }) }
+}
+
+async function deleteIntroPhotoFolder() {
+  try {
+    const { contractsApi: cApi } = await import('src/services/api')
+    await cApi.update(card.value.contract_id, {
+      photo_folder_public_link: null, photo_documentation_yandex_path: null,
+    })
+    await loadIntroData()
+    $q.notify({ type: 'positive', message: 'Фотофиксация удалена' })
+  } catch { $q.notify({ type: 'negative', message: 'Ошибка удаления' }) }
 }
 
 // Загрузка файлов для конкретной стадии закупки
