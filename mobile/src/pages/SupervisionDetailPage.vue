@@ -3899,6 +3899,8 @@ async function saveUnexpectedBudget() {
     })
     budgetExtra.value = data
     showUnexpectedDialog.value = false
+    const { data: s } = await supervisionApi.getTimelineSummary(card.value.id)
+    summary.value = s
     $q.notify({ type: 'positive', message: 'Непредвиденные расходы сохранены' })
   } catch (err) {
     $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка сохранения' })
