@@ -240,7 +240,10 @@ async def update_timeline_entry(contract_id: int, stage_code: str, update: Timel
     entry.updated_at = datetime.utcnow()
 
     # При изменении actual_date — синхронизировать активный подэтап карточки
+    # db.flush() необходим т.к. SessionLocal имеет autoflush=False:
+    # без flush запрос в sync-функции не видит только что обновлённую actual_date
     if "actual_date" in update_data:
+        db.flush()
         _sync_substep_after_date_entry(db, contract_id)
 
     db.commit()
