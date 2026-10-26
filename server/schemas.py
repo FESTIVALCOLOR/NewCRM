@@ -1660,3 +1660,5 @@ class BudgetExtraUpdate(BaseModel):
     materials_supplier: Optional[str] = None
     materials_notes: Optional[str] = None
     materials_payments: Optional[list[dict]] = None
+
+    unexpected_expenses: Optional[list[dict]] = None

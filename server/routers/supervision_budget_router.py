@@ -35,6 +35,7 @@ def _format(record):
         "materials_supplier": record.materials_supplier,
         "materials_notes": record.materials_notes,
         "materials_payments": _parse_json(record.materials_payments),
+        "unexpected_expenses": _parse_json(record.unexpected_expenses),
     }
 
 
@@ -48,6 +49,7 @@ _EMPTY = {
     "materials_supplier": None,
     "materials_notes": None,
     "materials_payments": [],
+    "unexpected_expenses": [],
 }
 
 
@@ -96,6 +98,8 @@ async def update_budget_extra(
         record.materials_notes = data.materials_notes
     if "materials_payments" in sent:
         record.materials_payments = json.dumps(data.materials_payments or [], ensure_ascii=False)
+    if "unexpected_expenses" in sent:
+        record.unexpected_expenses = json.dumps(data.unexpected_expenses or [], ensure_ascii=False)
 
     db.commit()
     db.refresh(record)

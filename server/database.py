@@ -720,6 +720,8 @@ class SupervisionBudgetExtra(Base):
     materials_notes = Column(Text, nullable=True)
     materials_payments = Column(Text, nullable=True)  # JSON: [{date, amount, supplier, commission}]
 
+    unexpected_expenses = Column(Text, nullable=True)  # JSON: [{date, amount, supplier, comment}]
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

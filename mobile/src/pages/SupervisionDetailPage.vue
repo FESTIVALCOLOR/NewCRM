@@ -910,6 +910,51 @@
               </div>
             </q-card-section>
           </q-card>
+
+          <!-- Непредвиденные расходы -->
+          <q-card class="is-card q-mb-md">
+            <q-card-section>
+              <div class="row items-center justify-between q-mb-sm">
+                <div class="text-subtitle2 text-weight-bold" style="color: var(--fc-text)">
+                  Непредвиденные расходы
+                </div>
+                <q-btn
+                  v-if="!isArchived"
+                  flat
+                  dense
+                  round
+                  icon="edit"
+                  size="sm"
+                  color="grey-6"
+                  @click="openUnexpectedDialog"
+                />
+              </div>
+              <template v-if="budgetExtra.unexpected_expenses?.length">
+                <div class="row q-col-gutter-sm q-mb-xs">
+                  <div class="col-12" style="text-align: center">
+                    <div class="text-caption text-grey-7">
+                      Итого
+                    </div>
+                    <div class="text-weight-bold">
+                      {{ formatMoney(unexpectedTotal) }}
+                    </div>
+                  </div>
+                </div>
+                <div class="q-mt-xs">
+                  <div class="text-caption text-grey-7 q-mb-xs">
+                    Расходы:
+                  </div>
+                  <div v-for="(p, idx) in budgetExtra.unexpected_expenses" :key="idx" class="text-caption q-mb-xs" style="color: var(--fc-text-medium)">
+                    {{ fmtDMY(p.date) }} — {{ formatMoney(p.amount) }}<span v-if="p.supplier" style="color: var(--fc-text-light)"> ({{ p.supplier }})</span><span v-if="p.comment" style="color: var(--fc-text-light)"> — {{ p.comment }}</span>
+                  </div>
+                </div>
+              </template>
+              <div v-else class="text-caption text-grey-5">
+                Нет данных.
+                <span v-if="!isArchived" class="text-primary cursor-pointer" @click="openUnexpectedDialog">Добавить расходы</span>
+              </div>
+            </q-card-section>
+          </q-card>
         </q-tab-panel>
 
         <!-- ====== ВКЛАДКА 3: Данные (отчёты, фотофиксация, файлы) ====== -->
@@ -2653,6 +2698,92 @@
       </q-card>
     </q-dialog>
 
+    <!-- Диалог: Непредвиденные расходы -->
+    <q-dialog v-model="showUnexpectedDialog" persistent>
+      <q-card style="min-width: 320px; max-width: 480px; border-radius: 10px">
+        <q-card-section style="background: var(--fc-bg-info); border-radius: 10px 10px 0 0">
+          <div class="text-subtitle1 text-weight-bold">
+            Непредвиденные расходы
+          </div>
+        </q-card-section>
+        <q-card-section>
+          <div v-for="(p, idx) in unexpectedForm.expenses" :key="idx" class="row items-center q-mb-xs">
+            <div class="col text-caption" style="color: var(--fc-text-medium)">
+              {{ p.date }} — {{ formatMoney(p.amount) }}<span v-if="p.supplier" style="color: var(--fc-text-light)"> ({{ p.supplier }})</span><span v-if="p.comment" style="color: var(--fc-text-light)"> — {{ p.comment }}</span>
+            </div>
+            <q-btn
+              flat
+              dense
+              round
+              icon="delete"
+              size="xs"
+              color="negative"
+              @click="unexpectedForm.expenses.splice(idx, 1)"
+            />
+          </div>
+          <div class="row q-col-gutter-xs q-mb-xs">
+            <div class="col-3">
+              <q-input
+                v-model="newUnexpectedEntry.date"
+                label="Дата"
+                stack-label
+                outlined
+                dense
+                type="date"
+              />
+            </div>
+            <div class="col-3">
+              <q-input
+                v-model.number="newUnexpectedEntry.amount"
+                label="Сумма"
+                stack-label
+                outlined
+                dense
+                type="number"
+                prefix="₽"
+              />
+            </div>
+            <div class="col-3">
+              <q-input
+                v-model="newUnexpectedEntry.supplier"
+                label="Поставщик"
+                stack-label
+                outlined
+                dense
+              />
+            </div>
+            <div class="col-3">
+              <q-input
+                v-model="newUnexpectedEntry.comment"
+                label="Комментарий"
+                stack-label
+                outlined
+                dense
+              />
+            </div>
+          </div>
+          <q-btn
+            unelevated
+            dense
+            no-caps
+            label="+ Добавить расходы"
+            style="background: var(--fc-accent); color: var(--fc-text); font-size: 11px"
+            @click="addUnexpectedEntry"
+          />
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat no-caps label="Отмена" @click="showUnexpectedDialog = false" />
+          <q-btn
+            unelevated
+            no-caps
+            label="Сохранить"
+            color="primary"
+            @click="saveUnexpectedBudget"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
     <!-- Диалог замера (вводные данные, scratch режим) -->
     <MeasurementDialog
       v-model="showIntroMeasurementDlg"
@@ -2755,6 +2886,11 @@ const materialsForm = ref({ planned: null, supplier: '', notes: '', payments: []
 const newConstructionPayment = ref({ date: '', amount: null, commission: null })
 const newMaterialsPayment = ref({ date: '', amount: null, supplier: '', commission: null })
 
+// Диалог непредвиденных расходов
+const showUnexpectedDialog = ref(false)
+const unexpectedForm = ref({ expenses: [] })
+const newUnexpectedEntry = ref({ date: '', amount: null, supplier: '', comment: '' })
+
 // Ежемесячные платежи клиента по надзору
 const clientPayments = ref([])
 const clientPaymentSettings = ref({ notification_enabled: true, notification_day: 1 })
@@ -2768,6 +2904,9 @@ const constructionActualTotal = computed(() =>
 )
 const materialsActualTotal = computed(() =>
   (budgetExtra.value.materials_payments || []).reduce((s, p) => s + (Number(p.amount) || 0), 0),
+)
+const unexpectedTotal = computed(() =>
+  (budgetExtra.value.unexpected_expenses || []).reduce((s, p) => s + (Number(p.amount) || 0), 0),
 )
 
 const totalCommission = computed(() => {
@@ -3717,6 +3856,34 @@ async function saveMaterialsBudget() {
     const { data: s } = await supervisionApi.getTimelineSummary(card.value.id)
     summary.value = s
     $q.notify({ type: 'positive', message: 'Черновые материалы сохранены' })
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка сохранения' })
+  }
+}
+
+function openUnexpectedDialog() {
+  unexpectedForm.value = {
+    expenses: JSON.parse(JSON.stringify(budgetExtra.value.unexpected_expenses || [])),
+  }
+  newUnexpectedEntry.value = { date: '', amount: null, supplier: '', comment: '' }
+  showUnexpectedDialog.value = true
+}
+
+function addUnexpectedEntry() {
+  const p = newUnexpectedEntry.value
+  if (!p.date || !p.amount) { $q.notify({ type: 'warning', message: 'Укажите дату и сумму' }); return }
+  unexpectedForm.value.expenses.push({ date: p.date, amount: Number(p.amount), supplier: p.supplier || '', comment: p.comment || '' })
+  newUnexpectedEntry.value = { date: '', amount: null, supplier: '', comment: '' }
+}
+
+async function saveUnexpectedBudget() {
+  try {
+    const { data } = await supervisionBudgetApi.update(card.value.id, {
+      unexpected_expenses: unexpectedForm.value.expenses,
+    })
+    budgetExtra.value = data
+    showUnexpectedDialog.value = false
+    $q.notify({ type: 'positive', message: 'Непредвиденные расходы сохранены' })
   } catch (err) {
     $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка сохранения' })
   }
