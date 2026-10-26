@@ -110,10 +110,20 @@ async def create_contract(contract_data: ContractCreate, current_user: Employee 
         db.add(contract)
         db.flush()  # Получаем ID без коммита — единая транзакция
 
-        # Автоматически создаём CRM карточку для нового договора
-        # (кроме Авторского надзора — для него создаётся SupervisionCard)
-        if contract.project_type != "Авторский надзор":
-            # Назначаем создателя в соответствующее поле по должности
+        # Автоматически создаём CRM или Надзорную карточку для нового договора
+        if contract.project_type == "Авторский надзор":
+            # Для Авторского надзора — создаём SupervisionCard и устанавливаем статус
+            contract.status = "АВТОРСКИЙ НАДЗОР"
+            contract.status_changed_date = datetime.utcnow().strftime("%Y-%m-%d")
+            supervision_card = SupervisionCard(
+                contract_id=contract.id,
+                column_name="Новый заказ",
+                created_at=datetime.utcnow(),
+            )
+            db.add(supervision_card)
+            logger.info(f"Создана карточка надзора для договора {contract.id}, создатель: {current_user.full_name}")
+        else:
+            # Для остальных типов — создаём CRM карточку
             crm_card_kwargs = {
                 "contract_id": contract.id,
                 "column_name": "Новый заказ",
@@ -123,7 +133,6 @@ async def create_contract(contract_data: ContractCreate, current_user: Employee 
             elif current_user.position == "Менеджер":
                 crm_card_kwargs["manager_id"] = current_user.id
             else:
-                # Для остальных должностей — в manager_id как fallback
                 crm_card_kwargs["manager_id"] = current_user.id
 
             crm_card = CRMCard(**crm_card_kwargs)

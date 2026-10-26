@@ -237,7 +237,7 @@ function agentColor(agentName) {
 function cardBgStyle(contract) {
   const s = contract.status || ''
   if (s.includes('СДАН') || s.includes('Сдан')) return { background: 'var(--fc-state-success-bg)' }
-  if (s.includes('НАДЗОР') || s.includes('надзор')) return { background: 'var(--fc-selected-bg)' }
+  if (s.includes('НАДЗОР') || s.includes('надзор') || contract.project_type === 'Авторский надзор') return { background: 'var(--fc-selected-bg)' }
   if (s.includes('РАСТОРГНУТ') || s.includes('Расторгнут')) return { background: $q.dark.isActive ? 'rgba(231, 76, 60, 0.18)' : '#FFEBEE' }
   if (s === 'В работе') return { background: 'var(--fc-bg-alt)' }
   if (s === 'Новый заказ' || s === 'Новый') return { background: 'var(--fc-bg)' }

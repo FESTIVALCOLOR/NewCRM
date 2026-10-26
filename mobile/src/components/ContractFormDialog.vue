@@ -82,8 +82,9 @@
             @update:model-value="onProjectTypeChange"
           />
 
-          <!-- Подтип проекта -->
+          <!-- Подтип проекта (не нужен для Авторского надзора) -->
           <q-select
+            v-if="form.project_type !== 'Авторский надзор'"
             v-model="form.project_subtype"
             :options="subtypeOptions"
             label="Подтип проекта"
@@ -158,8 +159,8 @@
             type="date"
           />
 
-          <!-- Срок выполнения (авторасчёт / ручной) -->
-          <div>
+          <!-- Срок выполнения (не нужен для Авторского надзора — нет фиксированного срока) -->
+          <div v-if="form.project_type !== 'Авторский надзор'">
             <div class="row items-center q-gutter-xs q-mb-xs">
               <div class="text-caption text-weight-bold" style="color: var(--fc-text)">
                 Срок выполнения (раб. дней)
@@ -195,42 +196,45 @@
             />
           </div>
 
-          <div class="text-subtitle2 text-weight-bold q-mt-md" style="color: var(--fc-text)">
-            Финансы
-          </div>
+          <!-- Финансы (не нужны для Авторского надзора — оплата ежемесячная через карточку надзора) -->
+          <template v-if="form.project_type !== 'Авторский надзор'">
+            <div class="text-subtitle2 text-weight-bold q-mt-md" style="color: var(--fc-text)">
+              Финансы
+            </div>
 
-          <q-input
-            v-model.number="form.total_amount"
-            label="Общая сумма"
-            outlined
-            dense
-            type="number"
-            prefix="₽"
-          />
-          <q-input
-            v-model.number="form.advance_payment"
-            label="Аванс"
-            outlined
-            dense
-            type="number"
-            prefix="₽"
-          />
-          <q-input
-            v-model.number="form.additional_payment"
-            label="Доп. оплата"
-            outlined
-            dense
-            type="number"
-            prefix="₽"
-          />
-          <q-input
-            v-model.number="form.third_payment"
-            label="Третий платёж"
-            outlined
-            dense
-            type="number"
-            prefix="₽"
-          />
+            <q-input
+              v-model.number="form.total_amount"
+              label="Общая сумма"
+              outlined
+              dense
+              type="number"
+              prefix="₽"
+            />
+            <q-input
+              v-model.number="form.advance_payment"
+              label="Аванс"
+              outlined
+              dense
+              type="number"
+              prefix="₽"
+            />
+            <q-input
+              v-model.number="form.additional_payment"
+              label="Доп. оплата"
+              outlined
+              dense
+              type="number"
+              prefix="₽"
+            />
+            <q-input
+              v-model.number="form.third_payment"
+              label="Третий платёж"
+              outlined
+              dense
+              type="number"
+              prefix="₽"
+            />
+          </template>
 
           <q-input
             v-model="form.comments"
