@@ -163,14 +163,7 @@ def _sync_substep_after_date_entry(db: Session, contract_id: int) -> None:
     Гарантирует что зелёная рамка активного подэтапа перемещается на следующий
     незаполненный подэтап, когда менеджер/СДП вводит дату вручную.
     """
-    card = (
-        db.query(CRMCard)
-        .filter(
-            CRMCard.contract_id == contract_id,
-            CRMCard.is_archived.is_(False),
-        )
-        .first()
-    )
+    card = db.query(CRMCard).filter(CRMCard.contract_id == contract_id).first()
     if not card or not card.column_name:
         return
 
