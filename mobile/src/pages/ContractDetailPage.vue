@@ -135,15 +135,15 @@
                 </div>
                 <!-- Колонка 2: Сумма, Площадь, Город -->
                 <div class="col-6" style="padding-left: 12px">
-                  <div v-if="contract.project_type === 'Авторский надзор' ? contract.supervision_payments_sum > 0 : contract.total_amount" class="q-mb-sm">
+                  <div v-if="isSupervisionContract ? contract.supervision_payments_sum > 0 : contract.total_amount" class="q-mb-sm">
                     <div class="text-caption" style="color: var(--fc-text-muted)">
                       Сумма договора
                     </div>
                     <div style="font-size: 13px; color: var(--fc-text); font-weight: bold">
-                      {{ fmtMoney(contract.project_type === 'Авторский надзор' ? contract.supervision_payments_sum : contract.total_amount) }}
+                      {{ fmtMoney(isSupervisionContract ? contract.supervision_payments_sum : contract.total_amount) }}
                     </div>
                   </div>
-                  <div v-if="contract.project_type === 'Авторский надзор' && contract.total_amount" class="q-mb-sm">
+                  <div v-if="isSupervisionContract && contract.total_amount" class="q-mb-sm">
                     <div class="text-caption" style="color: var(--fc-text-muted)">
                       Ежемесячный платёж
                     </div>
@@ -1383,6 +1383,11 @@ const timelineTotalAll = computed(() => {
 const isContractClosed = computed(() => {
   const s = contract.value?.status || ''
   return s === 'СДАН' || s === 'РАСТОРГНУТ'
+})
+
+const isSupervisionContract = computed(() => {
+  const c = contract.value
+  return c?.project_type === 'Авторский надзор' || c?.status === 'АВТОРСКИЙ НАДЗОР'
 })
 
 const timelineActualTotal = computed(() => {

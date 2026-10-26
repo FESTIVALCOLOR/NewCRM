@@ -2550,7 +2550,6 @@
               <q-input
                 v-model.number="newConstructionPayment.amount"
                 label="Сумма"
-                stack-label
                 outlined
                 dense
                 type="number"
@@ -2561,7 +2560,6 @@
               <q-input
                 v-model.number="newConstructionPayment.commission"
                 label="Комиссия"
-                stack-label
                 outlined
                 dense
                 type="number"
@@ -2650,7 +2648,6 @@
               <q-input
                 v-model.number="newMaterialsPayment.amount"
                 label="Сумма"
-                stack-label
                 outlined
                 dense
                 type="number"
@@ -2661,7 +2658,6 @@
               <q-input
                 v-model="newMaterialsPayment.supplier"
                 label="Поставщик"
-                stack-label
                 outlined
                 dense
               />
@@ -2670,7 +2666,6 @@
               <q-input
                 v-model.number="newMaterialsPayment.commission"
                 label="Комиссия"
-                stack-label
                 outlined
                 dense
                 type="number"
@@ -2739,7 +2734,6 @@
               <q-input
                 v-model.number="newUnexpectedEntry.amount"
                 label="Сумма"
-                stack-label
                 outlined
                 dense
                 type="number"
@@ -2750,7 +2744,6 @@
               <q-input
                 v-model="newUnexpectedEntry.supplier"
                 label="Поставщик"
-                stack-label
                 outlined
                 dense
               />
@@ -2759,7 +2752,6 @@
               <q-input
                 v-model.number="newUnexpectedEntry.commission"
                 label="Комиссия"
-                stack-label
                 outlined
                 dense
                 type="number"
@@ -2772,7 +2764,6 @@
               <q-input
                 v-model="newUnexpectedEntry.comment"
                 label="Комментарий"
-                stack-label
                 outlined
                 dense
               />

@@ -105,7 +105,7 @@
           <div v-if="contract.project_type" class="contract-row3">
             <span class="contract-type-info">{{ shortType(contract.project_type) }}<template v-if="contract.project_subtype"> | {{ contract.project_subtype }}</template></span>
             <span class="contract-amount-info">
-              <span v-if="contract.project_type === 'Авторский надзор' ? contract.supervision_payments_sum > 0 : contract.total_amount" class="contract-amount">{{ formatAmount(contract.project_type === 'Авторский надзор' ? contract.supervision_payments_sum : contract.total_amount) }} ₽</span>
+              <span v-if="isSupervisionContract(contract) ? contract.supervision_payments_sum > 0 : contract.total_amount" class="contract-amount">{{ formatAmount(isSupervisionContract(contract) ? contract.supervision_payments_sum : contract.total_amount) }} ₽</span>
               <q-icon
                 v-if="isFullyPaid(contract)"
                 name="check_circle"
@@ -143,7 +143,7 @@
         >
           <span class="lh-num ls-num">{{ contract.contract_number }}</span>
           <span class="lh-addr ls-addr">{{ contract.address || '—' }}</span>
-          <span class="lh-amount ls-amount">{{ formatAmount(contract.project_type === 'Авторский надзор' ? contract.supervision_payments_sum : contract.total_amount) }}</span>
+          <span class="lh-amount ls-amount">{{ formatAmount(isSupervisionContract(contract) ? contract.supervision_payments_sum : contract.total_amount) }}</span>
           <span class="lh-paid">
             <q-icon v-if="isFullyPaid(contract)" name="check_circle" color="positive" size="15px" />
           </span>
@@ -280,6 +280,10 @@ function isFullyPaid(contract) {
   return !!contract.advance_payment_paid_date
     && !!contract.additional_payment_paid_date
     && !!contract.third_payment_paid_date
+}
+
+function isSupervisionContract(contract) {
+  return contract.project_type === 'Авторский надзор' || contract.status === 'АВТОРСКИЙ НАДЗОР'
 }
 
 function shortType(type) {

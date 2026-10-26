@@ -72,12 +72,12 @@ async def get_contracts(skip: int = 0, limit: int = 100, response: Response = No
     contracts = db.query(Contract).order_by(nullslast(Contract.contract_date.desc())).offset(skip).limit(limit).all()
     if response is not None:
         response.headers["X-Total-Count"] = str(total)
-    supervision_ids = [c.id for c in contracts if c.project_type == "Авторский надзор"]
+    supervision_ids = [c.id for c in contracts if c.project_type == "Авторский надзор" or c.status == "АВТОРСКИЙ НАДЗОР"]
     sums = _get_supervision_payments_sums(db, supervision_ids)
     result = []
     for c in contracts:
         d = ContractResponse.model_validate(c).model_dump()
-        if c.project_type == "Авторский надзор":
+        if c.project_type == "Авторский надзор" or c.status == "АВТОРСКИЙ НАДЗОР":
             d["supervision_payments_sum"] = sums.get(c.id, 0.0)
         result.append(d)
     return result
@@ -114,7 +114,7 @@ async def get_contract(contract_id: int, current_user: Employee = Depends(get_cu
     data["crm_card_total_pause_days"] = crm_card.total_pause_days if crm_card else 0
     data["crm_card_deadline"] = str(crm_card.deadline) if crm_card and crm_card.deadline else None
     data["supervision_card_id"] = sv_card.id if sv_card else None
-    if contract.project_type == "Авторский надзор":
+    if contract.project_type == "Авторский надзор" or contract.status == "АВТОРСКИЙ НАДЗОР":
         sums = _get_supervision_payments_sums(db, [contract_id])
         data["supervision_payments_sum"] = sums.get(contract_id, 0.0)
     return data
