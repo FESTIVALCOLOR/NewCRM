@@ -35,6 +35,7 @@ from database import (
     StageExecutor,
     StageWorkflowState,
     SupervisionCard,
+    SupervisionClientPayment,
     SupervisionProjectHistory,
     SupervisionTimelineEntry,
     SupervisionVisit,
@@ -45,22 +46,41 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["contracts"])
 
 
+def _get_supervision_payments_sums(db: Session, contract_ids: list[int]) -> dict[int, float]:
+    """Возвращает словарь {contract_id: sum_amount} для указанных contract_ids."""
+    if not contract_ids:
+        return {}
+    rows = (
+        db.query(SupervisionClientPayment.contract_id, func.sum(SupervisionClientPayment.amount))
+        .filter(SupervisionClientPayment.contract_id.in_(contract_ids))
+        .group_by(SupervisionClientPayment.contract_id)
+        .all()
+    )
+    return {row[0]: float(row[1] or 0) for row in rows}
+
+
 # =========================
 # ДОГОВОРЫ
 # =========================
 
 
-@router.get("/", response_model=list[ContractResponse])
+@router.get("/")
 async def get_contracts(skip: int = 0, limit: int = 100, response: Response = None, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Получить список договоров с пагинацией.
     Заголовок X-Total-Count содержит общее количество записей."""
-    # Считаем общее количество записей для пагинации
     total = db.query(func.count(Contract.id)).scalar()
     contracts = db.query(Contract).order_by(nullslast(Contract.contract_date.desc())).offset(skip).limit(limit).all()
-    # Устанавливаем заголовок с общим количеством записей
     if response is not None:
         response.headers["X-Total-Count"] = str(total)
-    return contracts
+    supervision_ids = [c.id for c in contracts if c.project_type == "Авторский надзор"]
+    sums = _get_supervision_payments_sums(db, supervision_ids)
+    result = []
+    for c in contracts:
+        d = ContractResponse.model_validate(c).model_dump()
+        if c.project_type == "Авторский надзор":
+            d["supervision_payments_sum"] = sums.get(c.id, 0.0)
+        result.append(d)
+    return result
 
 
 @router.get("/count")
@@ -94,6 +114,9 @@ async def get_contract(contract_id: int, current_user: Employee = Depends(get_cu
     data["crm_card_total_pause_days"] = crm_card.total_pause_days if crm_card else 0
     data["crm_card_deadline"] = str(crm_card.deadline) if crm_card and crm_card.deadline else None
     data["supervision_card_id"] = sv_card.id if sv_card else None
+    if contract.project_type == "Авторский надзор":
+        sums = _get_supervision_payments_sums(db, [contract_id])
+        data["supervision_payments_sum"] = sums.get(contract_id, 0.0)
     return data
 
 

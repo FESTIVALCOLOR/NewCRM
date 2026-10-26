@@ -204,12 +204,12 @@
           <template v-if="form.project_type === 'Авторский надзор'">
             <q-input
               v-model.number="form.total_amount"
-              label="Ежемесячный платёж"
+              label="Ежемесячный платёж (справочно)"
               outlined
               dense
               type="number"
               prefix="₽"
-              hint="Сумма ежемесячного платежа за авторский надзор"
+              hint="Справочная информация. Итоговая сумма договора = сумма фактических оплат клиента."
             />
           </template>
 

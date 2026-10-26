@@ -2536,10 +2536,11 @@
           </div>
           <div class="row q-col-gutter-xs q-mb-xs">
             <div class="col-4">
+              <div class="text-caption text-grey-7 q-mb-xs">
+                Дата
+              </div>
               <q-input
                 v-model="newConstructionPayment.date"
-                label="Дата"
-                stack-label
                 outlined
                 dense
                 type="date"
@@ -2635,10 +2636,11 @@
           </div>
           <div class="row q-col-gutter-xs q-mb-xs">
             <div class="col-3">
+              <div class="text-caption text-grey-7 q-mb-xs">
+                Дата
+              </div>
               <q-input
                 v-model="newMaterialsPayment.date"
-                label="Дата"
-                stack-label
                 outlined
                 dense
                 type="date"
@@ -2723,10 +2725,11 @@
           </div>
           <div class="row q-col-gutter-xs q-mb-xs">
             <div class="col-3">
+              <div class="text-caption text-grey-7 q-mb-xs">
+                Дата
+              </div>
               <q-input
                 v-model="newUnexpectedEntry.date"
-                label="Дата"
-                stack-label
                 outlined
                 dense
                 type="date"

@@ -440,6 +440,7 @@ class ContractResponse(ContractBase):
     id: int
     created_at: datetime
     updated_at: datetime
+    supervision_payments_sum: Optional[float] = None  # сумма фактических платежей клиента по авторскому надзору
 
     class Config:
         from_attributes = True
