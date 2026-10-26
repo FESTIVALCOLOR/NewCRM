@@ -228,14 +228,12 @@
               <q-item
                 v-for="m in allTeamMembers"
                 :key="m.roleKey + (m.stageName || '')"
-                :style="m.highlight === 'yellow' ? 'background: var(--fc-highlight-yellow)' : m.highlight === 'green' ? 'background: var(--fc-highlight-green)' : ''"
+                :style="teamRowStyle(m.highlight)"
               >
                 <q-item-section avatar>
                   <q-avatar
                     size="28px"
-                    :color="m.highlight === 'yellow' ? 'amber-3' : m.highlight === 'green' ? 'green-3' : (m.name ? 'grey-3' : 'red-1')"
-                    :text-color="m.highlight ? 'grey-9' : (m.name ? 'grey-8' : 'red-3')"
-                    style="overflow:hidden"
+                    :style="teamAvatarStyle(m.highlight, !!m.name)"
                   >
                     <img v-if="m.name && getAvatarByName(m.name)" :src="getAvatarByName(m.name)" style="width:100%;height:100%;object-fit:cover;border-radius:50%">
                     <template v-else>
@@ -2577,6 +2575,28 @@ const projectStages = computed(() => {
 })
 
 // Команда — руководство + исполнители ПО СТАДИЯМ из stage_executors
+function teamRowStyle(highlight) {
+  if (!highlight) return {}
+  const dark = $q.dark.isActive
+  if (highlight === 'yellow') return { background: dark ? 'rgba(255,217,60,0.12)' : '#FFFDE7' }
+  if (highlight === 'green')  return { background: dark ? 'rgba(39,174,96,0.12)'  : '#F1F8E9' }
+  return {}
+}
+
+function teamAvatarStyle(highlight, hasName) {
+  const dark = $q.dark.isActive
+  if (dark) {
+    if (highlight === 'yellow') return { background: 'rgba(255,180,0,0.22)', color: '#FFECB3', overflow: 'hidden' }
+    if (highlight === 'green')  return { background: 'rgba(39,174,96,0.22)',  color: '#C8E6C9', overflow: 'hidden' }
+    if (hasName) return { background: 'rgba(150,150,150,0.22)', color: '#E0E0E0', overflow: 'hidden' }
+    return { background: 'rgba(231,76,60,0.22)', color: '#FFCDD2', overflow: 'hidden' }
+  }
+  if (highlight === 'yellow') return { background: '#FFE082', color: '#424242', overflow: 'hidden' }
+  if (highlight === 'green')  return { background: '#C8E6C9', color: '#424242', overflow: 'hidden' }
+  if (hasName) return { background: '#EEEEEE', color: '#424242', overflow: 'hidden' }
+  return { background: '#FFEBEE', color: '#EF9A9A', overflow: 'hidden' }
+}
+
 const allTeamMembers = computed(() => {
   if (!card.value) return []
   const canAssign = can('crm_cards.assign_executor')
