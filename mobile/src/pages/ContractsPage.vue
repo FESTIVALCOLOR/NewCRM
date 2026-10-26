@@ -348,7 +348,7 @@ onMounted(() => loadContracts())
   min-height: 32px;
 }
 .contract-row-ls:last-of-type { border-radius: 0 0 8px 8px; }
-.contract-row-ls:hover { background: #F9F9F9; }
+.contract-row-ls:hover { background: var(--fc-bg-hover); }
 /* колонки ландшафта */
 .lh-num     { width: 96px; flex-shrink: 0; font-size: 11px; white-space: nowrap; overflow: hidden; }
 .lh-addr    { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
