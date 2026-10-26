@@ -282,11 +282,21 @@ async def update_supervision_timeline_entry(card_id: int, stage_code: str, updat
     return {c.name: getattr(entry, c.name) for c in entry.__table__.columns}
 
 
+def _sum_payments(json_text: str) -> tuple[float, float]:
+    """Суммирует amount и commission из JSON-списка платежей."""
+    import json as _j
+
+    total_amount = 0.0
+    total_commission = 0.0
+    for p in _j.loads(json_text or "[]"):
+        total_amount += float(p.get("amount", 0) or 0)
+        total_commission += float(p.get("commission", 0) or 0)
+    return total_amount, total_commission
+
+
 @router.get("/{card_id}/summary")
 async def get_supervision_timeline_summary(card_id: int, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Сводка по таблице сроков надзора"""
-    import json as _json
-
     from database import SupervisionBudgetExtra as _BudgetExtra
 
     entries = db.query(SupervisionTimelineEntry).filter(SupervisionTimelineEntry.supervision_card_id == card_id).all()
@@ -299,16 +309,13 @@ async def get_supervision_timeline_summary(card_id: int, current_user: Employee 
     total_resolved = sum(e.defects_resolved or 0 for e in entries)
     total_visits = sum(e.site_visits or 0 for e in entries)
 
-    # Добавляем строительные работы и черновые материалы
     extra = db.query(_BudgetExtra).filter(_BudgetExtra.supervision_card_id == card_id).first()
     if extra:
         total_budget_planned += (extra.construction_planned or 0) + (extra.materials_planned or 0)
-        for p in _json.loads(extra.construction_payments or "[]"):
-            total_budget_actual += float(p.get("amount", 0) or 0)
-            total_commission += float(p.get("commission", 0) or 0)
-        for p in _json.loads(extra.materials_payments or "[]"):
-            total_budget_actual += float(p.get("amount", 0) or 0)
-            total_commission += float(p.get("commission", 0) or 0)
+        for field in (extra.construction_payments, extra.materials_payments, extra.unexpected_expenses):
+            amt, com = _sum_payments(field or "[]")
+            total_budget_actual += amt
+            total_commission += com
 
     status_counts = {}
     for e in entries:

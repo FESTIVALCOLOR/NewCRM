@@ -945,7 +945,7 @@
                     Расходы:
                   </div>
                   <div v-for="(p, idx) in budgetExtra.unexpected_expenses" :key="idx" class="text-caption q-mb-xs" style="color: var(--fc-text-medium)">
-                    {{ fmtDMY(p.date) }} — {{ formatMoney(p.amount) }}<span v-if="p.supplier" style="color: var(--fc-text-light)"> ({{ p.supplier }})</span><span v-if="p.comment" style="color: var(--fc-text-light)"> — {{ p.comment }}</span>
+                    {{ fmtDMY(p.date) }} — {{ formatMoney(p.amount) }}<span v-if="p.supplier" style="color: var(--fc-text-light)"> ({{ p.supplier }})</span><span v-if="p.commission > 0" style="color: #2e7d32"> ком. {{ formatMoney(p.commission) }}</span><span v-if="p.comment" style="color: var(--fc-text-light)"> — {{ p.comment }}</span>
                   </div>
                 </div>
               </template>
@@ -2709,7 +2709,7 @@
         <q-card-section>
           <div v-for="(p, idx) in unexpectedForm.expenses" :key="idx" class="row items-center q-mb-xs">
             <div class="col text-caption" style="color: var(--fc-text-medium)">
-              {{ p.date }} — {{ formatMoney(p.amount) }}<span v-if="p.supplier" style="color: var(--fc-text-light)"> ({{ p.supplier }})</span><span v-if="p.comment" style="color: var(--fc-text-light)"> — {{ p.comment }}</span>
+              {{ p.date }} — {{ formatMoney(p.amount) }}<span v-if="p.supplier" style="color: var(--fc-text-light)"> ({{ p.supplier }})</span><span v-if="p.commission > 0"> ком. {{ formatMoney(p.commission) }}</span><span v-if="p.comment" style="color: var(--fc-text-light)"> — {{ p.comment }}</span>
             </div>
             <q-btn
               flat
@@ -2753,6 +2753,19 @@
               />
             </div>
             <div class="col-3">
+              <q-input
+                v-model.number="newUnexpectedEntry.commission"
+                label="Комиссия"
+                stack-label
+                outlined
+                dense
+                type="number"
+                prefix="₽"
+              />
+            </div>
+          </div>
+          <div class="row q-col-gutter-xs q-mb-xs">
+            <div class="col-12">
               <q-input
                 v-model="newUnexpectedEntry.comment"
                 label="Комментарий"
@@ -2889,7 +2902,7 @@ const newMaterialsPayment = ref({ date: '', amount: null, supplier: '', commissi
 // Диалог непредвиденных расходов
 const showUnexpectedDialog = ref(false)
 const unexpectedForm = ref({ expenses: [] })
-const newUnexpectedEntry = ref({ date: '', amount: null, supplier: '', comment: '' })
+const newUnexpectedEntry = ref({ date: '', amount: null, supplier: '', comment: '', commission: null })
 
 // Ежемесячные платежи клиента по надзору
 const clientPayments = ref([])
@@ -2907,6 +2920,9 @@ const materialsActualTotal = computed(() =>
 )
 const unexpectedTotal = computed(() =>
   (budgetExtra.value.unexpected_expenses || []).reduce((s, p) => s + (Number(p.amount) || 0), 0),
+)
+const unexpectedCommissionTotal = computed(() =>
+  (budgetExtra.value.unexpected_expenses || []).reduce((s, p) => s + (Number(p.commission) || 0), 0),
 )
 
 const totalCommission = computed(() => {
@@ -3872,8 +3888,8 @@ function openUnexpectedDialog() {
 function addUnexpectedEntry() {
   const p = newUnexpectedEntry.value
   if (!p.date || !p.amount) { $q.notify({ type: 'warning', message: 'Укажите дату и сумму' }); return }
-  unexpectedForm.value.expenses.push({ date: p.date, amount: Number(p.amount), supplier: p.supplier || '', comment: p.comment || '' })
-  newUnexpectedEntry.value = { date: '', amount: null, supplier: '', comment: '' }
+  unexpectedForm.value.expenses.push({ date: p.date, amount: Number(p.amount), supplier: p.supplier || '', commission: Number(p.commission) || 0, comment: p.comment || '' })
+  newUnexpectedEntry.value = { date: '', amount: null, supplier: '', comment: '', commission: null }
 }
 
 async function saveUnexpectedBudget() {
