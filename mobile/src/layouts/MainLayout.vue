@@ -279,7 +279,7 @@
         </div>
       </div>
       <q-separator />
-      <q-list padding dense>
+      <q-list padding>
         <q-item
           v-for="item in filteredMenuItems"
           :key="item.to"
