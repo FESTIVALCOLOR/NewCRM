@@ -135,20 +135,30 @@
                 </div>
                 <!-- Колонка 2: Сумма, Площадь, Город -->
                 <div class="col-6" style="padding-left: 12px">
-                  <div v-if="isSupervisionContract ? contract.supervision_payments_sum > 0 : contract.total_amount" class="q-mb-sm">
+                  <div v-if="displayContractSum > 0" class="q-mb-sm">
                     <div class="text-caption" style="color: var(--fc-text-muted)">
                       Сумма договора
                     </div>
                     <div style="font-size: 13px; color: var(--fc-text); font-weight: bold">
-                      {{ fmtMoney(isSupervisionContract ? contract.supervision_payments_sum : contract.total_amount) }}
+                      {{ fmtMoney(displayContractSum) }}
                     </div>
                   </div>
-                  <div v-if="isSupervisionContract && contract.total_amount" class="q-mb-sm">
+                  <!-- Для чистого надзора: показываем справочный ежемесячный платёж -->
+                  <div v-if="isSupervisionContract && !isConvertedToSupervision && contract.total_amount" class="q-mb-sm">
                     <div class="text-caption" style="color: var(--fc-text-muted)">
                       Ежемесячный платёж
                     </div>
                     <div style="font-size: 13px; color: var(--fc-text)">
                       {{ fmtMoney(contract.total_amount) }}
+                    </div>
+                  </div>
+                  <!-- Для конвертированного надзора: показываем оплаченный надзор отдельной строкой -->
+                  <div v-if="isConvertedToSupervision && contract.supervision_payments_sum > 0" class="q-mb-sm">
+                    <div class="text-caption" style="color: var(--fc-text-muted)">
+                      Ежемесячный платёж
+                    </div>
+                    <div style="font-size: 13px; color: var(--fc-text)">
+                      {{ fmtMoney(contract.supervision_payments_sum) }}
                     </div>
                   </div>
                   <div v-if="contract.area" class="q-mb-sm">
@@ -1388,6 +1398,21 @@ const isContractClosed = computed(() => {
 const isSupervisionContract = computed(() => {
   const c = contract.value
   return c?.project_type === 'Авторский надзор' || c?.status === 'АВТОРСКИЙ НАДЗОР'
+})
+
+// Конвертированный — изначально проектный, потом переведён в надзор (project_type != надзор, но status = АВТОРСКИЙ НАДЗОР)
+const isConvertedToSupervision = computed(() => {
+  const c = contract.value
+  return c?.project_type !== 'Авторский надзор' && c?.status === 'АВТОРСКИЙ НАДЗОР'
+})
+
+// Сумма для отображения: конвертированный = проектная сумма + оплаченный надзор; чистый надзор = только оплаченный надзор
+const displayContractSum = computed(() => {
+  const c = contract.value
+  if (!c) return 0
+  if (isConvertedToSupervision.value) return (c.total_amount || 0) + (c.supervision_payments_sum || 0)
+  if (isSupervisionContract.value) return c.supervision_payments_sum || 0
+  return c.total_amount || 0
 })
 
 const timelineActualTotal = computed(() => {

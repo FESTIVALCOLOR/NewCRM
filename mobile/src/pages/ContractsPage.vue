@@ -105,7 +105,7 @@
           <div v-if="contract.project_type" class="contract-row3">
             <span class="contract-type-info">{{ shortType(contract.project_type) }}<template v-if="contract.project_subtype"> | {{ contract.project_subtype }}</template></span>
             <span class="contract-amount-info">
-              <span v-if="isSupervisionContract(contract) ? contract.supervision_payments_sum > 0 : contract.total_amount" class="contract-amount">{{ formatAmount(isSupervisionContract(contract) ? contract.supervision_payments_sum : contract.total_amount) }} ₽</span>
+              <span v-if="contractDisplaySum(contract) > 0" class="contract-amount">{{ formatAmount(contractDisplaySum(contract)) }} ₽</span>
               <q-icon
                 v-if="isFullyPaid(contract)"
                 name="check_circle"
@@ -143,7 +143,7 @@
         >
           <span class="lh-num ls-num">{{ contract.contract_number }}</span>
           <span class="lh-addr ls-addr">{{ contract.address || '—' }}</span>
-          <span class="lh-amount ls-amount">{{ formatAmount(isSupervisionContract(contract) ? contract.supervision_payments_sum : contract.total_amount) }}</span>
+          <span class="lh-amount ls-amount">{{ formatAmount(contractDisplaySum(contract)) }}</span>
           <span class="lh-paid">
             <q-icon v-if="isFullyPaid(contract)" name="check_circle" color="positive" size="15px" />
           </span>
@@ -284,6 +284,17 @@ function isFullyPaid(contract) {
 
 function isSupervisionContract(contract) {
   return contract.project_type === 'Авторский надзор' || contract.status === 'АВТОРСКИЙ НАДЗОР'
+}
+
+function contractDisplaySum(contract) {
+  if (contract.project_type !== 'Авторский надзор' && contract.status === 'АВТОРСКИЙ НАДЗОР') {
+    // Конвертированный: проектная сумма + оплаченный надзор
+    return (contract.total_amount || 0) + (contract.supervision_payments_sum || 0)
+  }
+  if (isSupervisionContract(contract)) {
+    return contract.supervision_payments_sum || 0
+  }
+  return contract.total_amount || 0
 }
 
 function shortType(type) {

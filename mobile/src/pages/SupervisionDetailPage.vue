@@ -2547,9 +2547,11 @@
               />
             </div>
             <div class="col-4">
+              <div class="text-caption text-grey-7 q-mb-xs">
+                Сумма
+              </div>
               <q-input
                 v-model.number="newConstructionPayment.amount"
-                label="Сумма"
                 outlined
                 dense
                 type="number"
@@ -2557,9 +2559,11 @@
               />
             </div>
             <div class="col-4">
+              <div class="text-caption text-grey-7 q-mb-xs">
+                Комиссия
+              </div>
               <q-input
                 v-model.number="newConstructionPayment.commission"
-                label="Комиссия"
                 outlined
                 dense
                 type="number"
@@ -2645,9 +2649,11 @@
               />
             </div>
             <div class="col-3">
+              <div class="text-caption text-grey-7 q-mb-xs">
+                Сумма
+              </div>
               <q-input
                 v-model.number="newMaterialsPayment.amount"
-                label="Сумма"
                 outlined
                 dense
                 type="number"
@@ -2655,17 +2661,21 @@
               />
             </div>
             <div class="col-3">
+              <div class="text-caption text-grey-7 q-mb-xs">
+                Поставщик
+              </div>
               <q-input
                 v-model="newMaterialsPayment.supplier"
-                label="Поставщик"
                 outlined
                 dense
               />
             </div>
             <div class="col-3">
+              <div class="text-caption text-grey-7 q-mb-xs">
+                Комиссия
+              </div>
               <q-input
                 v-model.number="newMaterialsPayment.commission"
-                label="Комиссия"
                 outlined
                 dense
                 type="number"
@@ -2731,9 +2741,11 @@
               />
             </div>
             <div class="col-3">
+              <div class="text-caption text-grey-7 q-mb-xs">
+                Сумма
+              </div>
               <q-input
                 v-model.number="newUnexpectedEntry.amount"
-                label="Сумма"
                 outlined
                 dense
                 type="number"
@@ -2741,17 +2753,21 @@
               />
             </div>
             <div class="col-3">
+              <div class="text-caption text-grey-7 q-mb-xs">
+                Поставщик
+              </div>
               <q-input
                 v-model="newUnexpectedEntry.supplier"
-                label="Поставщик"
                 outlined
                 dense
               />
             </div>
             <div class="col-3">
+              <div class="text-caption text-grey-7 q-mb-xs">
+                Комиссия
+              </div>
               <q-input
                 v-model.number="newUnexpectedEntry.commission"
-                label="Комиссия"
                 outlined
                 dense
                 type="number"
@@ -2761,9 +2777,11 @@
           </div>
           <div class="row q-col-gutter-xs q-mb-xs">
             <div class="col-12">
+              <div class="text-caption text-grey-7 q-mb-xs">
+                Комментарий
+              </div>
               <q-input
                 v-model="newUnexpectedEntry.comment"
-                label="Комментарий"
                 outlined
                 dense
               />
