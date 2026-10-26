@@ -242,7 +242,7 @@
                   </q-avatar>
                 </q-item-section>
                 <q-item-section>
-                  <q-item-label style="font-size: 12px" :style="{ color: m.name ? 'var(--fc-text)' : 'var(--fc-text-disabled)', fontWeight: m.highlight ? '600' : 'normal' }">
+                  <q-item-label style="font-size: 12px" :style="{ color: m.highlight ? '#333333' : (m.name ? 'var(--fc-text)' : 'var(--fc-text-disabled)'), fontWeight: m.highlight ? '600' : 'normal' }">
                     {{ m.name || 'Не назначен' }}
                     <q-icon
                       v-if="m.highlight === 'green'"
@@ -252,7 +252,7 @@
                       style="margin-left: 3px; vertical-align: middle"
                     />
                   </q-item-label>
-                  <q-item-label caption>
+                  <q-item-label caption :style="m.highlight ? { color: '#555555' } : {}">
                     {{ m.role }}
                   </q-item-label>
                 </q-item-section>
@@ -2578,8 +2578,8 @@ const projectStages = computed(() => {
 function teamRowStyle(highlight) {
   if (!highlight) return {}
   const dark = $q.dark.isActive
-  if (highlight === 'yellow') return { background: dark ? 'rgba(255,217,60,0.12)' : '#FFFDE7' }
-  if (highlight === 'green')  return { background: dark ? 'rgba(39,174,96,0.12)'  : '#F1F8E9' }
+  if (highlight === 'yellow') return { background: dark ? 'rgba(255,217,60,0.22)' : '#FFFDE7' }
+  if (highlight === 'green')  return { background: dark ? 'rgba(39,174,96,0.22)'  : '#F1F8E9' }
   return {}
 }
 
