@@ -82,9 +82,8 @@
             @update:model-value="onProjectTypeChange"
           />
 
-          <!-- Подтип проекта (не нужен для Авторского надзора) -->
+          <!-- Подтип проекта -->
           <q-select
-            v-if="form.project_type !== 'Авторский надзор'"
             v-model="form.project_subtype"
             :options="subtypeOptions"
             label="Подтип проекта"
@@ -196,12 +195,26 @@
             />
           </div>
 
-          <!-- Финансы (не нужны для Авторского надзора — оплата ежемесячная через карточку надзора) -->
-          <template v-if="form.project_type !== 'Авторский надзор'">
-            <div class="text-subtitle2 text-weight-bold q-mt-md" style="color: var(--fc-text)">
-              Финансы
-            </div>
+          <!-- Финансы -->
+          <div class="text-subtitle2 text-weight-bold q-mt-md" style="color: var(--fc-text)">
+            Финансы
+          </div>
 
+          <!-- Авторский надзор: только ежемесячный платёж -->
+          <template v-if="form.project_type === 'Авторский надзор'">
+            <q-input
+              v-model.number="form.total_amount"
+              label="Ежемесячный платёж"
+              outlined
+              dense
+              type="number"
+              prefix="₽"
+              hint="Сумма ежемесячного платежа за авторский надзор"
+            />
+          </template>
+
+          <!-- Прочие типы: стандартные финансовые поля -->
+          <template v-else>
             <q-input
               v-model.number="form.total_amount"
               label="Общая сумма"
