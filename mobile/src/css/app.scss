@@ -587,6 +587,15 @@ input[type="date"].q-field__native {
   height: 100%;
 }
 
+input[type="date"]::-webkit-calendar-picker-indicator {
+  margin-left: 2px;
+  cursor: pointer;
+}
+
+.body--dark input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+}
+
 // ===== TYPOGRAPHY =====
 .text-fc-primary { color: var(--fc-text); }
 .text-fc-secondary { color: var(--fc-text-secondary); }
