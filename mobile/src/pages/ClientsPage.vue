@@ -86,11 +86,9 @@
             />
             <span class="client-name">{{ clientDisplayName(client) }}</span>
             <q-badge
-              :color="client.organization_name ? 'blue-3' : 'green-3'"
-              :text-color="client.organization_name ? 'blue-9' : 'green-9'"
+              :style="{ background: client.organization_name ? 'var(--fc-blue)' : 'var(--fc-green)', color: 'white', fontSize: '9px', flexShrink: '0' }"
               :label="client.organization_name ? 'Юр.' : 'Физ.'"
               dense
-              style="font-size: 9px; flex-shrink: 0"
             />
           </div>
           <div class="client-row2">
@@ -126,11 +124,9 @@
           <span class="clh-email cls-meta">{{ client.email || '—' }}</span>
           <span class="clh-type">
             <q-badge
-              :color="client.organization_name ? 'blue-3' : 'green-3'"
-              :text-color="client.organization_name ? 'blue-9' : 'green-9'"
+              :style="{ background: client.organization_name ? 'var(--fc-blue)' : 'var(--fc-green)', color: 'white', fontSize: '9px' }"
               :label="client.organization_name ? 'Юр.' : 'Физ.'"
               dense
-              style="font-size: 9px"
             />
           </span>
         </div>
@@ -283,7 +279,7 @@ onMounted(() => {
   min-height: 32px;
 }
 .client-row-ls:last-of-type { border-radius: 0 0 8px 8px; }
-.client-row-ls:hover { background: #F9F9F9; }
+.client-row-ls:hover { background: var(--fc-bg-hover); }
 /* колонки ландшафта клиентов */
 .clh-name  { flex: 1; min-width: 0; display: flex; align-items: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .clh-phone { width: 110px; flex-shrink: 0; font-size: 11px; }

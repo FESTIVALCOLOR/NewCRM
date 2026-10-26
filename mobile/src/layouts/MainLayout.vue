@@ -279,12 +279,13 @@
         </div>
       </div>
       <q-separator />
-      <q-list padding>
+      <q-list padding dense>
         <q-item
           v-for="item in filteredMenuItems"
           :key="item.to"
           v-ripple
           :to="item.to"
+          :exact="item.to === '/'"
           clickable
           active-class="drawer-active"
         >
