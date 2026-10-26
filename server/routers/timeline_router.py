@@ -2,58 +2,48 @@
 Роутер таблицы сроков CRM проектов (timeline).
 Подключается в main.py через app.include_router(timeline_router, prefix="/api/timeline").
 """
+
+from datetime import datetime
 import io
 import logging
-from datetime import datetime
+import re
+
+from auth import get_current_user
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
-
-from database import get_db, Employee, Contract, ProjectTimelineEntry
-from auth import get_current_user
 from schemas import TimelineEntryUpdate, TimelineInitRequest
 from services.timeline_service import (
     build_project_timeline_template,
     build_template_project_timeline,
 )
+from sqlalchemy import or_
+from sqlalchemy.orm import Session
+
+from database import Contract, CRMCard, Employee, ProjectTimelineEntry, StageWorkflowState, get_db
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["timeline"])
 
 
 @router.get("/")
-async def get_all_timelines(
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def get_all_timelines(current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Получить все записи таймлайна проектов"""
-    entries = db.query(ProjectTimelineEntry).order_by(
-        ProjectTimelineEntry.contract_id,
-        ProjectTimelineEntry.sort_order
-    ).all()
-    return [
-        {c.name: getattr(e, c.name) for c in e.__table__.columns}
-        for e in entries
-    ]
+    entries = db.query(ProjectTimelineEntry).order_by(ProjectTimelineEntry.contract_id, ProjectTimelineEntry.sort_order).all()
+    return [{c.name: getattr(e, c.name) for c in e.__table__.columns} for e in entries]
 
 
 @router.get("/{contract_id}")
-async def get_project_timeline(
-    contract_id: int,
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def get_project_timeline(contract_id: int, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Получить таблицу сроков проекта"""
-    entries = db.query(ProjectTimelineEntry).filter(
-        ProjectTimelineEntry.contract_id == contract_id
-    ).order_by(ProjectTimelineEntry.sort_order).all()
+    entries = db.query(ProjectTimelineEntry).filter(ProjectTimelineEntry.contract_id == contract_id).order_by(ProjectTimelineEntry.sort_order).all()
 
     # Пересчёт actual_days на лету при загрузке (чтобы всегда актуальные)
     from services.date_helpers import networkdays as _nwd
+
     prev_date = None
     changed = False
     for entry in entries:
-        if (entry.executor_role or '') == 'header':
+        if (entry.executor_role or "") == "header":
             continue
         actual_date = entry.actual_date
         if actual_date and prev_date:
@@ -74,152 +64,180 @@ async def get_project_timeline(
     if changed:
         db.commit()
 
-    return [
-        {c.name: getattr(e, c.name) for c in e.__table__.columns}
-        for e in entries
-    ]
+    return [{c.name: getattr(e, c.name) for c in e.__table__.columns} for e in entries]
 
 
 @router.post("/{contract_id}/init")
-async def init_project_timeline(
-    contract_id: int,
-    request: TimelineInitRequest,
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def init_project_timeline(contract_id: int, request: TimelineInitRequest, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Инициализация таблицы сроков проекта из шаблона"""
     contract = db.query(Contract).filter(Contract.id == contract_id).first()
     if not contract:
         raise HTTPException(status_code=404, detail="Договор не найден")
 
     # Проверяем, есть ли уже записи
-    existing = db.query(ProjectTimelineEntry).filter(
-        ProjectTimelineEntry.contract_id == contract_id
-    ).count()
+    existing = db.query(ProjectTimelineEntry).filter(ProjectTimelineEntry.contract_id == contract_id).count()
     if existing > 0:
         return {"status": "already_initialized", "count": existing}
 
     # Используем agent_type из договора для выбора кастомного шаблона нормо-дней
-    contract_agent = contract.agent_type or 'Все агенты'
+    contract_agent = contract.agent_type or "Все агенты"
 
-    if request.project_type == 'Шаблонный':
-        template_subtype = request.project_subtype or 'Стандарт'
-        floors = getattr(request, 'floors', 1) or 1
-        entries, contract_term, K = build_template_project_timeline(
-            template_subtype, request.area, floors, agent_type=contract_agent
-        )
+    if request.project_type == "Шаблонный":
+        template_subtype = request.project_subtype or "Стандарт"
+        floors = getattr(request, "floors", 1) or 1
+        entries, contract_term, K = build_template_project_timeline(template_subtype, request.area, floors, agent_type=contract_agent)
     else:
-        entries, contract_term, K = build_project_timeline_template(
-            request.project_type, request.area, request.project_subtype, agent_type=contract_agent
-        )
+        entries, contract_term, K = build_project_timeline_template(request.project_type, request.area, request.project_subtype, agent_type=contract_agent)
 
     for e in entries:
         record = ProjectTimelineEntry(
             contract_id=contract_id,
-            stage_code=e['stage_code'],
-            stage_name=e['stage_name'],
-            stage_group=e['stage_group'],
-            substage_group=e.get('substage_group', ''),
-            executor_role=e['executor_role'],
-            is_in_contract_scope=e['is_in_contract_scope'],
-            sort_order=e['sort_order'],
-            raw_norm_days=e.get('raw_norm_days', 0),
-            cumulative_days=e.get('cumulative_days', 0),
-            norm_days=e.get('norm_days', 0)
+            stage_code=e["stage_code"],
+            stage_name=e["stage_name"],
+            stage_group=e["stage_group"],
+            substage_group=e.get("substage_group", ""),
+            executor_role=e["executor_role"],
+            is_in_contract_scope=e["is_in_contract_scope"],
+            sort_order=e["sort_order"],
+            raw_norm_days=e.get("raw_norm_days", 0),
+            cumulative_days=e.get("cumulative_days", 0),
+            norm_days=e.get("norm_days", 0),
         )
         db.add(record)
 
     db.commit()
-    return {
-        "status": "initialized",
-        "count": len(entries),
-        "contract_term": contract_term,
-        "area_coefficient": K
-    }
+    return {"status": "initialized", "count": len(entries), "contract_term": contract_term, "area_coefficient": K}
 
 
 @router.post("/{contract_id}/reinit")
-async def reinit_project_timeline(
-    contract_id: int,
-    request: TimelineInitRequest,
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def reinit_project_timeline(contract_id: int, request: TimelineInitRequest, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Пересоздать таблицу сроков проекта (удалить старые записи и создать заново)"""
     contract = db.query(Contract).filter(Contract.id == contract_id).first()
     if not contract:
         raise HTTPException(status_code=404, detail="Договор не найден")
 
     # K10: Проверяем наличие заполненных actual_date перед reinit
-    filled_entries = db.query(ProjectTimelineEntry).filter(
-        ProjectTimelineEntry.contract_id == contract_id,
-        ProjectTimelineEntry.actual_date.isnot(None),
-        ProjectTimelineEntry.actual_date != ''
-    ).count()
+    filled_entries = (
+        db.query(ProjectTimelineEntry).filter(ProjectTimelineEntry.contract_id == contract_id, ProjectTimelineEntry.actual_date.isnot(None), ProjectTimelineEntry.actual_date != "").count()
+    )
     if filled_entries > 0 and not request.force:
-        raise HTTPException(
-            status_code=409,
-            detail=f"Невозможно пересоздать таблицу сроков: {filled_entries} записей имеют фактические даты. Используйте force=true для принудительного сброса."
-        )
+        raise HTTPException(status_code=409, detail=f"Невозможно пересоздать таблицу сроков: {filled_entries} записей имеют фактические даты. Используйте force=true для принудительного сброса.")
 
     # Удаляем старые записи
-    db.query(ProjectTimelineEntry).filter(
-        ProjectTimelineEntry.contract_id == contract_id
-    ).delete()
+    db.query(ProjectTimelineEntry).filter(ProjectTimelineEntry.contract_id == contract_id).delete()
     db.flush()
 
     # Используем agent_type из договора для выбора кастомного шаблона нормо-дней
-    contract_agent = contract.agent_type or 'Все агенты'
+    contract_agent = contract.agent_type or "Все агенты"
 
-    if request.project_type == 'Шаблонный':
-        template_subtype = request.project_subtype or 'Стандарт'
-        floors = getattr(request, 'floors', 1) or 1
-        entries, contract_term, K = build_template_project_timeline(
-            template_subtype, request.area, floors, agent_type=contract_agent
-        )
+    if request.project_type == "Шаблонный":
+        template_subtype = request.project_subtype or "Стандарт"
+        floors = getattr(request, "floors", 1) or 1
+        entries, contract_term, K = build_template_project_timeline(template_subtype, request.area, floors, agent_type=contract_agent)
     else:
-        entries, contract_term, K = build_project_timeline_template(
-            request.project_type, request.area, request.project_subtype, agent_type=contract_agent
-        )
+        entries, contract_term, K = build_project_timeline_template(request.project_type, request.area, request.project_subtype, agent_type=contract_agent)
 
     for e in entries:
         record = ProjectTimelineEntry(
             contract_id=contract_id,
-            stage_code=e['stage_code'],
-            stage_name=e['stage_name'],
-            stage_group=e['stage_group'],
-            substage_group=e.get('substage_group', ''),
-            executor_role=e['executor_role'],
-            is_in_contract_scope=e['is_in_contract_scope'],
-            sort_order=e['sort_order'],
-            raw_norm_days=e.get('raw_norm_days', 0),
-            cumulative_days=e.get('cumulative_days', 0),
-            norm_days=e.get('norm_days', 0)
+            stage_code=e["stage_code"],
+            stage_name=e["stage_name"],
+            stage_group=e["stage_group"],
+            substage_group=e.get("substage_group", ""),
+            executor_role=e["executor_role"],
+            is_in_contract_scope=e["is_in_contract_scope"],
+            sort_order=e["sort_order"],
+            raw_norm_days=e.get("raw_norm_days", 0),
+            cumulative_days=e.get("cumulative_days", 0),
+            norm_days=e.get("norm_days", 0),
         )
         db.add(record)
 
     db.commit()
-    return {
-        "status": "reinitialized",
-        "count": len(entries),
-        "contract_term": contract_term,
-        "area_coefficient": K
+    return {"status": "reinitialized", "count": len(entries), "contract_term": contract_term, "area_coefficient": K}
+
+
+def _sync_substep_after_date_entry(db: Session, contract_id: int) -> None:
+    """После ручного ввода даты в таблице сроков синхронизировать current_substep_code.
+
+    Гарантирует что зелёная рамка активного подэтапа перемещается на следующий
+    незаполненный подэтап, когда менеджер/СДП вводит дату вручную.
+    """
+    card = (
+        db.query(CRMCard)
+        .filter(
+            CRMCard.contract_id == contract_id,
+            CRMCard.is_archived.is_(False),
+        )
+        .first()
+    )
+    if not card or not card.column_name:
+        return
+
+    col = card.column_name.lower()
+    m = re.search(r"стадия\s*(\d+)", col)
+    if m:
+        stage_group = f"STAGE{m.group(1)}"
+    elif "планировочн" in col:
+        stage_group = "STAGE1"
+    elif "концепция" in col or "дизайн" in col:
+        stage_group = "STAGE2"
+    elif "рабоч" in col or "чертеж" in col or "чертёж" in col:
+        stage_group = "STAGE3"
+    elif "визуализац" in col or "3д" in col or "3d" in col:
+        stage_group = "STAGE3"
+    else:
+        return
+
+    wf = (
+        db.query(StageWorkflowState)
+        .filter(
+            StageWorkflowState.crm_card_id == card.id,
+            StageWorkflowState.stage_name == card.column_name,
+        )
+        .first()
+    )
+    if not wf:
+        return
+
+    # Не трогаем статусы с нестандартной позиционной логикой (как в _sync_workflow_substep)
+    PROTECTED = {
+        "pending_review",
+        "revision",
+        "client_approval",
+        "pending_decision",
+        "act_signing",
+        "stage_completed",
     }
+    if wf.status in PROTECTED:
+        return
+
+    next_entry = (
+        db.query(ProjectTimelineEntry)
+        .filter(
+            ProjectTimelineEntry.contract_id == contract_id,
+            ProjectTimelineEntry.stage_group == stage_group,
+            ProjectTimelineEntry.executor_role != "header",
+            or_(ProjectTimelineEntry.actual_date.is_(None), ProjectTimelineEntry.actual_date == ""),
+            or_(ProjectTimelineEntry.status.is_(None), ProjectTimelineEntry.status != "skipped"),
+        )
+        .order_by(ProjectTimelineEntry.sort_order)
+        .first()
+    )
+
+    new_code = next_entry.stage_code if next_entry else None
+    new_substage = next_entry.substage_group if next_entry else None
+
+    if wf.current_substep_code != new_code:
+        logger.info(f"[TimelineSync] contract={contract_id}, card={card.id}: substep {wf.current_substep_code!r} → {new_code!r}")
+        wf.current_substep_code = new_code
+        wf.current_substage_group = new_substage
 
 
 @router.put("/{contract_id}/entry/{stage_code}")
-async def update_timeline_entry(
-    contract_id: int,
-    stage_code: str,
-    update: TimelineEntryUpdate,
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def update_timeline_entry(contract_id: int, stage_code: str, update: TimelineEntryUpdate, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Обновить запись таблицы сроков"""
-    entry = db.query(ProjectTimelineEntry).filter(
-        ProjectTimelineEntry.contract_id == contract_id,
-        ProjectTimelineEntry.stage_code == stage_code
-    ).first()
+    entry = db.query(ProjectTimelineEntry).filter(ProjectTimelineEntry.contract_id == contract_id, ProjectTimelineEntry.stage_code == stage_code).first()
     if not entry:
         raise HTTPException(status_code=404, detail="Запись не найдена")
 
@@ -228,51 +246,37 @@ async def update_timeline_entry(
         setattr(entry, key, value)
     entry.updated_at = datetime.utcnow()
 
+    # При изменении actual_date — синхронизировать активный подэтап карточки
+    if "actual_date" in update_data:
+        _sync_substep_after_date_entry(db, contract_id)
+
     db.commit()
     return {c.name: getattr(entry, c.name) for c in entry.__table__.columns}
 
 
 @router.get("/{contract_id}/summary")
-async def get_timeline_summary(
-    contract_id: int,
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def get_timeline_summary(contract_id: int, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Сводка по таблице сроков"""
-    entries = db.query(ProjectTimelineEntry).filter(
-        ProjectTimelineEntry.contract_id == contract_id,
-        ProjectTimelineEntry.executor_role != 'header'
-    ).all()
+    entries = db.query(ProjectTimelineEntry).filter(ProjectTimelineEntry.contract_id == contract_id, ProjectTimelineEntry.executor_role != "header").all()
 
     total_norm = sum(e.norm_days for e in entries if e.is_in_contract_scope)
     total_actual = sum(e.actual_days for e in entries if e.is_in_contract_scope and e.actual_days > 0)
     overdue_count = sum(1 for e in entries if e.actual_days > e.norm_days > 0)
 
-    return {
-        "total_norm_days": total_norm,
-        "total_actual_days": total_actual,
-        "overdue_count": overdue_count,
-        "entries_count": len(entries)
-    }
+    return {"total_norm_days": total_norm, "total_actual_days": total_actual, "overdue_count": overdue_count, "entries_count": len(entries)}
 
 
 @router.get("/{contract_id}/export/excel")
-async def export_timeline_excel(
-    contract_id: int,
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def export_timeline_excel(contract_id: int, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Экспорт таблицы сроков CRM в Excel"""
     from openpyxl import Workbook
-    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
     contract = db.query(Contract).filter(Contract.id == contract_id).first()
     if not contract:
         raise HTTPException(status_code=404, detail="Договор не найден")
 
-    entries = db.query(ProjectTimelineEntry).filter(
-        ProjectTimelineEntry.contract_id == contract_id
-    ).order_by(ProjectTimelineEntry.sort_order).all()
+    entries = db.query(ProjectTimelineEntry).filter(ProjectTimelineEntry.contract_id == contract_id).order_by(ProjectTimelineEntry.sort_order).all()
 
     wb = Workbook()
     ws = wb.active
@@ -290,16 +294,13 @@ async def export_timeline_excel(
 
     header_fill = PatternFill(start_color="2F5496", end_color="2F5496", fill_type="solid")
     header_font = Font(bold=True, color="FFFFFF", size=11)
-    thin_border = Border(
-        left=Side(style='thin'), right=Side(style='thin'),
-        top=Side(style='thin'), bottom=Side(style='thin')
-    )
+    thin_border = Border(left=Side(style="thin"), right=Side(style="thin"), top=Side(style="thin"), bottom=Side(style="thin"))
 
     for col_idx, header in enumerate(headers, 1):
         cell = ws.cell(row=5, column=col_idx)
         cell.fill = header_fill
         cell.font = header_font
-        cell.alignment = Alignment(horizontal='center')
+        cell.alignment = Alignment(horizontal="center")
         cell.border = thin_border
 
     # Данные
@@ -310,25 +311,18 @@ async def export_timeline_excel(
     overdue_fill = PatternFill(start_color="F2DCDB", end_color="F2DCDB", fill_type="solid")
 
     for entry in entries:
-        row_data = [
-            entry.stage_name,
-            entry.actual_date or "",
-            entry.actual_days or 0,
-            entry.norm_days or 0,
-            entry.status or "",
-            entry.executor_role or ""
-        ]
+        row_data = [entry.stage_name, entry.actual_date or "", entry.actual_days or 0, entry.norm_days or 0, entry.status or "", entry.executor_role or ""]
         ws.append(row_data)
         row_idx = ws.max_row
 
         # Стили для заголовков этапов
-        if entry.executor_role == 'header':
+        if entry.executor_role == "header":
             for col_idx in range(1, 7):
                 cell = ws.cell(row=row_idx, column=col_idx)
                 cell.fill = stage_fill
                 cell.font = stage_font
                 cell.border = thin_border
-        elif entry.executor_role == 'subheader':
+        elif entry.executor_role == "subheader":
             for col_idx in range(1, 7):
                 cell = ws.cell(row=row_idx, column=col_idx)
                 cell.fill = substage_fill
@@ -344,53 +338,50 @@ async def export_timeline_excel(
                     ws.cell(row=row_idx, column=col_idx).fill = overdue_fill
 
     # Ширина колонок
-    ws.column_dimensions['A'].width = 45
-    ws.column_dimensions['B'].width = 14
-    ws.column_dimensions['C'].width = 14
-    ws.column_dimensions['D'].width = 14
-    ws.column_dimensions['E'].width = 12
-    ws.column_dimensions['F'].width = 18
+    ws.column_dimensions["A"].width = 45
+    ws.column_dimensions["B"].width = 14
+    ws.column_dimensions["C"].width = 14
+    ws.column_dimensions["D"].width = 14
+    ws.column_dimensions["E"].width = 12
+    ws.column_dimensions["F"].width = 18
 
     output = io.BytesIO()
     wb.save(output)
     output.seek(0)
 
     filename = f"timeline_{contract_id}.xlsx"
-    return StreamingResponse(
-        output,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f"attachment; filename={filename}"}
-    )
+    return StreamingResponse(output, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f"attachment; filename={filename}"})
 
 
 @router.get("/{contract_id}/export/pdf")
-async def export_timeline_pdf(
-    contract_id: int,
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def export_timeline_pdf(contract_id: int, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Экспорт таблицы сроков CRM в PDF (фирменный стиль)."""
-    from reportlab.platypus import Paragraph
-    from reportlab.lib.styles import ParagraphStyle
     from pdf_helper import (
-        build_timeline_pdf, _font, _font_bold,
-        COLOR_HEADER_ROW, COLOR_SUBHEADER_ROW,
-        COLOR_OK, COLOR_OVERDUE, COLOR_SKIPPED,
-        COLOR_OUT_SCOPE, COLOR_SUBTOTAL, COLOR_GRANDTOTAL,
+        COLOR_GRANDTOTAL,
+        COLOR_HEADER_ROW,
+        COLOR_OK,
+        COLOR_OUT_SCOPE,
+        COLOR_OVERDUE,
+        COLOR_SKIPPED,
+        COLOR_SUBHEADER_ROW,
+        COLOR_SUBTOTAL,
+        _font,
+        _font_bold,
+        build_timeline_pdf,
     )
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.platypus import Paragraph
 
     contract = db.query(Contract).filter(Contract.id == contract_id).first()
     if not contract:
         raise HTTPException(status_code=404, detail="Договор не найден")
 
-    entries = db.query(ProjectTimelineEntry).filter(
-        ProjectTimelineEntry.contract_id == contract_id
-    ).order_by(ProjectTimelineEntry.sort_order).all()
+    entries = db.query(ProjectTimelineEntry).filter(ProjectTimelineEntry.contract_id == contract_id).order_by(ProjectTimelineEntry.sort_order).all()
 
     fn = _font()
     fb = _font_bold()
-    cell_style = ParagraphStyle('Cell', fontName=fn, fontSize=8, leading=10)
-    bold_style = ParagraphStyle('CellB', fontName=fb, fontSize=8, leading=10)
+    cell_style = ParagraphStyle("Cell", fontName=fn, fontSize=8, leading=10)
+    bold_style = ParagraphStyle("CellB", fontName=fb, fontSize=8, leading=10)
 
     headers = ["Этап", "Дата", "Дней", "Норма", "Статус", "Исполнитель"]
     rows = []
@@ -406,26 +397,28 @@ async def export_timeline_pdf(
     def _add_subtotal(label):
         """Вставить строку «Итого этапа»."""
         row_idx = len(rows) + 1
-        rows.append([
-            Paragraph(f'<b>Итого {label}:</b>', bold_style),
-            Paragraph('', cell_style),
-            Paragraph(f'<b>{stage_actual_sum}</b>', bold_style),
-            Paragraph(f'<b>{stage_norm_sum}</b>', bold_style),
-            Paragraph('', cell_style),
-            Paragraph('', cell_style),
-        ])
-        row_styles.append({'row_idx': row_idx, 'bg': COLOR_SUBTOTAL, 'bold': True})
+        rows.append(
+            [
+                Paragraph(f"<b>Итого {label}:</b>", bold_style),
+                Paragraph("", cell_style),
+                Paragraph(f"<b>{stage_actual_sum}</b>", bold_style),
+                Paragraph(f"<b>{stage_norm_sum}</b>", bold_style),
+                Paragraph("", cell_style),
+                Paragraph("", cell_style),
+            ]
+        )
+        row_styles.append({"row_idx": row_idx, "bg": COLOR_SUBTOTAL, "bold": True})
 
     for entry in entries:
-        role = entry.executor_role or ''
-        is_header = role == 'header' and not entry.substage_group
-        is_subheader = role == 'header' and bool(entry.substage_group)
-        stage_group = entry.stage_group or ''
+        role = entry.executor_role or ""
+        is_header = role == "header" and not entry.substage_group
+        is_subheader = role == "header" and bool(entry.substage_group)
+        stage_group = entry.stage_group or ""
         is_in_scope = entry.is_in_contract_scope if entry.is_in_contract_scope is not None else True
 
         # Итого предыдущего этапа при смене stage_group
-        if is_header and stage_group != current_stage_group and current_stage_group and current_stage_group != 'START':
-            _add_subtotal(current_stage_group.replace('STAGE', 'Этап '))
+        if is_header and stage_group != current_stage_group and current_stage_group and current_stage_group != "START":
+            _add_subtotal(current_stage_group.replace("STAGE", "Этап "))
             stage_actual_sum = 0
             stage_norm_sum = 0
 
@@ -437,21 +430,21 @@ async def export_timeline_pdf(
         # Вычисление статуса как в программе
         actual_days = entry.actual_days or 0
         norm_days_val = entry.norm_days or 0
-        status_text = entry.status or ''
+        status_text = entry.status or ""
         row_bg = None
 
         if not is_header and not is_subheader:
             if not is_in_scope:
                 row_bg = COLOR_OUT_SCOPE
-            elif status_text == 'skipped':
-                status_text = 'Пропущен'
+            elif status_text == "skipped":
+                status_text = "Пропущен"
                 row_bg = COLOR_SKIPPED
             elif actual_days > 0 and norm_days_val > 0:
                 if actual_days <= norm_days_val:
-                    status_text = 'В срок'
+                    status_text = "В срок"
                     row_bg = COLOR_OK
                 else:
-                    status_text = 'Просрочен'
+                    status_text = "Просрочен"
                     row_bg = COLOR_OVERDUE
 
             # Накопление сумм
@@ -463,39 +456,43 @@ async def export_timeline_pdf(
 
         # Строка данных
         row_idx = len(rows) + 1  # +1 т.к. row 0 — заголовок таблицы
-        rows.append([
-            Paragraph(entry.stage_name or "", cell_style),
-            Paragraph(entry.actual_date or "", cell_style),
-            Paragraph(str(actual_days) if actual_days else "", cell_style),
-            Paragraph(str(norm_days_val) if norm_days_val else "", cell_style),
-            Paragraph(status_text, cell_style),
-            Paragraph(role if role not in ('header',) else "", cell_style),
-        ])
+        rows.append(
+            [
+                Paragraph(entry.stage_name or "", cell_style),
+                Paragraph(entry.actual_date or "", cell_style),
+                Paragraph(str(actual_days) if actual_days else "", cell_style),
+                Paragraph(str(norm_days_val) if norm_days_val else "", cell_style),
+                Paragraph(status_text, cell_style),
+                Paragraph(role if role not in ("header",) else "", cell_style),
+            ]
+        )
 
         if is_header:
-            row_styles.append({'row_idx': row_idx, 'bg': COLOR_HEADER_ROW, 'fg': '#FFFFFF', 'bold': True})
+            row_styles.append({"row_idx": row_idx, "bg": COLOR_HEADER_ROW, "fg": "#FFFFFF", "bold": True})
         elif is_subheader:
-            row_styles.append({'row_idx': row_idx, 'bg': COLOR_SUBHEADER_ROW, 'bold': True})
+            row_styles.append({"row_idx": row_idx, "bg": COLOR_SUBHEADER_ROW, "bold": True})
         elif row_bg:
-            row_styles.append({'row_idx': row_idx, 'bg': row_bg})
+            row_styles.append({"row_idx": row_idx, "bg": row_bg})
 
     # Итого последнего этапа
-    if current_stage_group and current_stage_group != 'START':
-        _add_subtotal(current_stage_group.replace('STAGE', 'Этап '))
+    if current_stage_group and current_stage_group != "START":
+        _add_subtotal(current_stage_group.replace("STAGE", "Этап "))
 
     # Общий итог
-    contract_term = getattr(contract, 'contract_term', None)
+    contract_term = getattr(contract, "contract_term", None)
     grand_norm = contract_term if contract_term else total_norm
     grand_idx = len(rows) + 1
-    rows.append([
-        Paragraph('<b>ИТОГО ВСЕХ ЭТАПОВ:</b>', bold_style),
-        Paragraph('', cell_style),
-        Paragraph(f'<b>{total_actual}</b>', bold_style),
-        Paragraph(f'<b>{grand_norm}</b>', bold_style),
-        Paragraph('', cell_style),
-        Paragraph('', cell_style),
-    ])
-    row_styles.append({'row_idx': grand_idx, 'bg': COLOR_GRANDTOTAL, 'bold': True})
+    rows.append(
+        [
+            Paragraph("<b>ИТОГО ВСЕХ ЭТАПОВ:</b>", bold_style),
+            Paragraph("", cell_style),
+            Paragraph(f"<b>{total_actual}</b>", bold_style),
+            Paragraph(f"<b>{grand_norm}</b>", bold_style),
+            Paragraph("", cell_style),
+            Paragraph("", cell_style),
+        ]
+    )
+    row_styles.append({"row_idx": grand_idx, "bg": COLOR_GRANDTOTAL, "bold": True})
 
     pdf_bytes = build_timeline_pdf(
         title="Таблица сроков проекта",
@@ -508,16 +505,13 @@ async def export_timeline_pdf(
 
     from datetime import date
     from urllib.parse import quote
+
     today = date.today().strftime("%d.%m.%Y")
     address = contract.address or f"договор_{contract_id}"
-    ru_name = f'Отчет Таблица сроков {address} от {today}.pdf'
+    ru_name = f"Отчет Таблица сроков {address} от {today}.pdf"
     encoded = quote(ru_name)
     return StreamingResponse(
         io.BytesIO(pdf_bytes),
         media_type="application/pdf",
-        headers={
-            "Content-Disposition":
-                f"attachment; filename*=UTF-8''{encoded}; "
-                f"filename=timeline_{contract_id}.pdf"
-        },
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded}; filename=timeline_{contract_id}.pdf"},
     )
