@@ -242,7 +242,7 @@
                   </q-avatar>
                 </q-item-section>
                 <q-item-section>
-                  <q-item-label style="font-size: 12px" :style="{ color: m.highlight ? '#333333' : (m.name ? 'var(--fc-text)' : 'var(--fc-text-disabled)'), fontWeight: m.highlight ? '600' : 'normal' }">
+                  <q-item-label style="font-size: 12px" :style="{ color: m.name ? 'var(--fc-text)' : 'var(--fc-text-disabled)', fontWeight: m.highlight ? '600' : 'normal' }">
                     {{ m.name || 'Не назначен' }}
                     <q-icon
                       v-if="m.highlight === 'green'"
@@ -252,7 +252,7 @@
                       style="margin-left: 3px; vertical-align: middle"
                     />
                   </q-item-label>
-                  <q-item-label caption :style="m.highlight ? { color: '#555555' } : {}">
+                  <q-item-label caption>
                     {{ m.role }}
                   </q-item-label>
                 </q-item-section>

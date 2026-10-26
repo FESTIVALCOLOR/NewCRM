@@ -57,7 +57,7 @@
           Команда ({{ teamMembers.length }}) {{ showTeam ? '▲' : '▼' }}
         </div>
         <div v-if="showTeam">
-          <div v-for="m in teamMembers" :key="m.text" style="font-size: 10px; padding: 1px 4px; border-radius: 2px; margin-top: 1px" :style="{ background: m.bg, color: 'var(--fc-text)' }">
+          <div v-for="m in teamMembers" :key="m.text" style="font-size: 10px; padding: 1px 4px; border-radius: 2px; margin-top: 1px" :style="{ background: m.bg, color: m.color }">
             {{ m.text }}
           </div>
         </div>
@@ -330,6 +330,11 @@ const teamMembers = computed(() => {
   const pt = c.project_type || ''
   const items = []
 
+  const dark = $q.dark.isActive
+  const bgYellow = dark ? 'rgba(255,217,60,0.22)' : '#FFE082'
+  const bgGreen  = dark ? 'rgba(39,174,96,0.22)'  : '#C8E6C9'
+  const textHighlight = dark ? 'var(--fc-text)' : '#333333'
+
   // Управленческие роли: жёлтый по статусу workflow
   const mgmtIsActive = (roleKey) => {
     if (wf === 'pending_review') return pt === 'Шаблонный' ? roleKey === 'gap' : roleKey === 'sdp'
@@ -338,16 +343,17 @@ const teamMembers = computed(() => {
   }
   const addMgmt = (label, name, roleKey) => {
     if (!name) return
-    const bg = mgmtIsActive(roleKey) ? '#FFE082' : 'transparent'
-    items.push({ text: `${label}: ${name}`, bg })
+    const active = mgmtIsActive(roleKey)
+    items.push({ text: `${label}: ${name}`, bg: active ? bgYellow : 'transparent', color: active ? textHighlight : 'var(--fc-text)' })
   }
 
   // Исполнители стадий: жёлтый если текущая колонка совпадает и стадия не завершена
   const addStage = (label, name, completed, colSubstr) => {
     if (!name) return
     const isCurrent = !completed && col.includes(colSubstr)
-    const bg = completed ? '#C8E6C9' : isCurrent ? '#FFE082' : 'transparent'
-    items.push({ text: `${label}: ${name}${completed ? ' ✓' : ''}`, bg })
+    const bg = completed ? bgGreen : isCurrent ? bgYellow : 'transparent'
+    const color = (completed || isCurrent) ? textHighlight : 'var(--fc-text)'
+    items.push({ text: `${label}: ${name}${completed ? ' ✓' : ''}`, bg, color })
   }
 
   addMgmt('СМ', c.senior_manager_name, 'senior_manager')
