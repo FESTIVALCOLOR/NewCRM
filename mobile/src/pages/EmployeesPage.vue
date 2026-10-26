@@ -865,7 +865,7 @@ onMounted(() => loadEmployees())
   min-height: 34px;
 }
 .emp-row-ls:last-of-type { border-radius: 0 0 8px 8px; }
-.emp-row-ls:hover { background: #F9F9F9; }
+.emp-row-ls:hover { background: var(--fc-bg-hover); }
 .emph-name   { flex: 1; min-width: 0; display: flex; align-items: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .emph-pos    { width: 180px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
 .emph-dept   { width: 110px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }

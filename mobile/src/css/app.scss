@@ -493,6 +493,18 @@ body {
   .nd-group-header {
     color: #333333 !important;
   }
+
+  // ---- Аватарки команды (CRM + надзор): Quasar palette → полупрозрачные тёмные ----
+  // Quasar bg-* на q-avatar — фиксированные светлые цвета, нечитаемы на тёмном фоне
+  .q-avatar {
+    &.bg-amber-3  { background: rgba(255, 180, 0, 0.22) !important;    color: #FFECB3 !important; }
+    &.bg-green-3  { background: rgba(39, 174, 96, 0.22) !important;     color: #C8E6C9 !important; }
+    &.bg-grey-3   { background: rgba(150, 150, 150, 0.22) !important;   color: #E0E0E0 !important; }
+    &.bg-red-1    { background: rgba(231, 76, 60, 0.22) !important;     color: #FFCDD2 !important; }
+    &.bg-orange-2 { background: rgba(243, 156, 18, 0.22) !important;    color: #FFE0B2 !important; }
+    &.bg-blue-2   { background: rgba(52, 152, 219, 0.22) !important;    color: #BBDEFB !important; }
+    &.bg-purple-2 { background: rgba(155, 89, 182, 0.22) !important;    color: #E1BEE7 !important; }
+  }
 }
 
 // ===== BADGE агента =====
