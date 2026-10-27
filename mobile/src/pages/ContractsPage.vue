@@ -273,6 +273,9 @@ function formatAmount(amount) {
 }
 
 function isFullyPaid(contract) {
+  if (isSupervisionContract(contract)) {
+    return !!contract.supervision_fully_paid
+  }
   if (contract.project_type === 'Шаблонный') {
     return !!contract.advance_payment_paid_date
   }

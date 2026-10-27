@@ -59,6 +59,54 @@ def _get_supervision_payments_sums(db: Session, contract_ids: list[int]) -> dict
     return {row[0]: float(row[1] or 0) for row in rows}
 
 
+def _get_supervision_fully_paid_status(db: Session, contract_ids: list[int]) -> dict[int, bool]:
+    """Возвращает {contract_id: True} если карточка надзора в 'Выполненный проект' и все платежи оплачены."""
+    if not contract_ids:
+        return {}
+
+    sv_cards = db.query(SupervisionCard).filter(SupervisionCard.contract_id.in_(contract_ids)).all()
+    sv_card_by_contract: dict[int, SupervisionCard] = {}
+    for card in sv_cards:
+        existing = sv_card_by_contract.get(card.contract_id)
+        if existing is None or card.id > existing.id:
+            sv_card_by_contract[card.contract_id] = card
+
+    sv_card_ids = [c.id for c in sv_card_by_contract.values()]
+    if not sv_card_ids:
+        return dict.fromkeys(contract_ids, False)
+
+    total_rows = (
+        db.query(SupervisionClientPayment.supervision_card_id, func.count(SupervisionClientPayment.id))
+        .filter(SupervisionClientPayment.supervision_card_id.in_(sv_card_ids))
+        .group_by(SupervisionClientPayment.supervision_card_id)
+        .all()
+    )
+    total_by_card = {row[0]: row[1] for row in total_rows}
+
+    paid_rows = (
+        db.query(SupervisionClientPayment.supervision_card_id, func.count(SupervisionClientPayment.id))
+        .filter(
+            SupervisionClientPayment.supervision_card_id.in_(sv_card_ids),
+            SupervisionClientPayment.payment_date.isnot(None),
+            SupervisionClientPayment.payment_date != "",
+        )
+        .group_by(SupervisionClientPayment.supervision_card_id)
+        .all()
+    )
+    paid_by_card = {row[0]: row[1] for row in paid_rows}
+
+    result: dict[int, bool] = {}
+    for cid in contract_ids:
+        card = sv_card_by_contract.get(cid)
+        if card is None or card.column_name != "Выполненный проект":
+            result[cid] = False
+            continue
+        total = total_by_card.get(card.id, 0)
+        paid = paid_by_card.get(card.id, 0)
+        result[cid] = total > 0 and total == paid
+    return result
+
+
 # =========================
 # ДОГОВОРЫ
 # =========================
@@ -74,11 +122,13 @@ async def get_contracts(skip: int = 0, limit: int = 100, response: Response = No
         response.headers["X-Total-Count"] = str(total)
     supervision_ids = [c.id for c in contracts if c.project_type == "Авторский надзор" or c.status == "АВТОРСКИЙ НАДЗОР"]
     sums = _get_supervision_payments_sums(db, supervision_ids)
+    fully_paid = _get_supervision_fully_paid_status(db, supervision_ids)
     result = []
     for c in contracts:
         d = ContractResponse.model_validate(c).model_dump()
         if c.project_type == "Авторский надзор" or c.status == "АВТОРСКИЙ НАДЗОР":
             d["supervision_payments_sum"] = sums.get(c.id, 0.0)
+            d["supervision_fully_paid"] = fully_paid.get(c.id, False)
         result.append(d)
     return result
 
@@ -117,6 +167,8 @@ async def get_contract(contract_id: int, current_user: Employee = Depends(get_cu
     if contract.project_type == "Авторский надзор" or contract.status == "АВТОРСКИЙ НАДЗОР":
         sums = _get_supervision_payments_sums(db, [contract_id])
         data["supervision_payments_sum"] = sums.get(contract_id, 0.0)
+        fully_paid = _get_supervision_fully_paid_status(db, [contract_id])
+        data["supervision_fully_paid"] = fully_paid.get(contract_id, False)
     return data
 
 
