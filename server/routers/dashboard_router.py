@@ -1706,16 +1706,28 @@ async def get_supervision_analytics(
         period_active = bool(year or quarter or month)
 
         def _sc_in_period(sc) -> bool:
-            """True если карточка надзора попадает в выбранный период (по start_date или created_at)."""
+            """Фильтр карточки надзора по периоду.
+            Приоритет дат: start_date → contract_date договора → created_at карточки.
+            """
             if not period_active:
                 return True
-            date_src = sc.start_date
-            if date_src:
+            # 1. start_date самой карточки (редко заполняется вручную)
+            d = None
+            if sc.start_date:
                 try:
-                    d = datetime.strptime(str(date_src)[:10], "%Y-%m-%d")
+                    d = datetime.strptime(str(sc.start_date)[:10], "%Y-%m-%d")
                 except (ValueError, TypeError):
-                    d = sc.created_at
-            else:
+                    pass
+            # 2. contract_date связанного договора (основная дата)
+            if d is None:
+                cont = contracts_map.get(sc.contract_id)
+                if cont and cont.contract_date:
+                    try:
+                        d = datetime.strptime(str(cont.contract_date)[:10], "%Y-%m-%d")
+                    except (ValueError, TypeError):
+                        pass
+            # 3. created_at карточки (последний резерв)
+            if d is None:
                 d = sc.created_at
             if d is None:
                 return False
