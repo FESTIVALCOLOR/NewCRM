@@ -337,6 +337,8 @@ async def get_employee_statistics(
         # Период фильтруется по CRMCard.created_at (дата назначения = дата создания карточки).
         emp_id_set = set(emp_ids)
         card_role_map: dict = {}
+        sup_dan_map: dict = {}
+        sup_manager_map: dict = {}
 
         if project_type in (None, "individual", "template"):
             card_q = db.query(
@@ -394,6 +396,10 @@ async def get_employee_statistics(
                         entry["total"] += 1
                         if is_done:
                             entry["completed"] += 1
+                if row.dan_id and row.dan_id in emp_id_set:
+                    sup_dan_map[row.dan_id] = sup_dan_map.get(row.dan_id, 0) + 1
+                if row.senior_manager_id and row.senior_manager_id in emp_id_set:
+                    sup_manager_map[row.senior_manager_id] = sup_manager_map.get(row.senior_manager_id, 0) + 1
 
         result = []
         for emp in employees:
@@ -419,6 +425,8 @@ async def get_employee_statistics(
                         emp.id, {"avg_nps": None, "avg_csat": None, "avg_design": None, "avg_deadline": None, "avg_communication": None, "avg_expectations": None, "avg_supervision": None}
                     ),
                     **{f"visits_{k}": v for k, v in visit_map.get(emp.id, {"total": 0, "object": 0, "supplier": 0, "overdue": 0}).items()},
+                    "supervision_dan_cards": sup_dan_map.get(emp.id, 0),
+                    "supervision_manager_cards": sup_manager_map.get(emp.id, 0),
                 }
             )
 

@@ -576,8 +576,12 @@ async function loadData() {
     let filtered = allEmps
     if (rt === 'sdp') filtered = allEmps.filter(e => _hasPos(e, 'СДП'))
     else if (rt === 'gap') filtered = allEmps.filter(e => _hasPos(e, 'ГАП'))
-    else if (rt === 'manager') filtered = allEmps.filter(e => _hasPosLc(e, 'менеджер'))
-    else if (rt === 'dan') filtered = allEmps.filter(e => _hasPos(e, 'ДАН') || _hasPos(e, 'Дизайнер авторского надзора'))
+    else if (rt === 'manager') {
+      filtered = projectTab.value === 'supervision'
+        ? allEmps.filter(e => (e.supervision_manager_cards || 0) > 0)
+        : allEmps.filter(e => _hasPosLc(e, 'менеджер'))
+    }
+    else if (rt === 'dan') filtered = allEmps.filter(e => (e.supervision_dan_cards || 0) > 0)
     else if (rt === 'designer') filtered = allEmps.filter(e => _pos(e) === 'Дизайнер' || _sec(e) === 'Дизайнер')
     else if (rt === 'draftsman') filtered = allEmps.filter(e => _hasPos(e, 'Чертёжник') || _hasPos(e, 'Чертежник'))
     else if (rt === 'visualization') filtered = allEmps.filter(e => _pos(e) === 'Дизайнер' || _sec(e) === 'Дизайнер')
