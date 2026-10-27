@@ -463,7 +463,7 @@
             <div class="text-caption q-mb-xs" style="color: var(--fc-text-secondary); font-weight: 600; font-size: 11px">
               Просрочки этапов за период
             </div>
-            <template v-if="overdueByName[selectedEmp.full_name || selectedEmp.name]">
+            <template v-if="empFilteredOverdue && empFilteredOverdue.total_overdue_count > 0">
               <!-- Кликабельная строка summary -->
               <div
                 class="row items-center justify-between q-pa-sm cursor-pointer"
@@ -472,10 +472,10 @@
               >
                 <div>
                   <div class="text-weight-bold" style="color: #E53935; font-size: 15px">
-                    {{ overdueByName[selectedEmp.full_name || selectedEmp.name].total_overdue_days }} дн. просрочки
+                    {{ empFilteredOverdue.total_overdue_days }} дн. просрочки
                   </div>
                   <div class="text-caption" style="color: #C07070">
-                    {{ overdueByName[selectedEmp.full_name || selectedEmp.name].total_overdue_count }} этапов сданы с опозданием
+                    {{ empFilteredOverdue.total_overdue_count }} этапов сданы с опозданием
                   </div>
                 </div>
                 <q-icon :name="showOverdueDetail ? 'expand_less' : 'expand_more'" color="red-3" size="20px" />
@@ -483,7 +483,7 @@
               <!-- Инлайн разбивка по этапам -->
               <div v-if="showOverdueDetail" class="q-mt-xs">
                 <div
-                  v-for="(stage, idx) in overdueByName[selectedEmp.full_name || selectedEmp.name].stages"
+                  v-for="(stage, idx) in empFilteredOverdue.stages"
                   :key="idx"
                   class="row items-start justify-between q-pa-xs"
                   :style="{ background: idx % 2 ? '#fff' : 'var(--fc-bg-hover)', borderRadius: '4px', marginBottom: '2px' }"
@@ -616,23 +616,12 @@ const quarters = [{ label: 'Все', value: null }, { label: 'Q1', value: 1 }, {
 const monthOpts = [{ label: 'Все', value: null }, ...Array.from({ length: 12 }, (_, i) => ({ label: new Date(2000, i).toLocaleDateString('ru-RU', { month: 'short' }), value: i + 1 }))]
 
 const ROLE_TABS = {
-  individual: [{ code: 'sdp', label: 'СДП' }, { code: 'gap', label: 'ГАП' }, { code: 'manager', label: 'Менеджер' }, { code: 'designer', label: 'Дизайнер' }, { code: 'draftsman', label: 'Чертёжник' }],
-  template: [{ code: 'gap', label: 'ГАП' }, { code: 'manager', label: 'Менеджер' }, { code: 'draftsman', label: 'Чертёжник' }, { code: 'visualization', label: 'Визуализация' }],
+  individual: [{ code: 'sdp', label: 'СДП' }, { code: 'gap', label: 'ГАП' }, { code: 'manager', label: 'Менеджер' }, { code: 'senior_manager', label: 'Ст. менеджер' }, { code: 'designer', label: 'Дизайнер' }, { code: 'draftsman', label: 'Чертёжник' }],
+  template: [{ code: 'gap', label: 'ГАП' }, { code: 'manager', label: 'Менеджер' }, { code: 'senior_manager', label: 'Ст. менеджер' }, { code: 'draftsman', label: 'Чертёжник' }, { code: 'visualization', label: 'Визуализация' }],
   supervision: [{ code: 'dan', label: 'ДАН' }, { code: 'manager', label: 'Менеджер' }],
 }
 
 const roleTabs = computed(() => ROLE_TABS[projectTab.value] || ROLE_TABS.individual)
-
-function empProjectOverdueDays(item) {
-  if (!selectedEmp.value || !item.contract_number) return null
-  const empName = selectedEmp.value.full_name || selectedEmp.value.name || ''
-  const ovd = overdueByName.value[empName]
-  if (!ovd || !ovd.stages) return null
-  const total = ovd.stages
-    .filter(s => s.contract_number === item.contract_number)
-    .reduce((sum, s) => sum + (s.overdue_days || 0), 0)
-  return total > 0 ? total : null
-}
 
 // Быстрый lookup просрочек по имени сотрудника
 const overdueByName = computed(() => {
@@ -640,6 +629,34 @@ const overdueByName = computed(() => {
   for (const o of overdueList.value) m[o.employee_name] = o
   return m
 })
+
+// Просрочки выбранного сотрудника, отфильтрованные по текущей роли (только договора из empProjects)
+const empFilteredOverdue = computed(() => {
+  if (!selectedEmp.value) return null
+  const empName = selectedEmp.value.full_name || selectedEmp.value.name || ''
+  const ovd = overdueByName.value[empName]
+  if (!ovd || !ovd.stages) return ovd || null
+  const items = empProjects.value?.items
+  if (items == null) return ovd  // проекты ещё не загружены — возвращаем всё
+  const projectContracts = new Set(items.map(p => p.contract_number))
+  const filteredStages = ovd.stages.filter(s => projectContracts.has(s.contract_number))
+  return {
+    ...ovd,
+    stages: filteredStages,
+    total_overdue_days: filteredStages.reduce((sum, s) => sum + (s.overdue_days || 0), 0),
+    total_overdue_count: filteredStages.length,
+  }
+})
+
+function empProjectOverdueDays(item) {
+  if (!selectedEmp.value || !item.contract_number) return null
+  const ovd = empFilteredOverdue.value
+  if (!ovd || !ovd.stages) return null
+  const total = ovd.stages
+    .filter(s => s.contract_number === item.contract_number)
+    .reduce((sum, s) => sum + (s.overdue_days || 0), 0)
+  return total > 0 ? total : null
+}
 
 const dashboardKpi = computed(() => {
   const d = dashboard.value || {}
