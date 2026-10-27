@@ -763,24 +763,19 @@ async function loadData() {
     const _hasPosLc = (e, s) => _pos(e).toLowerCase().includes(s) || _sec(e).toLowerCase().includes(s)
     const rt = roleTab.value
     let filtered = allEmps
-    if (rt === 'sdp') filtered = allEmps.filter(e => _hasPos(e, 'СДП'))
-    else if (rt === 'gap') filtered = allEmps.filter(e => _hasPos(e, 'ГАП'))
-    else if (rt === 'manager') {
-      filtered = projectTab.value === 'supervision'
-        ? allEmps.filter(e => e.is_supervision_manager)
-        : allEmps.filter(e => _hasPosLc(e, 'менеджер'))
-    }
-    else if (rt === 'dan') filtered = allEmps.filter(e => e.is_supervision_dan)
-    else if (rt === 'designer' || rt === 'draftsman' || rt === 'visualization') {
-      // Backend отфильтровал stage_query по паттернам stage_name для данной роли:
-      // показываем тех у кого есть реальная работа в данной роли за период
-      filtered = allEmps.filter(e => e.total_stages > 0)
-    }
-    else if (rt === 'executor') {
+    if (rt === 'dan') {
+      filtered = allEmps.filter(e => e.is_supervision_dan)
+    } else if (rt === 'manager' && projectTab.value === 'supervision') {
+      filtered = allEmps.filter(e => e.is_supervision_manager)
+    } else if (rt === 'executor') {
       filtered = allEmps.filter(e => {
         const p = _pos(e); const s = _sec(e)
         return ['Дизайнер', 'Чертёжник', 'Чертежник', 'Замерщик'].some(r => p.includes(r) || s.includes(r)) && p !== 'ДАН' && p !== 'Дизайнер авторского надзора'
       })
+    } else {
+      // sdp / gap / manager(non-supervision) / designer / draftsman / visualization:
+      // backend вернул total_stages из role-specific источника → показываем только реально работавших
+      filtered = allEmps.filter(e => e.total_stages > 0)
     }
 
     roleEmployees.value = filtered.sort((a, b) => b.completion_rate - a.completion_rate)

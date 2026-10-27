@@ -349,7 +349,12 @@ async def get_employee_statistics(
         # Факт выполнения = карточка в "Выполненный проект" или договор в архивном статусе.
         # Период фильтруется по CRMCard.created_at (дата назначения = дата создания карточки).
         emp_id_set = set(emp_ids)
+        # Раздельные карты по управленческим ролям: sdp / gap / manager (менеджер + старший менеджер)
+        # combined card_role_map оставляем для режима «без фильтрации роли» (executor tab)
         card_role_map: dict = {}
+        sdp_card_map: dict = {}
+        gap_card_map: dict = {}
+        manager_card_map: dict = {}
         sup_dan_map: dict = {}
         sup_manager_map: dict = {}
 
@@ -375,14 +380,26 @@ async def get_employee_statistics(
             if month:
                 card_q = card_q.filter(extract("month", CRMCard.created_at) == month)
 
+            def _inc(m: dict, eid: int, done: bool) -> None:
+                e = m.setdefault(eid, {"total": 0, "completed": 0})
+                e["total"] += 1
+                if done:
+                    e["completed"] += 1
+
             for row in card_q.all():
                 is_done = row.column_name == "Выполненный проект" or (row.contract_status and row.contract_status in ARCHIVE_STATUSES)
+                # combined map (для executor-view без role фильтра)
                 for role_id in (row.gap_id, row.sdp_id, row.manager_id, row.senior_manager_id):
                     if role_id and role_id in emp_id_set:
-                        entry = card_role_map.setdefault(role_id, {"total": 0, "completed": 0})
-                        entry["total"] += 1
-                        if is_done:
-                            entry["completed"] += 1
+                        _inc(card_role_map, role_id, is_done)
+                # per-role maps
+                if row.sdp_id and row.sdp_id in emp_id_set:
+                    _inc(sdp_card_map, row.sdp_id, is_done)
+                if row.gap_id and row.gap_id in emp_id_set:
+                    _inc(gap_card_map, row.gap_id, is_done)
+                for mgr_id in (row.manager_id, row.senior_manager_id):
+                    if mgr_id and mgr_id in emp_id_set:
+                        _inc(manager_card_map, mgr_id, is_done)
 
         # Supervision: ДАН и Старший менеджер через поля SupervisionCard
         # Период определяется по приоритету: start_date → contract_date → created_at
@@ -443,14 +460,28 @@ async def get_employee_statistics(
                 if row.senior_manager_id and row.senior_manager_id in emp_id_set:
                     sup_manager_map[row.senior_manager_id] = sup_manager_map.get(row.senior_manager_id, 0) + 1
 
+        # Роли-исполнители (StageExecutor): при role filter используем только stage_data
+        _EXEC_ROLES = {"designer", "draftsman", "visualization"}
+        # Роли-управленцы (CRMCard FK): при role filter используем только соответствующую per-role map
+        _CARD_ROLE_MAPS = {"sdp": sdp_card_map, "gap": gap_card_map, "manager": manager_card_map}
+
         result = []
         for emp in employees:
             stage_data = stage_map.get(emp.id, {"total": 0, "completed": 0})
-            card_data = card_role_map.get(emp.id, {"total": 0, "completed": 0})
-            # Управленческие роли не имеют StageExecutor-записей, а исполнители — card-level полей,
-            # поэтому сумма даёт корректный результат для обоих типов без двойного счёта.
-            total_stages = stage_data["total"] + card_data["total"]
-            completed_stages = stage_data["completed"] + card_data["completed"]
+            if role in _EXEC_ROLES:
+                # Исполнитель: только отфильтрованные по stage_name StageExecutor записи
+                total_stages = stage_data["total"]
+                completed_stages = stage_data["completed"]
+            elif role in _CARD_ROLE_MAPS:
+                # Управленец: только конкретная роль-карта (sdp/gap/manager)
+                rd = _CARD_ROLE_MAPS[role].get(emp.id, {"total": 0, "completed": 0})
+                total_stages = rd["total"]
+                completed_stages = rd["completed"]
+            else:
+                # Без role-фильтра (executor tab, supervision): суммарно
+                card_data = card_role_map.get(emp.id, {"total": 0, "completed": 0})
+                total_stages = stage_data["total"] + card_data["total"]
+                completed_stages = stage_data["completed"] + card_data["completed"]
             total_salary = salary_map.get(emp.id, 0)
 
             result.append(
