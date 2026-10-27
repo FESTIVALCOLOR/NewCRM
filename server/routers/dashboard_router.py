@@ -1933,12 +1933,12 @@ async def get_supervision_analytics(
         undated_agents_result = [{"agent": agent, "commission": round(val, 2)} for agent, val in sorted(commission_undated_by_agent.items(), key=lambda x: -x[1])]
         undated_total = round(sum(commission_undated_by_agent.values()), 2)
 
-        # --- Закупки по агентам (все карточки, без фильтра периода — суммарные расходы) ---
+        # --- Закупки по агентам (фильтруются по периоду так же как комиссии) ---
         purchases_all: dict = defaultdict(float)
 
         for entry in all_commission_entries:
             ba = entry.budget_actual or 0.0
-            if ba > 0:
+            if ba > 0 and _entry_in_period(entry.actual_date):
                 sc = sc_by_id.get(entry.supervision_card_id)
                 cont = contracts_map.get(sc.contract_id) if sc else None
                 agent = (cont.agent_type if cont else None) or "Не указан"
@@ -1955,7 +1955,7 @@ async def get_supervision_analytics(
                 try:
                     for p in json.loads(raw):
                         amt = float(p.get("amount") or 0)
-                        if amt > 0:
+                        if amt > 0 and _entry_in_period(p.get("date") or ""):
                             purchases_all[agent] += amt
                 except Exception:
                     pass
@@ -1963,7 +1963,7 @@ async def get_supervision_analytics(
                 try:
                     for e in json.loads(be.unexpected_expenses):
                         amt = float(e.get("amount") or 0)
-                        if amt > 0:
+                        if amt > 0 and _entry_in_period(e.get("date") or ""):
                             purchases_all[agent] += amt
                 except Exception:
                     pass
