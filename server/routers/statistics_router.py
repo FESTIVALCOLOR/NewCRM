@@ -18,7 +18,7 @@ from constants import (
     STATUS_TERMINATED,
 )
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import Date, and_, case, cast, extract, func
+from sqlalchemy import Date, and_, case, cast, extract, func, or_
 from sqlalchemy.orm import Session
 
 from database import ClientSurvey, Contract, CRMCard, Employee, Payment, Salary, StageExecutor, SupervisionCard, SupervisionVisit, get_db
@@ -131,12 +131,21 @@ async def get_dashboard_statistics(
         raise HTTPException(status_code=500, detail="Внутренняя ошибка сервера")
 
 
+_STAGE_ROLE_PATTERNS: dict = {
+    ("individual", "designer"): ["концепция дизайна"],
+    ("individual", "draftsman"): ["планировочные решения", "рабочие чертежи"],
+    ("template", "draftsman"): ["планировочные решения", "рабочие чертежи"],
+    ("template", "visualization"): ["визуализация"],
+}
+
+
 @router.get("/employees")
 async def get_employee_statistics(
     year: Optional[int] = None,
     month: Optional[int] = None,
     quarter: Optional[int] = None,
     project_type: Optional[str] = None,
+    role: Optional[str] = None,
     current_user: Employee = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -176,6 +185,10 @@ async def get_employee_statistics(
                 stage_query = stage_query.filter(extract("month", StageExecutor.assigned_date).between(_q_start, _q_end))
             if month:
                 stage_query = stage_query.filter(extract("month", StageExecutor.assigned_date) == month)
+
+            _role_patterns = _STAGE_ROLE_PATTERNS.get((project_type, role)) if project_type and role else None
+            if _role_patterns:
+                stage_query = stage_query.filter(or_(*[StageExecutor.stage_name.ilike(f"%{p}%") for p in _role_patterns]))
 
             stage_counts = stage_query.group_by(StageExecutor.executor_id).all()
             stage_map = {sc[0]: {"total": sc[1], "completed": sc[2]} for sc in stage_counts}
@@ -475,6 +488,7 @@ async def get_employee_projects(
     year: Optional[int] = None,
     quarter: Optional[int] = None,
     month: Optional[int] = None,
+    role: Optional[str] = None,
     current_user: Employee = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -522,6 +536,10 @@ async def get_employee_projects(
             if month:
                 se_q = se_q.filter(extract("month", StageExecutor.assigned_date) == month)
 
+            _se_role_patterns = _STAGE_ROLE_PATTERNS.get((project_type, role)) if project_type and role else None
+            if _se_role_patterns:
+                se_q = se_q.filter(or_(*[StageExecutor.stage_name.ilike(f"%{p}%") for p in _se_role_patterns]))
+
             for row in se_q.all():
                 items.append(
                     {
@@ -538,8 +556,6 @@ async def get_employee_projects(
 
         # --- CRMCard role fields: ГАП/СДП/Менеджер/Старший менеджер ---
         if project_type != "supervision":
-            from sqlalchemy import or_
-
             crm_q = (
                 db.query(
                     CRMCard.gap_id,
@@ -600,8 +616,6 @@ async def get_employee_projects(
 
         # --- SupervisionCard: ДАН / Старший менеджер ---
         if project_type in (None, "supervision"):
-            from sqlalchemy import or_
-
             sup_q = (
                 db.query(
                     SupervisionCard.dan_id,

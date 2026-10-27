@@ -57,5 +57,6 @@ update_crm_card
 delete_contract
 restore_deleted_contract
 get_employee_statistics
+get_employee_projects
 _build_display_rows
 _populate_table

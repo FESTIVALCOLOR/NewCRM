@@ -553,8 +553,16 @@
                       <div v-if="item.address" style="font-size: 11px; color: var(--fc-text-light); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">
                         {{ item.address }}
                       </div>
-                      <div v-if="item.stage_name" style="font-size: 11px; color: var(--fc-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">
-                        {{ item.stage_name }}
+                      <div v-if="item.stage_name" class="row items-center no-wrap" style="gap: 4px">
+                        <span style="font-size: 11px; color: var(--fc-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0">
+                          {{ item.stage_name }}
+                        </span>
+                        <span
+                          v-if="empProjectOverdueDays(item)"
+                          style="font-size: 10px; color: #E53935; font-weight: 600; flex-shrink: 0"
+                        >
+                          +{{ empProjectOverdueDays(item) }} дн.
+                        </span>
                       </div>
                     </div>
                     <div class="q-ml-xs" style="flex-shrink: 0">
@@ -616,6 +624,17 @@ const ROLE_TABS = {
 }
 
 const roleTabs = computed(() => ROLE_TABS[projectTab.value] || ROLE_TABS.individual)
+
+function empProjectOverdueDays(item) {
+  if (!selectedEmp.value || !item.stage_name) return null
+  const empName = selectedEmp.value.full_name || selectedEmp.value.name || ''
+  const ovd = overdueByName.value[empName]
+  if (!ovd || !ovd.stages) return null
+  const match = ovd.stages.find(
+    s => s.contract_number === item.contract_number && s.stage_name === item.stage_name,
+  )
+  return match ? match.overdue_days : null
+}
 
 // Быстрый lookup просрочек по имени сотрудника
 const overdueByName = computed(() => {
@@ -718,9 +737,12 @@ async function loadData() {
 
   const periodLabel = filters.value.quarter ? 'За квартал' : filters.value.month ? 'За месяц' : 'За год'
 
+  const empParams = { ...params, project_type: projectTab.value }
+  if (projectTab.value !== 'supervision') empParams.role = roleTab.value
+
   const [dashR, empR, projR, survR, ovdR] = await Promise.allSettled([
     statisticsApi.getDashboard({ ...params, project_type: projectTab.value }),
-    statisticsApi.getEmployees({ ...params, project_type: projectTab.value }),
+    statisticsApi.getEmployees(empParams),
     statisticsApi.getProjects({ ...params, project_type: pt }),
     surveyApi.getStats({ project_type: PT_ENG[pt] || 'individual' }),
     reportsApi.getEmployeeOverdue({ ...params, project_type: pt, period: periodLabel }),
@@ -749,9 +771,11 @@ async function loadData() {
         : allEmps.filter(e => _hasPosLc(e, 'менеджер'))
     }
     else if (rt === 'dan') filtered = allEmps.filter(e => e.is_supervision_dan)
-    else if (rt === 'designer') filtered = allEmps.filter(e => _pos(e) === 'Дизайнер' || _sec(e) === 'Дизайнер')
-    else if (rt === 'draftsman') filtered = allEmps.filter(e => _hasPos(e, 'Чертёжник') || _hasPos(e, 'Чертежник'))
-    else if (rt === 'visualization') filtered = allEmps.filter(e => _pos(e) === 'Дизайнер' || _sec(e) === 'Дизайнер')
+    else if (rt === 'designer' || rt === 'draftsman' || rt === 'visualization') {
+      // Backend отфильтровал stage_query по паттернам stage_name для данной роли:
+      // показываем тех у кого есть реальная работа в данной роли за период
+      filtered = allEmps.filter(e => e.total_stages > 0)
+    }
     else if (rt === 'executor') {
       filtered = allEmps.filter(e => {
         const p = _pos(e); const s = _sec(e)
@@ -1101,6 +1125,7 @@ watch(selectedEmp, async (emp) => {
     if (filters.value.year) params.year = filters.value.year
     if (filters.value.quarter) params.quarter = filters.value.quarter
     if (filters.value.month) params.month = filters.value.month
+    if (projectTab.value !== 'supervision') params.role = roleTab.value
     const res = await statisticsApi.getEmployeeProjects(emp.id, params)
     empProjects.value = res.data
   } catch (e) {
@@ -1116,7 +1141,25 @@ watch(projectTab, (newTab) => {
   }
   loadData()
 })
-watch(roleTab, () => loadData())
+watch(roleTab, async () => {
+  loadData()
+  if (selectedEmp.value && projectTab.value !== 'supervision') {
+    empProjects.value = null
+    empProjectsLoading.value = true
+    try {
+      const params = { project_type: projectTab.value, role: roleTab.value }
+      if (filters.value.year) params.year = filters.value.year
+      if (filters.value.quarter) params.quarter = filters.value.quarter
+      if (filters.value.month) params.month = filters.value.month
+      const res = await statisticsApi.getEmployeeProjects(selectedEmp.value.id, params)
+      empProjects.value = res.data
+    } catch (e) {
+      empProjects.value = { items: [] }
+    } finally {
+      empProjectsLoading.value = false
+    }
+  }
+})
 function onRefresh(done) { loadData().finally(done) }
 onMounted(() => loadData())
 </script>
