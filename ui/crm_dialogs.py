@@ -4356,7 +4356,7 @@ class MeasurementDialog(QDialog):
         from PyQt5.QtWidgets import QFileDialog, QProgressDialog
 
         file_path, _ = QFileDialog.getOpenFileName(
-            self, "Выберите файл замера", "", "Изображения и видео (*.png *.jpg *.jpeg *.gif *.bmp *.mp4 *.mov *.avi *.mkv);;Видео (*.mp4 *.mov *.avi *.mkv);;Все файлы (*.*)"
+            self, "Выберите файл замера", "", "Изображения, PDF и видео (*.png *.jpg *.jpeg *.gif *.bmp *.pdf *.mp4 *.mov *.avi *.mkv);;PDF (*.pdf);;Видео (*.mp4 *.mov *.avi *.mkv);;Все файлы (*.*)"
         )
 
         if not file_path:

@@ -3153,6 +3153,7 @@ async function saveTimelineEntry() {
     timelineEditVisible.value = false
     $q.notify({ type: 'positive', message: 'Сохранено' })
     if (update.actual_date) await updateBalanceFromTimeline(entry)
+    if ('custom_norm_days' in update) await reloadCard()
   } catch (err) {
     $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
   }

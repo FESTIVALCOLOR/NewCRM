@@ -3,7 +3,7 @@
 Подключается в main.py через app.include_router(timeline_router, prefix="/api/timeline").
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 import io
 import logging
 import re
@@ -19,7 +19,7 @@ from services.timeline_service import (
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from database import Contract, CRMCard, Employee, ProjectTimelineEntry, StageWorkflowState, get_db
+from database import Contract, CRMCard, Employee, ProjectTimelineEntry, StageExecutor, StageWorkflowState, get_db
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["timeline"])
@@ -227,6 +227,63 @@ def _sync_substep_after_date_entry(db: Session, contract_id: int) -> None:
         wf.current_substage_group = new_substage
 
 
+def _recalculate_stage_executor_deadline(db: Session, contract_id: int, stage_group: str) -> None:
+    """Пересчитывает StageExecutor.deadline при изменении custom_norm_days.
+
+    Обновляет дедлайн только если изменённый подэтап относится к текущей стадии карточки.
+    """
+    from datetime import date as _date
+
+    from services.date_helpers import is_working_day
+
+    card = db.query(CRMCard).filter(CRMCard.contract_id == contract_id).first()
+    if not card or not card.column_name:
+        return
+
+    col = card.column_name.lower()
+    m = re.search(r"стадия\s*(\d+)", col)
+    current_group = f"STAGE{m.group(1)}" if m else None
+    if not current_group or current_group != stage_group:
+        return
+
+    entries = db.query(ProjectTimelineEntry).filter(ProjectTimelineEntry.contract_id == contract_id).order_by(ProjectTimelineEntry.sort_order).all()
+
+    prev_date_str = ""
+    target_norm_days = 0
+
+    for e in entries:
+        if (e.executor_role or "") == "header":
+            continue
+        if e.stage_group == stage_group and not e.actual_date:
+            effective = (e.custom_norm_days or 0) or (e.norm_days or 0)
+            if effective > 0:
+                target_norm_days = effective
+                break
+        if e.actual_date:
+            prev_date_str = e.actual_date
+
+    if target_norm_days <= 0:
+        return
+
+    try:
+        start = datetime.strptime(prev_date_str, "%Y-%m-%d").date() if prev_date_str else _date.today()
+    except ValueError:
+        start = _date.today()
+
+    count = 0
+    current = start
+    while count < target_norm_days:
+        current += timedelta(days=1)
+        if is_working_day(current):
+            count += 1
+
+    new_deadline = current.strftime("%Y-%m-%d")
+
+    executor = db.query(StageExecutor).filter(StageExecutor.crm_card_id == card.id, StageExecutor.stage_name == card.column_name).first()
+    if executor:
+        executor.deadline = new_deadline
+
+
 @router.put("/{contract_id}/entry/{stage_code}")
 async def update_timeline_entry(contract_id: int, stage_code: str, update: TimelineEntryUpdate, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Обновить запись таблицы сроков"""
@@ -245,6 +302,11 @@ async def update_timeline_entry(contract_id: int, stage_code: str, update: Timel
     if "actual_date" in update_data:
         db.flush()
         _sync_substep_after_date_entry(db, contract_id)
+
+    # При изменении custom_norm_days — пересчитать дедлайн StageExecutor текущей стадии
+    if "custom_norm_days" in update_data:
+        db.flush()
+        _recalculate_stage_executor_deadline(db, contract_id, entry.stage_group)
 
     db.commit()
     return {c.name: getattr(entry, c.name) for c in entry.__table__.columns}

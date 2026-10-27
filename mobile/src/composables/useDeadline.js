@@ -151,8 +151,8 @@ export function getStageDeadlineInfo(entries, columnName) {
 
   for (const e of sorted) {
     if ((e.executor_role || '') === 'header') continue
-    if (e.stage_group === stageGroup && !e.actual_date && (e.norm_days || 0) > 0) {
-      normDays = e.norm_days
+    if (e.stage_group === stageGroup && !e.actual_date && ((e.custom_norm_days || 0) > 0 || (e.norm_days || 0) > 0)) {
+      normDays = e.custom_norm_days || e.norm_days
       substepName = e.stage_name || ''
       break
     }
