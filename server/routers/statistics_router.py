@@ -372,23 +372,52 @@ async def get_employee_statistics(
                             entry["completed"] += 1
 
         # Supervision: ДАН и Старший менеджер через поля SupervisionCard
+        # Период определяется по приоритету: start_date → contract_date → created_at
+        # (та же логика что в supervision-analytics endpoint в dashboard_router)
         if project_type in (None, "supervision"):
-            sup_q = db.query(
-                SupervisionCard.dan_id,
-                SupervisionCard.senior_manager_id,
-                SupervisionCard.dan_completed,
-            ).join(Contract, SupervisionCard.contract_id == Contract.id)
+            all_sup_rows = (
+                db.query(
+                    SupervisionCard.dan_id,
+                    SupervisionCard.senior_manager_id,
+                    SupervisionCard.dan_completed,
+                    SupervisionCard.start_date,
+                    SupervisionCard.created_at,
+                    Contract.contract_date,
+                )
+                .join(Contract, SupervisionCard.contract_id == Contract.id)
+                .filter(SupervisionCard.dan_id.isnot(None) | SupervisionCard.senior_manager_id.isnot(None))
+                .all()
+            )
 
-            if year:
-                sup_q = sup_q.filter(extract("year", SupervisionCard.created_at) == year)
-            if quarter:
-                _sq_start = (quarter - 1) * 3 + 1
-                _sq_end = quarter * 3
-                sup_q = sup_q.filter(extract("month", SupervisionCard.created_at).between(_sq_start, _sq_end))
-            if month:
-                sup_q = sup_q.filter(extract("month", SupervisionCard.created_at) == month)
+            def _sup_row_date(row):
+                if row.start_date:
+                    try:
+                        return datetime.strptime(str(row.start_date)[:10], "%Y-%m-%d")
+                    except (ValueError, TypeError):
+                        pass
+                if row.contract_date:
+                    try:
+                        d = row.contract_date
+                        return datetime.strptime(str(d)[:10], "%Y-%m-%d") if isinstance(d, str) else d
+                    except (ValueError, TypeError):
+                        pass
+                return row.created_at
 
-            for row in sup_q.all():
+            def _sup_row_in_period(row):
+                d = _sup_row_date(row)
+                if d is None:
+                    return not bool(year or quarter or month)
+                if year and d.year != year:
+                    return False
+                if month and d.month != month:
+                    return False
+                if quarter and (d.month - 1) // 3 + 1 != quarter:
+                    return False
+                return True
+
+            for row in all_sup_rows:
+                if not _sup_row_in_period(row):
+                    continue
                 is_done = bool(row.dan_completed)
                 for role_id in (row.dan_id, row.senior_manager_id):
                     if role_id and role_id in emp_id_set:
@@ -400,25 +429,6 @@ async def get_employee_statistics(
                     sup_dan_map[row.dan_id] = sup_dan_map.get(row.dan_id, 0) + 1
                 if row.senior_manager_id and row.senior_manager_id in emp_id_set:
                     sup_manager_map[row.senior_manager_id] = sup_manager_map.get(row.senior_manager_id, 0) + 1
-
-        # All-time role membership for supervision — без year/period фильтра,
-        # чтобы вкладки ДАН/Менеджер не были пустыми при смене периода
-        sup_dan_ids: set = set()
-        sup_manager_ids: set = set()
-        if project_type in (None, "supervision"):
-            alltime_rows = (
-                db.query(
-                    SupervisionCard.dan_id,
-                    SupervisionCard.senior_manager_id,
-                )
-                .filter(SupervisionCard.dan_id.isnot(None) | SupervisionCard.senior_manager_id.isnot(None))
-                .all()
-            )
-            for row in alltime_rows:
-                if row.dan_id and row.dan_id in emp_id_set:
-                    sup_dan_ids.add(row.dan_id)
-                if row.senior_manager_id and row.senior_manager_id in emp_id_set:
-                    sup_manager_ids.add(row.senior_manager_id)
 
         result = []
         for emp in employees:
@@ -446,8 +456,8 @@ async def get_employee_statistics(
                     **{f"visits_{k}": v for k, v in visit_map.get(emp.id, {"total": 0, "object": 0, "supplier": 0, "overdue": 0}).items()},
                     "supervision_dan_cards": sup_dan_map.get(emp.id, 0),
                     "supervision_manager_cards": sup_manager_map.get(emp.id, 0),
-                    "is_supervision_dan": emp.id in sup_dan_ids,
-                    "is_supervision_manager": emp.id in sup_manager_ids,
+                    "is_supervision_dan": sup_dan_map.get(emp.id, 0) > 0,
+                    "is_supervision_manager": sup_manager_map.get(emp.id, 0) > 0,
                 }
             )
 
