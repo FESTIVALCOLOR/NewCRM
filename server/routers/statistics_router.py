@@ -571,7 +571,24 @@ async def get_employee_projects(
             if _se_role_patterns:
                 se_q = se_q.filter(or_(*[StageExecutor.stage_name.ilike(f"%{p}%") for p in _se_role_patterns]))
 
+            # Метка роли для исполнительских этапов
+            _EXEC_ROLE_LABELS = {"designer": "Дизайнер", "draftsman": "Чертёжник", "visualization": "Визуализация"}
+
             for row in se_q.all():
+                # Если role задан — берём готовую метку; иначе определяем по stage_name
+                if role in _EXEC_ROLE_LABELS:
+                    stage_role = _EXEC_ROLE_LABELS[role]
+                else:
+                    sn = (row.stage_name or "").lower()
+                    if "концепция дизайна" in sn:
+                        stage_role = "Дизайнер"
+                    elif "визуализация" in sn:
+                        stage_role = "Визуализация"
+                    elif "планировочные решения" in sn or "рабочие чертежи" in sn:
+                        stage_role = "Чертёжник"
+                    else:
+                        stage_role = None
+
                 items.append(
                     {
                         "source": "stage",
@@ -579,14 +596,31 @@ async def get_employee_projects(
                         "address": row.address,
                         "project_type": row.project_type,
                         "stage_name": row.stage_name,
-                        "role": None,
+                        "role": stage_role,
                         "is_completed": bool(row.completed),
                         "date": row.assigned_date.strftime("%Y-%m-%d") if row.assigned_date else None,
                     }
                 )
 
         # --- CRMCard role fields: ГАП/СДП/Менеджер/Старший менеджер ---
-        if project_type != "supervision":
+        # Фильтр по конкретной роли страницы (sdp/gap/manager) или по всем если роль не задана
+        _CARD_ROLE_LABELS = {"sdp": "СДП", "gap": "ГАП", "manager": "Менеджер"}
+        _EXEC_ROLES_SET = {"designer", "draftsman", "visualization"}
+        if project_type != "supervision" and role not in _EXEC_ROLES_SET:
+            if role == "sdp":
+                _crm_filter = CRMCard.sdp_id == employee_id
+            elif role == "gap":
+                _crm_filter = CRMCard.gap_id == employee_id
+            elif role == "manager":
+                _crm_filter = or_(CRMCard.manager_id == employee_id, CRMCard.senior_manager_id == employee_id)
+            else:
+                _crm_filter = or_(
+                    CRMCard.gap_id == employee_id,
+                    CRMCard.sdp_id == employee_id,
+                    CRMCard.manager_id == employee_id,
+                    CRMCard.senior_manager_id == employee_id,
+                )
+
             crm_q = (
                 db.query(
                     CRMCard.gap_id,
@@ -601,14 +635,7 @@ async def get_employee_projects(
                     Contract.status,
                 )
                 .join(Contract, CRMCard.contract_id == Contract.id)
-                .filter(
-                    or_(
-                        CRMCard.gap_id == employee_id,
-                        CRMCard.sdp_id == employee_id,
-                        CRMCard.manager_id == employee_id,
-                        CRMCard.senior_manager_id == employee_id,
-                    )
-                )
+                .filter(_crm_filter)
             )
             if project_type in _CRM_PT_LOCAL:
                 crm_q = crm_q.filter(Contract.project_type == _CRM_PT_LOCAL[project_type])
@@ -622,15 +649,18 @@ async def get_employee_projects(
                 crm_q = crm_q.filter(extract("month", CRMCard.created_at) == month)
 
             for row in crm_q.all():
-                role_parts = []
-                if row.gap_id == employee_id:
-                    role_parts.append("ГАП")
-                if row.sdp_id == employee_id:
-                    role_parts.append("СДП")
-                if row.manager_id == employee_id:
-                    role_parts.append("Менеджер")
-                if row.senior_manager_id == employee_id:
-                    role_parts.append("Старший менеджер")
+                # При фильтрации по конкретной роли — метка однозначна
+                if role in _CARD_ROLE_LABELS:
+                    row_role = _CARD_ROLE_LABELS[role]
+                else:
+                    role_parts = []
+                    if row.gap_id == employee_id:
+                        role_parts.append("ГАП")
+                    if row.sdp_id == employee_id:
+                        role_parts.append("СДП")
+                    if row.manager_id == employee_id or row.senior_manager_id == employee_id:
+                        role_parts.append("Менеджер")
+                    row_role = ", ".join(role_parts)
                 is_done = row.column_name == "Выполненный проект" or (row.status and row.status in ARCHIVE_STATUSES)
                 items.append(
                     {
@@ -639,7 +669,7 @@ async def get_employee_projects(
                         "address": row.address,
                         "project_type": row.project_type,
                         "stage_name": None,
-                        "role": ", ".join(role_parts),
+                        "role": row_role,
                         "is_completed": is_done,
                         "date": row.created_at.strftime("%Y-%m-%d") if row.created_at else None,
                     }

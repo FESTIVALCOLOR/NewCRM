@@ -549,20 +549,18 @@
                         >
                           {{ item.role }}
                         </q-badge>
-                      </div>
-                      <div v-if="item.address" style="font-size: 11px; color: var(--fc-text-light); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">
-                        {{ item.address }}
-                      </div>
-                      <div v-if="item.stage_name" class="row items-center no-wrap" style="gap: 4px">
-                        <span style="font-size: 11px; color: var(--fc-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0">
-                          {{ item.stage_name }}
-                        </span>
                         <span
                           v-if="empProjectOverdueDays(item)"
                           style="font-size: 10px; color: #E53935; font-weight: 600; flex-shrink: 0"
                         >
                           +{{ empProjectOverdueDays(item) }} дн.
                         </span>
+                      </div>
+                      <div v-if="item.address" style="font-size: 11px; color: var(--fc-text-light); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">
+                        {{ item.address }}
+                      </div>
+                      <div v-if="item.stage_name" style="font-size: 11px; color: var(--fc-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
+                        {{ item.stage_name }}
                       </div>
                     </div>
                     <div class="q-ml-xs" style="flex-shrink: 0">
@@ -626,14 +624,14 @@ const ROLE_TABS = {
 const roleTabs = computed(() => ROLE_TABS[projectTab.value] || ROLE_TABS.individual)
 
 function empProjectOverdueDays(item) {
-  if (!selectedEmp.value || !item.stage_name) return null
+  if (!selectedEmp.value || !item.contract_number) return null
   const empName = selectedEmp.value.full_name || selectedEmp.value.name || ''
   const ovd = overdueByName.value[empName]
   if (!ovd || !ovd.stages) return null
-  const match = ovd.stages.find(
-    s => s.contract_number === item.contract_number && s.stage_name === item.stage_name,
-  )
-  return match ? match.overdue_days : null
+  const total = ovd.stages
+    .filter(s => s.contract_number === item.contract_number)
+    .reduce((sum, s) => sum + (s.overdue_days || 0), 0)
+  return total > 0 ? total : null
 }
 
 // Быстрый lookup просрочек по имени сотрудника
