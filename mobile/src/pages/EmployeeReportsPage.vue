@@ -409,6 +409,70 @@
               Все этапы сданы в срок
             </div>
           </div>
+
+          <!-- Проекты и этапы за период -->
+          <div class="q-mt-md">
+            <div
+              class="row items-center justify-between cursor-pointer q-mb-xs"
+              @click="showEmpProjects = !showEmpProjects"
+            >
+              <div class="text-caption" style="color: var(--fc-text-secondary); font-weight: 600; font-size: 11px">
+                Проекты и этапы за период
+                <span v-if="empProjects" style="color: var(--fc-text-light); font-weight: 400">
+                  ({{ empProjects.total }})
+                </span>
+              </div>
+              <q-icon v-if="!empProjectsLoading" :name="showEmpProjects ? 'expand_less' : 'expand_more'" color="grey-5" size="18px" />
+              <q-spinner v-else size="16px" color="grey-5" />
+            </div>
+            <div v-if="showEmpProjects">
+              <div v-if="empProjectsLoading" class="text-center q-py-sm">
+                <q-spinner size="24px" color="primary" />
+              </div>
+              <template v-else-if="empProjects && empProjects.items.length > 0">
+                <div
+                  v-for="(item, idx) in empProjects.items"
+                  :key="idx"
+                  class="q-pa-xs q-mb-xs"
+                  :style="{ background: idx % 2 === 0 ? 'var(--fc-bg-hover)' : 'transparent', borderRadius: '6px' }"
+                >
+                  <div class="row items-start justify-between">
+                    <div style="flex: 1; min-width: 0">
+                      <div class="row items-center q-gutter-xs">
+                        <span class="text-weight-medium" style="font-size: 12px; color: var(--fc-text)">
+                          {{ item.contract_number }}
+                        </span>
+                        <q-badge
+                          v-if="item.role"
+                          :color="item.source === 'supervision' ? 'purple' : 'blue-grey'"
+                          text-color="white"
+                          style="font-size: 9px; padding: 1px 5px"
+                        >
+                          {{ item.role }}
+                        </q-badge>
+                      </div>
+                      <div v-if="item.address" style="font-size: 11px; color: var(--fc-text-light); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">
+                        {{ item.address }}
+                      </div>
+                      <div v-if="item.stage_name" style="font-size: 11px; color: var(--fc-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">
+                        {{ item.stage_name }}
+                      </div>
+                    </div>
+                    <div class="q-ml-xs" style="flex-shrink: 0">
+                      <q-icon
+                        :name="item.is_completed ? 'check_circle' : 'schedule'"
+                        :color="item.is_completed ? 'positive' : 'warning'"
+                        size="18px"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </template>
+              <div v-else class="text-caption q-pa-sm" style="background: var(--fc-bg-hover); border-radius: 8px; color: var(--fc-text-light)">
+                Нет проектов за выбранный период
+              </div>
+            </div>
+          </div>
         </q-card-section>
       </q-card>
     </q-dialog>
@@ -433,9 +497,12 @@ const surveyStats = ref(null)
 const selectedEmp = ref(null)
 const overdueList = ref([])
 const showOverdueDetail = ref(false)
+const empProjects = ref(null)
+const empProjectsLoading = ref(false)
+const showEmpProjects = ref(false)
 const empDialog = computed({
   get: () => !!selectedEmp.value,
-  set: (v) => { if (!v) { selectedEmp.value = null; showOverdueDetail.value = false } },
+  set: (v) => { if (!v) { selectedEmp.value = null; showOverdueDetail.value = false; empProjects.value = null; showEmpProjects.value = false } },
 })
 
 const years = Array.from({ length: 7 }, (_, i) => currentYear - i)
@@ -923,7 +990,25 @@ function resetFilters() {
   loadData()
 }
 
-watch(selectedEmp, () => { showOverdueDetail.value = false })
+watch(selectedEmp, async (emp) => {
+  showOverdueDetail.value = false
+  showEmpProjects.value = false
+  empProjects.value = null
+  if (!emp) return
+  empProjectsLoading.value = true
+  try {
+    const params = { project_type: projectTab.value }
+    if (filters.value.year) params.year = filters.value.year
+    if (filters.value.quarter) params.quarter = filters.value.quarter
+    if (filters.value.month) params.month = filters.value.month
+    const res = await statisticsApi.getEmployeeProjects(emp.id, params)
+    empProjects.value = res.data
+  } catch (e) {
+    empProjects.value = { items: [] }
+  } finally {
+    empProjectsLoading.value = false
+  }
+})
 watch(projectTab, (newTab) => {
   const tabs = ROLE_TABS[newTab] || ROLE_TABS.individual
   if (!tabs.find(t => t.code === roleTab.value)) {

@@ -468,6 +468,208 @@ async def get_employee_statistics(
         raise HTTPException(status_code=500, detail="Внутренняя ошибка сервера")
 
 
+@router.get("/employees/{employee_id}/projects")
+async def get_employee_projects(
+    employee_id: int,
+    project_type: Optional[str] = None,
+    year: Optional[int] = None,
+    quarter: Optional[int] = None,
+    month: Optional[int] = None,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Проекты и этапы сотрудника за период для детального просмотра."""
+    try:
+        _CRM_PT_LOCAL = {"individual": "Индивидуальный", "template": "Шаблонный"}
+        items = []
+
+        def _year_match(dt) -> bool:
+            if dt is None:
+                return not bool(year or quarter or month)
+            if year and dt.year != year:
+                return False
+            if month and dt.month != month:
+                return False
+            if quarter and (dt.month - 1) // 3 + 1 != quarter:
+                return False
+            return True
+
+        # --- StageExecutor: этапы где сотрудник исполнитель ---
+        if project_type != "supervision":
+            se_q = (
+                db.query(
+                    StageExecutor.stage_name,
+                    StageExecutor.completed,
+                    StageExecutor.assigned_date,
+                    StageExecutor.completed_date,
+                    CRMCard.column_name,
+                    Contract.contract_number,
+                    Contract.address,
+                    Contract.project_type,
+                )
+                .join(CRMCard, StageExecutor.crm_card_id == CRMCard.id)
+                .join(Contract, CRMCard.contract_id == Contract.id)
+                .filter(StageExecutor.executor_id == employee_id)
+            )
+            if project_type in _CRM_PT_LOCAL:
+                se_q = se_q.filter(Contract.project_type == _CRM_PT_LOCAL[project_type])
+            if year:
+                se_q = se_q.filter(extract("year", StageExecutor.assigned_date) == year)
+            if quarter:
+                _qs = (quarter - 1) * 3 + 1
+                _qe = quarter * 3
+                se_q = se_q.filter(extract("month", StageExecutor.assigned_date).between(_qs, _qe))
+            if month:
+                se_q = se_q.filter(extract("month", StageExecutor.assigned_date) == month)
+
+            for row in se_q.all():
+                items.append(
+                    {
+                        "source": "stage",
+                        "contract_number": row.contract_number,
+                        "address": row.address,
+                        "project_type": row.project_type,
+                        "stage_name": row.stage_name,
+                        "role": None,
+                        "is_completed": bool(row.completed),
+                        "date": row.assigned_date.strftime("%Y-%m-%d") if row.assigned_date else None,
+                    }
+                )
+
+        # --- CRMCard role fields: ГАП/СДП/Менеджер/Старший менеджер ---
+        if project_type != "supervision":
+            from sqlalchemy import or_
+
+            crm_q = (
+                db.query(
+                    CRMCard.gap_id,
+                    CRMCard.sdp_id,
+                    CRMCard.manager_id,
+                    CRMCard.senior_manager_id,
+                    CRMCard.column_name,
+                    CRMCard.created_at,
+                    Contract.contract_number,
+                    Contract.address,
+                    Contract.project_type,
+                    Contract.status,
+                )
+                .join(Contract, CRMCard.contract_id == Contract.id)
+                .filter(
+                    or_(
+                        CRMCard.gap_id == employee_id,
+                        CRMCard.sdp_id == employee_id,
+                        CRMCard.manager_id == employee_id,
+                        CRMCard.senior_manager_id == employee_id,
+                    )
+                )
+            )
+            if project_type in _CRM_PT_LOCAL:
+                crm_q = crm_q.filter(Contract.project_type == _CRM_PT_LOCAL[project_type])
+            if year:
+                crm_q = crm_q.filter(extract("year", CRMCard.created_at) == year)
+            if quarter:
+                _qs2 = (quarter - 1) * 3 + 1
+                _qe2 = quarter * 3
+                crm_q = crm_q.filter(extract("month", CRMCard.created_at).between(_qs2, _qe2))
+            if month:
+                crm_q = crm_q.filter(extract("month", CRMCard.created_at) == month)
+
+            for row in crm_q.all():
+                role_parts = []
+                if row.gap_id == employee_id:
+                    role_parts.append("ГАП")
+                if row.sdp_id == employee_id:
+                    role_parts.append("СДП")
+                if row.manager_id == employee_id:
+                    role_parts.append("Менеджер")
+                if row.senior_manager_id == employee_id:
+                    role_parts.append("Старший менеджер")
+                is_done = row.column_name == "Выполненный проект" or (row.status and row.status in ARCHIVE_STATUSES)
+                items.append(
+                    {
+                        "source": "card_role",
+                        "contract_number": row.contract_number,
+                        "address": row.address,
+                        "project_type": row.project_type,
+                        "stage_name": None,
+                        "role": ", ".join(role_parts),
+                        "is_completed": is_done,
+                        "date": row.created_at.strftime("%Y-%m-%d") if row.created_at else None,
+                    }
+                )
+
+        # --- SupervisionCard: ДАН / Старший менеджер ---
+        if project_type in (None, "supervision"):
+            from sqlalchemy import or_
+
+            sup_q = (
+                db.query(
+                    SupervisionCard.dan_id,
+                    SupervisionCard.senior_manager_id,
+                    SupervisionCard.dan_completed,
+                    SupervisionCard.start_date,
+                    SupervisionCard.created_at,
+                    Contract.contract_number,
+                    Contract.address,
+                    Contract.project_type,
+                    Contract.contract_date,
+                )
+                .join(Contract, SupervisionCard.contract_id == Contract.id)
+                .filter(
+                    or_(
+                        SupervisionCard.dan_id == employee_id,
+                        SupervisionCard.senior_manager_id == employee_id,
+                    )
+                )
+                .all()
+            )
+
+            def _sup_date(row):
+                if row.start_date:
+                    try:
+                        return datetime.strptime(str(row.start_date)[:10], "%Y-%m-%d")
+                    except (ValueError, TypeError):
+                        pass
+                if row.contract_date:
+                    try:
+                        d = row.contract_date
+                        return datetime.strptime(str(d)[:10], "%Y-%m-%d") if isinstance(d, str) else d
+                    except (ValueError, TypeError):
+                        pass
+                return row.created_at
+
+            for row in sup_q:
+                if not _year_match(_sup_date(row)):
+                    continue
+                role_parts = []
+                if row.dan_id == employee_id:
+                    role_parts.append("ДАН")
+                if row.senior_manager_id == employee_id:
+                    role_parts.append("Менеджер")
+                d = _sup_date(row)
+                items.append(
+                    {
+                        "source": "supervision",
+                        "contract_number": row.contract_number,
+                        "address": row.address,
+                        "project_type": "Авторский надзор",
+                        "stage_name": None,
+                        "role": ", ".join(role_parts),
+                        "is_completed": bool(row.dan_completed),
+                        "date": d.strftime("%Y-%m-%d") if d else None,
+                    }
+                )
+
+        # Сортировка: незавершённые первыми, потом по дате
+        items.sort(key=lambda x: (x["is_completed"], x["date"] or ""))
+
+        return {"employee_id": employee_id, "total": len(items), "items": items}
+
+    except Exception as e:
+        logger.exception(f"Ошибка при получении проектов сотрудника {employee_id}: {e}")
+        raise HTTPException(status_code=500, detail="Внутренняя ошибка сервера")
+
+
 @router.get("/contracts-by-period")
 async def get_contracts_by_period(
     year: int,
