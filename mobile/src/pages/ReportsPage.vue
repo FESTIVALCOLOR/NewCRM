@@ -690,15 +690,14 @@ const stageDurationsChart = computed(() => {
 
 // ========== НАДЗОР ==========
 const supervisionMini = computed(() => {
-  const s = supervisionStats.value || {}
   const sd = supervisionDetailed.value || {}
   const v = sd.visits || {}
   const avgVisits = v.avg_per_card ?? (sd.total && sd.site_visits ? (sd.site_visits / sd.total).toFixed(1) : '—')
   return [
-    { label: 'Всего надзоров', value: s.total_orders ?? '—', color: '#27AE60' },
-    { label: 'Активных', value: s.active ?? '—', color: '#F39C12' },
-    { label: 'По индивид.', value: s.by_individual ?? '—', color: '#F57C00' },
-    { label: 'По шаблонным', value: s.by_template ?? '—', color: '#C62828' },
+    { label: 'Всего надзоров', value: sd.total ?? '—', color: '#27AE60' },
+    { label: 'Активных', value: sd.active ?? '—', color: '#F39C12' },
+    { label: 'По индивид.', value: sd.by_project_type?.individual ?? '—', color: '#F57C00' },
+    { label: 'По шаблонным', value: sd.by_project_type?.template ?? '—', color: '#C62828' },
     { label: 'Всего выездов', value: v.total ?? sd.site_visits ?? '—', color: '#E67E22' },
     { label: 'На объект', value: v.on_site ?? '—', color: '#27AE60' },
     { label: 'К поставщикам', value: v.supplier ?? '—', color: '#3498DB' },
@@ -710,21 +709,12 @@ const supervisionMini = computed(() => {
 // Надзоры по агентам — из supervision-analytics (включает агентов с 0)
 const supervisionByAgentChart = computed(() => {
   const sd = supervisionDetailed.value
-  if (sd?.by_agent?.length > 0) {
-    const items = sd.by_agent.filter(a => a.count > 0 || true) // все агенты, включая 0
-    return {
-      labels: items.map(a => a.agent_name),
-      datasets: [{ label: 'Надзоров', data: items.map(a => a.count), color: '#F39C12' }],
-    }
-  }
-  // Fallback: старый формат из statistics/supervision
-  const s = supervisionStats.value || {}
-  const ba = s.by_agents || {}
-  const entries = Object.entries(ba)
-  if (entries.length === 0) return null
+  if (!sd?.by_agent?.length) return null
+  const items = sd.by_agent.filter(a => a.count > 0)
+  if (!items.length) return null
   return {
-    labels: entries.map(([k]) => k),
-    datasets: [{ label: 'Надзоров', data: entries.map(([, v]) => v), color: '#F39C12' }],
+    labels: items.map(a => a.agent_name),
+    datasets: [{ label: 'Надзоров', data: items.map(a => a.count), color: '#F39C12' }],
   }
 })
 
