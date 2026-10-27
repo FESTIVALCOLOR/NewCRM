@@ -983,6 +983,11 @@ async function exportPDF() {
     const sbc = supervisionByCityChart.value
     if (sbc) chartData.supCity = { labels: sbc.labels, datasets: sbc.datasets.map(d => ({ label: d.label, data: d.data, color: d.color })) }
 
+    const scStage = supervisionCommissionByStageChart.value
+    if (scStage) chartData.supCommStage = { labels: scStage.labels, datasets: scStage.datasets.map(d => ({ label: d.label, data: d.data, color: d.color })) }
+    const scAgent = supervisionCommissionByAgentChart.value
+    if (scAgent) chartData.supCommAgent = { labels: scAgent.labels, datasets: scAgent.datasets.map(d => ({ label: d.label, data: d.data, color: d.color })) }
+
     // Build body HTML — таблицы + компактные графики рядом
     const funnelH = chartData.funnel ? Math.max(120, chartData.funnel.labels.length * 24 + 40) : 120
     const indStH = chartData.indStages ? Math.max(150, chartData.indStages.labels.length * 22 + 50) : 150
@@ -1063,6 +1068,24 @@ async function exportPDF() {
     const sbc2 = supervisionByCityChart.value
     if (sbc2) {
       body += `<h3>Выезды по городам (таблица)</h3><table><tr><th>Город</th>${sbc2.datasets.map(d => `<th class="num">${d.label}</th>`).join('')}</tr>${sbc2.labels.map((l, i) => `<tr><td>${l}</td>${sbc2.datasets.map(d => `<td class="num">${d.data[i] || 0}</td>`).join('')}</tr>`).join('')}</table>`
+    }
+    const sfk = supervisionFinanceKpi.value
+    if (sfk.length > 0) {
+      body += `<h3>Финансы надзора (закупки и комиссии)</h3>${listTable([{ key: 'label', label: 'Показатель' }, { key: 'value', label: 'Сумма', r: true }], sfk)}`
+    }
+    if (chartData.supCommStage) {
+      const supCommStH = Math.max(100, chartData.supCommStage.labels.length * 20 + 30)
+      body += `<h3>Комиссии по стадиям закупок</h3><canvas id="supCommStage" width="700" height="${supCommStH}" style="display:block;max-width:100%;height:${supCommStH}px"></canvas>`
+      const stCols = [{ key: 'label', label: 'Стадия' }, ...chartData.supCommStage.datasets.map(d => ({ key: d.label, label: d.label + ', ₽', r: true }))]
+      const stRows = chartData.supCommStage.labels.map((l, i) => { const row = { label: l }; chartData.supCommStage.datasets.forEach(d => { row[d.label] = fmtMoney(d.data[i] || 0) }); return row })
+      body += listTable(stCols, stRows)
+    }
+    if (chartData.supCommAgent) {
+      const supCommAgH = Math.max(100, chartData.supCommAgent.labels.length * 20 + 30)
+      body += `<h3>Комиссии по агентам</h3><canvas id="supCommAgent" width="700" height="${supCommAgH}" style="display:block;max-width:100%;height:${supCommAgH}px"></canvas>`
+      const agCols = [{ key: 'label', label: 'Агент' }, ...chartData.supCommAgent.datasets.map(d => ({ key: d.label, label: d.label + ', ₽', r: true }))]
+      const agRows = chartData.supCommAgent.labels.map((l, i) => { const row = { label: l }; chartData.supCommAgent.datasets.forEach(d => { row[d.label] = fmtMoney(d.data[i] || 0) }); return row })
+      body += listTable(agCols, agRows)
     }
 
     const cdJson = JSON.stringify(chartData).replace(/<\//g, '<\\/')
@@ -1154,6 +1177,8 @@ async function exportPDF() {
     try { if (cd.tmplAgents) hBar('tmplAgents', cd.tmplAgents.labels, cd.tmplAgents.data, 'Проектов', '#C62828'); } catch(e) {}
     try { if (cd.supAgent) hBar('supAgent', cd.supAgent.labels, cd.supAgent.data, 'Надзоров', '#F39C12'); } catch(e) {}
     try { if (cd.supCity) vBar('supCity', cd.supCity.labels, cd.supCity.datasets); } catch(e) {}
+    try { if (cd.supCommStage) hBar2('supCommStage', cd.supCommStage.labels, cd.supCommStage.datasets); } catch(e) {}
+    try { if (cd.supCommAgent) hBar2('supCommAgent', cd.supCommAgent.labels, cd.supCommAgent.datasets); } catch(e) {}
     setTimeout(function() { try { window.focus(); window.print(); } catch(e2) {} }, 900);
   });
   <` + `/script>
