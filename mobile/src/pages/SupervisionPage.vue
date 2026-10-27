@@ -198,7 +198,17 @@
                           icon="open_in_new"
                           label="Данные карточки"
                           style="color: var(--fc-text); font-size: 11px; height: 28px; width: 100%; background: var(--fc-bg-alt); border-radius: 4px"
+                          class="q-mb-xs"
                           @click="openCard(card)"
+                        />
+                        <q-btn
+                          flat
+                          dense
+                          no-caps
+                          icon="swap_horiz"
+                          label="Переместить"
+                          style="color: var(--fc-text-light); font-size: 10px; height: 24px; width: 100%"
+                          @click.stop="showMoveDialog(card)"
                         />
                       </div>
                     </q-card-section>
