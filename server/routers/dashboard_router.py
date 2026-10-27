@@ -1896,6 +1896,44 @@ async def get_supervision_analytics(
         undated_agents_result = [{"agent": agent, "commission": round(val, 2)} for agent, val in sorted(commission_undated_by_agent.items(), key=lambda x: -x[1])]
         undated_total = round(sum(commission_undated_by_agent.values()), 2)
 
+        # --- Закупки по агентам (все карточки, без фильтра периода — суммарные расходы) ---
+        purchases_all: dict = defaultdict(float)
+
+        for entry in all_commission_entries:
+            ba = entry.budget_actual or 0.0
+            if ba > 0:
+                sc = sc_by_id.get(entry.supervision_card_id)
+                cont = contracts_map.get(sc.contract_id) if sc else None
+                agent = (cont.agent_type if cont else None) or "Не указан"
+                purchases_all[agent] += ba
+
+        for be in budget_extras:
+            sc = sc_by_id.get(be.supervision_card_id)
+            cont = contracts_map.get(sc.contract_id) if sc else None
+            agent = (cont.agent_type if cont else None) or "Не указан"
+            for field in ["construction_payments", "materials_payments"]:
+                raw = getattr(be, field, None)
+                if not raw:
+                    continue
+                try:
+                    for p in json.loads(raw):
+                        amt = float(p.get("amount") or 0)
+                        if amt > 0:
+                            purchases_all[agent] += amt
+                except Exception:
+                    pass
+            if be.unexpected_expenses:
+                try:
+                    for e in json.loads(be.unexpected_expenses):
+                        amt = float(e.get("amount") or 0)
+                        if amt > 0:
+                            purchases_all[agent] += amt
+                except Exception:
+                    pass
+
+        purchases_by_agent_list = [{"agent": ag, "total": round(v, 2)} for ag, v in sorted(purchases_all.items(), key=lambda x: -x[1])]
+        total_purchases = round(sum(purchases_all.values()), 2)
+
         savings_pct = round(total_savings / total_planned * 100, 1) if total_planned > 0 else 0.0
         resolution_pct = round(defects_resolved / defects_found * 100, 1) if defects_found > 0 else 0.0
 
@@ -1992,6 +2030,10 @@ async def get_supervision_analytics(
                 "by_agent": commission_agents_result,
                 "undated_by_stage": undated_stages_result,
                 "undated_by_agent": undated_agents_result,
+            },
+            "purchases": {
+                "total": total_purchases,
+                "by_agent": purchases_by_agent_list,
             },
         }
 

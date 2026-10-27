@@ -283,33 +283,53 @@
       </q-card>
 
       <!-- ========== АВТОРСКИЙ НАДЗОР ========== -->
-      <q-card v-if="supervisionStats" class="is-card q-mb-md">
-        <q-card-section>
-          <div class="text-subtitle2 text-weight-bold q-mb-sm">
+      <q-card v-if="supervisionStats || supervisionDetailed" class="is-card q-mb-md">
+        <q-card-section class="q-pb-none">
+          <div class="text-subtitle2 text-weight-bold">
             Авторский надзор
           </div>
-          <!-- Строка 1: общие показатели надзора -->
-          <div class="row q-col-gutter-xs q-mb-xs">
-            <div v-for="s in supervisionMini.slice(0, 4)" :key="s.label" class="col-3 text-center">
-              <div class="text-subtitle1 text-weight-bold" :style="{ color: s.color || 'var(--fc-text)' }">
-                {{ s.value }}
-              </div>
-              <div class="text-caption text-grey-7" style="font-size: 9px">
-                {{ s.label }}
-              </div>
-            </div>
-          </div>
-          <!-- Строка 2: статистика выездов -->
-          <div class="row q-col-gutter-xs q-mb-md">
-            <div v-for="s in supervisionMini.slice(4)" :key="s.label" class="col text-center">
-              <div class="text-subtitle1 text-weight-bold" :style="{ color: s.color || 'var(--fc-text)' }">
-                {{ s.value }}
-              </div>
-              <div class="text-caption text-grey-7" style="font-size: 9px">
-                {{ s.label }}
+        </q-card-section>
+        <q-card-section>
+          <!-- Строка 1: общие показатели надзора (KPI-стиль) -->
+          <div class="row q-col-gutter-xs q-mb-sm">
+            <div v-for="s in supervisionMini.slice(0, 4)" :key="s.label" class="col-6 col-sm-3">
+              <div class="q-pa-xs" :style="{ borderLeft: `3px solid ${s.color || '#95A5A6'}`, borderRadius: '6px', background: 'var(--fc-bg-hover)' }">
+                <div class="text-subtitle1 text-weight-bold">
+                  {{ s.value }}
+                </div>
+                <div class="text-caption text-grey-7" style="font-size: 9px">
+                  {{ s.label }}
+                </div>
               </div>
             </div>
           </div>
+          <!-- Строка 2: выезды (KPI-стиль) -->
+          <div class="row q-col-gutter-xs q-mb-sm">
+            <div v-for="s in supervisionMini.slice(4)" :key="s.label" class="col-6 col-sm-4 col-md-2">
+              <div class="q-pa-xs" :style="{ borderLeft: `3px solid ${s.color || '#95A5A6'}`, borderRadius: '6px', background: 'var(--fc-bg-hover)' }">
+                <div class="text-subtitle1 text-weight-bold">
+                  {{ s.value }}
+                </div>
+                <div class="text-caption text-grey-7" style="font-size: 9px">
+                  {{ s.label }}
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- Строка 3: финансы (закупки + комиссии по агентам) -->
+          <div v-if="supervisionFinanceKpi.length > 0" class="row q-col-gutter-xs q-mb-md">
+            <div v-for="f in supervisionFinanceKpi" :key="f.label" class="col-6">
+              <div class="q-pa-xs" :style="{ borderLeft: `3px solid ${f.color}`, borderRadius: '6px', background: 'var(--fc-bg-hover)' }">
+                <div class="text-subtitle2 text-weight-bold">
+                  {{ f.value }}
+                </div>
+                <div class="text-caption text-grey-7" style="font-size: 9px">
+                  {{ f.label }}
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- Графики -->
           <div class="row q-col-gutter-md">
             <div v-if="supervisionByAgentChart" class="col-12 col-md-6">
               <div class="text-caption text-weight-bold q-mb-xs">
@@ -325,18 +345,13 @@
             </div>
           </div>
         </q-card-section>
-      </q-card>
-
-      <!-- ========== КОМИССИИ НАДЗОРА ========== -->
-      <q-card v-if="supervisionCommissionByStageChart || supervisionCommissionByAgentChart" class="is-card q-mb-md">
-        <q-card-section>
-          <div class="text-subtitle2 text-weight-bold text-center q-mb-xs" style="color: #27AE60">
+        <!-- Комиссии: графики по стадиям и агентам -->
+        <q-card-section v-if="supervisionCommissionByStageChart || supervisionCommissionByAgentChart" class="q-pt-none">
+          <q-separator class="q-mb-sm" />
+          <div class="text-caption text-weight-bold q-mb-sm" style="color: #27AE60">
             Комиссии (доход студии из закупок)
-          </div>
-          <div v-if="supervisionDetailed?.commission?.total || supervisionDetailed?.commission?.undated_total" class="text-caption text-center q-mb-md" style="color: var(--fc-text-medium)">
-            Итого: {{ fmtMoney((supervisionDetailed.commission.total || 0) + (supervisionDetailed.commission.undated_total || 0)) }}
-            <span v-if="supervisionDetailed?.commission?.undated_total > 0" style="color: #F39C12">
-              (в т.ч. {{ fmtMoney(supervisionDetailed.commission.undated_total) }} без даты)
+            <span v-if="supervisionDetailed?.commission?.undated_total > 0" style="color: #F39C12; font-weight: normal">
+              · {{ fmtMoney(supervisionDetailed.commission.undated_total) }} без даты
             </span>
           </div>
           <div class="row q-col-gutter-md">
@@ -790,6 +805,40 @@ const supervisionCommissionByAgentChart = computed(() => {
       { label: 'Без даты', data: allAgents.map(n => udMap[n] || 0), color: '#F39C12' },
     ],
   }
+})
+
+// Финансовые KPI надзора: закупки и комиссии раздельно по агентам
+const supervisionFinanceKpi = computed(() => {
+  const sd = supervisionDetailed.value
+  if (!sd) return []
+  const purchases = sd.purchases || {}
+  const commission = sd.commission || {}
+
+  const totalComm = (commission.total || 0) + (commission.undated_total || 0)
+  const totalPurch = purchases.total || 0
+
+  const rows = [
+    { label: 'Закупки всего', value: fmtMoney(totalPurch), color: '#2980B9' },
+    { label: 'Комиссия всего', value: fmtMoney(totalComm), color: '#27AE60' },
+  ]
+
+  // Объединяем агентов из purchases и commission
+  const agentPurch = Object.fromEntries((purchases.by_agent || []).map(a => [a.agent, a.total]))
+  const agentComm = Object.fromEntries((commission.by_agent || []).map(a => [a.agent, a.commission]))
+  const agentUndated = Object.fromEntries((commission.undated_by_agent || []).map(a => [a.agent, a.commission]))
+  const allAgents = [...new Set([
+    ...(purchases.by_agent || []).map(a => a.agent),
+    ...(commission.by_agent || []).map(a => a.agent),
+  ])].filter(a => a !== 'Не указан')
+
+  for (const agent of allAgents) {
+    const p = agentPurch[agent] || 0
+    const c = (agentComm[agent] || 0) + (agentUndated[agent] || 0)
+    rows.push({ label: `${agent}: закупки`, value: fmtMoney(p), color: '#3498DB' })
+    rows.push({ label: `${agent}: комиссия`, value: fmtMoney(c), color: '#1ABC9C' })
+  }
+
+  return rows
 })
 
 // ========== ЗАГРУЗКА ДАННЫХ ==========
