@@ -107,8 +107,19 @@
           <div class="text-subtitle2 text-weight-bold" style="color: var(--fc-text)">
             Рейтинг эффективности
           </div>
-          <div class="text-caption q-mb-sm" style="color: var(--fc-text-light)">
-            50% KPI · 25% Объём · 25% Пунктуальность{{ roleRating.some(e => e.clientScore !== null) ? ' · ±10% Клиент' : '' }}
+          <div class="row items-center q-mb-sm">
+            <div class="text-caption" style="color: var(--fc-text-light)">
+              50% KPI · 25% Объём · 25% Пунктуальность{{ roleRating.some(e => e.clientScore !== null) ? ' · ±10% Клиент' : '' }}
+            </div>
+            <q-btn
+              flat
+              round
+              icon="help_outline"
+              size="xs"
+              color="grey-5"
+              class="q-ml-xs"
+              @click.stop="showRatingHelp = true"
+            />
           </div>
           <div
             v-for="(emp, idx) in roleRating"
@@ -248,6 +259,94 @@
         <div>Нет данных</div>
       </div>
     </q-pull-to-refresh>
+
+    <!-- Диалог объяснения рейтинга -->
+    <q-dialog v-model="showRatingHelp">
+      <q-card style="width: 100%; max-width: 520px; border-radius: 16px">
+        <q-card-section class="q-pb-none">
+          <div class="row items-center justify-between">
+            <div class="text-subtitle1 text-weight-bold" style="color: var(--fc-text)">
+              Как считается рейтинг
+            </div>
+            <q-btn flat round icon="close" @click="showRatingHelp = false" />
+          </div>
+        </q-card-section>
+        <q-card-section style="max-height: 70vh; overflow-y: auto">
+          <div class="q-mb-md">
+            <div class="text-caption q-mb-xs" style="color: var(--fc-text-secondary); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px">
+              Итоговый балл
+            </div>
+            <div class="q-pa-sm" style="background: var(--fc-bg-hover); border-radius: 8px; font-size: 13px; color: var(--fc-text)">
+              Балл = KPI×50% + Объём×25% + Пунктуальность×25%
+              <div style="color: var(--fc-text-light); font-size: 12px; margin-top: 2px">
+                × коэффициент клиента (0.9–1.0, если есть оценки)
+              </div>
+            </div>
+          </div>
+
+          <div class="q-mb-md">
+            <div class="text-caption q-mb-xs" style="color: #27AE60; font-weight: 700">
+              KPI выполнения — 50%
+            </div>
+            <div style="font-size: 13px; color: var(--fc-text)">
+              Доля завершённых этапов от всех назначенных за период:
+            </div>
+            <div class="q-pa-sm q-mt-xs" style="background: var(--fc-bg-hover); border-radius: 8px; font-size: 12px; color: var(--fc-text)">
+              KPI = завершено / всего × 100%
+            </div>
+            <div class="q-mt-xs" style="font-size: 12px; color: var(--fc-text-light)">
+              Этапы берутся из StageExecutor (исполнитель) и назначений на карточке (ГАП, СДП, Менеджер). Для надзора — карточки где назначен как ДАН или Менеджер.
+            </div>
+          </div>
+
+          <div class="q-mb-md">
+            <div class="text-caption q-mb-xs" style="color: var(--fc-link); font-weight: 700">
+              Объём — 25%
+            </div>
+            <div style="font-size: 13px; color: var(--fc-text)">
+              Сколько этапов завершил сотрудник относительно самого продуктивного в этой роли:
+            </div>
+            <div class="q-pa-sm q-mt-xs" style="background: var(--fc-bg-hover); border-radius: 8px; font-size: 12px; color: var(--fc-text)">
+              Объём = завершено / максимум_в_роли × 100%
+            </div>
+            <div class="q-mt-xs" style="font-size: 12px; color: var(--fc-text-light)">
+              Сравнение идёт только внутри текущей вкладки роли. У лидера роли всегда 100%.
+            </div>
+          </div>
+
+          <div class="q-mb-md">
+            <div class="text-caption q-mb-xs" style="color: #F5A623; font-weight: 700">
+              Пунктуальность — 25%
+            </div>
+            <div style="font-size: 13px; color: var(--fc-text)">
+              Штраф за просрочки: чем больше дней просрочки в среднем на этап — тем ниже:
+            </div>
+            <div class="q-pa-sm q-mt-xs" style="background: var(--fc-bg-hover); border-radius: 8px; font-size: 12px; color: var(--fc-text)">
+              Среднее просрочки = сумма дней / кол-во завершённых<br>
+              Пунктуальность = max(0, 1 − среднее / 10) × 100%
+            </div>
+            <div class="q-mt-xs" style="font-size: 12px; color: var(--fc-text-light)">
+              При среднем ≥10 дней просрочки на этап → 0%. При 0 днях → 100%. При 5 днях → 50%.
+            </div>
+          </div>
+
+          <div>
+            <div class="text-caption q-mb-xs" style="color: #9C27B0; font-weight: 700">
+              Оценка клиента — ±10%
+            </div>
+            <div style="font-size: 13px; color: var(--fc-text)">
+              Модификатор из анкет клиентов по завершённым проектам. Влияет на итоговый балл от −10% до 0%:
+            </div>
+            <div class="q-pa-sm q-mt-xs" style="background: var(--fc-bg-hover); border-radius: 8px; font-size: 12px; color: var(--fc-text)">
+              Коэффициент = 0.9 + 0.1 × средняя_оценка/100
+            </div>
+            <div class="q-mt-xs" style="font-size: 12px; color: var(--fc-text-light)">
+              Оценки NPS (0–10), CSAT, дизайн, дедлайн, коммуникация, ожидания (1–5) — нормализуются к 0–100 и усредняются. Если анкет нет — коэффициент 1.0 (нейтральный).
+            </div>
+          </div>
+        </q-card-section>
+      </q-card>
+    </q-dialog>
 
     <!-- Диалог деталей сотрудника -->
     <q-dialog v-model="empDialog" position="bottom">
@@ -500,6 +599,7 @@ const showOverdueDetail = ref(false)
 const empProjects = ref(null)
 const empProjectsLoading = ref(false)
 const showEmpProjects = ref(false)
+const showRatingHelp = ref(false)
 const empDialog = computed({
   get: () => !!selectedEmp.value,
   set: (v) => { if (!v) { selectedEmp.value = null; showOverdueDetail.value = false; empProjects.value = null; showEmpProjects.value = false } },
