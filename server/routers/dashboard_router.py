@@ -1702,15 +1702,42 @@ async def get_supervision_analytics(
             for cont in db.query(Contract).filter(Contract.id.in_(contract_ids_for_sup)).all():
                 contracts_map[cont.id] = cont
 
-        # Не фильтруем надзорные карточки по периоду — показываем все активные
-        # (период используется только для фильтрации визитов по visit_date)
         archived_stages = {"Выполненный проект", STATUS_COMPLETED, STATUS_TERMINATED}
-        filtered_sc = [sc for sc in supervision_cards if sc.column_name not in archived_stages]
+        period_active = bool(year or quarter or month)
+
+        def _sc_in_period(sc) -> bool:
+            """True если карточка надзора попадает в выбранный период (по start_date или created_at)."""
+            if not period_active:
+                return True
+            date_src = sc.start_date
+            if date_src:
+                try:
+                    d = datetime.strptime(str(date_src)[:10], "%Y-%m-%d")
+                except (ValueError, TypeError):
+                    d = sc.created_at
+            else:
+                d = sc.created_at
+            if d is None:
+                return False
+            if year and d.year != year:
+                return False
+            if month and d.month != month:
+                return False
+            if quarter and (d.month - 1) // 3 + 1 != quarter:
+                return False
+            return True
+
+        # При активном периоде — все карточки периода (включая завершённые), иначе — только активные
+        if period_active:
+            filtered_sc = [sc for sc in supervision_cards if _sc_in_period(sc)]
+        else:
+            filtered_sc = [sc for sc in supervision_cards if sc.column_name not in archived_stages]
         filtered_sc_ids = {sc.id for sc in filtered_sc}
 
         # --- Итоговые счётчики ---
         total = len(filtered_sc)
-        active = total  # все из filtered_sc уже активны
+        # при периодной фильтрации включаем завершённые → считаем активных отдельно
+        active = sum(1 for sc in filtered_sc if sc.column_name not in archived_stages)
 
         # --- По типу проекта (через договор) ---
         individual_count = 0
@@ -1811,8 +1838,6 @@ async def get_supervision_analytics(
                 defects_resolved += entry.defects_resolved or 0
 
         # --- Комиссии по стадиям и агентам (все карточки: активные + архивные) ---
-        period_active = bool(year or quarter or month)
-
         def _entry_in_period(actual_date_str) -> bool:
             """True если дата попадает в выбранный период (или период не задан). Пустая дата → False при активном периоде."""
             if not period_active:
