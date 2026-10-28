@@ -770,12 +770,12 @@ class ManagerAcceptanceRequest(BaseModel):
 
 
 class PaymentBase(BaseModel):
-    contract_id: int
+    contract_id: Optional[int] = None
     crm_card_id: Optional[int] = None
     supervision_card_id: Optional[int] = None
     employee_id: int
     employee_name: Optional[str] = None
-    role: str
+    role: Optional[str] = None
     stage_name: Optional[str] = None
     calculated_amount: Optional[float] = 0.0
     manual_amount: Optional[float] = None

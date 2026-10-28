@@ -815,7 +815,7 @@ class Payment(Base):
     __tablename__ = "payments"
 
     id = Column(Integer, primary_key=True, index=True)
-    contract_id = Column(Integer, ForeignKey("contracts.id"), nullable=False)
+    contract_id = Column(Integer, ForeignKey("contracts.id"), nullable=True)
     crm_card_id = Column(Integer, ForeignKey("crm_cards.id"))
     supervision_card_id = Column(Integer, ForeignKey("supervision_cards.id"))
 
@@ -823,7 +823,7 @@ class Payment(Base):
     employee_id = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
     # Денормализация: имя сохраняется при создании, чтобы не терять при удалении сотрудника
     employee_name = Column(String, nullable=True)
-    role = Column(String, nullable=False)
+    role = Column(String, nullable=True)
     stage_name = Column(String)
 
     calculated_amount = Column(Float, nullable=False)

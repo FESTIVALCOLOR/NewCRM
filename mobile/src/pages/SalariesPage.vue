@@ -642,6 +642,15 @@
             type="month"
             class="q-mb-sm"
           />
+          <q-input
+            v-model="newPayment.comments"
+            label="Комментарий"
+            outlined
+            dense
+            type="textarea"
+            rows="2"
+            class="q-mb-sm"
+          />
         </q-card-section>
         <q-card-actions align="right">
           <q-btn v-close-popup flat label="Отмена" no-caps />
@@ -696,6 +705,7 @@ const newPayment = ref({
   report_month: '',
   contract_id: null,
   crm_card_id: null,
+  comments: '',
 })
 // Состояние развёрнутости групп (ключ — employeeId, значение — bool)
 const expandedGroups = ref({})
@@ -1025,13 +1035,18 @@ async function createPayment() {
       report_month: newPayment.value.report_month || null,
       contract_id: newPayment.value.contract_id || null,
       crm_card_id: newPayment.value.crm_card_id || null,
+      comments: newPayment.value.comments || null,
     })
     $q.notify({ type: 'positive', message: 'Платёж создан' })
     showCreatePaymentDialog.value = false
-    newPayment.value = { employee_id: null, amount: '', payment_type: 'Полная оплата', stage_name: '', role: '', report_month: '', contract_id: null, crm_card_id: null }
+    newPayment.value = { employee_id: null, amount: '', payment_type: 'Полная оплата', stage_name: '', role: '', report_month: '', contract_id: null, crm_card_id: null, comments: '' }
     loadData()
   } catch (err) {
-    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка создания платежа' })
+    const detail = err.response?.data?.detail
+    const msg = Array.isArray(detail)
+      ? detail.map(e => e.msg || JSON.stringify(e)).join('; ')
+      : (typeof detail === 'string' ? detail : 'Ошибка создания платежа')
+    $q.notify({ type: 'negative', message: msg })
   }
 }
 
