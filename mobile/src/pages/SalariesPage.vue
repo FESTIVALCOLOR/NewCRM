@@ -261,7 +261,7 @@
               </div>
               <div style="width: 1px; height: 12px; background: var(--fc-border); flex-shrink: 0" />
               <button class="collapse-all-btn" @click="collapseAll">
-                Свернуть все
+                {{ allCollapsed ? 'Развернуть все' : 'Свернуть все' }}
               </button>
             </div>
           </div>
@@ -368,6 +368,9 @@
                       </div>
                       <div v-if="p.address" class="text-caption ellipsis" style="color: var(--fc-text-disabled); font-size: 10px">
                         {{ p.address }}
+                      </div>
+                      <div v-if="p.comments" class="text-caption ellipsis q-mt-xs" style="color: var(--fc-text-secondary); font-size: 10px; font-style: italic">
+                        {{ p.comments }}
                       </div>
                     </div>
                     <div class="text-right q-ml-sm" style="flex-shrink: 0">
@@ -1039,7 +1042,7 @@ function openEditDialog(p) {
     final_amount: p.final_amount || p.amount || 0,
     report_month: p.report_month || '',
     payment_type: p.payment_type || p.source || '',
-    comment: p.comment || '',
+    comment: p.comments || '',
     source: p.source || '',
   }
   showEditDialog.value = true
@@ -1054,7 +1057,7 @@ async function saveEdit() {
       amount: parseFloat(editPay.value.final_amount),
       report_month: editPay.value.report_month || null,
       payment_type: editPay.value.payment_type,
-      comment: editPay.value.comment || null,
+      comments: editPay.value.comment || null,
     }
     if (editPay.value.source === 'Оклад') {
       await salariesApi.update(editPay.value.id, data)
@@ -1164,8 +1167,17 @@ onMounted(async () => {
   } catch {}
 })
 
+const allCollapsed = computed(() => {
+  const keys = Object.keys(expandedGroups.value)
+  return keys.length > 0 && keys.every(k => !expandedGroups.value[k])
+})
+
 function collapseAll() {
-  Object.keys(expandedGroups.value).forEach(k => { expandedGroups.value[k] = false })
+  if (allCollapsed.value) {
+    Object.keys(expandedGroups.value).forEach(k => { expandedGroups.value[k] = true })
+  } else {
+    Object.keys(expandedGroups.value).forEach(k => { expandedGroups.value[k] = false })
+  }
 }
 
 function isCurrentOrFilteredMonth(report_month) {
