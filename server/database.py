@@ -832,6 +832,7 @@ class Payment(Base):
 
     is_manual = Column(Boolean, default=False)
     payment_type = Column(String)  # Полная оплата, Аванс, Доплата, Оклад
+    project_type = Column(String, nullable=True)
     report_month = Column(String)
     payment_status = Column(String)
     comments = Column(Text, nullable=True)
