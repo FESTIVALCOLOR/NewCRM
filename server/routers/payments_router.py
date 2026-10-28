@@ -138,6 +138,7 @@ async def get_all_payments(
                     "area": float(contract.area) if contract and contract.area else None,
                     "city": contract.city if contract else None,
                     "reassigned": p.reassigned if hasattr(p, "reassigned") else False,
+                    "comments": p.comments,
                 }
             )
 
