@@ -21,7 +21,7 @@
       >
         <div class="viz-gallery">
           <div class="viz-row">
-            <div v-for="img in vizRow1" :key="img.id" class="viz-item">
+            <div v-for="img in vizRow1" :key="img.id" class="viz-item" @click="openVizGallery(img)">
               <img
                 class="viz-img"
                 :src="vizStreamUrl(img)"
@@ -36,7 +36,7 @@
           </div>
           <div class="viz-divider" />
           <div class="viz-row">
-            <div v-for="img in vizRow2" :key="img.id" class="viz-item">
+            <div v-for="img in vizRow2" :key="img.id" class="viz-item" @click="openVizGallery(img)">
               <img
                 class="viz-img"
                 :src="vizStreamUrl(img)"
@@ -212,6 +212,12 @@
       </q-card>
     </q-pull-to-refresh>
   </q-page>
+
+  <ImageGalleryDialog
+    v-model="showVizGallery"
+    :images="vizGalleryImages"
+    :start-index="vizGalleryIndex"
+  />
 </template>
 
 <script setup>
@@ -224,6 +230,7 @@ import { useNotificationsStore } from 'src/stores/notifications'
 import { usePermissionsStore } from 'src/stores/permissions'
 import { useCardMutesStore } from 'src/stores/cardMutes'
 import InstallBanner from 'src/components/InstallBanner.vue'
+import ImageGalleryDialog from 'src/components/ImageGalleryDialog.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -430,6 +437,22 @@ function vizStreamUrl(img) {
 const vizReady = ref(false)
 let _vizSettledCount = 0
 
+const showVizGallery = ref(false)
+const vizGalleryIndex = ref(0)
+
+const vizGalleryImages = computed(() =>
+  vizImages.value.map(img => ({
+    src: vizStreamUrl(img),
+    filename: img.contract_address || img.file_name || 'Изображение',
+    url: vizStreamUrl(img),
+  })),
+)
+
+function openVizGallery(img) {
+  vizGalleryIndex.value = vizImages.value.findIndex(i => i.id === img.id)
+  showVizGallery.value = true
+}
+
 watch(vizImages, (imgs) => {
   vizReady.value = false
   _vizSettledCount = 0
@@ -500,6 +523,7 @@ onMounted(() => { dashboard.loadAll(); loadMyTasks(); cardMutes.load(); loadVizG
   position: relative;
   flex-shrink: 0;
   height: 160px;
+  cursor: pointer;
 }
 
 .viz-item + .viz-item {
