@@ -760,7 +760,7 @@ async function loadData() {
     statisticsApi.getEmployees(empParams),
     statisticsApi.getProjects({ ...params, project_type: pt }),
     surveyApi.getStats({ project_type: PT_ENG[pt] || 'individual' }),
-    reportsApi.getEmployeeOverdue({ ...params, project_type: pt, period: periodLabel }),
+    reportsApi.getEmployeeOverdue({ ...params, project_type: pt, period: periodLabel, ...(projectTab.value !== 'supervision' ? { role: roleTab.value } : {}) }),
   ])
 
   if (dashR.status === 'fulfilled') dashboard.value = dashR.value.data

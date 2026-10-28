@@ -262,6 +262,21 @@ def _normalize_role(role: str) -> str:
     return role.replace("Чертежник", "Чертёжник")
 
 
+# Маппинг role-кода (из query param) → допустимые executor_role в ProjectTimelineEntry.
+# Пустой список = нет timeline-этапов для этой роли (просрочки 0, пунктуальность 100%).
+_ROLE_EXECUTOR_MAP: dict = {
+    "designer": ["Дизайнер"],
+    "draftsman": ["Чертёжник", "Чертежник"],
+    "sdp": ["СДП"],
+    "gap": ["ГАП"],
+    "manager": ["Менеджер"],
+    "senior_manager": [],
+    "visualization": [],
+    "dan": [],
+    "executor": [],
+}
+
+
 def _build_se_index(db, card_ids):
     from collections import defaultdict
 
@@ -343,11 +358,33 @@ def _fetch_overdue_rows(db, project_type, period, year, quarter, month):
 
 @router.get("/employee-overdue")
 async def get_employee_overdue_detail(
-    project_type: str, period: str, year: int, quarter: Optional[int] = None, month: Optional[int] = None, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)
+    project_type: str,
+    period: str,
+    year: int,
+    quarter: Optional[int] = None,
+    month: Optional[int] = None,
+    role: Optional[str] = None,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """Детальная разбивка просрочек по сотрудникам через ProjectTimelineEntry."""
     try:
+        # Если роль задана — проверяем есть ли timeline-этапы для неё
+        role_executor_roles: list | None = None
+        if role is not None:
+            mapped = _ROLE_EXECUTOR_MAP.get(role)
+            if mapped is not None and not mapped:
+                return []  # нет timeline-этапов для этой роли (visualization, senior_manager и др.)
+            if mapped:
+                role_executor_roles = [_normalize_role(r) for r in mapped]
+
         overdue_rows = _fetch_overdue_rows(db, project_type, period, year, quarter, month)
+        if not overdue_rows:
+            return []
+
+        # Фильтрация по executor_role если роль задана
+        if role_executor_roles:
+            overdue_rows = [r for r in overdue_rows if _normalize_role(r.executor_role or "") in role_executor_roles]
         if not overdue_rows:
             return []
 
