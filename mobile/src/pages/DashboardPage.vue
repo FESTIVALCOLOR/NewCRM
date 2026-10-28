@@ -13,6 +13,35 @@
         </div>
       </div>
 
+      <!-- Галерея визуализаций -->
+      <div v-if="vizImages.length > 0" class="viz-gallery-wrap q-mb-md">
+        <div class="viz-gallery">
+          <div class="viz-row">
+            <img
+              v-for="img in vizRow1"
+              :key="img.id"
+              class="viz-img"
+              :src="img.public_link"
+              :alt="img.file_name"
+              loading="lazy"
+              @click="$router.push(`/contracts/${img.contract_id}`)"
+            >
+          </div>
+          <div class="viz-divider" />
+          <div class="viz-row">
+            <img
+              v-for="img in vizRow2"
+              :key="img.id"
+              class="viz-img"
+              :src="img.public_link"
+              :alt="img.file_name"
+              loading="lazy"
+              @click="$router.push(`/contracts/${img.contract_id}`)"
+            >
+          </div>
+        </div>
+      </div>
+
       <!-- 6 KPI карточек (2×3) -->
       <div class="row q-col-gutter-sm q-mb-md">
         <div v-for="kpi in kpiCards" :key="kpi.label" class="col-4">
@@ -180,7 +209,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from 'src/stores/auth'
 import { useDashboardStore } from 'src/stores/dashboard'
-import { crmApi, supervisionApi } from 'src/services/api'
+import { crmApi, dashboardApi, supervisionApi } from 'src/services/api'
 import { useNotificationsStore } from 'src/stores/notifications'
 import { usePermissionsStore } from 'src/stores/permissions'
 import { useCardMutesStore } from 'src/stores/cardMutes'
@@ -363,6 +392,18 @@ async function loadMyTasks() {
   }
 }
 
+const vizImages = ref([])
+
+const vizRow1 = computed(() => vizImages.value.slice(0, 20))
+const vizRow2 = computed(() => vizImages.value.slice(20, 40))
+
+async function loadVizGallery() {
+  try {
+    const { data } = await dashboardApi.getVisualizationGallery()
+    vizImages.value = data || []
+  } catch { vizImages.value = [] }
+}
+
 async function markAllNotificationsRead() {
   try {
     const { notificationsApi } = await import('../services/api.js')
@@ -375,9 +416,9 @@ async function markAllNotificationsRead() {
   }
 }
 
-function onRefresh(done) { Promise.all([dashboard.loadAll(), notificationsStore.load(), loadMyTasks()]).finally(done) }
+function onRefresh(done) { Promise.all([dashboard.loadAll(), notificationsStore.load(), loadMyTasks(), loadVizGallery()]).finally(done) }
 
-onMounted(() => { dashboard.loadAll(); loadMyTasks(); cardMutes.load() })
+onMounted(() => { dashboard.loadAll(); loadMyTasks(); cardMutes.load(); loadVizGallery() })
 </script>
 
 <style scoped>
@@ -390,5 +431,41 @@ onMounted(() => { dashboard.loadAll(); loadMyTasks(); cardMutes.load() })
   padding: 2px;
   cursor: pointer;
   line-height: 1;
+}
+
+/* Галерея визуализаций */
+.viz-gallery-wrap { width: 100%; }
+
+.viz-gallery {
+  border-radius: 8px;
+  border: 1px solid var(--fc-border-light);
+  overflow: hidden;
+  background: var(--fc-bg);
+}
+
+.viz-row {
+  display: flex;
+  flex-wrap: nowrap;
+  height: 80px;
+  overflow: hidden;
+  background: var(--fc-bg);
+}
+
+.viz-img {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  flex-shrink: 0;
+  display: block;
+  cursor: pointer;
+}
+
+.viz-img + .viz-img {
+  border-left: 1px solid var(--fc-bg);
+}
+
+.viz-divider {
+  height: 1px;
+  background: var(--fc-bg);
 }
 </style>

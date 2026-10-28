@@ -59,6 +59,7 @@ from database import (
     CRMCard,
     Employee,
     Payment,
+    ProjectFile,
     ProjectTimelineEntry,
     Salary,
     StageExecutor,
@@ -2130,4 +2131,40 @@ async def get_distribution(
 
     except Exception as e:
         logger.exception(f"Ошибка distribution (dimension={dimension}): {e}")
+        raise HTTPException(status_code=500, detail="Внутренняя ошибка сервера")
+
+
+@router.get("/visualization-gallery")
+async def get_visualization_gallery(
+    limit: int = 40,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Последние N изображений из стадий концепции/визуализации для галереи дашборда."""
+    try:
+        files = (
+            db.query(ProjectFile)
+            .filter(
+                ProjectFile.stage.in_(["stage2_concept", "stage2_3d"]),
+                ProjectFile.file_type == "image",
+                ProjectFile.public_link.isnot(None),
+                ProjectFile.public_link != "",
+            )
+            .order_by(ProjectFile.upload_date.desc())
+            .limit(limit)
+            .all()
+        )
+        return [
+            {
+                "id": f.id,
+                "public_link": f.public_link,
+                "file_name": f.file_name,
+                "contract_id": f.contract_id,
+                "stage": f.stage,
+                "upload_date": f.upload_date.isoformat() if f.upload_date else None,
+            }
+            for f in files
+        ]
+    except Exception as e:
+        logger.exception(f"Ошибка visualization-gallery: {e}")
         raise HTTPException(status_code=500, detail="Внутренняя ошибка сервера")

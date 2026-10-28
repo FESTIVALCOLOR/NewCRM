@@ -20,6 +20,9 @@ export const dashboardApi = {
 
   getReportsSummary: (params = {}) =>
     api.get('/api/v1/dashboard/reports/summary', { params }),
+
+  getVisualizationGallery: () =>
+    api.get('/api/v1/dashboard/visualization-gallery'),
 }
 
 // === Statistics ===
