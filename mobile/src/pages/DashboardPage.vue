@@ -458,9 +458,9 @@ onMounted(() => { dashboard.loadAll(); loadMyTasks(); cardMutes.load(); loadVizG
 }
 
 .viz-img {
-  width: 160px;
   height: 160px;
-  object-fit: cover;
+  width: auto;
+  min-width: 80px;
   flex-shrink: 0;
   display: block;
 }
