@@ -3,7 +3,8 @@
     <!-- Фильтры -->
     <q-card class="is-card q-mb-md">
       <q-card-section class="q-pa-sm">
-        <div class="row q-col-gutter-xs items-center">
+        <!-- Строка 1: период -->
+        <div class="row q-col-gutter-xs q-mb-xs">
           <div class="col">
             <q-select
               v-model="filters.year"
@@ -38,14 +39,17 @@
               @update:model-value="loadData"
             />
           </div>
-          <div class="col-auto">
-            <button type="button" class="reset-btn" @click="resetFilters">
+        </div>
+        <!-- Строка 2: кнопки действий -->
+        <div class="row q-col-gutter-xs">
+          <div class="col">
+            <button type="button" class="reset-btn filter-action-btn" @click="resetFilters">
               <q-icon name="refresh" size="18px" />
               <span>Сброс</span>
             </button>
           </div>
-          <div class="col-auto">
-            <button type="button" class="emp-pdf-btn" :disabled="pdfLoading || loading" @click="exportPDF">
+          <div class="col">
+            <button type="button" class="emp-pdf-btn filter-action-btn" :disabled="pdfLoading || loading" @click="exportPDF">
               <q-spinner v-if="pdfLoading" size="14px" />
               <span v-else>PDF</span>
             </button>
@@ -1187,11 +1191,15 @@ onMounted(() => loadData())
 </script>
 
 <style scoped>
+.filter-action-btn {
+  width: 100%;
+}
+
 .reset-btn {
   height: 40px;
   padding: 0 12px;
   background: var(--fc-accent);
-  color: var(--fc-text);
+  color: #000;
   border: none;
   border-radius: 4px;
   cursor: pointer;
