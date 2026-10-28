@@ -3,6 +3,12 @@
     <div style="background:#111;display:flex;flex-direction:column;height:100%;width:100%">
       <!-- Header -->
       <div class="row no-wrap items-center q-px-sm" style="min-height:48px;flex-shrink:0;gap:4px">
+        <div class="text-white text-caption" style="min-width:44px;flex-shrink:0">
+          {{ idx + 1 }}/{{ images.length }}
+        </div>
+        <div class="col ellipsis text-white text-body2 text-center" style="font-size:13px">
+          {{ currentImage?.filename || 'Изображение' }}
+        </div>
         <q-btn
           flat
           round
@@ -11,12 +17,6 @@
           color="white"
           @click="visible = false"
         />
-        <div class="col ellipsis text-white text-body2" style="font-size:13px">
-          {{ currentImage?.filename || 'Изображение' }}
-        </div>
-        <div class="text-white text-caption" style="min-width:44px;text-align:right;flex-shrink:0">
-          {{ idx + 1 }}/{{ images.length }}
-        </div>
       </div>
 
       <!-- Image area with swipe and arrows -->
