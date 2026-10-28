@@ -2142,8 +2142,9 @@ async def get_visualization_gallery(
 ):
     """Последние N изображений из стадий концепции/визуализации для галереи дашборда."""
     try:
-        files = (
-            db.query(ProjectFile)
+        rows = (
+            db.query(ProjectFile, Contract.address)
+            .join(Contract, ProjectFile.contract_id == Contract.id)
             .filter(
                 ProjectFile.stage.in_(["stage2_concept", "stage2_3d"]),
                 ProjectFile.file_type == "image",
@@ -2160,10 +2161,11 @@ async def get_visualization_gallery(
                 "yandex_path": f.yandex_path,
                 "file_name": f.file_name,
                 "contract_id": f.contract_id,
+                "contract_address": address or "",
                 "stage": f.stage,
                 "upload_date": f.upload_date.isoformat() if f.upload_date else None,
             }
-            for f in files
+            for f, address in rows
         ]
     except Exception as e:
         logger.exception(f"Ошибка visualization-gallery: {e}")

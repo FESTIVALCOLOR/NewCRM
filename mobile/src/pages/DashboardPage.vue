@@ -17,25 +17,21 @@
       <div v-if="vizImages.length > 0" class="viz-gallery-wrap q-mb-md">
         <div class="viz-gallery">
           <div class="viz-row">
-            <img
-              v-for="img in vizRow1"
-              :key="img.id"
-              class="viz-img"
-              :src="vizStreamUrl(img)"
-              :alt="img.file_name"
-              loading="lazy"
-            >
+            <div v-for="img in vizRow1" :key="img.id" class="viz-item">
+              <img class="viz-img" :src="vizStreamUrl(img)" :alt="img.file_name" loading="lazy">
+              <q-tooltip v-if="img.contract_address" anchor="top middle" self="bottom middle" :offset="[0, 6]">
+                {{ img.contract_address }}
+              </q-tooltip>
+            </div>
           </div>
           <div class="viz-divider" />
           <div class="viz-row">
-            <img
-              v-for="img in vizRow2"
-              :key="img.id"
-              class="viz-img"
-              :src="vizStreamUrl(img)"
-              :alt="img.file_name"
-              loading="lazy"
-            >
+            <div v-for="img in vizRow2" :key="img.id" class="viz-item">
+              <img class="viz-img" :src="vizStreamUrl(img)" :alt="img.file_name" loading="lazy">
+              <q-tooltip v-if="img.contract_address" anchor="top middle" self="bottom middle" :offset="[0, 6]">
+                {{ img.contract_address }}
+              </q-tooltip>
+            </div>
           </div>
         </div>
       </div>
@@ -457,16 +453,21 @@ onMounted(() => { dashboard.loadAll(); loadMyTasks(); cardMutes.load(); loadVizG
   background: var(--fc-bg);
 }
 
+.viz-item {
+  position: relative;
+  flex-shrink: 0;
+  height: 160px;
+}
+
+.viz-item + .viz-item {
+  border-left: 1px solid var(--fc-bg);
+}
+
 .viz-img {
   height: 160px;
   width: auto;
   min-width: 80px;
-  flex-shrink: 0;
   display: block;
-}
-
-.viz-img + .viz-img {
-  border-left: 1px solid var(--fc-bg);
 }
 
 .viz-divider {
