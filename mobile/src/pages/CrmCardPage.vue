@@ -1188,11 +1188,11 @@
                   <q-item-label v-if="p.is_paid || p.payment_status === 'paid'" caption style="color: #27AE60; font-size: 10px">
                     оплачено
                   </q-item-label>
-                  <q-item-label v-else-if="p.payment_status === 'done'" caption style="color: #00897B; font-size: 10px">
-                    выполнено
-                  </q-item-label>
                   <q-item-label v-else-if="p.payment_status === 'to_pay'" caption style="color: #F39C12; font-size: 10px">
                     к оплате
+                  </q-item-label>
+                  <q-item-label v-else-if="p.payment_status === 'done' || isStageCompleted(p.stage_name)" caption style="color: #00897B; font-size: 10px">
+                    выполнено
                   </q-item-label>
                   <q-item-label v-else-if="p.payment_status === 'pending_stage'" caption style="color: var(--fc-text-disabled); font-size: 10px">
                     в ожидании
@@ -1204,7 +1204,7 @@
                 <q-item-section side>
                   <div class="text-right">
                     <div class="row items-center justify-end no-wrap">
-                      <span class="text-caption" style="color: var(--fc-text-light)">{{ p.payment_subtype || '' }}</span>
+                      <span class="text-caption" style="color: var(--fc-text-light)">{{ p.payment_type || p.payment_subtype || '' }}</span>
                       <div style="width: 1px; height: 14px; background: var(--fc-border); margin: 0 6px" />
                       <div class="text-caption" :style="{ color: p.report_month ? 'var(--fc-text)' : 'var(--fc-text-disabled)' }">
                         {{ formatReportMonth(p.report_month) }}
@@ -2858,14 +2858,18 @@ const paymentTotal = computed(() => {
 
 function paymentRowStyle(p) {
   if (p.is_paid || p.payment_status === 'paid') return { background: 'var(--fc-state-success-bg)' }
-
   if (p.payment_status === 'to_pay') return { background: 'var(--fc-state-warning-bg)' }
   if (p.payment_status === 'pending_stage') return { background: 'var(--fc-bg-alt)' }
   return {}
 }
 
+function isStageCompleted(stageName) {
+  if (!stageName) return false
+  return (card.value?.stage_executors || []).some(se => se.stage_name === stageName && se.completed)
+}
+
 function formatReportMonth(m) {
-  if (!m) return 'в работе'
+  if (!m) return 'в ожидании'
   try {
     const [y, mo] = m.split('-')
     const months = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь']
