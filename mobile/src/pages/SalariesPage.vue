@@ -733,7 +733,7 @@ const paymentTabs = [
   { label: 'Оклады', value: 'salary' },
 ]
 
-const filters = ref({ period: 'all', year: currentYear, month: new Date().getMonth() + 1, quarter: Math.ceil((new Date().getMonth() + 1) / 3), employee_id: null, status: null, address: '', role: null, agent_type: null, payment_type: null })
+const filters = ref({ period: 'month', year: currentYear, month: new Date().getMonth() + 1, quarter: Math.ceil((new Date().getMonth() + 1) / 3), employee_id: null, status: null, address: '', role: null, agent_type: null, payment_type: null })
 
 const paymentTypeOptions = [
   { label: 'Все типы', value: null },
