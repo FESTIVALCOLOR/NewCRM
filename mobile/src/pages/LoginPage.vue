@@ -4,7 +4,7 @@
       <q-card class="login-card">
         <!-- Логотип -->
         <q-card-section class="text-center q-pb-none">
-          <img src="/festival_logo.png" alt="Festival Color" style="height: 64px; width: auto" class="q-mb-sm">
+          <img src="/festival_logo.png" alt="Festival Color" class="login-logo q-mb-sm">
           <div class="text-h6 text-weight-bold q-mb-xs" style="color: var(--fc-text)">
             FESTIVAL COLOR
           </div>
@@ -132,6 +132,13 @@ async function handleLogin() {
   border-radius: 10px;
   border: 1px solid var(--fc-border-light);
   box-shadow: 0 2px 12px var(--fc-shadow-xs);
+}
+
+.login-logo {
+  height: 64px;
+  width: 64px;
+  border-radius: 50%;
+  object-fit: cover;
 }
 
 .login-btn-wrap :deep(.q-btn) {
