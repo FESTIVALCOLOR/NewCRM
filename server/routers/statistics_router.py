@@ -134,10 +134,11 @@ async def get_dashboard_statistics(
 _STAGE_ROLE_PATTERNS: dict = {
     ("individual", "designer"): ["концепция дизайна"],
     ("individual", "draftsman"): ["планировочные решения", "рабочие чертежи"],
+    ("template", "designer"): ["визуализация"],  # дизайнер в шаблонных = визуализация
     ("template", "draftsman"): ["планировочные решения", "рабочие чертежи"],
-    ("template", "visualization"): ["визуализация"],
+    ("template", "visualization"): ["визуализация"],  # обратная совместимость
     # для таба "Все" (project_type=None):
-    (None, "designer"): ["концепция дизайна"],
+    (None, "designer"): ["концепция дизайна", "визуализация"],  # дизайнер + визуализация
     (None, "draftsman"): ["планировочные решения", "рабочие чертежи"],
     (None, "visualization"): ["визуализация"],
 }
@@ -545,8 +546,11 @@ async def get_employee_projects(
                 return False
             return True
 
+        # Роли без StageExecutor-записей — только CRM-карты и Supervision
+        _CRM_ONLY_ROLES = {"sdp", "gap", "manager", "senior_manager", "dan"}
+
         # --- StageExecutor: этапы где сотрудник исполнитель ---
-        if project_type != "supervision":
+        if project_type != "supervision" and role not in _CRM_ONLY_ROLES:
             se_q = (
                 db.query(
                     StageExecutor.stage_name,
@@ -685,8 +689,10 @@ async def get_employee_projects(
                     }
                 )
 
-        # --- SupervisionCard: ДАН / Старший менеджер ---
-        if project_type in (None, "supervision"):
+        # --- SupervisionCard: ДАН / Менеджер надзора ---
+        # При role-фильтре показываем надзор только для ролей, связанных с надзором
+        _SUPERVISION_ROLES = {None, "dan", "manager"}
+        if project_type in (None, "supervision") and role in _SUPERVISION_ROLES:
             sup_q = (
                 db.query(
                     SupervisionCard.dan_id,

@@ -592,8 +592,8 @@ import BarChart from 'src/components/charts/BarChart.vue'
 
 const currentYear = new Date().getFullYear()
 const filters = ref({ year: currentYear, quarter: null, month: null })
-const projectTab = ref('individual')
-const roleTab = ref('executor')
+const projectTab = ref('all')
+const roleTab = ref('sdp')
 const dashboard = ref(null)
 const executorLoad = ref([])
 const roleEmployees = ref([])
@@ -617,9 +617,9 @@ const quarters = [{ label: 'Все', value: null }, { label: 'Q1', value: 1 }, {
 const monthOpts = [{ label: 'Все', value: null }, ...Array.from({ length: 12 }, (_, i) => ({ label: new Date(2000, i).toLocaleDateString('ru-RU', { month: 'short' }), value: i + 1 }))]
 
 const ROLE_TABS = {
-  all: [{ code: 'sdp', label: 'СДП' }, { code: 'gap', label: 'ГАП' }, { code: 'manager', label: 'Менеджер' }, { code: 'senior_manager', label: 'Ст. менеджер' }, { code: 'designer', label: 'Дизайнер' }, { code: 'draftsman', label: 'Чертёжник' }, { code: 'visualization', label: 'Визуализация' }, { code: 'dan', label: 'ДАН' }],
+  all: [{ code: 'sdp', label: 'СДП' }, { code: 'gap', label: 'ГАП' }, { code: 'manager', label: 'Менеджер' }, { code: 'senior_manager', label: 'Ст. менеджер' }, { code: 'designer', label: 'Дизайнер' }, { code: 'draftsman', label: 'Чертёжник' }, { code: 'dan', label: 'ДАН' }],
   individual: [{ code: 'sdp', label: 'СДП' }, { code: 'gap', label: 'ГАП' }, { code: 'manager', label: 'Менеджер' }, { code: 'senior_manager', label: 'Ст. менеджер' }, { code: 'designer', label: 'Дизайнер' }, { code: 'draftsman', label: 'Чертёжник' }],
-  template: [{ code: 'gap', label: 'ГАП' }, { code: 'manager', label: 'Менеджер' }, { code: 'senior_manager', label: 'Ст. менеджер' }, { code: 'draftsman', label: 'Чертёжник' }, { code: 'visualization', label: 'Визуализация' }],
+  template: [{ code: 'gap', label: 'ГАП' }, { code: 'manager', label: 'Менеджер' }, { code: 'senior_manager', label: 'Ст. менеджер' }, { code: 'draftsman', label: 'Чертёжник' }, { code: 'designer', label: 'Дизайнер' }],
   supervision: [{ code: 'dan', label: 'ДАН' }, { code: 'manager', label: 'Менеджер' }],
 }
 
