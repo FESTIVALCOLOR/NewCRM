@@ -86,6 +86,7 @@
           />
         </div>
         <q-btn
+          v-if="!hideUrlButton"
           flat
           no-caps
           icon="open_in_new"
@@ -107,6 +108,7 @@ const props = defineProps({
   modelValue: { type: Boolean, default: false },
   images: { type: Array, default: () => [] },
   startIndex: { type: Number, default: 0 },
+  hideUrlButton: { type: Boolean, default: false },
 })
 const emit = defineEmits(['update:modelValue'])
 

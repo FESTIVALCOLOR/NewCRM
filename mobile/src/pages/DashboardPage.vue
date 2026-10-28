@@ -217,6 +217,7 @@
     v-model="showVizGallery"
     :images="vizGalleryImages"
     :start-index="vizGalleryIndex"
+    hide-url-button
   />
 </template>
 
