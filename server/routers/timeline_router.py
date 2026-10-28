@@ -226,6 +226,41 @@ def _sync_substep_after_date_entry(db: Session, contract_id: int) -> None:
         wf.current_substep_code = new_code
         wf.current_substage_group = new_substage
 
+    # Если все подэтапы закрыты — синхронизировать StageExecutor.completed_date
+    if next_entry is None:
+        last_entry = (
+            db.query(ProjectTimelineEntry)
+            .filter(
+                ProjectTimelineEntry.contract_id == contract_id,
+                ProjectTimelineEntry.stage_group == stage_group,
+                ProjectTimelineEntry.executor_role != "header",
+                ProjectTimelineEntry.actual_date.isnot(None),
+                ProjectTimelineEntry.actual_date != "",
+            )
+            .order_by(ProjectTimelineEntry.sort_order.desc())
+            .first()
+        )
+        if last_entry and last_entry.actual_date:
+            try:
+                completed_dt = datetime.strptime(last_entry.actual_date[:10], "%Y-%m-%d")
+            except ValueError:
+                completed_dt = datetime.utcnow()
+            stage_execs = (
+                db.query(StageExecutor)
+                .filter(
+                    StageExecutor.crm_card_id == card.id,
+                    StageExecutor.stage_name == card.column_name,
+                    StageExecutor.completed == False,
+                )
+                .all()
+            )
+            for se in stage_execs:
+                se.completed = True
+                if not se.completed_date:
+                    se.completed_date = completed_dt
+            if stage_execs:
+                logger.info(f"[TimelineSync] contract={contract_id}, card={card.id}: {len(stage_execs)} StageExecutor(s) completed via timeline, date={completed_dt.date()}")
+
 
 def _recalculate_stage_executor_deadline(db: Session, contract_id: int, stage_group: str) -> None:
     """Пересчитывает StageExecutor.deadline при изменении custom_norm_days.
