@@ -41,7 +41,6 @@
             label="Роль"
             outlined
             dense
-            clearable
             emit-value
             map-options
             style="font-size: 11px"
@@ -666,7 +665,7 @@ const roleFilter = ref(null)
 
 const roleOptions = computed(() => {
   const roles = new Set(employees.value.map(e => e.position).filter(Boolean))
-  return [...roles].sort().map(r => ({ label: r, value: r }))
+  return [{ label: 'Все', value: null }, ...[...roles].sort().map(r => ({ label: r, value: r }))]
 })
 const selected = ref(null)
 const showDetail = ref(false)

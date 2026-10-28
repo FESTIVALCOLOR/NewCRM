@@ -28,7 +28,6 @@
             dense
             emit-value
             map-options
-            clearable
             class="crm-filter-select"
           />
         </div>
@@ -41,7 +40,6 @@
             dense
             emit-value
             map-options
-            clearable
             class="crm-filter-select"
           />
         </div>
@@ -52,7 +50,8 @@
             label="Агент"
             outlined
             dense
-            clearable
+            emit-value
+            map-options
             class="crm-filter-select"
           />
         </div>
@@ -67,7 +66,6 @@
             dense
             emit-value
             map-options
-            clearable
             class="crm-filter-select"
           />
         </div>
@@ -217,6 +215,7 @@ const sortOptions = [
 ]
 
 const statusOpts = [
+  { label: 'Все', value: null },
   { label: 'В работе', value: 'В работе' },
   { label: 'Новый заказ', value: 'Новый заказ' },
   { label: 'СДАН', value: 'СДАН' },
@@ -225,11 +224,12 @@ const statusOpts = [
 ]
 
 const typeOpts = [
+  { label: 'Все', value: null },
   { label: 'Индивидуальный', value: 'Индивидуальный' },
   { label: 'Шаблонный', value: 'Шаблонный' },
 ]
 
-const agentOpts = computed(() => refs.agentNames())
+const agentOpts = computed(() => [{ label: 'Все', value: null }, ...refs.agentNames().map(n => ({ label: n, value: n }))])
 
 function agentColor(agentName) {
   const agent = refs.agentByName(agentName)

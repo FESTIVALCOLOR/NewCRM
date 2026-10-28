@@ -44,14 +44,14 @@
           dense
           emit-value
           map-options
-          clearable
           use-input
+          hide-selected
+          fill-input
           input-debounce="200"
           placeholder="Исполнитель"
           style="font-size: 12px; min-width: 0"
           @filter="filterEmployees"
           @update:model-value="onEmployeeFilter"
-          @clear="filters.employee_id = null; loadData()"
         >
           <template #prepend>
             <q-icon name="person" size="16px" />
@@ -64,12 +64,10 @@
           :options="roleOpts"
           outlined
           dense
-          clearable
           emit-value
           map-options
           label="Роль"
           style="font-size: 12px"
-          @clear="filters.role = null; loadData()"
           @update:model-value="loadData"
         >
           <template #prepend>
@@ -115,10 +113,10 @@
           :options="agentOpts"
           outlined
           dense
-          clearable
+          emit-value
+          map-options
           label="Агент"
           style="font-size: 12px"
-          @clear="filters.agent_type = null; loadData()"
           @update:model-value="loadData"
         >
           <template #prepend>
@@ -761,9 +759,9 @@ const paymentTypeOptions = [
 
 const roleOpts = computed(() => {
   const roles = new Set(allEmployees.value.map(e => e.position).filter(Boolean))
-  return [...roles].sort().map(r => ({ label: r, value: r }))
+  return [{ label: 'Все', value: null }, ...[...roles].sort().map(r => ({ label: r, value: r }))]
 })
-const agentOpts = computed(() => refsStore.agentNames())
+const agentOpts = computed(() => [{ label: 'Все', value: null }, ...refsStore.agentNames().map(n => ({ label: n, value: n }))])
 
 function onEmployeeFilter(val) {
   // При выборе null (сброс) или disable item — пропускаем
@@ -785,7 +783,7 @@ function filterEmployees(val, update) {
   const makeOpts = (list) => {
     const byPos = {}
     for (const e of list) { const pos = e.position || 'Прочие'; if (!byPos[pos]) byPos[pos] = []; byPos[pos].push(e) }
-    const opts = []
+    const opts = [{ label: 'Все сотрудники', value: null }]
     for (const [pos, emps] of Object.entries(byPos).sort((a, b) => a[0].localeCompare(b[0]))) {
       opts.push({ label: `── ${pos} ──`, value: `__header_${pos}`, disable: true })
       for (const e of emps) opts.push({ label: e.full_name, value: e.id })
