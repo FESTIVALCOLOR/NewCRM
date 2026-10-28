@@ -47,7 +47,7 @@
            ══════════════════════════════════════════ -->
 
       <!-- МЕНЕДЖЕР -->
-      <q-expansion-item v-model="expanded.manager" :header-style="myRoleKey==='manager' ? 'background:var(--fc-highlight-yellow)' : ''">
+      <q-expansion-item v-if="myRoleKey==='manager' || myRoleKey==='director'" v-model="expanded.manager" :header-style="myRoleKey==='manager' ? 'background:var(--fc-highlight-yellow)' : ''">
         <template #header>
           <q-item-section avatar>
             <q-icon name="manage_accounts" :color="myRoleKey==='manager' ? 'amber-8' : 'grey-6'" size="22px" />
@@ -256,7 +256,7 @@
       </q-expansion-item>
 
       <!-- ДИЗАЙНЕР -->
-      <q-expansion-item v-model="expanded.designer" :header-style="myRoleKey==='designer' ? 'background:var(--fc-highlight-yellow)' : ''">
+      <q-expansion-item v-if="myRoleKey==='designer' || myRoleKey==='director'" v-model="expanded.designer" :header-style="myRoleKey==='designer' ? 'background:var(--fc-highlight-yellow)' : ''">
         <template #header>
           <q-item-section avatar>
             <q-icon name="palette" :color="myRoleKey==='designer' ? 'amber-8' : 'grey-6'" size="22px" />
@@ -463,7 +463,7 @@
       </q-expansion-item>
 
       <!-- ЧЕРТЁЖНИК -->
-      <q-expansion-item v-model="expanded.draftsman" :header-style="myRoleKey==='draftsman' ? 'background:var(--fc-highlight-yellow)' : ''">
+      <q-expansion-item v-if="myRoleKey==='draftsman' || myRoleKey==='director'" v-model="expanded.draftsman" :header-style="myRoleKey==='draftsman' ? 'background:var(--fc-highlight-yellow)' : ''">
         <template #header>
           <q-item-section avatar>
             <q-icon name="architecture" :color="myRoleKey==='draftsman' ? 'amber-8' : 'grey-6'" size="22px" />
@@ -581,7 +581,7 @@
       </q-expansion-item>
 
       <!-- СДП / ГАП -->
-      <q-expansion-item v-model="expanded.sdp" :header-style="myRoleKey==='sdp' ? 'background:var(--fc-highlight-yellow)' : ''">
+      <q-expansion-item v-if="myRoleKey==='sdp' || myRoleKey==='director'" v-model="expanded.sdp" :header-style="myRoleKey==='sdp' ? 'background:var(--fc-highlight-yellow)' : ''">
         <template #header>
           <q-item-section avatar>
             <q-icon name="rate_review" :color="myRoleKey==='sdp' ? 'amber-8' : 'grey-6'" size="22px" />
@@ -727,7 +727,7 @@
       </q-expansion-item>
 
       <!-- ДАН -->
-      <q-expansion-item v-model="expanded.dan" :header-style="myRoleKey==='dan' ? 'background:var(--fc-highlight-yellow)' : ''">
+      <q-expansion-item v-if="myRoleKey==='dan' || myRoleKey==='director'" v-model="expanded.dan" :header-style="myRoleKey==='dan' ? 'background:var(--fc-highlight-yellow)' : ''">
         <template #header>
           <q-item-section avatar>
             <q-icon name="engineering" :color="myRoleKey==='dan' ? 'amber-8' : 'grey-6'" size="22px" />
@@ -889,7 +889,7 @@
       </q-expansion-item>
 
       <!-- ЗАМЕРЩИК -->
-      <q-expansion-item v-model="expanded.measurer" :header-style="myRoleKey==='measurer' ? 'background:var(--fc-highlight-yellow)' : ''">
+      <q-expansion-item v-if="myRoleKey==='measurer' || myRoleKey==='director'" v-model="expanded.measurer" :header-style="myRoleKey==='measurer' ? 'background:var(--fc-highlight-yellow)' : ''">
         <template #header>
           <q-item-section avatar>
             <q-icon name="straighten" :color="myRoleKey==='measurer' ? 'amber-8' : 'grey-6'" size="22px" />
@@ -1011,7 +1011,7 @@
       </q-expansion-item>
 
       <!-- РУКОВОДИТЕЛЬ / СТАРШИЙ МЕНЕДЖЕР -->
-      <q-expansion-item v-model="expanded.director" :header-style="myRoleKey==='director' ? 'background:var(--fc-highlight-yellow)' : ''">
+      <q-expansion-item v-if="myRoleKey==='director'" v-model="expanded.director" :header-style="myRoleKey==='director' ? 'background:var(--fc-highlight-yellow)' : ''">
         <template #header>
           <q-item-section avatar>
             <q-icon name="admin_panel_settings" :color="myRoleKey==='director' ? 'amber-8' : 'grey-6'" size="22px" />
@@ -1308,6 +1308,7 @@
 
       <!-- КЛИЕНТЫ -->
       <q-expansion-item
+        v-if="perms.has('access.clients')"
         v-model="expanded.clients"
         icon="people"
         label="Клиенты"
@@ -1350,6 +1351,7 @@
 
       <!-- ДОГОВОРА -->
       <q-expansion-item
+        v-if="perms.has('access.contracts')"
         v-model="expanded.contracts"
         icon="description"
         label="Договора"
@@ -1406,6 +1408,7 @@
 
       <!-- CRM ДОСКА -->
       <q-expansion-item
+        v-if="perms.has('access.crm')"
         v-model="expanded.crm"
         icon="view_kanban"
         label="CRM — доска проектов"
@@ -1451,6 +1454,7 @@
 
       <!-- CRM КАРТОЧКА -->
       <q-expansion-item
+        v-if="perms.has('access.crm')"
         v-model="expanded.crmCard"
         icon="open_in_new"
         label="CRM — карточка проекта (вкладки)"
@@ -1539,6 +1543,7 @@
 
       <!-- АВТОРСКИЙ НАДЗОР -->
       <q-expansion-item
+        v-if="perms.has('access.supervision')"
         v-model="expanded.supervision"
         icon="engineering"
         label="Авторский надзор"
@@ -1703,6 +1708,7 @@
 
       <!-- ЧАТ С КЛИЕНТАМИ -->
       <q-expansion-item
+        v-if="perms.has('access.clients')"
         v-model="expanded.clientChats"
         icon="support_agent"
         label="Чат с клиентами"
@@ -1804,6 +1810,7 @@
 
       <!-- ФАЙЛЫ -->
       <q-expansion-item
+        v-if="perms.has('access.crm') || perms.has('access.supervision')"
         v-model="expanded.files"
         icon="folder"
         label="Файлы проектов"
@@ -1912,6 +1919,7 @@
 
       <!-- FAB МЕНЮ CRM -->
       <q-expansion-item
+        v-if="perms.has('access.crm')"
         v-model="expanded.crmFab"
         icon="more_vert"
         label="Кнопка ⋮ в CRM карточке — служебные действия"
@@ -1991,6 +1999,7 @@
 
       <!-- ЗАРПЛАТЫ -->
       <q-expansion-item
+        v-if="perms.has('access.salaries')"
         v-model="expanded.salaries"
         icon="payments"
         label="Зарплаты и выплаты"
@@ -2029,6 +2038,7 @@
 
       <!-- ОТЧЁТЫ -->
       <q-expansion-item
+        v-if="perms.has('access.reports') || perms.has('access.employee_reports')"
         v-model="expanded.reports"
         icon="bar_chart"
         label="Отчёты и статистика"
@@ -2066,6 +2076,7 @@
 
       <!-- СОТРУДНИКИ -->
       <q-expansion-item
+        v-if="perms.has('access.employees')"
         v-model="expanded.employees"
         icon="badge"
         label="Сотрудники"
@@ -2116,6 +2127,7 @@
 
       <!-- АДМИНИСТРИРОВАНИЕ -->
       <q-expansion-item
+        v-if="perms.has('access.admin')"
         v-model="expanded.admin"
         icon="admin_panel_settings"
         label="Администрирование"
@@ -2151,8 +2163,10 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from 'src/stores/auth'
+import { usePermissionsStore } from 'src/stores/permissions'
 
 const authStore = useAuthStore()
+const perms = usePermissionsStore()
 
 const POSITION_MAP = {
   'Менеджер': 'manager',
