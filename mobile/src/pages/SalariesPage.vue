@@ -1221,11 +1221,12 @@ function isCurrentOrFilteredMonth(report_month) {
 
 function payStatusBadgeText(p) {
   if (p.is_paid || p.payment_status === 'paid') return 'оплачено'
-  if (p.payment_status === 'done') return 'выполнено'
   if (p.payment_status === 'pending_stage') return 'в ожидании'
+  if (p.payment_status === 'to_pay') return 'к оплате'
+  // Месяц приоритетнее статуса (для done и in_progress)
   const m = fmtMonth(p.report_month)
   if (m !== 'в работе') return m
-  if (p.payment_status === 'to_pay') return 'к оплате'
+  if (p.payment_status === 'done') return 'выполнено'
   return 'в работе'
 }
 
@@ -1249,7 +1250,7 @@ function payStatusBadgeStyle(p) {
 .stat-pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold }
 .stat-pill.paid { background: #E8F8F5; color: #27AE60 }
 .stat-pill.pending { background: var(--fc-state-warning-bg); color: #F39C12 }
-.stat-pill.done { background: transparent; color: #00897B }
+.stat-pill.done { background: #E0F2F1; color: #00897B }
 .stat-pill.waiting { background: var(--fc-bg-alt); color: var(--fc-text-disabled) }
 .stat-pill.inwork { background: var(--fc-bg-alt); color: var(--fc-text-light) }
 .employee-group-header { display: flex; align-items: center; padding: 8px 12px; background: var(--fc-bg); border: 1px solid var(--fc-border-light); border-radius: 8px 8px 0 0; cursor: pointer }
