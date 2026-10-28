@@ -24,7 +24,6 @@
               :src="vizStreamUrl(img)"
               :alt="img.file_name"
               loading="lazy"
-              @click="$router.push(`/contracts/${img.contract_id}`)"
             >
           </div>
           <div class="viz-divider" />
@@ -36,7 +35,6 @@
               :src="vizStreamUrl(img)"
               :alt="img.file_name"
               loading="lazy"
-              @click="$router.push(`/contracts/${img.contract_id}`)"
             >
           </div>
         </div>
@@ -454,18 +452,17 @@ onMounted(() => { dashboard.loadAll(); loadMyTasks(); cardMutes.load(); loadVizG
 .viz-row {
   display: flex;
   flex-wrap: nowrap;
-  height: 80px;
+  height: 160px;
   overflow: hidden;
   background: var(--fc-bg);
 }
 
 .viz-img {
-  width: 80px;
-  height: 80px;
+  width: 160px;
+  height: 160px;
   object-fit: cover;
   flex-shrink: 0;
   display: block;
-  cursor: pointer;
 }
 
 .viz-img + .viz-img {
