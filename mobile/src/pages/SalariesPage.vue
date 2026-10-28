@@ -255,8 +255,14 @@
                 {{ inWorkCount }} в работе
               </div>
             </div>
-            <div class="text-caption q-mt-xs" style="color: var(--fc-text-muted)">
-              {{ payments.length }} записей
+            <div class="row items-center justify-end no-wrap q-mt-xs" style="gap: 6px">
+              <div class="text-caption" style="color: var(--fc-text-muted)">
+                {{ payments.length }} записей
+              </div>
+              <div style="width: 1px; height: 12px; background: var(--fc-border); flex-shrink: 0" />
+              <button class="collapse-all-btn" @click="collapseAll">
+                Свернуть все
+              </button>
             </div>
           </div>
         </div>
@@ -370,32 +376,9 @@
                           {{ formatMoney(p.final_amount || p.amount) }}
                         </div>
                         <div style="width: 1px; height: 16px; background: var(--fc-border); margin: 0 6px" />
-                        <div class="text-caption" :style="{ color: p.payment_status === 'pending_stage' ? 'var(--fc-text-disabled)' : p.payment_status === 'done' ? '#00897B' : fmtMonth(p.report_month) !== 'в работе' ? 'var(--fc-text)' : 'var(--fc-text-disabled)' }">
-                          {{ p.payment_status === 'pending_stage' ? 'в ожидании' : p.payment_status === 'done' ? 'выполнено' : fmtMonth(p.report_month) }}
-                        </div>
+                        <span class="pay-status-badge" :style="payStatusBadgeStyle(p)">{{ payStatusBadgeText(p) }}</span>
                       </div>
                       <div class="row items-center justify-end q-gutter-xs q-mt-xs" style="flex-wrap: wrap">
-                        <!-- Статус (только информация, не кнопка) -->
-                        <span
-                          v-if="p.is_paid || p.payment_status === 'paid'"
-                          style="display:inline-flex;align-items:center;height:26px;padding:0 8px;border-radius:4px;font-size:10px;background:#21BA45;color:#fff;white-space:nowrap"
-                        >Оплачено</span>
-                        <span
-                          v-else-if="p.payment_status === 'to_pay'"
-                          style="display:inline-flex;align-items:center;height:26px;padding:0 8px;border-radius:4px;font-size:10px;background:#F2C037;color:var(--fc-text);white-space:nowrap"
-                        >К оплате</span>
-                        <span
-                          v-else-if="p.payment_status === 'done'"
-                          style="display:inline-flex;align-items:center;height:26px;padding:0 8px;border-radius:4px;font-size:10px;background:transparent;color:#00897B;white-space:nowrap"
-                        >Выполнено</span>
-                        <span
-                          v-else-if="p.payment_status === 'pending_stage'"
-                          style="display:inline-flex;align-items:center;height:26px;padding:0 8px;border-radius:4px;font-size:10px;background:var(--fc-bg-alt);color:var(--fc-text-disabled);white-space:nowrap"
-                        >В ожидании</span>
-                        <span
-                          v-else
-                          style="display:inline-flex;align-items:center;height:26px;padding:0 8px;border-radius:4px;font-size:10px;background:var(--fc-tab-inactive);color:var(--fc-text-secondary);white-space:nowrap"
-                        >В работе</span>
                         <!-- Кнопка действия по статусу -->
                         <button
                           v-if="can('salaries.mark_paid') && (p.is_paid || p.payment_status === 'paid')"
@@ -1180,6 +1163,43 @@ onMounted(async () => {
     employeeOpts.value = data.filter(e => e.status === 'активный').map(e => ({ label: `${e.full_name} (${e.position || ''})`, value: e.id }))
   } catch {}
 })
+
+function collapseAll() {
+  Object.keys(expandedGroups.value).forEach(k => { expandedGroups.value[k] = false })
+}
+
+function isCurrentOrFilteredMonth(report_month) {
+  if (!report_month) return false
+  const parts = report_month.split('-')
+  if (parts.length < 2) return false
+  const rmYear = parseInt(parts[0])
+  const rmMonth = parseInt(parts[1])
+  const now = new Date()
+  if (filters.value.period === 'month') {
+    return rmYear === filters.value.year && rmMonth === filters.value.month
+  }
+  return rmYear === now.getFullYear() && rmMonth === (now.getMonth() + 1)
+}
+
+function payStatusBadgeText(p) {
+  if (p.is_paid || p.payment_status === 'paid') return 'оплачено'
+  if (p.payment_status === 'done') return 'выполнено'
+  if (p.payment_status === 'pending_stage') return 'в ожидании'
+  const m = fmtMonth(p.report_month)
+  if (m !== 'в работе') return m
+  if (p.payment_status === 'to_pay') return 'к оплате'
+  return 'в работе'
+}
+
+function payStatusBadgeStyle(p) {
+  const base = { display: 'inline-flex', alignItems: 'center', height: '20px', padding: '0 6px', borderRadius: '4px', fontSize: '10px', whiteSpace: 'nowrap' }
+  if (p.is_paid || p.payment_status === 'paid') return { ...base, background: '#21BA45', color: '#fff' }
+  if (p.payment_status === 'done') return { ...base, background: '#E8F5E9', color: '#2E7D32', border: '1px solid #A5D6A7' }
+  if (p.payment_status === 'pending_stage') return { ...base, background: 'var(--fc-bg-alt)', color: 'var(--fc-text-disabled)', border: '1px solid var(--fc-border)' }
+  const highlight = p.report_month && isCurrentOrFilteredMonth(p.report_month)
+  if (highlight) return { ...base, background: '#FFF3E0', color: '#E65100', border: '1px solid #FFCC80' }
+  return { ...base, background: 'var(--fc-bg-alt)', color: 'var(--fc-text-secondary)', border: '1px solid var(--fc-border)' }
+}
 </script>
 
 <style scoped>
@@ -1221,4 +1241,7 @@ onMounted(async () => {
 }
 .sal-export-btn:hover { background: var(--fc-selected-bg); }
 .sal-export-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.collapse-all-btn { border: none; background: none; color: var(--fc-link); font-size: 10px; cursor: pointer; font-family: inherit; padding: 0; white-space: nowrap; line-height: 1; }
+.collapse-all-btn:hover { text-decoration: underline; }
+.pay-status-badge { display: inline-flex; align-items: center; height: 20px; padding: 0 6px; border-radius: 4px; font-size: 10px; white-space: nowrap; }
 </style>
