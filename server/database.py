@@ -834,6 +834,7 @@ class Payment(Base):
     payment_type = Column(String)  # Полная оплата, Аванс, Доплата, Оклад
     report_month = Column(String)
     payment_status = Column(String)
+    comments = Column(Text, nullable=True)
 
     is_paid = Column(Boolean, default=False)
     paid_date = Column(DateTime)
