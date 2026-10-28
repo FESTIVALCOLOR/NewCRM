@@ -532,6 +532,7 @@
           round
           :icon="tab.icon"
           :color="$route.path === tab.to ? 'dark' : 'grey-5'"
+          :class="{ 'bottom-tab-active': $route.path === tab.to }"
           size="sm"
           @click="$router.push(tab.to)"
         >

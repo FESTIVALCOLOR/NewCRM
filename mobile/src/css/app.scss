@@ -494,6 +494,9 @@ body {
     color: #333333 !important;
   }
 
+  // ---- Нижнее меню: активная иконка — жёлтая ----
+  .bottom-tab-active { color: var(--fc-accent) !important; }
+
   // ---- Аватарки команды (CRM + надзор): Quasar palette → полупрозрачные тёмные ----
   // Quasar bg-* на q-avatar — фиксированные светлые цвета, нечитаемы на тёмном фоне
   .q-avatar {
