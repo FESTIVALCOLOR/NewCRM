@@ -2884,20 +2884,9 @@ async function reconcileCompletedPayments() {
     const update = {}
     if (p.payment_status !== 'done') update.payment_status = 'done'
     if (p.payment_type === 'Доплата' && !p.report_month) {
-      // 1. completed_date из stage_executors (с флагом или без — хватит любого)
+      // Только completed_date исполнителя — это фактическая дата сдачи стадии
       const se = (card.value?.stage_executors || []).find(s => s.stage_name === p.stage_name && s.completed_date)
-      if (se?.completed_date) {
-        update.report_month = se.completed_date.substring(0, 7)
-      } else {
-        // 2. Берём месяц из Аванса той же стадии того же сотрудника
-        const avans = payments.find(x =>
-          x.stage_name === p.stage_name &&
-          x.employee_id === p.employee_id &&
-          x.payment_type === 'Аванс' &&
-          x.report_month,
-        )
-        if (avans?.report_month) update.report_month = avans.report_month
-      }
+      if (se?.completed_date) update.report_month = se.completed_date.substring(0, 7)
     }
     if (Object.keys(update).length) patches.push({ id: p.id, update, payment: p })
   }
