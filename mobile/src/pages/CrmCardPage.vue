@@ -2885,63 +2885,62 @@ async function reconcileCompletedPayments() {
   const firstAssigned = [...ses].filter(s => s.assigned_date).sort((a, b) => new Date(a.assigned_date) - new Date(b.assigned_date))[0]
   const lastCompleted = [...ses].filter(s => s.completed_date).sort((a, b) => new Date(b.completed_date) - new Date(a.completed_date))[0]
 
+  const sNum = (name) => { const m = name?.match(/тадия\s*(\d+)/i); return m ? parseInt(m[1]) : -1 }
+  const curStage = sNum(card.value?.column_name)
+
   const patches = []
   for (const p of payments) {
     if (p.is_paid || p.payment_status === 'paid' || p.payment_status === 'to_pay') continue
 
-    // Аванс: done когда исполнитель НАЗНАЧЕН на стадию (работа началась)
-    // Доплата / Полная: done когда стадия ЗАВЕРШЕНА
-    let stageDone = false
-    let seForMonth = null
+    let newStatus = null  // null = не менять
+    let newMonth = p.report_month || null
 
-    if (p.payment_type === 'Аванс') {
-      if (p.stage_name) {
-        // Аванс: когда карточка ВОШЛА в эту стадию или прошла её
-        // (не просто когда назначен исполнитель — можно назначить заранее)
-        const stageNum = (name) => { const m = name?.match(/тадия\s*(\d+)/i); return m ? parseInt(m[1]) : -1 }
-        const cur = stageNum(card.value?.column_name)
-        const own = stageNum(p.stage_name)
-        const inCurrent = card.value?.column_name === p.stage_name
-        const byColumn = own >= 0 && cur > own
-        stageDone = inCurrent || byColumn || isArchived
-        if (stageDone) seForMonth = ses.find(s => s.stage_name === p.stage_name && s.assigned_date)
-      } else {
-        // stage=None Аванс (СДП, ГАП без стадии): только archived
-        stageDone = isArchived
-        seForMonth = firstAssigned
-      }
-    } else {
-      // Доплата / Полная оплата
-      if (p.stage_name) {
-        stageDone = isStageCompleted(p.stage_name)
-        seForMonth = ses.find(s => s.stage_name === p.stage_name && s.completed_date)
-      } else {
-        // stage=None: только archived
-        stageDone = isArchived
-        seForMonth = lastCompleted
-      }
-    }
+    if (p.stage_name) {
+      const own = sNum(p.stage_name)
+      const inCurrent = card.value?.column_name === p.stage_name
+      const byColumn = own >= 0 && curStage > own
+      const stageCompleted = isStageCompleted(p.stage_name)  // byColumn || se.completed || isArchived
+      const stageActive = inCurrent && !stageCompleted
 
-    if (!stageDone) continue
-
-    const update = {}
-    if (p.payment_status !== 'done') update.payment_status = 'done'
-
-    if (!p.report_month) {
-      let month = null
-      if (p.payment_type === 'Аванс') {
-        const dateStr = seForMonth?.assigned_date
-        if (dateStr) month = dateStr.substring(0, 7)
-      } else {
-        const dateStr = seForMonth?.completed_date
-        if (dateStr) month = dateStr.substring(0, 7)
-        // stage=None Полная/Доплата: fallback на lastCompleted если seForMonth не найден
-        if (!month && lastCompleted?.completed_date && !p.stage_name) {
-          month = lastCompleted.completed_date.substring(0, 7)
+      if (stageCompleted) {
+        // Стадия завершена → оба типа платежа = 'done' (выполнено)
+        newStatus = 'done'
+        if (!newMonth) {
+          const se = p.payment_type === 'Аванс'
+            ? ses.find(s => s.stage_name === p.stage_name && s.assigned_date)
+            : ses.find(s => s.stage_name === p.stage_name && s.completed_date)
+          const dateStr = p.payment_type === 'Аванс' ? se?.assigned_date : se?.completed_date
+          if (dateStr) newMonth = dateStr.substring(0, 7)
+        }
+      } else if (stageActive) {
+        // Стадия активна прямо сейчас → оба типа = 'in_progress' (в работе)
+        newStatus = 'in_progress'
+        // Месяц: только для Аванса (у Доплаты месяц ставится при завершении)
+        if (p.payment_type === 'Аванс' && !newMonth) {
+          const se = ses.find(s => s.stage_name === p.stage_name && s.assigned_date)
+          if (se?.assigned_date) newMonth = se.assigned_date.substring(0, 7)
         }
       }
-      if (month) update.report_month = month
+      // Будущая стадия → не меняем (оставляем pending_stage)
+    } else {
+      // stage=None (ГАП, Замерщик и т.д.): только archived
+      if (isArchived) {
+        newStatus = 'done'
+        if (!newMonth) {
+          if (p.payment_type === 'Аванс' && firstAssigned?.assigned_date) {
+            newMonth = firstAssigned.assigned_date.substring(0, 7)
+          } else if (lastCompleted?.completed_date) {
+            newMonth = lastCompleted.completed_date.substring(0, 7)
+          }
+        }
+      }
     }
+
+    if (!newStatus) continue
+
+    const update = {}
+    if (p.payment_status !== newStatus) update.payment_status = newStatus
+    if (newMonth && newMonth !== p.report_month) update.report_month = newMonth
 
     if (Object.keys(update).length) patches.push({ id: p.id, update, payment: p })
   }
