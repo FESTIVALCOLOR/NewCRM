@@ -616,7 +616,8 @@ async def get_employee_projects(
         # Фильтр по конкретной роли страницы (sdp/gap/manager) или по всем если роль не задана
         _CARD_ROLE_LABELS = {"sdp": "СДП", "gap": "ГАП", "manager": "Менеджер", "senior_manager": "Старший менеджер"}
         _EXEC_ROLES_SET = {"designer", "draftsman", "visualization"}
-        if project_type != "supervision" and role not in _EXEC_ROLES_SET:
+        # 'dan' — только supervision, не имеет CRM-роли → пропускаем CRM-секцию
+        if project_type != "supervision" and role not in _EXEC_ROLES_SET and role != "dan":
             if role == "sdp":
                 _crm_filter = CRMCard.sdp_id == employee_id
             elif role == "gap":
@@ -707,10 +708,11 @@ async def get_employee_projects(
                 )
                 .join(Contract, SupervisionCard.contract_id == Contract.id)
                 .filter(
-                    or_(
-                        SupervisionCard.dan_id == employee_id,
-                        SupervisionCard.senior_manager_id == employee_id,
-                    )
+                    SupervisionCard.dan_id == employee_id
+                    if role == "dan"
+                    else SupervisionCard.senior_manager_id == employee_id
+                    if role == "manager"
+                    else or_(SupervisionCard.dan_id == employee_id, SupervisionCard.senior_manager_id == employee_id)
                 )
                 .all()
             )
