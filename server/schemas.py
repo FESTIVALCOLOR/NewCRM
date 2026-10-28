@@ -786,6 +786,7 @@ class PaymentBase(BaseModel):
     payment_status: Optional[str] = None
     reassigned: Optional[bool] = False  # ДОБАВЛЕНО 28.01.2026: Флаг переназначения
     old_employee_id: Optional[int] = None  # ДОБАВЛЕНО 28.01.2026: ID старого исполнителя
+    comments: Optional[str] = None
 
     @field_validator("calculated_amount", "manual_amount", "final_amount", mode="before")
     @classmethod
@@ -829,6 +830,7 @@ class PaymentUpdate(BaseModel):
     paid_by: Optional[int] = None
     reassigned: Optional[bool] = None  # ДОБАВЛЕНО 28.01.2026: Флаг переназначения
     old_employee_id: Optional[int] = None  # ДОБАВЛЕНО 28.01.2026: ID старого исполнителя
+    comments: Optional[str] = None
 
     @field_validator("payment_type", mode="before")
     @classmethod
