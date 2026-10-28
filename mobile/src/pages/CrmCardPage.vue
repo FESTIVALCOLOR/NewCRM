@@ -2879,17 +2879,47 @@ function isStageCompleted(stageName) {
 async function reconcileCompletedPayments() {
   const payments = cardPayments.value
   if (!payments?.length) return
+  const ses = card.value?.stage_executors || []
+  const isArchived = card.value?.column_name === 'Выполненный проект'
+
+  // Вспомогательные данные для платежей без stage (ГАП, Замерщик и т.д.)
+  const sortedBySe = (arr) => [...arr].sort((a, b) => new Date(a) - new Date(b))
+  const firstAssigned = [...ses].filter(s => s.assigned_date).sort((a, b) => new Date(a.assigned_date) - new Date(b.assigned_date))[0]
+  const lastCompleted = [...ses].filter(s => s.completed_date).sort((a, b) => new Date(b.completed_date) - new Date(a.completed_date))[0]
+
   const patches = []
   for (const p of payments) {
-    if (!isStageCompleted(p.stage_name)) continue
+    // Для платежей без stage_name — фиксируем только архивные карточки
+    const stageDone = p.stage_name ? isStageCompleted(p.stage_name) : isArchived
+    if (!stageDone) continue
     if (p.is_paid || p.payment_status === 'paid' || p.payment_status === 'to_pay') continue
+
     const update = {}
     if (p.payment_status !== 'done') update.payment_status = 'done'
-    if (p.payment_type === 'Доплата' && !p.report_month) {
-      // Только completed_date исполнителя — это фактическая дата сдачи стадии
-      const se = (card.value?.stage_executors || []).find(s => s.stage_name === p.stage_name && s.completed_date)
-      if (se?.completed_date) update.report_month = se.completed_date.substring(0, 7)
+
+    if (!p.report_month) {
+      let month = null
+      if (p.stage_name) {
+        if (p.payment_type === 'Аванс') {
+          // Аванс: когда исполнитель назначен на стадию = начало работы
+          const se = ses.find(s => s.stage_name === p.stage_name && s.assigned_date)
+          if (se?.assigned_date) month = se.assigned_date.substring(0, 7)
+        } else {
+          // Доплата / Полная оплата: когда стадия сдана
+          const se = ses.find(s => s.stage_name === p.stage_name && s.completed_date)
+          if (se?.completed_date) month = se.completed_date.substring(0, 7)
+        }
+      } else {
+        // stage=None (ГАП, Замерщик, Менеджер, Рук.студии)
+        if (p.payment_type === 'Аванс') {
+          if (firstAssigned?.assigned_date) month = firstAssigned.assigned_date.substring(0, 7)
+        } else {
+          if (lastCompleted?.completed_date) month = lastCompleted.completed_date.substring(0, 7)
+        }
+      }
+      if (month) update.report_month = month
     }
+
     if (Object.keys(update).length) patches.push({ id: p.id, update, payment: p })
   }
   if (!patches.length) return
