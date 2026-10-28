@@ -107,7 +107,7 @@ async def get_all_payments(
             if p.supervision_card_id:
                 payment_project_type = "Авторский надзор"
             else:
-                payment_project_type = contract.project_type if contract else None
+                payment_project_type = (contract.project_type if contract else None) or p.project_type
 
             result.append(
                 {
