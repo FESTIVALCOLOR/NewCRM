@@ -2865,6 +2865,8 @@ function paymentRowStyle(p) {
 
 function isStageCompleted(stageName) {
   if (!stageName) return false
+  // Карточка в архиве — все стадии завершены
+  if (card.value?.column_name === 'Выполненный проект') return true
   // Прямая проверка флага completed в stage_executors
   if ((card.value?.stage_executors || []).some(se => se.stage_name === stageName && se.completed)) return true
   // Проверка по номеру стадии: если текущая колонка дальше по порядку
