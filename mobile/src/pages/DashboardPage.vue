@@ -410,7 +410,12 @@ const vizRow2 = computed(() => vizImages.value.slice(20, 40))
 async function loadVizGallery() {
   try {
     const { data } = await dashboardApi.getVisualizationGallery()
-    vizImages.value = data || []
+    const arr = data || []
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]]
+    }
+    vizImages.value = arr
   } catch { vizImages.value = [] }
 }
 
