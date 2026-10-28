@@ -136,6 +136,10 @@ _STAGE_ROLE_PATTERNS: dict = {
     ("individual", "draftsman"): ["планировочные решения", "рабочие чертежи"],
     ("template", "draftsman"): ["планировочные решения", "рабочие чертежи"],
     ("template", "visualization"): ["визуализация"],
+    # для таба "Все" (project_type=None):
+    (None, "designer"): ["концепция дизайна"],
+    (None, "draftsman"): ["планировочные решения", "рабочие чертежи"],
+    (None, "visualization"): ["визуализация"],
 }
 
 
@@ -186,7 +190,7 @@ async def get_employee_statistics(
             if month:
                 stage_query = stage_query.filter(extract("month", StageExecutor.assigned_date) == month)
 
-            _role_patterns = _STAGE_ROLE_PATTERNS.get((project_type, role)) if project_type and role else None
+            _role_patterns = _STAGE_ROLE_PATTERNS.get((project_type, role)) if role else None
             if _role_patterns:
                 stage_query = stage_query.filter(or_(*[StageExecutor.stage_name.ilike(f"%{p}%") for p in _role_patterns]))
 
@@ -569,7 +573,7 @@ async def get_employee_projects(
             if month:
                 se_q = se_q.filter(extract("month", StageExecutor.assigned_date) == month)
 
-            _se_role_patterns = _STAGE_ROLE_PATTERNS.get((project_type, role)) if project_type and role else None
+            _se_role_patterns = _STAGE_ROLE_PATTERNS.get((project_type, role)) if role else None
             if _se_role_patterns:
                 se_q = se_q.filter(or_(*[StageExecutor.stage_name.ilike(f"%{p}%") for p in _se_role_patterns]))
 

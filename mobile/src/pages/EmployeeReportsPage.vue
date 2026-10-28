@@ -65,6 +65,7 @@
       style="color: var(--fc-text-secondary)"
       align="left"
     >
+      <q-tab name="all" label="Все" />
       <q-tab name="individual" label="Индивидуальные" />
       <q-tab name="template" label="Шаблонные" />
       <q-tab name="supervision" label="Авт. надзор" />
@@ -616,12 +617,13 @@ const quarters = [{ label: 'Все', value: null }, { label: 'Q1', value: 1 }, {
 const monthOpts = [{ label: 'Все', value: null }, ...Array.from({ length: 12 }, (_, i) => ({ label: new Date(2000, i).toLocaleDateString('ru-RU', { month: 'short' }), value: i + 1 }))]
 
 const ROLE_TABS = {
+  all: [{ code: 'sdp', label: 'СДП' }, { code: 'gap', label: 'ГАП' }, { code: 'manager', label: 'Менеджер' }, { code: 'senior_manager', label: 'Ст. менеджер' }, { code: 'designer', label: 'Дизайнер' }, { code: 'draftsman', label: 'Чертёжник' }, { code: 'visualization', label: 'Визуализация' }, { code: 'dan', label: 'ДАН' }],
   individual: [{ code: 'sdp', label: 'СДП' }, { code: 'gap', label: 'ГАП' }, { code: 'manager', label: 'Менеджер' }, { code: 'senior_manager', label: 'Ст. менеджер' }, { code: 'designer', label: 'Дизайнер' }, { code: 'draftsman', label: 'Чертёжник' }],
   template: [{ code: 'gap', label: 'ГАП' }, { code: 'manager', label: 'Менеджер' }, { code: 'senior_manager', label: 'Ст. менеджер' }, { code: 'draftsman', label: 'Чертёжник' }, { code: 'visualization', label: 'Визуализация' }],
   supervision: [{ code: 'dan', label: 'ДАН' }, { code: 'manager', label: 'Менеджер' }],
 }
 
-const roleTabs = computed(() => ROLE_TABS[projectTab.value] || ROLE_TABS.individual)
+const roleTabs = computed(() => ROLE_TABS[projectTab.value] || ROLE_TABS.all)
 
 // Быстрый lookup просрочек по имени сотрудника
 const overdueByName = computed(() => {
@@ -666,6 +668,8 @@ const dashboardKpi = computed(() => {
     : null
   const projectCount = projectTab.value === 'supervision'
     ? (d.supervision_cards ?? '—')
+    : projectTab.value === 'all'
+    ? ((d.active_crm_cards ?? 0) + (d.supervision_cards ?? 0)) || '—'
     : (d.active_crm_cards ?? '—')
   return [
     { label: 'Сотрудников', value: emps.length || '—' },
@@ -747,20 +751,26 @@ async function loadData() {
   if (filters.value.quarter) params.quarter = filters.value.quarter
   if (filters.value.month) params.month = filters.value.month
 
-  const pt = projectTab.value === 'template' ? 'Шаблонный' : projectTab.value === 'supervision' ? 'Авторский надзор' : 'Индивидуальный'
+  const isAll = projectTab.value === 'all'
+  const pt = projectTab.value === 'template' ? 'Шаблонный' : projectTab.value === 'supervision' ? 'Авторский надзор' : isAll ? null : 'Индивидуальный'
   const PT_ENG = { 'Индивидуальный': 'individual', 'Шаблонный': 'template', 'Авторский надзор': 'supervision' }
 
   const periodLabel = filters.value.quarter ? 'За квартал' : filters.value.month ? 'За месяц' : 'За год'
 
-  const empParams = { ...params, project_type: projectTab.value }
+  const empParams = { ...params }
+  if (!isAll) empParams.project_type = projectTab.value
   if (projectTab.value !== 'supervision') empParams.role = roleTab.value
 
+  const ovdParams = { ...params, period: periodLabel }
+  if (pt) ovdParams.project_type = pt
+  if (projectTab.value !== 'supervision') ovdParams.role = roleTab.value
+
   const [dashR, empR, projR, survR, ovdR] = await Promise.allSettled([
-    statisticsApi.getDashboard({ ...params, project_type: projectTab.value }),
+    statisticsApi.getDashboard({ ...params, ...(isAll ? {} : { project_type: projectTab.value }) }),
     statisticsApi.getEmployees(empParams),
-    statisticsApi.getProjects({ ...params, project_type: pt }),
+    statisticsApi.getProjects({ ...params, ...(pt ? { project_type: pt } : {}) }),
     surveyApi.getStats({ project_type: PT_ENG[pt] || 'individual' }),
-    reportsApi.getEmployeeOverdue({ ...params, project_type: pt, period: periodLabel, ...(projectTab.value !== 'supervision' ? { role: roleTab.value } : {}) }),
+    reportsApi.getEmployeeOverdue(ovdParams),
   ])
 
   if (dashR.status === 'fulfilled') dashboard.value = dashR.value.data
@@ -1131,7 +1141,8 @@ watch(selectedEmp, async (emp) => {
   if (!emp) return
   empProjectsLoading.value = true
   try {
-    const params = { project_type: projectTab.value }
+    const params = {}
+    if (projectTab.value !== 'all') params.project_type = projectTab.value
     if (filters.value.year) params.year = filters.value.year
     if (filters.value.quarter) params.quarter = filters.value.quarter
     if (filters.value.month) params.month = filters.value.month
@@ -1157,7 +1168,8 @@ watch(roleTab, async () => {
     empProjects.value = null
     empProjectsLoading.value = true
     try {
-      const params = { project_type: projectTab.value, role: roleTab.value }
+      const params = { role: roleTab.value }
+      if (projectTab.value !== 'all') params.project_type = projectTab.value
       if (filters.value.year) params.year = filters.value.year
       if (filters.value.quarter) params.quarter = filters.value.quarter
       if (filters.value.month) params.month = filters.value.month

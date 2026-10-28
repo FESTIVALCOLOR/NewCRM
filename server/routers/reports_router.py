@@ -342,7 +342,7 @@ def _fetch_overdue_rows(db, project_type, period, year, quarter, month):
         .join(Contract, Contract.id == ProjectTimelineEntry.contract_id)
         .join(CRMCard, CRMCard.contract_id == Contract.id)
         .filter(
-            Contract.project_type == project_type,
+            *([Contract.project_type == project_type] if project_type else []),
             ProjectTimelineEntry.actual_days > 0,
             ProjectTimelineEntry.actual_days > eff,
             ProjectTimelineEntry.executor_role != "header",
@@ -358,11 +358,11 @@ def _fetch_overdue_rows(db, project_type, period, year, quarter, month):
 
 @router.get("/employee-overdue")
 async def get_employee_overdue_detail(
-    project_type: str,
     period: str,
     year: int,
     quarter: Optional[int] = None,
     month: Optional[int] = None,
+    project_type: Optional[str] = None,
     role: Optional[str] = None,
     current_user: Employee = Depends(get_current_user),
     db: Session = Depends(get_db),
