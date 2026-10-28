@@ -2865,7 +2865,36 @@ function paymentRowStyle(p) {
 
 function isStageCompleted(stageName) {
   if (!stageName) return false
-  return (card.value?.stage_executors || []).some(se => se.stage_name === stageName && se.completed)
+  // Прямая проверка флага completed в stage_executors
+  if ((card.value?.stage_executors || []).some(se => se.stage_name === stageName && se.completed)) return true
+  // Проверка по номеру стадии: если текущая колонка дальше по порядку
+  const stageNum = (name) => { const m = name?.match(/тадия\s*(\d+)/i); return m ? parseInt(m[1]) : -1 }
+  const cur = stageNum(card.value?.column_name)
+  const own = stageNum(stageName)
+  return own >= 0 && cur > own
+}
+
+async function reconcileCompletedPayments() {
+  const payments = cardPayments.value
+  if (!payments?.length) return
+  const patches = []
+  for (const p of payments) {
+    if (!isStageCompleted(p.stage_name)) continue
+    if (p.is_paid || p.payment_status === 'paid' || p.payment_status === 'to_pay') continue
+    const update = {}
+    if (p.payment_status !== 'done') update.payment_status = 'done'
+    if (p.payment_type === 'Доплата' && !p.report_month) {
+      const se = (card.value?.stage_executors || []).find(s => s.stage_name === p.stage_name && s.completed && s.completed_date)
+      if (se?.completed_date) update.report_month = se.completed_date.substring(0, 7)
+    }
+    if (Object.keys(update).length) patches.push({ id: p.id, update, payment: p })
+  }
+  if (!patches.length) return
+  await Promise.allSettled(patches.map(({ id, update, payment }) =>
+    paymentsApi.update(id, update).then(() => {
+      Object.assign(payment, update)
+    }).catch(() => {}),
+  ))
 }
 
 function formatReportMonth(m) {
@@ -4095,6 +4124,8 @@ async function loadAdditionalData(cardId) {
       const cid = Number(cardId)
       // Фильтр: только этой карточки, исключая оклады
       cardPayments.value = (data || []).filter(p => Number(p.crm_card_id) === cid && p.source !== 'Оклад')
+      // Авто-примирение: синхронизировать payment_status/report_month для завершённых стадий
+      reconcileCompletedPayments()
     }
   } catch { cardPayments.value = [] }
 
