@@ -787,6 +787,7 @@ class PaymentBase(BaseModel):
     reassigned: Optional[bool] = False  # ДОБАВЛЕНО 28.01.2026: Флаг переназначения
     old_employee_id: Optional[int] = None  # ДОБАВЛЕНО 28.01.2026: ID старого исполнителя
     comments: Optional[str] = None
+    project_type: Optional[str] = None
 
     @field_validator("calculated_amount", "manual_amount", "final_amount", mode="before")
     @classmethod

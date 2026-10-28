@@ -620,6 +620,15 @@
             dense
             class="q-mb-sm"
           />
+          <q-select
+            v-model="newPayment.project_type"
+            :options="['Индивидуальный', 'Шаблонный', 'Авторский надзор']"
+            label="Тип проекта"
+            outlined
+            dense
+            clearable
+            class="q-mb-sm"
+          />
           <q-input
             v-model="newPayment.role"
             label="Роль (необязательно)"
@@ -700,6 +709,7 @@ const newPayment = ref({
   employee_id: null,
   amount: '',
   payment_type: 'Полная оплата',
+  project_type: null,
   stage_name: '',
   role: '',
   report_month: '',
@@ -1029,6 +1039,7 @@ async function createPayment() {
       calculated_amount: parseFloat(newPayment.value.amount),
       final_amount: parseFloat(newPayment.value.amount),
       payment_type: newPayment.value.payment_type,
+      project_type: newPayment.value.project_type || null,
       payment_status: 'pending',
       stage_name: newPayment.value.stage_name || null,
       role: newPayment.value.role || null,
@@ -1039,7 +1050,7 @@ async function createPayment() {
     })
     $q.notify({ type: 'positive', message: 'Платёж создан' })
     showCreatePaymentDialog.value = false
-    newPayment.value = { employee_id: null, amount: '', payment_type: 'Полная оплата', stage_name: '', role: '', report_month: '', contract_id: null, crm_card_id: null, comments: '' }
+    newPayment.value = { employee_id: null, amount: '', payment_type: 'Полная оплата', project_type: null, stage_name: '', role: '', report_month: '', contract_id: null, crm_card_id: null, comments: '' }
     loadData()
   } catch (err) {
     const detail = err.response?.data?.detail
