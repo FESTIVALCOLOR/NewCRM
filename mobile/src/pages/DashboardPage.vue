@@ -14,11 +14,21 @@
       </div>
 
       <!-- Галерея визуализаций -->
-      <div v-if="vizImages.length > 0" class="viz-gallery-wrap q-mb-md">
+      <div
+        v-if="vizImages.length > 0"
+        class="viz-gallery-wrap q-mb-md"
+        :class="{ 'viz-gallery-ready': vizReady }"
+      >
         <div class="viz-gallery">
           <div class="viz-row">
             <div v-for="img in vizRow1" :key="img.id" class="viz-item">
-              <img class="viz-img" :src="vizStreamUrl(img)" :alt="img.file_name" loading="lazy">
+              <img
+                class="viz-img"
+                :src="vizStreamUrl(img)"
+                :alt="img.file_name"
+                @load="onVizImgSettled"
+                @error="onVizImgSettled"
+              >
               <q-tooltip v-if="img.contract_address" anchor="top middle" self="bottom middle" :offset="[0, 6]">
                 {{ img.contract_address }}
               </q-tooltip>
@@ -27,7 +37,13 @@
           <div class="viz-divider" />
           <div class="viz-row">
             <div v-for="img in vizRow2" :key="img.id" class="viz-item">
-              <img class="viz-img" :src="vizStreamUrl(img)" :alt="img.file_name" loading="lazy">
+              <img
+                class="viz-img"
+                :src="vizStreamUrl(img)"
+                :alt="img.file_name"
+                @load="onVizImgSettled"
+                @error="onVizImgSettled"
+              >
               <q-tooltip v-if="img.contract_address" anchor="top middle" self="bottom middle" :offset="[0, 6]">
                 {{ img.contract_address }}
               </q-tooltip>
@@ -199,7 +215,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from 'src/stores/auth'
 import { useDashboardStore } from 'src/stores/dashboard'
@@ -406,6 +422,20 @@ function vizStreamUrl(img) {
   return `/api/v1/files/stream?yandex_path=${encodeURIComponent(path)}&token=${encodeURIComponent(token)}`
 }
 
+const vizReady = ref(false)
+let _vizSettledCount = 0
+
+watch(vizImages, (imgs) => {
+  vizReady.value = false
+  _vizSettledCount = 0
+  if (imgs.length === 0) vizReady.value = true
+})
+
+function onVizImgSettled() {
+  _vizSettledCount++
+  if (_vizSettledCount >= vizImages.value.length) vizReady.value = true
+}
+
 async function markAllNotificationsRead() {
   try {
     const { notificationsApi } = await import('../services/api.js')
@@ -436,7 +466,15 @@ onMounted(() => { dashboard.loadAll(); loadMyTasks(); cardMutes.load(); loadVizG
 }
 
 /* Галерея визуализаций */
-.viz-gallery-wrap { width: 100%; }
+.viz-gallery-wrap {
+  width: 100%;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+
+.viz-gallery-wrap.viz-gallery-ready {
+  opacity: 1;
+}
 
 .viz-gallery {
   border-radius: 8px;
