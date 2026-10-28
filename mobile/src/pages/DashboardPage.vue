@@ -21,7 +21,7 @@
               v-for="img in vizRow1"
               :key="img.id"
               class="viz-img"
-              :src="img.download_url"
+              :src="vizStreamUrl(img)"
               :alt="img.file_name"
               loading="lazy"
               @click="$router.push(`/contracts/${img.contract_id}`)"
@@ -33,7 +33,7 @@
               v-for="img in vizRow2"
               :key="img.id"
               class="viz-img"
-              :src="img.download_url"
+              :src="vizStreamUrl(img)"
               :alt="img.file_name"
               loading="lazy"
               @click="$router.push(`/contracts/${img.contract_id}`)"
@@ -402,6 +402,14 @@ async function loadVizGallery() {
     const { data } = await dashboardApi.getVisualizationGallery()
     vizImages.value = data || []
   } catch { vizImages.value = [] }
+}
+
+function vizStreamUrl(img) {
+  const raw = img?.yandex_path || ''
+  if (!raw) return ''
+  const path = raw.replace(/^disk:/, '')
+  const token = localStorage.getItem('access_token') || ''
+  return `/api/v1/files/stream?yandex_path=${encodeURIComponent(path)}&token=${encodeURIComponent(token)}`
 }
 
 async function markAllNotificationsRead() {

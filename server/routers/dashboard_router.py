@@ -2134,27 +2134,6 @@ async def get_distribution(
         raise HTTPException(status_code=500, detail="Внутренняя ошибка сервера")
 
 
-_viz_gallery_cache: dict = {"data": None, "ts": 0.0}
-_VIZ_CACHE_TTL = 20 * 60  # 20 минут
-
-
-def _resolve_yd_download_url(public_key: str) -> str:
-    """Получить прямую ссылку для скачивания из публичной ссылки ЯД (без токена)."""
-    import requests as req
-
-    try:
-        resp = req.get(
-            "https://cloud-api.yandex.net/v1/disk/public/resources/download",
-            params={"public_key": public_key},
-            timeout=8,
-        )
-        if resp.status_code == 200:
-            return resp.json().get("href", "")
-    except Exception:
-        pass
-    return ""
-
-
 @router.get("/visualization-gallery")
 async def get_visualization_gallery(
     limit: int = 40,
@@ -2162,58 +2141,30 @@ async def get_visualization_gallery(
     db: Session = Depends(get_db),
 ):
     """Последние N изображений из стадий концепции/визуализации для галереи дашборда."""
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-    import time as _time
-
     try:
-        now = _time.time()
-        if _viz_gallery_cache["data"] is not None and (now - _viz_gallery_cache["ts"]) < _VIZ_CACHE_TTL:
-            return _viz_gallery_cache["data"]
-
         files = (
             db.query(ProjectFile)
             .filter(
                 ProjectFile.stage.in_(["stage2_concept", "stage2_3d"]),
                 ProjectFile.file_type == "image",
-                ProjectFile.public_link.isnot(None),
-                ProjectFile.public_link != "",
+                ProjectFile.yandex_path.isnot(None),
+                ProjectFile.yandex_path != "",
             )
             .order_by(ProjectFile.upload_date.desc())
             .limit(limit)
             .all()
         )
-
-        if not files:
-            return []
-
-        public_links = [f.public_link for f in files]
-        download_urls: dict[str, str] = {}
-        with ThreadPoolExecutor(max_workers=10) as executor:
-            future_to_pk = {executor.submit(_resolve_yd_download_url, pk): pk for pk in public_links}
-            for future in as_completed(future_to_pk):
-                pk = future_to_pk[future]
-                try:
-                    download_urls[pk] = future.result()
-                except Exception:
-                    download_urls[pk] = ""
-
-        result = [
+        return [
             {
                 "id": f.id,
-                "download_url": download_urls.get(f.public_link, ""),
+                "yandex_path": f.yandex_path,
                 "file_name": f.file_name,
                 "contract_id": f.contract_id,
                 "stage": f.stage,
                 "upload_date": f.upload_date.isoformat() if f.upload_date else None,
             }
             for f in files
-            if download_urls.get(f.public_link)
         ]
-
-        _viz_gallery_cache["data"] = result
-        _viz_gallery_cache["ts"] = now
-
-        return result
     except Exception as e:
         logger.exception(f"Ошибка visualization-gallery: {e}")
         raise HTTPException(status_code=500, detail="Внутренняя ошибка сервера")
