@@ -18,8 +18,8 @@
       </q-input>
 
       <!-- Фильтры -->
-      <div class="row q-col-gutter-xs q-mb-sm">
-        <div class="col-3">
+      <div class="row q-col-gutter-xs q-mb-xs">
+        <div class="col-4">
           <q-select
             v-model="statusFilter"
             :options="statusOpts"
@@ -32,7 +32,7 @@
             class="crm-filter-select"
           />
         </div>
-        <div class="col-3">
+        <div class="col-4">
           <q-select
             v-model="typeFilter"
             :options="typeOpts"
@@ -45,7 +45,7 @@
             class="crm-filter-select"
           />
         </div>
-        <div class="col-3">
+        <div class="col-4">
           <q-select
             v-model="agentFilter"
             :options="agentOpts"
@@ -56,7 +56,9 @@
             class="crm-filter-select"
           />
         </div>
-        <div class="col-3">
+      </div>
+      <div class="row q-col-gutter-xs q-mb-sm">
+        <div class="col-12">
           <q-select
             v-model="sortBy"
             :options="sortOptions"

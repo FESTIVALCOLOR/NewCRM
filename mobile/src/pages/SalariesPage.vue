@@ -18,7 +18,7 @@
       />
     </div>
 
-    <!-- Фильтры — расширенные как в десктопе -->
+    <!-- Фильтры — строка 1: период, исполнитель, роль -->
     <div class="row q-col-gutter-xs q-mb-xs">
       <div class="col">
         <q-select
@@ -58,42 +58,28 @@
           </template>
         </q-select>
       </div>
-      <div class="col-auto">
+      <div class="col">
         <q-select
-          v-model="filters.status"
-          :options="statusOptions"
+          v-model="filters.role"
+          :options="roleOpts"
           outlined
           dense
+          clearable
           emit-value
           map-options
-          style="font-size: 12px; min-width: 100px"
+          label="Роль"
+          style="font-size: 12px"
+          @clear="filters.role = null; loadData()"
           @update:model-value="loadData"
         >
           <template #prepend>
-            <q-icon name="filter_list" size="16px" />
-          </template>
-        </q-select>
-      </div>
-      <div class="col-auto">
-        <q-select
-          v-model="filters.payment_type"
-          :options="paymentTypeOptions"
-          label="Тип выплаты"
-          outlined
-          dense
-          emit-value
-          map-options
-          style="font-size: 12px; min-width: 100px"
-          @update:model-value="loadData"
-        >
-          <template #prepend>
-            <q-icon name="payment" size="16px" />
+            <q-icon name="badge" size="16px" />
           </template>
         </q-select>
       </div>
     </div>
-    <!-- Строка 2: адрес, роль, агент -->
-    <div class="row q-col-gutter-xs q-mb-md">
+    <!-- Строка 2: адрес, агент -->
+    <div class="row q-col-gutter-xs q-mb-xs">
       <div class="col">
         <q-select
           v-model="filters.address"
@@ -125,25 +111,6 @@
       </div>
       <div class="col">
         <q-select
-          v-model="filters.role"
-          :options="roleOpts"
-          outlined
-          dense
-          clearable
-          emit-value
-          map-options
-          label="Роль"
-          style="font-size: 12px"
-          @clear="filters.role = null; loadData()"
-          @update:model-value="loadData"
-        >
-          <template #prepend>
-            <q-icon name="badge" size="16px" />
-          </template>
-        </q-select>
-      </div>
-      <div class="col">
-        <q-select
           v-model="filters.agent_type"
           :options="agentOpts"
           outlined
@@ -156,6 +123,42 @@
         >
           <template #prepend>
             <q-icon name="business" size="16px" />
+          </template>
+        </q-select>
+      </div>
+    </div>
+    <!-- Строка 3: тип, статус, сброс -->
+    <div class="row q-col-gutter-xs q-mb-md">
+      <div class="col">
+        <q-select
+          v-model="filters.payment_type"
+          :options="paymentTypeOptions"
+          label="Тип выплаты"
+          outlined
+          dense
+          emit-value
+          map-options
+          style="font-size: 12px"
+          @update:model-value="loadData"
+        >
+          <template #prepend>
+            <q-icon name="payment" size="16px" />
+          </template>
+        </q-select>
+      </div>
+      <div class="col">
+        <q-select
+          v-model="filters.status"
+          :options="statusOptions"
+          outlined
+          dense
+          emit-value
+          map-options
+          style="font-size: 12px"
+          @update:model-value="loadData"
+        >
+          <template #prepend>
+            <q-icon name="filter_list" size="16px" />
           </template>
         </q-select>
       </div>
