@@ -918,7 +918,8 @@ async function exportPDF() {
       const _hl = (e, v) => _p(e).toLowerCase().includes(v) || _s(e).toLowerCase().includes(v)
       if (rt === 'sdp') return emps.filter(e => _h(e, 'СДП'))
       if (rt === 'gap') return emps.filter(e => _h(e, 'ГАП'))
-      if (rt === 'manager') return emps.filter(e => _hl(e, 'менеджер'))
+      if (rt === 'senior_manager') return emps.filter(e => _h(e, 'Старший менеджер'))
+      if (rt === 'manager') return emps.filter(e => _hl(e, 'менеджер') && !_h(e, 'Старший менеджер'))
       if (rt === 'dan') return emps.filter(e => _h(e, 'ДАН') || _h(e, 'Дизайнер авторского надзора'))
       if (rt === 'designer' || rt === 'visualization') return emps.filter(e => _p(e) === 'Дизайнер' || _s(e) === 'Дизайнер')
       if (rt === 'draftsman') return emps.filter(e => _h(e, 'Чертёжник') || _h(e, 'Чертежник'))
@@ -1002,35 +1003,40 @@ async function exportPDF() {
             const isMgrPos = e.position?.toLowerCase().includes('менеджер')
             if (isDanPos || isMgrPos) {
               const ov = e.visits_overdue ?? 0
-              visitsTd = '<td style="padding:5px 8px;font-size:9px;text-align:right;white-space:nowrap">' +
+              visitsTd = '<td style="padding:3px 5px;font-size:9px;text-align:right;white-space:nowrap">' +
                 `${e.visits_object ?? 0} / ${e.visits_supplier ?? 0}` +
                 (ov > 0 ? ` <span style="color:#E74C3C">(!${ov})</span>` : '') + '</td>'
             } else {
-              visitsTd = '<td style="padding:5px 8px"></td>'
+              visitsTd = '<td style="padding:3px 5px"></td>'
             }
           }
           return `<tr style="background:${i % 2 ? '#fff' : 'var(--fc-bg-hover)'}">` +
-            `<td style="padding:5px 8px">${e.full_name || e.name || ''}</td>` +
-            `<td style="padding:5px 8px;color:var(--fc-text-light);font-size:10px">${e.position || ''}</td>` +
-            `<td style="padding:5px 8px;text-align:right;font-weight:700;color:${clr}">${kpi.toFixed(0)}%</td>` +
-            `<td style="padding:5px 8px;text-align:right">${e.completed_stages || 0}/${e.total_stages || 0}</td>` +
-            `<td style="padding:5px 8px">${scoresCells}</td>` +
+            `<td style="padding:3px 5px;font-size:10px">${e.full_name || e.name || ''}</td>` +
+            `<td style="padding:3px 5px;color:var(--fc-text-light);font-size:9px">${e.position || ''}</td>` +
+            `<td style="padding:3px 5px;text-align:right;font-weight:700;color:${clr}">${kpi.toFixed(0)}%</td>` +
+            `<td style="padding:3px 5px;text-align:right;font-size:9px">${e.completed_stages || 0}/${e.total_stages || 0}</td>` +
+            `<td style="padding:3px 5px">${scoresCells}</td>` +
             `${visitsTd}</tr>`
         }).join('')
 
-        const canvH = Math.max(60, rEmps.length * 24)
-        const visitsTh = hasVisits ? '<th style="padding:5px 8px;text-align:right;white-space:nowrap">Выезды (об/пост)</th>' : ''
-        roleHtml += `${roleDivider}<div class="ct">${role.label} — сравнение KPI</div>
-        <canvas id="${kpiKey}" width="700" height="${canvH}" style="break-inside:avoid;margin-bottom:6px"></canvas>
-        <table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:14px">
-          <thead><tr style="background:var(--fc-bg-alt)">
-            <th style="padding:5px 8px;text-align:left">Сотрудник</th>
-            <th style="padding:5px 8px;text-align:left">Должность</th>
-            <th style="padding:5px 8px;text-align:right">KPI%</th>
-            <th style="padding:5px 8px;text-align:right">Этапы</th>
-            <th style="padding:5px 8px;text-align:left">Оценки клиентов</th>
-            ${visitsTh}
-          </tr></thead><tbody>${empRows}</tbody></table>`
+        const canvH = Math.max(60, rEmps.length * 20)
+        const visitsTh = hasVisits ? '<th style="padding:3px 5px;text-align:right;white-space:nowrap;font-size:9px">Выезды (об/пост)</th>' : ''
+        roleHtml += `${roleDivider}
+        <div style="break-inside:avoid;margin-bottom:14px">
+          <div class="ct">${role.label} — сравнение KPI</div>
+          <div style="display:flex;gap:10px;align-items:flex-start">
+            <canvas id="${kpiKey}" width="240" height="${canvH}" style="flex:0 0 240px"></canvas>
+            <table style="flex:1;min-width:0;border-collapse:collapse;font-size:10px">
+              <thead><tr style="background:var(--fc-bg-alt)">
+                <th style="padding:3px 5px;text-align:left">Сотрудник</th>
+                <th style="padding:3px 5px;text-align:left;font-size:9px">Должность</th>
+                <th style="padding:3px 5px;text-align:right">KPI%</th>
+                <th style="padding:3px 5px;text-align:right;font-size:9px">Этапы</th>
+                <th style="padding:3px 5px;text-align:left;font-size:9px">Оценки</th>
+                ${visitsTh}
+              </tr></thead><tbody>${empRows}</tbody></table>
+          </div>
+        </div>`
       }
 
       let survHtml = ''
