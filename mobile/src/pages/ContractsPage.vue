@@ -96,7 +96,7 @@
         >
           <div class="contract-row1">
             <span class="contract-num">{{ contract.contract_number }}</span>
-            <q-badge :color="statusColor(contract.status)" :label="contract.status" style="font-size: 10px; padding: 2px 6px" />
+            <q-badge :color="statusColor(contract.status)" :label="shortStatus(contract.status)" style="font-size: 10px; padding: 2px 6px; width: 90px; justify-content: center" />
           </div>
           <div class="contract-row2">
             <span class="contract-addr">{{ contract.address || 'Без адреса' }}</span>
@@ -150,7 +150,7 @@
           <span class="lh-type ls-meta">{{ shortType(contract.project_type) }}</span>
           <span class="lh-subtype ls-meta">{{ contract.project_subtype || '—' }}</span>
           <span class="lh-status">
-            <q-badge :color="statusColor(contract.status)" :label="shortStatus(contract.status)" style="font-size: 10px; padding: 2px 5px" />
+            <q-badge :color="statusColor(contract.status)" :label="shortStatus(contract.status)" style="font-size: 10px; padding: 2px 5px; width: 88px; justify-content: center" />
           </span>
           <span class="lh-agent">
             <span v-if="contract.agent_type" class="contract-agent" :style="{ background: agentColor(contract.agent_type) }">{{ contract.agent_type }}</span>
@@ -428,6 +428,10 @@ onMounted(() => loadContracts())
   border-radius: 4px;
   white-space: nowrap;
   flex-shrink: 0;
+  width: 72px;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .contract-row3 {
   margin-top: 3px;
