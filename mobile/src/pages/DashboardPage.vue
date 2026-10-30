@@ -222,7 +222,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from 'src/stores/auth'
 import { useDashboardStore } from 'src/stores/dashboard'
@@ -411,20 +411,23 @@ async function loadMyTasks() {
 }
 
 const vizImages = ref([])
+let _vizMounted = false
 
 const vizRow1 = computed(() => vizImages.value.slice(0, 20))
 const vizRow2 = computed(() => vizImages.value.slice(20, 40))
 
 async function loadVizGallery() {
+  if (!_vizMounted) return
   try {
     const { data } = await dashboardApi.getVisualizationGallery()
+    if (!_vizMounted) return
     const arr = data || []
     for (let i = arr.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [arr[i], arr[j]] = [arr[j], arr[i]]
     }
     vizImages.value = arr
-  } catch { vizImages.value = [] }
+  } catch { if (_vizMounted) vizImages.value = [] }
 }
 
 function vizStreamUrl(img) {
@@ -484,9 +487,15 @@ function onRefresh(done) {
 }
 
 onMounted(async () => {
+  _vizMounted = true
   cardMutes.load()
   await Promise.all([dashboard.loadAll(), loadMyTasks()])
   setTimeout(() => loadVizGallery(), 0)
+})
+
+onUnmounted(() => {
+  _vizMounted = false
+  vizImages.value = []
 })
 </script>
 
