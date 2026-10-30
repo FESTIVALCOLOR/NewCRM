@@ -477,9 +477,17 @@ async function markAllNotificationsRead() {
   }
 }
 
-function onRefresh(done) { Promise.all([dashboard.loadAll(), notificationsStore.load(), loadMyTasks(), loadVizGallery()]).finally(done) }
+function onRefresh(done) {
+  Promise.all([dashboard.loadAll(), notificationsStore.load(), loadMyTasks()])
+    .finally(done)
+  loadVizGallery()
+}
 
-onMounted(() => { dashboard.loadAll(); loadMyTasks(); cardMutes.load(); loadVizGallery() })
+onMounted(async () => {
+  cardMutes.load()
+  await Promise.all([dashboard.loadAll(), loadMyTasks()])
+  setTimeout(() => loadVizGallery(), 0)
+})
 </script>
 
 <style scoped>
