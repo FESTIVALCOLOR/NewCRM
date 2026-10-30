@@ -98,6 +98,7 @@
                     :color="statusColor(emp.status)"
                     :label="emp.status"
                     dense
+                    style="min-width: 60px; justify-content: center"
                   />
                   <q-btn
                     v-if="canSeePaymentInfo"
