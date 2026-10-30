@@ -60,6 +60,18 @@ class BaseDraggableList(QListWidget):
 
         self.setSelectionMode(QListWidget.SingleSelection)
 
+    def keyPressEvent(self, event):
+        """Enter/Return на выбранной карточке → открыть редактирование."""
+        from PyQt5.QtCore import Qt
+        if event.key() in (Qt.Key_Return, Qt.Key_Enter):
+            item = self.currentItem()
+            if item:
+                widget = self.itemWidget(item)
+                if widget and hasattr(widget, 'edit_card'):
+                    widget.edit_card()
+                    return
+        super().keyPressEvent(event)
+
     def startDrag(self, supportedActions):
         """Начало перетаскивания — блокируем, если drag запрещён или нет выбранного элемента."""
         if not self.can_drag:
@@ -112,6 +124,7 @@ class BaseKanbanColumn(QFrame):
         self.header_label = None
         self.vertical_label = None
         self.cards_list = None
+        self.collapse_btn = None  # Создаётся в подклассах (CRMColumn, SupervisionColumn)
 
         # Состояние сворачивания
         self._is_collapsed = False

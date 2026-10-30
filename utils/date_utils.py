@@ -5,26 +5,23 @@
 """
 
 from datetime import datetime, timedelta
-from PyQt5.QtCore import QDate, QDateTime
+
+try:
+    from PyQt5.QtCore import QDate, QDateTime
+except ImportError:
+
+    class QDate:  # type: ignore[no-redef]
+        pass
+
+    class QDateTime:  # type: ignore[no-redef]
+        pass
+
 
 # Словарь для месяцев прописью
-MONTHS_RU = {
-    '01': 'январь',
-    '02': 'февраль',
-    '03': 'март',
-    '04': 'апрель',
-    '05': 'май',
-    '06': 'июнь',
-    '07': 'июль',
-    '08': 'август',
-    '09': 'сентябрь',
-    '10': 'октябрь',
-    '11': 'ноябрь',
-    '12': 'декабрь'
-}
+MONTHS_RU = {"01": "январь", "02": "февраль", "03": "март", "04": "апрель", "05": "май", "06": "июнь", "07": "июль", "08": "август", "09": "сентябрь", "10": "октябрь", "11": "ноябрь", "12": "декабрь"}
 
 
-def format_date(date_value, default='—'):
+def format_date(date_value, default="—"):
     """
     Форматирует дату в формат ДД.ММ.ГГГГ (без времени)
 
@@ -41,15 +38,15 @@ def format_date(date_value, default='—'):
     try:
         # Если это QDateTime
         if isinstance(date_value, QDateTime):
-            return date_value.date().toString('dd.MM.yyyy')
+            return date_value.date().toString("dd.MM.yyyy")
 
         # Если это QDate
         if isinstance(date_value, QDate):
-            return date_value.toString('dd.MM.yyyy')
+            return date_value.toString("dd.MM.yyyy")
 
         # Если это datetime
         if isinstance(date_value, datetime):
-            return date_value.strftime('%d.%m.%Y')
+            return date_value.strftime("%d.%m.%Y")
 
         # Если это строка
         if isinstance(date_value, str):
@@ -61,25 +58,25 @@ def format_date(date_value, default='—'):
 
             # Пытаемся распарсить разные форматы
             formats_to_try = [
-                '%Y-%m-%d %H:%M:%S',  # yyyy-MM-dd HH:MM:SS
-                '%Y-%m-%d',           # yyyy-MM-dd
-                '%d.%m.%Y',           # dd.MM.yyyy (уже в нужном формате)
-                '%d/%m/%Y',           # dd/MM/yyyy
-                '%Y/%m/%d',           # yyyy/MM/dd
+                "%Y-%m-%d %H:%M:%S",  # yyyy-MM-dd HH:MM:SS
+                "%Y-%m-%d",  # yyyy-MM-dd
+                "%d.%m.%Y",  # dd.MM.yyyy (уже в нужном формате)
+                "%d/%m/%Y",  # dd/MM/yyyy
+                "%Y/%m/%d",  # yyyy/MM/dd
             ]
 
             for fmt in formats_to_try:
                 try:
                     date_obj = datetime.strptime(date_str, fmt)
-                    return date_obj.strftime('%d.%m.%Y')
+                    return date_obj.strftime("%d.%m.%Y")
                 except ValueError:
                     continue
 
             # Если не удалось распарсить, пробуем взять только дату (первые 10 символов)
             if len(date_str) >= 10:
                 try:
-                    date_obj = datetime.strptime(date_str[:10], '%Y-%m-%d')
-                    return date_obj.strftime('%d.%m.%Y')
+                    date_obj = datetime.strptime(date_str[:10], "%Y-%m-%d")
+                    return date_obj.strftime("%d.%m.%Y")
                 except ValueError:
                     pass
 
@@ -93,7 +90,7 @@ def format_date(date_value, default='—'):
     return default
 
 
-def format_datetime(datetime_value, default='—'):
+def format_datetime(datetime_value, default="—"):
     """
     Форматирует дату и время в формат ДД.ММ.ГГГГ ЧЧ:ММ
 
@@ -110,11 +107,11 @@ def format_datetime(datetime_value, default='—'):
     try:
         # Если это QDateTime
         if isinstance(datetime_value, QDateTime):
-            return datetime_value.toString('dd.MM.yyyy HH:mm')
+            return datetime_value.toString("dd.MM.yyyy HH:mm")
 
         # Если это datetime
         if isinstance(datetime_value, datetime):
-            return datetime_value.strftime('%d.%m.%Y %H:%M')
+            return datetime_value.strftime("%d.%m.%Y %H:%M")
 
         # Если это строка
         if isinstance(datetime_value, str):
@@ -125,18 +122,18 @@ def format_datetime(datetime_value, default='—'):
 
             # Пытаемся распарсить
             formats_to_try = [
-                '%Y-%m-%d %H:%M:%S',
-                '%Y-%m-%d %H:%M',
-                '%Y-%m-%d',
+                "%Y-%m-%d %H:%M:%S",
+                "%Y-%m-%d %H:%M",
+                "%Y-%m-%d",
             ]
 
             for fmt in formats_to_try:
                 try:
                     dt_obj = datetime.strptime(date_str, fmt)
                     # Если нет времени, не показываем его
-                    if fmt == '%Y-%m-%d':
-                        return dt_obj.strftime('%d.%m.%Y')
-                    return dt_obj.strftime('%d.%m.%Y %H:%M')
+                    if fmt == "%Y-%m-%d":
+                        return dt_obj.strftime("%d.%m.%Y")
+                    return dt_obj.strftime("%d.%m.%Y %H:%M")
                 except ValueError:
                     continue
 
@@ -149,7 +146,7 @@ def format_datetime(datetime_value, default='—'):
     return default
 
 
-def format_month_year(month_value, default='—'):
+def format_month_year(month_value, default="—"):
     """
     Форматирует месяц из формата ГГГГ-ММ в формат "месяц ГГГГ"
 
@@ -172,12 +169,12 @@ def format_month_year(month_value, default='—'):
     try:
         month_str = str(month_value).strip()
 
-        if not month_str or month_str == '-':
+        if not month_str or month_str == "-":
             return default
 
         # Проверяем формат ГГГГ-ММ
-        if '-' in month_str and len(month_str) == 7:
-            year, month = month_str.split('-')
+        if "-" in month_str and len(month_str) == 7:
+            year, month = month_str.split("-")
 
             # Получаем название месяца из словаря
             month_name = MONTHS_RU.get(month, None)
@@ -196,11 +193,18 @@ def format_month_year(month_value, default='—'):
 # Список праздничных дней России (нерабочие дни)
 # Формат: (месяц, день)
 RUSSIAN_HOLIDAYS = [
-    (1, 1), (1, 2), (1, 3), (1, 4), (1, 5), (1, 6), (1, 7), (1, 8),  # Новогодние праздники
+    (1, 1),
+    (1, 2),
+    (1, 3),
+    (1, 4),
+    (1, 5),
+    (1, 6),
+    (1, 7),
+    (1, 8),  # Новогодние праздники
     (2, 23),  # День защитника Отечества
-    (3, 8),   # Международный женский день
-    (5, 1),   # Праздник Весны и Труда
-    (5, 9),   # День Победы
+    (3, 8),  # Международный женский день
+    (5, 1),  # Праздник Весны и Труда
+    (5, 9),  # День Победы
     (6, 12),  # День России
     (11, 4),  # День народного единства
 ]
@@ -234,17 +238,17 @@ def networkdays(start_date, end_date):
         return 0
     if isinstance(start_date, str):
         try:
-            start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+            start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
         except ValueError:
             return 0
     if isinstance(end_date, str):
         try:
-            end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+            end_date = datetime.strptime(end_date, "%Y-%m-%d").date()
         except ValueError:
             return 0
-    if hasattr(start_date, 'date'):
+    if hasattr(start_date, "date"):
         start_date = start_date.date()
-    if hasattr(end_date, 'date'):
+    if hasattr(end_date, "date"):
         end_date = end_date.date()
     if end_date < start_date:
         return 0
@@ -270,7 +274,7 @@ def add_working_days(start_date, working_days):
     """
     # Конвертируем start_date в datetime если нужно
     if isinstance(start_date, str):
-        current_date = datetime.strptime(start_date, '%Y-%m-%d')
+        current_date = datetime.strptime(start_date, "%Y-%m-%d")
     elif isinstance(start_date, QDate):
         current_date = datetime(start_date.year(), start_date.month(), start_date.day())
     elif isinstance(start_date, datetime):
@@ -312,7 +316,7 @@ def calculate_deadline(contract_date, survey_date, tech_task_date, contract_peri
     if contract_date:
         if isinstance(contract_date, str):
             try:
-                dates.append(datetime.strptime(contract_date, '%Y-%m-%d'))
+                dates.append(datetime.strptime(contract_date, "%Y-%m-%d"))
             except:
                 pass
         elif isinstance(contract_date, QDate):
@@ -324,7 +328,7 @@ def calculate_deadline(contract_date, survey_date, tech_task_date, contract_peri
     if survey_date:
         if isinstance(survey_date, str):
             try:
-                dates.append(datetime.strptime(survey_date, '%Y-%m-%d'))
+                dates.append(datetime.strptime(survey_date, "%Y-%m-%d"))
             except:
                 pass
         elif isinstance(survey_date, QDate):
@@ -336,7 +340,7 @@ def calculate_deadline(contract_date, survey_date, tech_task_date, contract_peri
     if tech_task_date:
         if isinstance(tech_task_date, str):
             try:
-                dates.append(datetime.strptime(tech_task_date, '%Y-%m-%d'))
+                dates.append(datetime.strptime(tech_task_date, "%Y-%m-%d"))
             except:
                 pass
         elif isinstance(tech_task_date, QDate):

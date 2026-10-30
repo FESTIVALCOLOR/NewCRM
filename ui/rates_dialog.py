@@ -999,7 +999,10 @@ class RatesDialog(QDialog):
                 f'{area_from:.0f} - {area_to:.0f} м² = {price:,.0f} рублей',
                 'success'
             ).exec_()
-            
+
+            # Предложение пересчитать выплаты
+            self._offer_recalculate_payments(role)
+
         except Exception as e:
             print(f"Ошибка сохранения диапазона: {e}")
             import traceback
@@ -1063,7 +1066,10 @@ class RatesDialog(QDialog):
                 f'Старший менеджер: {manager_rate:.0f} ₽/м²',
                 'success'
             ).exec_()
-            
+
+            # Предложение пересчитать выплаты
+            self._offer_recalculate_payments()
+
         except Exception as e:
             print(f"Ошибка сохранения тарифов надзора: {e}")
             import traceback
@@ -1184,7 +1190,10 @@ class RatesDialog(QDialog):
                 f'Тариф замера в городе {city}: {price:.0f} рублей',
                 'success'
             ).exec_()
-            
+
+            # Предложение пересчитать выплаты
+            self._offer_recalculate_payments('Замерщик')
+
         except Exception as e:
             print(f"Ошибка сохранения тарифа замера: {e}")
             import traceback

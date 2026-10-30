@@ -1,0 +1,562 @@
+<template>
+  <q-page padding>
+    <q-pull-to-refresh @refresh="onRefresh">
+      <install-banner />
+
+      <!-- Приветствие -->
+      <div class="q-mb-md">
+        <div class="text-h6 text-weight-bold" style="color: var(--fc-text)">
+          {{ greeting }}, {{ firstName }}
+        </div>
+        <div class="text-caption" style="color: var(--fc-text-muted)">
+          {{ todayDate }}
+        </div>
+      </div>
+
+      <!-- Галерея визуализаций -->
+      <div
+        v-if="vizImages.length > 0"
+        class="viz-gallery-wrap q-mb-md"
+        :class="{ 'viz-gallery-ready': vizReady }"
+      >
+        <div class="viz-gallery">
+          <div class="viz-row">
+            <div v-for="img in vizRow1" :key="img.id" class="viz-item" @click="openVizGallery(img)">
+              <img
+                class="viz-img"
+                :src="vizStreamUrl(img)"
+                :alt="img.file_name"
+                @load="onVizImgSettled"
+                @error="onVizImgSettled"
+              >
+              <q-tooltip v-if="img.contract_address" anchor="top middle" self="bottom middle" :offset="[0, 6]">
+                {{ img.contract_address }}
+              </q-tooltip>
+            </div>
+          </div>
+          <div class="viz-divider" />
+          <div class="viz-row">
+            <div v-for="img in vizRow2" :key="img.id" class="viz-item" @click="openVizGallery(img)">
+              <img
+                class="viz-img"
+                :src="vizStreamUrl(img)"
+                :alt="img.file_name"
+                @load="onVizImgSettled"
+                @error="onVizImgSettled"
+              >
+              <q-tooltip v-if="img.contract_address" anchor="top middle" self="bottom middle" :offset="[0, 6]">
+                {{ img.contract_address }}
+              </q-tooltip>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 6 KPI карточек (2×3) -->
+      <div class="row q-col-gutter-sm q-mb-md">
+        <div v-for="kpi in kpiCards" :key="kpi.label" class="col-4">
+          <q-card
+            v-ripple
+            class="is-card"
+            style="min-height: 80px; cursor: pointer"
+            :style="{ borderLeft: `3px solid ${kpi.border}` }"
+            clickable
+            @click="router.push(kpi.to)"
+          >
+            <q-card-section class="q-pa-sm text-center">
+              <div class="text-h6 text-weight-bold" style="color: var(--fc-text)">
+                <q-skeleton v-if="dashboard.loading" type="text" width="30px" style="margin: 0 auto" />
+                <span v-else>{{ kpi.value }}</span>
+              </div>
+              <div class="text-caption" style="color: var(--fc-text-light); font-size: 10px; line-height: 1.2">
+                {{ kpi.label }}
+              </div>
+            </q-card-section>
+          </q-card>
+        </div>
+      </div>
+
+      <!-- Кнопки быстрого доступа — порядок: Клиенты, Договора, СРМ, СРМ надзора -->
+      <div class="row q-col-gutter-sm q-mb-md">
+        <div v-for="action in quickActions" :key="action.to" :class="quickActions.length === 1 ? 'col-12' : 'col-6'">
+          <q-btn
+            :icon="action.icon"
+            :label="action.label"
+            :to="action.to"
+            no-caps
+            unelevated
+            class="full-width"
+            style="background: var(--fc-bg-alt); color: var(--fc-text); border: 1px solid var(--fc-border-light); border-radius: 8px; height: 48px"
+          />
+        </div>
+      </div>
+
+      <!-- Мои задачи (ближайшие дедлайны) -->
+      <q-card v-if="myTasks.length > 0" class="is-card q-mb-md">
+        <q-card-section class="q-pb-none">
+          <div class="text-subtitle2 text-weight-bold" style="color: var(--fc-text)">
+            Мои задачи
+          </div>
+          <div style="height: 1px; background: #222; margin-top: 6px" />
+        </q-card-section>
+        <q-list dense separator>
+          <template v-for="(task, idx) in myTasks" :key="`${task._card_type || 'crm'}-${task.id}`">
+            <!-- Разделитель между CRM и надзором -->
+            <div
+              v-if="task._card_type === 'supervision' && (idx === 0 || myTasks[idx - 1]._card_type !== 'supervision')"
+              style="height: 3px; background: #1565C0; margin: 2px 0"
+            />
+            <q-item
+              v-ripple
+              clickable
+              :style="taskBg(task)"
+              @click="$router.push(task._card_type === 'supervision' ? `/supervision/${task.id}` : `/crm/${task.id}`)"
+            >
+              <q-item-section avatar style="min-width: 24px; padding-left: 0; padding-right: 8px">
+                <q-icon :name="task._card_type === 'supervision' ? 'engineering' : 'assignment'" :color="taskColor(task)" size="20px" />
+              </q-item-section>
+              <q-item-section>
+                <q-item-label style="font-size: 12px; color: var(--fc-text)">
+                  {{ task.address || task.contract_number }}
+                </q-item-label>
+                <q-item-label caption style="color: var(--fc-text-light)">
+                  {{ task.column_name }}
+                </q-item-label>
+              </q-item-section>
+              <q-item-section side style="padding-left: 4px">
+                <div style="display: flex; align-items: center; gap: 10px; flex-shrink: 0">
+                  <button
+                    class="dash-mute-bell-btn"
+                    @click.stop="cardMutes.toggleMute(entityType(task), task.id)"
+                  >
+                    <span
+                      class="material-icons"
+                      :style="{ fontSize: '16px', color: cardMutes.isMuted(entityType(task), task.id) ? 'var(--fc-text)' : 'var(--fc-border-card)' }"
+                    >
+                      {{ cardMutes.isMuted(entityType(task), task.id) ? 'notifications_off' : 'notifications' }}
+                    </span>
+                  </button>
+                  <div
+                    v-if="task.column_name === 'В ожидании' || task.is_paused"
+                    style="width: 52px; text-align: right; font-size: 10px; font-weight: 600; color: #B8860B; line-height: 1.2; white-space: normal"
+                  >
+                    Пауза
+                  </div>
+                  <div
+                    v-else-if="_taskDeadline(task)"
+                    style="width: 52px; text-align: right; font-size: 10px; font-weight: 600; line-height: 1.2; white-space: normal"
+                    :style="{ color: dlColor(_taskDeadline(task), task) }"
+                  >
+                    {{ fmtDeadline(_taskDeadline(task), task) }}
+                  </div>
+                  <div v-else style="width: 52px" />
+                </div>
+              </q-item-section>
+            </q-item>
+          </template>
+        </q-list>
+      </q-card>
+
+      <!-- Уведомления -->
+      <q-card class="is-card">
+        <q-card-section class="q-pb-none">
+          <div class="row items-center justify-between">
+            <div class="text-subtitle2 text-weight-bold" style="color: var(--fc-text)">
+              Уведомления
+            </div>
+            <div class="row items-center q-gutter-xs">
+              <q-btn
+                v-if="notificationsStore.unreadCount > 0"
+                flat
+                dense
+                no-caps
+                size="xs"
+                color="primary"
+                label="Прочитать все"
+                style="font-size: 10px"
+                @click="markAllNotificationsRead"
+              />
+              <q-badge v-if="notificationsStore.unreadCount > 0" color="negative" :label="notificationsStore.unreadCount" />
+            </div>
+          </div>
+          <div style="height: 1px; background: #222; margin-top: 6px" />
+        </q-card-section>
+        <q-list v-if="recentNotifications.length > 0" separator>
+          <q-item
+            v-for="n in recentNotifications"
+            :key="n.id"
+            v-ripple
+            clickable
+            :class="{ 'bg-blue-1': !n.is_read }"
+            @click="handleNotificationClick(n)"
+          >
+            <q-item-section avatar>
+              <q-icon :name="notificationIcon(n.notification_type)" :color="n.is_read ? 'grey-5' : 'warning'" size="20px" />
+            </q-item-section>
+            <q-item-section>
+              <q-item-label :class="{ 'text-weight-bold': !n.is_read }" style="font-size: 13px; color: var(--fc-text)">
+                {{ n.title }}
+              </q-item-label>
+              <q-item-label caption lines="1" style="color: var(--fc-text-light)">
+                {{ n.message }}
+              </q-item-label>
+            </q-item-section>
+          </q-item>
+        </q-list>
+        <q-card-section v-else class="text-center q-py-md" style="color: var(--fc-text-muted)">
+          <q-icon name="notifications_none" size="28px" class="q-mb-xs" />
+          <div class="text-caption">
+            Нет уведомлений
+          </div>
+        </q-card-section>
+      </q-card>
+    </q-pull-to-refresh>
+  </q-page>
+
+  <ImageGalleryDialog
+    v-model="showVizGallery"
+    :images="vizGalleryImages"
+    :start-index="vizGalleryIndex"
+    hide-url-button
+  />
+</template>
+
+<script setup>
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
+import { useAuthStore } from 'src/stores/auth'
+import { useDashboardStore } from 'src/stores/dashboard'
+import { crmApi, dashboardApi, supervisionApi } from 'src/services/api'
+import { useNotificationsStore } from 'src/stores/notifications'
+import { usePermissionsStore } from 'src/stores/permissions'
+import { useCardMutesStore } from 'src/stores/cardMutes'
+import InstallBanner from 'src/components/InstallBanner.vue'
+import ImageGalleryDialog from 'src/components/ImageGalleryDialog.vue'
+
+const router = useRouter()
+const authStore = useAuthStore()
+const dashboard = useDashboardStore()
+const notificationsStore = useNotificationsStore()
+const permissionsStore = usePermissionsStore()
+const cardMutes = useCardMutesStore()
+
+function entityType(task) {
+  return task._card_type === 'supervision' ? 'supervision_card' : 'crm_card'
+}
+
+const firstName = computed(() => authStore.user?.full_name?.split(' ')[0] || '')
+const greeting = computed(() => { const h = new Date().getHours(); return h < 6 ? 'Доброй ночи' : h < 12 ? 'Доброе утро' : h < 18 ? 'Добрый день' : 'Добрый вечер' })
+const todayDate = computed(() => new Date().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' }))
+
+const kpiCards = computed(() => {
+  const crm = dashboard.crmStats || {}
+  const crmT = dashboard.crmTemplateStats || {}
+  const crmN = dashboard.crmNadzorStats || {}
+  const cli = dashboard.clientsStats || {}
+  const con = dashboard.contractsStats || {}
+  const emp = dashboard.employeesStats || {}
+  const totalContracts = (con.individual_orders ?? 0) + (con.template_orders ?? 0)
+  return [
+    { label: 'Индивидуальные', value: crm.active_orders ?? '—', border: 'var(--fc-accent)', to: '/crm?type=Индивидуальный' },
+    { label: 'Шаблонные', value: crmT.active_orders ?? '—', border: '#F39C12', to: '/crm?type=Шаблонный' },
+    { label: 'Авт. надзор', value: crmN.active_orders ?? '—', border: '#27AE60', to: '/supervision' },
+    { label: 'Клиентов', value: cli.total_clients ?? '—', border: '#9B59B6', to: '/clients' },
+    { label: 'Договоров', value: totalContracts || '—', border: '#E74C3C', to: '/contracts' },
+    { label: 'Сотрудников', value: emp.active_employees ?? '—', border: '#1ABC9C', to: '/employees' },
+  ]
+})
+
+// Порядок: Клиенты, Договора, СРМ, СРМ надзора — фильтруются по правам
+const ALL_QUICK_ACTIONS = [
+  { label: 'Клиенты', icon: 'people', to: '/clients', perm: 'access.clients' },
+  { label: 'Договора', icon: 'description', to: '/contracts', perm: 'access.contracts' },
+  { label: 'СРМ', icon: 'view_kanban', to: '/crm', perm: 'access.crm' },
+  { label: 'СРМ надзора', icon: 'engineering', to: '/supervision', perm: 'access.supervision' },
+]
+const quickActions = computed(() =>
+  ALL_QUICK_ACTIONS.filter(a => permissionsStore.has(a.perm)),
+)
+
+const myTasks = ref([])
+
+const recentNotifications = computed(() => notificationsStore.items.slice(0, 5))
+
+// Рабочие дни между двумя датами (без выходных и праздников РФ)
+const _RU_HOLIDAYS = new Set(['01-01','01-02','01-03','01-04','01-05','01-06','01-07','01-08','02-23','03-08','05-01','05-09','06-12','11-04'])
+function _countWorkDays(from, to) {
+  let d = new Date(from), count = 0
+  const sign = to > from ? 1 : -1
+  while (d.getTime() !== to.getTime()) {
+    d = new Date(d.getTime() + sign * 86400000)
+    const wd = d.getDay(), mm = String(d.getMonth()+1).padStart(2,'0'), dd = String(d.getDate()).padStart(2,'0')
+    if (wd !== 0 && wd !== 6 && !_RU_HOLIDAYS.has(`${mm}-${dd}`)) count += sign
+  }
+  return count
+}
+function _workDaysLeft(dateStr) {
+  if (!dateStr) return null
+  const now = new Date(); now.setHours(0,0,0,0)
+  const dl = new Date(dateStr); dl.setHours(0,0,0,0)
+  return _countWorkDays(now, dl)
+}
+
+function _taskDeadline(task) {
+  // effective_deadline учитывает дни паузы для карточек в «В ожидании»
+  return task.effective_deadline || task.deadline || task.current_stage_deadline
+}
+
+function taskBg(task) {
+  if (task.column_name === 'В ожидании') return { background: 'var(--fc-highlight-yellow)' }
+  if (task.is_paused) return { background: 'var(--fc-highlight-yellow)' }
+  if (task._card_type === 'supervision') return { background: 'var(--fc-selected-bg)' }
+  return {}
+}
+
+function taskColor(task) {
+  if (task.column_name === 'В ожидании' || task.is_paused) return 'amber-7'
+  if (task._card_type === 'supervision') return 'blue-5'
+  const d = _taskDeadline(task)
+  if (!d) return 'grey-5'
+  const days = _workDaysLeft(d)
+  if (days === null) return 'grey-5'
+  // Клиентский/согласовательный этап — серый даже при просрочке
+  if (task.is_client_stage && days < 0) return 'grey-6'
+  if (days < 0) return 'negative'
+  if (days <= 2) return 'warning'
+  return 'grey-7'
+}
+
+function dlColor(d, task) {
+  const days = _workDaysLeft(d)
+  if (days === null) return 'var(--fc-text-light)'
+  if (task && task.is_client_stage && days < 0) return '#9E9E9E'
+  if (days < 0) return '#E74C3C'
+  if (days <= 2) return '#F39C12'
+  return 'var(--fc-text-light)'
+}
+
+function fmtDeadline(d, task) {
+  const days = _workDaysLeft(d)
+  if (days === null) return ''
+  if (task && task.is_client_stage && days < 0) return `${Math.abs(days)} дн. согл.`
+  if (days < 0) return `${Math.abs(days)} дн. просрочено`
+  if (days === 0) return 'Сегодня'
+  if (days === 1) return 'Завтра'
+  return `${days} раб.дн.`
+}
+function notificationIcon(t) { return { assigned: 'assignment_ind', deadline: 'schedule', payment: 'payments', crm_stage: 'swap_horiz', supervision: 'engineering' }[t] || 'notifications' }
+function handleNotificationClick(n) { if (!n.is_read) notificationsStore.markRead(n.id); if (n.related_entity_type === 'crm_card') router.push(`/crm/${n.related_entity_id}`) }
+const STUDIO_DIRECTOR_POSITION = 'Руководитель студии'
+
+function _isAssignedCrm(c, userId) {
+  return (
+    c.manager_id === userId ||
+    c.senior_manager_id === userId ||
+    c.sdp_id === userId ||
+    c.gap_id === userId ||
+    c.surveyor_id === userId ||
+    c.stage_plan_executor_id === userId ||
+    c.designer_executor_id === userId ||
+    c.draftsman_executor_id === userId ||
+    c.current_stage_executor_id === userId
+  )
+}
+
+function _isAssignedSupervision(c, userId) {
+  return c.senior_manager_id === userId || c.dan_id === userId || c.studio_director_id === userId
+}
+
+async function loadMyTasks() {
+  try {
+    const userId = authStore.user?.id
+    if (!userId) return
+    const isDirector =
+      authStore.user?.position === STUDIO_DIRECTOR_POSITION ||
+      ['admin', 'director'].includes(authStore.user?.role)
+
+    const [{ data: ind }, { data: tmpl }, svResp] = await Promise.all([
+      crmApi.getCards('Индивидуальный', false),
+      crmApi.getCards('Шаблонный', false),
+      supervisionApi.getCards({ status: 'active' }).catch(() => ({ data: [] })),
+    ])
+    const svData = svResp?.data || []
+
+    // CRM карточки (уже не архивные — archived=false передан в getCards)
+    const crmFiltered = [...(ind || []), ...(tmpl || [])].filter(c =>
+      isDirector ? true : _isAssignedCrm(c, userId),
+    )
+
+    // Карточки надзора (status=active, включая паузированные — они выделяются цветом)
+    const svFiltered = svData
+      .filter(c => (isDirector ? true : _isAssignedSupervision(c, userId)))
+      .map(c => ({ ...c, _card_type: 'supervision' }))
+
+    const byDeadline = (a, b) => {
+      const da = _taskDeadline(a)
+      const db2 = _taskDeadline(b)
+      if (!da && !db2) return 0
+      if (!da) return 1
+      if (!db2) return -1
+      return new Date(da) - new Date(db2)
+    }
+
+    // CRM сначала (отсортированные по дедлайну), потом надзор (отсортированный по дедлайну)
+    myTasks.value = [
+      ...crmFiltered.sort(byDeadline).slice(0, 7),
+      ...svFiltered.sort(byDeadline).slice(0, 7),
+    ].slice(0, 10)
+  } catch (e) {
+    console.error('loadMyTasks error', e)
+  }
+}
+
+const vizImages = ref([])
+let _vizMounted = false
+
+const vizRow1 = computed(() => vizImages.value.slice(0, 20))
+const vizRow2 = computed(() => vizImages.value.slice(20, 40))
+
+async function loadVizGallery() {
+  if (!_vizMounted) return
+  try {
+    const { data } = await dashboardApi.getVisualizationGallery()
+    if (!_vizMounted) return
+    const arr = data || []
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]]
+    }
+    vizImages.value = arr
+  } catch { if (_vizMounted) vizImages.value = [] }
+}
+
+function vizStreamUrl(img) {
+  const raw = img?.yandex_path || ''
+  if (!raw) return ''
+  const path = raw.replace(/^disk:/, '')
+  const token = localStorage.getItem('access_token') || ''
+  return `/api/v1/files/stream?yandex_path=${encodeURIComponent(path)}&token=${encodeURIComponent(token)}`
+}
+
+const vizReady = ref(false)
+let _vizSettledCount = 0
+
+const showVizGallery = ref(false)
+const vizGalleryIndex = ref(0)
+
+const vizGalleryImages = computed(() =>
+  vizImages.value.map(img => ({
+    src: vizStreamUrl(img),
+    filename: img.contract_address || img.file_name || 'Изображение',
+    url: vizStreamUrl(img),
+  })),
+)
+
+function openVizGallery(img) {
+  vizGalleryIndex.value = vizImages.value.findIndex(i => i.id === img.id)
+  showVizGallery.value = true
+}
+
+watch(vizImages, (imgs) => {
+  vizReady.value = false
+  _vizSettledCount = 0
+  if (imgs.length === 0) vizReady.value = true
+})
+
+function onVizImgSettled() {
+  _vizSettledCount++
+  if (_vizSettledCount >= vizImages.value.length) vizReady.value = true
+}
+
+async function markAllNotificationsRead() {
+  try {
+    const { notificationsApi } = await import('../services/api.js')
+    const { useAuthStore } = await import('../stores/auth.js')
+    const auth = useAuthStore()
+    await notificationsApi.markAllRead(auth.user?.id)
+    notificationsStore.items.forEach(n => { n.is_read = true })
+  } catch (err) {
+    console.error('markAllRead error', err)
+  }
+}
+
+function onRefresh(done) {
+  Promise.all([dashboard.loadAll(), notificationsStore.load(), loadMyTasks()])
+    .finally(done)
+  loadVizGallery()
+}
+
+onMounted(async () => {
+  _vizMounted = true
+  cardMutes.load()
+  await Promise.all([dashboard.loadAll(), loadMyTasks()])
+  setTimeout(() => loadVizGallery(), 0)
+})
+
+onUnmounted(() => {
+  _vizMounted = false
+  vizImages.value = []
+})
+</script>
+
+<style scoped>
+.dash-mute-bell-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+/* Галерея визуализаций */
+.viz-gallery-wrap {
+  width: 100%;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+
+.viz-gallery-wrap.viz-gallery-ready {
+  opacity: 1;
+}
+
+.viz-gallery {
+  border-radius: 8px;
+  border: 1px solid var(--fc-border-light);
+  overflow: hidden;
+  background: var(--fc-bg);
+}
+
+.viz-row {
+  display: flex;
+  flex-wrap: nowrap;
+  height: 160px;
+  overflow: hidden;
+  background: var(--fc-bg);
+}
+
+.viz-item {
+  position: relative;
+  flex-shrink: 0;
+  height: 160px;
+  cursor: pointer;
+}
+
+.viz-item + .viz-item {
+  border-left: 1px solid var(--fc-bg);
+}
+
+.viz-img {
+  height: 160px;
+  width: auto;
+  min-width: 80px;
+  display: block;
+}
+
+.viz-divider {
+  height: 1px;
+  background: var(--fc-bg);
+}
+</style>

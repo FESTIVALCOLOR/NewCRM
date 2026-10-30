@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db, Employee, ConcurrentEdit, UserSession
 from auth import get_current_user
+from constants import POSITION_STUDIO_DIRECTOR, POSITION_SENIOR_MANAGER
 from schemas import LockRequest
 
 logger = logging.getLogger(__name__)
@@ -156,7 +157,7 @@ async def release_user_locks(
     """Снять все блокировки пользователя"""
     try:
         # Только сам пользователь или админ может снять блокировки
-        if employee_id != current_user.id and current_user.position not in ['Руководитель студии', 'Старший менеджер проектов']:
+        if employee_id != current_user.id and current_user.position not in [POSITION_STUDIO_DIRECTOR, POSITION_SENIOR_MANAGER]:
             raise HTTPException(status_code=403, detail="Нет прав")
 
         locks = db.query(ConcurrentEdit).filter(
@@ -195,7 +196,7 @@ async def release_lock(
 
         if lock:
             # Только владелец или админ может снять блокировку
-            if lock.employee_id == current_user.id or current_user.position in ['Руководитель студии', 'Старший менеджер проектов']:
+            if lock.employee_id == current_user.id or current_user.position in [POSITION_STUDIO_DIRECTOR, POSITION_SENIOR_MANAGER]:
                 db.delete(lock)
                 db.commit()
                 return {'status': 'released'}

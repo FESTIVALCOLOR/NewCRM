@@ -1,0 +1,663 @@
+// Interior Studio CRM — мобильные стили
+// ТОЧНОЕ соответствие десктопной версии
+
+// Safe areas (iPhone notch / Dynamic Island)
+body {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  margin: 0;
+  font-family: 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+}
+
+// ===== ЦВЕТА — СВЕТЛАЯ ТЕМА (дефолт) =====
+:root {
+  --fc-white: #FFFFFF;
+  --fc-bg: #FFFFFF;
+  --fc-bg-info: #F8F9FA;
+  --fc-bg-alt: #F5F5F5;
+  --fc-bg-hover: #FAFAFA;
+  --fc-accent: #ffd93c;
+  --fc-accent-hover: #f0c929;
+  --fc-accent-border: #e6c235;
+  --fc-border: #d9d9d9;
+  --fc-border-light: #E0E0E0;
+  --fc-border-card: #CCCCCC;
+  --fc-text: #333333;
+  --fc-text-secondary: #666666;
+  --fc-text-medium: #555555;
+  --fc-text-light: #888888;
+  --fc-text-muted: #999999;
+  --fc-text-disabled: #BBBBBB;
+  --fc-green: #27AE60;
+  --fc-red: #E74C3C;
+  --fc-orange: #F39C12;
+  --fc-blue: #3498DB;
+  --fc-purple: #8E44AD;
+  --fc-teal: #1ABC9C;
+  --fc-tab-inactive: #E8E8E8;
+  --fc-tab-hover: #F0F0F0;
+  --fc-highlight-yellow: #FFFDE7;
+  --fc-highlight-green: #F1F8E9;
+  --fc-shadow-xs: rgba(0, 0, 0, 0.06);
+  --fc-shadow-sm: rgba(0, 0, 0, 0.08);
+  --fc-shadow-md: rgba(0, 0, 0, 0.13);
+  --fc-shadow-lg: rgba(0, 0, 0, 0.18);
+  --fc-link: #1677FF;
+  --fc-state-success-bg: #E8F5E9;
+  --fc-state-warning-bg: #FFF8E1;
+  --fc-chat-reply-bg: #F3F6FF;
+  --fc-chat-reply-border: #D0D9F0;
+  --fc-selected-bg: #E3F2FD;
+}
+
+// ===== ЦВЕТА — ТЁМНАЯ ТЕМА =====
+// CSS media fallback (до загрузки Quasar JS)
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fc-white: #1E1E1E;
+    --fc-bg: #1E1E1E;
+    --fc-bg-info: #252525;
+    --fc-bg-alt: #2A2A2A;
+    --fc-bg-hover: #303030;
+    --fc-accent: #ffd93c;
+    --fc-accent-hover: #f0c929;
+    --fc-accent-border: #d4b520;
+    --fc-border: #3D3D3D;
+    --fc-border-light: #383838;
+    --fc-border-card: #444444;
+    --fc-text: #E8E8E8;
+    --fc-text-secondary: #AAAAAA;
+    --fc-text-medium: #C0C0C0;
+    --fc-text-light: #909090;
+    --fc-text-muted: #787878;
+    --fc-text-disabled: #606060;
+    --fc-green: #2ECC71;
+    --fc-red: #E74C3C;
+    --fc-orange: #F39C12;
+    --fc-blue: #5DADE2;
+    --fc-purple: #A569BD;
+    --fc-teal: #1ABC9C;
+    --fc-tab-inactive: #333333;
+    --fc-tab-hover: #2E2E2E;
+    --fc-highlight-yellow: rgba(255, 217, 60, 0.12);
+    --fc-highlight-green: rgba(39, 174, 96, 0.12);
+    --fc-shadow-xs: rgba(0, 0, 0, 0.3);
+    --fc-shadow-sm: rgba(0, 0, 0, 0.4);
+    --fc-shadow-md: rgba(0, 0, 0, 0.5);
+    --fc-shadow-lg: rgba(0, 0, 0, 0.6);
+    --fc-link: #5B9BD5;
+    --fc-state-success-bg: rgba(46, 204, 113, 0.12);
+    --fc-state-warning-bg: rgba(243, 156, 18, 0.12);
+    --fc-chat-reply-bg: rgba(21, 101, 192, 0.1);
+    --fc-chat-reply-border: rgba(21, 101, 192, 0.25);
+    --fc-selected-bg: rgba(21, 101, 192, 0.12);
+  }
+}
+
+// Ручное переключение на светлую тему при тёмной ОС:
+// media-query устанавливает тёмные vars на :root, но body:not(.body--dark)
+// их переопределяет — элементы наследуют от body (ближе в дереве чем :root)
+@media (prefers-color-scheme: dark) {
+  body:not(.body--dark) {
+    --fc-white: #FFFFFF;
+    --fc-bg: #FFFFFF;
+    --fc-bg-info: #F8F9FA;
+    --fc-bg-alt: #F5F5F5;
+    --fc-bg-hover: #FAFAFA;
+    --fc-accent: #ffd93c;
+    --fc-accent-hover: #f0c929;
+    --fc-accent-border: #e6c235;
+    --fc-border: #d9d9d9;
+    --fc-border-light: #E0E0E0;
+    --fc-border-card: #CCCCCC;
+    --fc-text: #333333;
+    --fc-text-secondary: #666666;
+    --fc-text-medium: #555555;
+    --fc-text-light: #888888;
+    --fc-text-muted: #999999;
+    --fc-text-disabled: #BBBBBB;
+    --fc-green: #27AE60;
+    --fc-red: #E74C3C;
+    --fc-orange: #F39C12;
+    --fc-blue: #3498DB;
+    --fc-purple: #8E44AD;
+    --fc-teal: #1ABC9C;
+    --fc-tab-inactive: #E8E8E8;
+    --fc-tab-hover: #F0F0F0;
+    --fc-highlight-yellow: #FFFDE7;
+    --fc-highlight-green: #F1F8E9;
+    --fc-shadow-xs: rgba(0, 0, 0, 0.06);
+    --fc-shadow-sm: rgba(0, 0, 0, 0.08);
+    --fc-shadow-md: rgba(0, 0, 0, 0.13);
+    --fc-shadow-lg: rgba(0, 0, 0, 0.18);
+    --fc-link: #1677FF;
+    --fc-state-success-bg: #E8F5E9;
+    --fc-state-warning-bg: #FFF8E1;
+    --fc-chat-reply-bg: #F3F6FF;
+    --fc-chat-reply-border: #D0D9F0;
+    --fc-selected-bg: #E3F2FD;
+    background: #FFFFFF;
+    color: #333333;
+  }
+}
+
+// body--dark — управляется Quasar Dark plugin (точный контроль через JS)
+.body--dark {
+  --fc-white: #1E1E1E;
+  --fc-bg: #1E1E1E;
+  --fc-bg-info: #252525;
+  --fc-bg-alt: #2A2A2A;
+  --fc-bg-hover: #303030;
+  --fc-accent: #ffd93c;
+  --fc-accent-hover: #f0c929;
+  --fc-accent-border: #d4b520;
+  --fc-border: #3D3D3D;
+  --fc-border-light: #383838;
+  --fc-border-card: #444444;
+  --fc-text: #E8E8E8;
+  --fc-text-secondary: #AAAAAA;
+  --fc-text-medium: #C0C0C0;
+  --fc-text-light: #909090;
+  --fc-text-muted: #787878;
+  --fc-text-disabled: #606060;
+  --fc-green: #2ECC71;
+  --fc-red: #E74C3C;
+  --fc-orange: #F39C12;
+  --fc-blue: #5DADE2;
+  --fc-purple: #A569BD;
+  --fc-teal: #1ABC9C;
+  --fc-tab-inactive: #333333;
+  --fc-tab-hover: #2E2E2E;
+  --fc-highlight-yellow: rgba(255, 217, 60, 0.12);
+  --fc-highlight-green: rgba(39, 174, 96, 0.12);
+  --fc-shadow-xs: rgba(0, 0, 0, 0.3);
+  --fc-shadow-sm: rgba(0, 0, 0, 0.4);
+  --fc-shadow-md: rgba(0, 0, 0, 0.5);
+  --fc-shadow-lg: rgba(0, 0, 0, 0.6);
+  --fc-link: #5B9BD5;
+  --fc-state-success-bg: rgba(46, 204, 113, 0.12);
+  --fc-state-warning-bg: rgba(243, 156, 18, 0.12);
+  --fc-chat-reply-bg: rgba(21, 101, 192, 0.1);
+  --fc-chat-reply-border: rgba(21, 101, 192, 0.25);
+  --fc-selected-bg: rgba(21, 101, 192, 0.12);
+}
+
+// ===== HEADER (светлый / тёмный) =====
+.q-header .q-toolbar {
+  background: var(--fc-bg) !important;
+  color: var(--fc-text) !important;
+  border-bottom: 1px solid var(--fc-border-light);
+  min-height: 48px;
+}
+
+// ===== PAGES =====
+.q-page {
+  background-color: var(--fc-bg);
+}
+
+// Тёмный фон для body и html (Quasar q-layout)
+.body--dark {
+  background: var(--fc-bg);
+
+  .q-page-container {
+    background: var(--fc-bg);
+  }
+}
+
+// ===== CARDS =====
+.is-card {
+  border-radius: 8px;
+  border: 1px solid var(--fc-border-light);
+  box-shadow: none;
+  background: var(--fc-bg);
+}
+
+// CRM Kanban карточка
+.crm-card {
+  border: 2px solid var(--fc-border-card);
+  border-radius: 8px;
+  background: var(--fc-bg);
+  padding: 12px;
+
+  &:active {
+    border-color: var(--fc-text-light);
+    background: var(--fc-bg-alt);
+  }
+}
+
+// ===== TABS =====
+.q-tab {
+  text-transform: none !important;
+  font-weight: bold;
+  font-size: 12px;
+  letter-spacing: 0;
+  color: var(--fc-text-secondary);
+}
+
+.q-tab--active {
+  color: var(--fc-text) !important;
+  background: var(--fc-bg) !important;
+}
+
+.q-tabs__content .q-tab__indicator {
+  background: var(--fc-accent) !important;
+  height: 2px;
+}
+
+// ===== BUTTONS — СТАНДАРТ 32px =====
+.q-btn:not(.q-btn--fab):not(.q-btn--round) {
+  min-height: 32px !important;
+  max-height: 32px !important;
+  font-size: 12px;
+  border-radius: 4px;
+  padding: 0 14px;
+  line-height: 30px;
+}
+
+.q-toolbar .q-btn:not(.q-btn--round) {
+  min-height: 28px !important;
+  max-height: 28px !important;
+}
+
+// Primary (жёлтый)
+.q-btn--unelevated.bg-accent,
+.btn-primary {
+  background: var(--fc-accent) !important;
+  color: var(--fc-text) !important;
+  border: 1px solid var(--fc-accent-border);
+  font-weight: 600;
+}
+
+// Dense кнопки
+.q-btn--dense {
+  min-height: 24px !important;
+  max-height: 24px !important;
+  font-size: 11px;
+  padding: 0 8px;
+}
+
+// ===== DIALOGS =====
+.q-dialog .q-card {
+  border-radius: 10px;
+  background: var(--fc-bg);
+  color: var(--fc-text);
+}
+
+// ===== DRAWER =====
+.q-drawer {
+  border-right: 1px solid var(--fc-border-light) !important;
+  background: var(--fc-bg) !important;
+
+  .q-item {
+    border-radius: 4px;
+    margin: 1px 4px;
+    font-size: 13px;
+    min-height: 44px;
+  }
+
+  .q-item--active {
+    color: var(--fc-text);
+    font-weight: bold;
+    background: var(--fc-bg-alt);
+    border-left: 3px solid var(--fc-accent);
+  }
+}
+
+// ===== FOOTER (bottom tabs) =====
+.q-footer {
+  border-top: 1px solid var(--fc-border-light) !important;
+  background: var(--fc-bg) !important;
+
+  .q-tab--active {
+    color: var(--fc-text) !important;
+  }
+  .q-tab__indicator {
+    background: var(--fc-accent) !important;
+  }
+}
+
+// ===== Quasar bg-white и bg-grey-* — оверрайд для тёмной темы =====
+.body--dark {
+  .bg-white {
+    background: var(--fc-bg) !important;
+    color: var(--fc-text) !important;
+  }
+  .bg-grey-1, .bg-grey-2 {
+    background: var(--fc-bg-info) !important;
+  }
+  .bg-grey-3 {
+    background: var(--fc-bg-alt) !important;
+  }
+  .text-grey-6, .text-grey-7, .text-grey-8, .text-grey-9 {
+    color: var(--fc-text-secondary) !important;
+  }
+
+  // Quasar input, select, textarea
+  .q-field__control {
+    background: var(--fc-bg-alt) !important;
+    color: var(--fc-text) !important;
+  }
+  .q-field__label {
+    color: var(--fc-text-secondary) !important;
+  }
+  .q-field__native, .q-field__input {
+    color: var(--fc-text) !important;
+  }
+  .q-field--outlined .q-field__control {
+    border-color: var(--fc-border) !important;
+  }
+  .q-field--outlined.q-field--focused .q-field__control {
+    border-color: var(--fc-accent) !important;
+  }
+
+  // Quasar list items
+  .q-item {
+    color: var(--fc-text);
+  }
+  .q-item__label--caption {
+    color: var(--fc-text-secondary) !important;
+  }
+
+  // Quasar separator
+  .q-separator {
+    background: var(--fc-border-light);
+  }
+
+  // Quasar table
+  .q-table {
+    background: var(--fc-bg);
+    color: var(--fc-text);
+  }
+  .q-table thead tr th {
+    background: var(--fc-bg-alt);
+    color: var(--fc-text-secondary);
+    border-bottom-color: var(--fc-border-light);
+  }
+  .q-table tbody tr:hover td {
+    background: var(--fc-bg-hover);
+  }
+  .q-table tbody tr td {
+    border-bottom-color: var(--fc-border-light);
+  }
+
+  // Quasar chip
+  .q-chip {
+    background: var(--fc-bg-alt);
+    color: var(--fc-text);
+  }
+
+  // Quasar badge
+  .q-badge {
+    &.bg-grey-3 { background: var(--fc-bg-alt) !important; }
+    &.bg-grey-7 { background: var(--fc-text-secondary) !important; }
+  }
+
+  // Quasar scroll area
+  .q-scrollarea__thumb {
+    background: var(--fc-border-card);
+  }
+
+  // Quasar expansion item
+  .q-expansion-item__content {
+    background: var(--fc-bg-info);
+  }
+
+  // ---- Акцент (жёлтый) фон → всегда тёмный текст (жёлтый — светлый цвет) ----
+  .q-btn--unelevated.bg-accent,
+  .btn-primary {
+    color: #333333 !important;
+    .q-btn__content, .q-btn__wrapper, i { color: #333333 !important; }
+  }
+  // Inline-стили с accent-фоном — тёмный текст поверх жёлтого
+  // !important на родителе не наследуется через явный color Quasar на дочерних span,
+  // поэтому дублируем явно на детей
+  [style*="background: var(--fc-accent)"],
+  [style*="background:var(--fc-accent)"] {
+    color: #333333 !important;
+    border-color: #b8960e !important;
+    .q-btn__content, .q-btn__wrapper, i, span { color: #333333 !important; }
+    // .save-btn и .emp-save-btn внутри жёлтого тулбара — рамка тоже тёмная
+    .save-btn, .emp-save-btn {
+      color: #333333 !important;
+      border-color: #333333 !important;
+    }
+  }
+
+  // ---- Зелёные, красные, синие Quasar-утилиты → тёмные оттенки ----
+  .bg-green-1 {
+    background: rgba(39, 174, 96, 0.18) !important;
+  }
+  .text-green-9 {
+    color: #81C784 !important;
+  }
+  .bg-red-1 {
+    background: rgba(183, 28, 28, 0.18) !important;
+  }
+  .text-red-9 {
+    color: #EF9A9A !important;
+  }
+  .bg-blue-1 {
+    background: rgba(21, 101, 192, 0.18) !important;
+  }
+
+  // ---- Чат: скошенные цвета → тёмные аналоги ----
+  // EmployeeChatsPage: admin-чат (светло-синий фон → полупрозрачный синий)
+  .admin-chat-item {
+    background: rgba(21, 101, 192, 0.18) !important;
+    border-left-color: #90CAF9 !important;
+  }
+  // InlineChatRoom / CrmCard файловый диалог
+  .cf-stage-hdr {
+    color: var(--fc-link) !important;
+  }
+  .cf-var-hdr {
+    background: var(--fc-bg-alt) !important;
+  }
+  .cf-file-row--checked {
+    background: var(--fc-highlight-yellow) !important;
+  }
+  .cf-btn-send {
+    color: #333333 !important;
+  }
+  // Иконки типов файлов → полупрозрачные тёмные версии
+  .cf-ico-img  { background: rgba(46, 125, 50, 0.25) !important; color: #A5D6A7 !important; }
+  .cf-ico-pdf  { background: rgba(183, 28, 28, 0.25) !important; color: #EF9A9A !important; }
+  .cf-ico-xls  { background: rgba(27, 94, 32, 0.25) !important; color: #A5D6A7 !important; }
+  .cf-ico-doc  { color: #90CAF9 !important; }
+  .cf-ico-zip  { background: rgba(74, 20, 140, 0.25) !important; color: #CE93D8 !important; }
+  .cf-ico-dir  { background: rgba(245, 127, 23, 0.25) !important; color: #FFB74D !important; }
+  .cf-ico-file { color: var(--fc-text-secondary) !important; }
+
+  // ---- Навигация по столбцам — активный столбец ----
+  // Фон = var(--fc-text) = #E8E8E8 (светло-серый) → нужен тёмный текст, не белый
+  .column-nav button.active {
+    color: #333333 !important;
+  }
+  .column-nav button.active .count {
+    color: #333333 !important;
+  }
+
+  // ---- Outline-кнопки с тёмным primary (#333333) или grey-7: цвет → светлый ----
+  // primary = #333333 (по quasar.variables.scss) → на тёмном фоне невидим
+  .q-btn--outline.text-primary,
+  .q-btn--outline.text-dark,
+  .q-btn--outline.text-grey-7,
+  .q-btn--outline.text-grey-8,
+  .q-btn--outline.text-grey-9 {
+    color: var(--fc-text) !important;
+  }
+
+  // ---- Заголовки нормодней: жёлтый фон → текст всегда тёмный ----
+  .nd-group-header {
+    color: #333333 !important;
+  }
+
+  // ---- Нижнее меню: активная иконка — жёлтая ----
+  .bottom-tab-active { color: var(--fc-accent) !important; }
+
+  // ---- Логотип входа: обводка чтобы белый круг читался на тёмном фоне ----
+  .login-logo { box-shadow: 0 0 0 2px var(--fc-border); }
+
+  // ---- Аватарки команды (CRM + надзор): Quasar palette → полупрозрачные тёмные ----
+  // Quasar bg-* на q-avatar — фиксированные светлые цвета, нечитаемы на тёмном фоне
+  .q-avatar {
+    &.bg-amber-3  { background: rgba(255, 180, 0, 0.22) !important;    color: #FFECB3 !important; }
+    &.bg-green-3  { background: rgba(39, 174, 96, 0.22) !important;     color: #C8E6C9 !important; }
+    &.bg-grey-3   { background: rgba(150, 150, 150, 0.22) !important;   color: #E0E0E0 !important; }
+    &.bg-red-1    { background: rgba(231, 76, 60, 0.22) !important;     color: #FFCDD2 !important; }
+    &.bg-orange-2 { background: rgba(243, 156, 18, 0.22) !important;    color: #FFE0B2 !important; }
+    &.bg-blue-2   { background: rgba(52, 152, 219, 0.22) !important;    color: #BBDEFB !important; }
+    &.bg-purple-2 { background: rgba(155, 89, 182, 0.22) !important;    color: #E1BEE7 !important; }
+  }
+}
+
+// ===== BADGE агента =====
+.agent-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  color: white;
+}
+
+// ===== LOGIN PAGE =====
+.login-page {
+  min-height: 100vh;
+  background: var(--fc-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.login-card {
+  border-radius: 10px;
+  border: 1px solid var(--fc-border-light);
+  max-width: 400px;
+  width: 100%;
+  padding: 32px 24px;
+  background: var(--fc-bg);
+  box-shadow: 0 2px 12px var(--fc-shadow-sm);
+}
+
+// ===== KPI карточка =====
+.kpi-card {
+  border-radius: 8px;
+  background: var(--fc-bg);
+  padding: 12px;
+  text-align: center;
+}
+
+// ===== ФОН ЧАТА (паттерн только в светлой теме) =====
+.chat-messages-area {
+  background-image: url('/backgrounds/bg-employee.png');
+  background-repeat: repeat;
+  background-size: 400px auto;
+}
+.body--dark .chat-messages-area {
+  background-image: none;
+}
+
+// ===== PULL TO REFRESH =====
+.q-pull-to-refresh .q-pull-to-refresh__puller {
+  color: var(--fc-accent);
+}
+
+// ===== FORM INPUTS =====
+.q-field--outlined .q-field__control {
+  border-radius: 4px;
+}
+
+input[type='number'] {
+  -moz-appearance: textfield;
+
+  &::-webkit-outer-spin-button,
+  &::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+}
+
+.q-field--dense .q-field__append {
+  align-self: center;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+input[type="date"].q-field__native {
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  align-self: center;
+  height: 100%;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  margin-left: 2px;
+  cursor: pointer;
+}
+
+.body--dark input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+}
+
+// ===== TYPOGRAPHY =====
+.text-fc-primary { color: var(--fc-text); }
+.text-fc-secondary { color: var(--fc-text-secondary); }
+.text-fc-light { color: var(--fc-text-light); }
+
+// ===== GLOBAL =====
+* { -webkit-tap-highlight-color: transparent; }
+html { scroll-behavior: smooth; -webkit-overflow-scrolling: touch; }
+
+// Logo
+.fc-logo {
+  height: 24px;
+  width: auto;
+}
+
+// ===== PRINT / PDF EXPORT =====
+@media print {
+  .q-header, .q-footer, .q-drawer, .q-page-sticky,
+  .q-fab, .q-btn[fab], .q-pull-to-refresh__puller,
+  .toggle-pills, .toggle-pills-wide, .column-nav { display: none !important; }
+
+  .q-page { padding: 8px !important; }
+  body { padding: 0 !important; }
+
+  .q-card, .is-card {
+    box-shadow: none !important;
+    border: 1px solid #ddd !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  canvas { max-width: 100% !important; height: auto !important; }
+  * { color: #333 !important; }
+  .q-badge { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  @page { size: A4 portrait; margin: 10mm; }
+}
+
+// ===== АВАТАР С ЗАГРУЗКОЙ ФОТО =====
+.avatar-upload-wrap {
+  display: inline-block;
+  position: relative;
+  cursor: pointer;
+
+  .avatar-cam-overlay {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  &:hover .avatar-cam-overlay {
+    opacity: 1;
+  }
+}

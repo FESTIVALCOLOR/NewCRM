@@ -27,6 +27,8 @@ cache/
 # Build
 build/
 dist/
+# PWA dist включён для деплоя (на сервере нет Node.js)
+!mobile/dist/
 *.egg-info/
 
 # IDE
@@ -63,6 +65,7 @@ telegram_session.session
 # Тестовые скриншоты (генерируются автоматически)
 tests/visual/auto_captures/
 tests/visual/test_results/
+tests/visual/snapshots/
 
 # Тестовые логи
 tests/logs/

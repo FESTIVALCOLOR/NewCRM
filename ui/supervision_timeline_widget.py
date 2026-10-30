@@ -60,7 +60,9 @@ class SupervisionTimelineWidget(QWidget):
         self.employee = employee
         self.entries = []
         self.totals = {}
+        self.stage_files = {}
         self._loading = False
+        self._saving = False
 
         self.card_id = card_data.get('id')
 
@@ -296,32 +298,38 @@ class SupervisionTimelineWidget(QWidget):
         ''')
 
         def save_and_close():
-            text = line_edit.text().strip()
-            value = None
-            if is_number:
-                try:
-                    value = float(text) if text else 0
-                except ValueError:
-                    value = 0
-            else:
-                value = text
+            if self._saving:
+                return
+            self._saving = True
+            try:
+                text = line_edit.text().strip()
+                value = None
+                if is_number:
+                    try:
+                        value = float(text) if text else 0
+                    except ValueError:
+                        value = 0
+                else:
+                    value = text
 
-            if row < len(self.entries):
-                self.entries[row][field_name] = value
+                if row < len(self.entries):
+                    self.entries[row][field_name] = value
 
-            updates = {field_name: value}
+                updates = {field_name: value}
 
-            # Автоподсчёт экономии при изменении бюджета
-            if field_name in ('budget_planned', 'budget_actual'):
-                bp = self.entries[row].get('budget_planned', 0) or 0
-                ba = self.entries[row].get('budget_actual', 0) or 0
-                savings = bp - ba
-                self.entries[row]['budget_savings'] = savings
-                updates['budget_savings'] = savings
+                # Автоподсчёт экономии при изменении бюджета
+                if field_name in ('budget_planned', 'budget_actual'):
+                    bp = self.entries[row].get('budget_planned', 0) or 0
+                    ba = self.entries[row].get('budget_actual', 0) or 0
+                    savings = bp - ba
+                    self.entries[row]['budget_savings'] = savings
+                    updates['budget_savings'] = savings
 
-            self._save_entry(stage_code, updates)
-            self._populate_table()
-            self._update_summary()
+                self._save_entry(stage_code, updates)
+                self._populate_table()
+                self._update_summary()
+            finally:
+                self._saving = False
 
         line_edit.editingFinished.connect(save_and_close)
 
@@ -388,8 +396,20 @@ class SupervisionTimelineWidget(QWidget):
         return mapping.get(field_name, -1)
 
     def _build_ui(self):
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 15, 20, 20)
+        from PyQt5.QtWidgets import QScrollArea, QFrame
+
+        outer_layout = QVBoxLayout(self)
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+        outer_layout.setSpacing(0)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
+        scroll_content = QWidget()
+        layout = QVBoxLayout(scroll_content)
+        layout.setContentsMargins(0, 15, 0, 20)
         layout.setSpacing(6)
 
         # === ШАПКА ===
@@ -517,6 +537,9 @@ class SupervisionTimelineWidget(QWidget):
         # === БЛОК ФАЙЛОВ ===
         self._build_files_section(layout)
 
+        scroll.setWidget(scroll_content)
+        outer_layout.addWidget(scroll)
+
     # Стадии надзора для локальной инициализации
     SUPERVISION_STAGES = [
         ('STAGE_1_CERAMIC', 'Стадия 1: Закупка керамогранита'),
@@ -563,6 +586,26 @@ class SupervisionTimelineWidget(QWidget):
 
             self.entries = entries or []
             self.totals = totals or {}
+
+            # Загрузить файлы по стадиям закупок
+            self.stage_files = {}
+            try:
+                contract_id = self.card_data.get('contract_id')
+                if contract_id:
+                    files = self.data.get_project_files(contract_id, stage='supervision')
+                    if not files:
+                        all_files = self.data.get_project_files(contract_id)
+                        files = [f for f in (all_files or [])
+                                 if f.get('file_type') == 'Файл надзора' or f.get('stage') == 'supervision']
+                    if files:
+                        for f in files:
+                            code = f.get('stage_code') or f.get('stage') or 'unknown'
+                            if code not in self.stage_files:
+                                self.stage_files[code] = []
+                            self.stage_files[code].append(f)
+            except Exception:
+                pass
+
             self._recalculate_all_days()
             self._populate_table()
             self._update_summary()
@@ -620,9 +663,45 @@ class SupervisionTimelineWidget(QWidget):
                 status = entry.get('status', 'Не начато')
                 bg = STATUS_COLORS.get(status, '#FFFFFF')
 
-                # Кол 0: Стадия (только чтение)
-                stage_lbl = self._make_cell_label(entry.get('stage_name', ''), bg, 'left')
-                self.table.setCellWidget(row, 0, stage_lbl)
+                # Кол 0: Стадия (только чтение) + кнопка папки ЯД если есть файлы
+                stage_name = entry.get('stage_name', '')
+                files_count = len(self.stage_files.get(stage_code, []))
+                if files_count > 0:
+                    stage_container = QWidget()
+                    stage_container.setStyleSheet('background-color: transparent;')
+                    stage_layout = QHBoxLayout(stage_container)
+                    stage_layout.setContentsMargins(2, 0, 2, 0)
+                    stage_layout.setSpacing(4)
+                    stage_layout.setAlignment(Qt.AlignVCenter)
+
+                    stage_lbl = QLabel(stage_name)
+                    stage_lbl.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+                    stage_lbl.setStyleSheet(
+                        f'background-color: {bg}; color: #333333; padding: 2px 4px; '
+                        f'font-size: 12px; border-radius: 2px;')
+                    stage_layout.addWidget(stage_lbl, 1)
+
+                    folder_btn = IconLoader.create_action_button(
+                        'folder', tooltip=f'Файлы стадии ({files_count})',
+                        bg_color='transparent', hover_color='#FFF8E1',
+                        icon_size=14, button_size=22, icon_color='#F5A623'
+                    )
+                    folder_btn.clicked.connect(
+                        lambda checked, sc=stage_code: self._open_stage_folder(sc))
+                    stage_layout.addWidget(folder_btn, 0)
+
+                    files_badge = QLabel(str(files_count))
+                    files_badge.setFixedSize(18, 18)
+                    files_badge.setAlignment(Qt.AlignCenter)
+                    files_badge.setStyleSheet(
+                        'background-color: #F5A623; color: white; border-radius: 9px; '
+                        'font-size: 9px; font-weight: bold;')
+                    stage_layout.addWidget(files_badge, 0)
+
+                    self.table.setCellWidget(row, 0, stage_container)
+                else:
+                    stage_lbl = self._make_cell_label(stage_name, bg, 'left')
+                    self.table.setCellWidget(row, 0, stage_lbl)
 
                 # Кол 1: Исполнитель (QComboBox с привязанными к карточке)
                 executor_combo = QComboBox()
@@ -636,6 +715,7 @@ class SupervisionTimelineWidget(QWidget):
                 idx = executor_combo.findText(current_executor)
                 if idx >= 0:
                     executor_combo.setCurrentIndex(idx)
+                executor_combo.setFocusPolicy(Qt.StrongFocus)
                 executor_combo.setStyleSheet(
                     "QComboBox { border: 1px solid #E0E0E0; padding: 2px;"
                     " font-size: 11px; background: white; }")
@@ -675,8 +755,10 @@ class SupervisionTimelineWidget(QWidget):
                 self.table.setCellWidget(row, 3, fact_cell)
 
                 # Кол 4: Дней (авто-расчёт, только чтение)
-                days_val = entry.get('actual_days', '') or ''
-                days_lbl = self._make_cell_label(str(days_val) if days_val else '', bg)
+                days_val = entry.get('actual_days', 0)
+                has_fact = bool(entry.get('actual_date', ''))
+                days_text = str(days_val) if has_fact else ''
+                days_lbl = self._make_cell_label(days_text, bg)
                 self.table.setCellWidget(row, 4, days_lbl)
 
                 # Кол 5: Расхождение (авто-расчёт, цвет)
@@ -741,6 +823,7 @@ class SupervisionTimelineWidget(QWidget):
                 status_combo.addItems(STATUS_OPTIONS)
                 idx = STATUS_OPTIONS.index(status) if status in STATUS_OPTIONS else 0
                 status_combo.setCurrentIndex(idx)
+                status_combo.setFocusPolicy(Qt.StrongFocus)
                 status_combo.setStyleSheet(
                     "QComboBox { border: 1px solid #E0E0E0; padding: 2px;"
                     " font-size: 11px; background: white; }")
@@ -791,7 +874,8 @@ class SupervisionTimelineWidget(QWidget):
 
         # Кол 4: Итого дней
         total_days = sum(e.get('actual_days', 0) or 0 for e in self.entries)
-        days_text = str(total_days) if total_days else ''
+        has_any_fact = any(e.get('actual_date', '') for e in self.entries)
+        days_text = str(total_days) if has_any_fact else ''
         days_lbl = self._make_cell_label(days_text, totals_bg, 'center', bold=True)
         self.table.setCellWidget(row, 4, days_lbl)
 
@@ -882,9 +966,21 @@ class SupervisionTimelineWidget(QWidget):
             fact_date = entry.get('actual_date', '')
             if fact_date and prev_date:
                 days = networkdays(prev_date, fact_date)
-                entry['actual_days'] = days
+                entry['actual_days'] = max(days, 0)
             else:
                 entry['actual_days'] = 0
+
+            # Расхождение план vs факт (для использования в итогах)
+            plan_date = entry.get('plan_date', '')
+            if plan_date and fact_date:
+                try:
+                    p = datetime.strptime(plan_date, '%Y-%m-%d').date()
+                    a = datetime.strptime(fact_date, '%Y-%m-%d').date()
+                    entry['_deviation'] = (a - p).days
+                except (ValueError, TypeError):
+                    entry['_deviation'] = None
+            else:
+                entry['_deviation'] = None
 
             # Следующая стадия считает от факт. даты текущей
             if fact_date:
@@ -909,6 +1005,34 @@ class SupervisionTimelineWidget(QWidget):
             except Exception as e:
                 print(f"[SupervisionTimelineWidget] Ошибка сохранения: {e}")
 
+
+    def _open_stage_folder(self, stage_code):
+        """Открыть папку стадии на Яндекс.Диске"""
+        try:
+            files = self.stage_files.get(stage_code, [])
+            if not files:
+                return
+            # Пытаемся получить yandex_path первого файла и вычислить папку
+            first_file = files[0]
+            yandex_path = first_file.get('yandex_path', '')
+            if yandex_path:
+                # Берём папку из пути файла (убираем имя файла)
+                folder_path = '/'.join(yandex_path.replace('\\', '/').split('/')[:-1])
+                if folder_path:
+                    from urllib.parse import quote
+                    clean_path = folder_path
+                    if clean_path.startswith('disk:'):
+                        clean_path = clean_path[5:]
+                    encoded = quote(clean_path, safe='/')
+                    url = f"https://disk.yandex.ru/client/disk{encoded}"
+                    QDesktopServices.openUrl(QUrl(url))
+                    return
+            # Fallback: если нет yandex_path — открываем public_link первого файла
+            public_link = first_file.get('public_link', '')
+            if public_link:
+                QDesktopServices.openUrl(QUrl(public_link))
+        except Exception as e:
+            logger.error("Ошибка открытия папки стадии на ЯД: %s", e)
 
     def _update_summary(self):
         """Обновление сводки"""

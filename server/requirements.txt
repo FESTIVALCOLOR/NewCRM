@@ -16,9 +16,15 @@ openpyxl==3.1.5
 reportlab==4.2.5
 # Telegram мессенджер-чаты
 aiogram==3.25.0
+aiohttp-socks==0.9.1
 pyrogram==2.0.106
 tgcrypto==1.2.5
 # Email для invite-ссылок
 aiosmtplib==3.0.2
 # Склонение имён (дательный падеж для скриптов)
 pymorphy3==2.0.2
+# Web Push уведомления
+pywebpush==2.0.1
+py-vapid==1.9.2
+# Рендеринг PDF в превью (чистый Python, без системных зависимостей)
+pypdfium2==4.30.0

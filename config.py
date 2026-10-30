@@ -106,13 +106,13 @@ COLORS = {
 }
 
 # ========== ВЕРСИОНИРОВАНИЕ И ОБНОВЛЕНИЯ ==========
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.0.2"
 APP_NAME = "Interior Studio CRM"
 
 # Настройки обновлений через Яндекс Диск
 UPDATE_CHECK_ENABLED = True  # Включить/выключить проверку обновлений
 UPDATE_CHECK_INTERVAL = 3600  # Проверка каждый час (в секундах)
-UPDATE_YANDEX_PUBLIC_KEY = "SmxiWfUUEt8oEA"  # Публичный ключ папки с обновлениями (будет настроен позже)
+UPDATE_YANDEX_PUBLIC_KEY = "https://yadi.sk/d/iaqxqcXljJGKqA"  # Публичная ссылка на папку с обновлениями
 UPDATE_CHECK_URL = "https://cloud-api.yandex.net/v1/disk/public/resources"
 # ===================================================
 

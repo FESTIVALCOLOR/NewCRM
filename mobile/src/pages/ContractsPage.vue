@@ -1,0 +1,478 @@
+<template>
+  <q-page padding>
+    <q-pull-to-refresh @refresh="onRefresh">
+      <!-- Поиск -->
+      <q-input
+        v-model="search"
+        placeholder="Поиск договоров..."
+        outlined
+        dense
+        class="q-mb-md crm-search-input"
+      >
+        <template #prepend>
+          <q-icon name="search" />
+        </template>
+        <template v-if="search" #append>
+          <q-icon name="close" class="cursor-pointer" @click="search = ''" />
+        </template>
+      </q-input>
+
+      <!-- Фильтры -->
+      <div class="row q-col-gutter-xs q-mb-xs">
+        <div class="col-4">
+          <q-select
+            v-model="statusFilter"
+            :options="statusOpts"
+            label="Статус"
+            outlined
+            dense
+            emit-value
+            map-options
+            class="crm-filter-select"
+          />
+        </div>
+        <div class="col-4">
+          <q-select
+            v-model="typeFilter"
+            :options="typeOpts"
+            label="Тип"
+            outlined
+            dense
+            emit-value
+            map-options
+            class="crm-filter-select"
+          />
+        </div>
+        <div class="col-4">
+          <q-select
+            v-model="agentFilter"
+            :options="agentOpts"
+            label="Агент"
+            outlined
+            dense
+            emit-value
+            map-options
+            class="crm-filter-select"
+          />
+        </div>
+      </div>
+      <div class="row q-col-gutter-xs q-mb-sm">
+        <div class="col-12">
+          <q-select
+            v-model="sortBy"
+            :options="sortOptions"
+            label="Сортировка"
+            outlined
+            dense
+            emit-value
+            map-options
+            class="crm-filter-select"
+          />
+        </div>
+      </div>
+
+      <div v-if="!loading" class="text-caption" style="color: var(--fc-text-light)">
+        Договоров: {{ filtered.length }}
+      </div>
+
+      <!-- Загрузка -->
+      <div v-if="loading">
+        <q-card v-for="n in 5" :key="n" class="is-card q-mb-sm">
+          <q-card-section>
+            <q-skeleton type="text" width="50%" class="q-mb-xs" />
+            <q-skeleton type="text" width="70%" />
+          </q-card-section>
+        </q-card>
+      </div>
+
+      <!-- Портрет: компактные карточки (2 строки, без скролла) -->
+      <template v-else-if="!($q.screen.width > $q.screen.height)">
+        <div
+          v-for="contract in filtered"
+          :key="contract.id"
+          class="contract-card"
+          :style="cardBgStyle(contract)"
+          @click="$router.push(`/contracts/${contract.id}`)"
+        >
+          <div class="contract-row1">
+            <span class="contract-num">{{ contract.contract_number }}</span>
+            <q-badge :color="statusColor(contract.status)" :label="shortStatus(contract.status)" style="font-size: 10px; padding: 2px 6px; width: 90px; justify-content: center" />
+          </div>
+          <div class="contract-row2">
+            <span class="contract-addr">{{ contract.address || 'Без адреса' }}</span>
+            <span v-if="contract.agent_type" class="contract-agent" :style="{ background: agentColor(contract.agent_type) }">{{ contract.agent_type }}</span>
+          </div>
+          <div v-if="contract.project_type" class="contract-row3">
+            <span class="contract-type-info">{{ shortType(contract.project_type) }}<template v-if="contract.project_subtype"> | {{ contract.project_subtype }}</template></span>
+            <span v-if="contractDisplaySum(contract) > 0 || isFullyPaid(contract)" class="contract-amount-info">
+              <span v-if="contractDisplaySum(contract) > 0" class="contract-amount">{{ formatAmount(contractDisplaySum(contract)) }} ₽</span>
+              <q-icon
+                v-if="isFullyPaid(contract)"
+                name="check_circle"
+                color="positive"
+                size="13px"
+              />
+            </span>
+          </div>
+        </div>
+        <div v-if="filtered.length === 0" class="text-center q-pa-xl text-grey-5">
+          <q-icon name="description" size="48px" class="q-mb-sm" />
+          <div>{{ search ? 'Ничего не найдено' : 'Нет договоров' }}</div>
+        </div>
+      </template>
+
+      <!-- Ландшафт: 1 строка на договор -->
+      <template v-else>
+        <div class="landscape-header">
+          <span class="lh-num">№</span>
+          <span class="lh-addr">Адрес</span>
+          <span class="lh-amount">Сумма, ₽</span>
+          <span class="lh-paid" />
+          <span class="lh-type">Тип</span>
+          <span class="lh-subtype">Подтип</span>
+          <span class="lh-status">Статус</span>
+          <span class="lh-agent">Агент</span>
+        </div>
+        <div
+          v-for="contract in filtered"
+          :key="contract.id"
+          class="contract-row-ls"
+          :style="cardBgStyle(contract)"
+          @click="$router.push(`/contracts/${contract.id}`)"
+        >
+          <span class="lh-num ls-num">{{ contract.contract_number }}</span>
+          <span class="lh-addr ls-addr">{{ contract.address || '—' }}</span>
+          <span class="lh-amount ls-amount">{{ formatAmount(contractDisplaySum(contract)) }}</span>
+          <span class="lh-paid">
+            <q-icon v-if="isFullyPaid(contract)" name="check_circle" color="positive" size="15px" />
+          </span>
+          <span class="lh-type ls-meta">{{ shortType(contract.project_type) }}</span>
+          <span class="lh-subtype ls-meta">{{ contract.project_subtype || '—' }}</span>
+          <span class="lh-status">
+            <q-badge :color="statusColor(contract.status)" :label="shortStatus(contract.status)" style="font-size: 10px; padding: 2px 5px; width: 88px; justify-content: center" />
+          </span>
+          <span class="lh-agent">
+            <span v-if="contract.agent_type" class="contract-agent" :style="{ background: agentColor(contract.agent_type) }">{{ contract.agent_type }}</span>
+          </span>
+        </div>
+        <div v-if="filtered.length === 0" class="text-center q-pa-xl text-grey-5">
+          <q-icon name="description" size="48px" class="q-mb-sm" />
+          <div>{{ search ? 'Ничего не найдено' : 'Нет договоров' }}</div>
+        </div>
+      </template>
+    </q-pull-to-refresh>
+    <!-- FAB создания (если есть право) -->
+    <q-page-sticky v-if="canCreate" position="bottom-right" :offset="[18, 80]">
+      <q-btn fab icon="add" style="background: var(--fc-accent); color: var(--fc-text)" @click="showForm = true" />
+    </q-page-sticky>
+
+    <contract-form-dialog v-model="showForm" @saved="loadContracts" />
+
+    <!-- Дашборд внизу -->
+    <page-dashboard :items="dashItems" />
+  </q-page>
+</template>
+
+<script setup>
+import { ref, computed, onMounted } from 'vue'
+import { useQuasar } from 'quasar'
+import { contractsApi } from 'src/services/api'
+import { useReferencesStore } from 'src/stores/references'
+import { usePermission } from 'src/composables/usePermission'
+import ContractFormDialog from 'src/components/ContractFormDialog.vue'
+import PageDashboard from 'src/components/PageDashboard.vue'
+
+const $q = useQuasar()
+const refs = useReferencesStore()
+const { can } = usePermission()
+const canCreate = computed(() => can('contracts.create'))
+
+const dashItems = computed(() => {
+  const all = contracts.value
+  const active = all.filter(c => c.status === 'В работе').length
+  const done = all.filter(c => c.status?.includes('СДАН')).length
+  return [
+    { label: 'Всего', value: all.length },
+    { label: 'В работе', value: active, color: '#F39C12' },
+    { label: 'Сдано', value: done, color: '#27AE60' },
+  ]
+})
+const contracts = ref([])
+const loading = ref(false)
+const search = ref('')
+const showForm = ref(false)
+const statusFilter = ref(null)
+const typeFilter = ref(null)
+const agentFilter = ref(null)
+const sortBy = ref('date')
+const sortOptions = [
+  { label: 'По дате', value: 'date' },
+  { label: 'По типу агента', value: 'agent' },
+  { label: 'По типу проекта', value: 'project_type' },
+  { label: 'По городу', value: 'city' },
+  { label: 'По площади', value: 'area' },
+]
+
+const statusOpts = [
+  { label: 'Все', value: null },
+  { label: 'В работе', value: 'В работе' },
+  { label: 'Новый заказ', value: 'Новый заказ' },
+  { label: 'СДАН', value: 'СДАН' },
+  { label: 'РАСТОРГНУТ', value: 'РАСТОРГНУТ' },
+  { label: 'АВТ. НАДЗОР', value: 'АВТОРСКИЙ НАДЗОР' },
+]
+
+const typeOpts = [
+  { label: 'Все', value: null },
+  { label: 'Индивидуальный', value: 'Индивидуальный' },
+  { label: 'Шаблонный', value: 'Шаблонный' },
+]
+
+const agentOpts = computed(() => [{ label: 'Все', value: null }, ...refs.agentNames().map(n => ({ label: n, value: n }))])
+
+function agentColor(agentName) {
+  const agent = refs.agentByName(agentName)
+  return agent?.color || '#95A5A6'
+}
+
+function cardBgStyle(contract) {
+  const s = contract.status || ''
+  if (s.includes('СДАН') || s.includes('Сдан')) return { background: 'var(--fc-state-success-bg)' }
+  if (s.includes('НАДЗОР') || s.includes('надзор') || contract.project_type === 'Авторский надзор') return { background: 'var(--fc-selected-bg)' }
+  if (s.includes('РАСТОРГНУТ') || s.includes('Расторгнут')) return { background: $q.dark.isActive ? 'rgba(231, 76, 60, 0.18)' : '#FFEBEE' }
+  if (s === 'В работе') return { background: 'var(--fc-bg-alt)' }
+  if (s === 'Новый заказ' || s === 'Новый') return { background: 'var(--fc-bg)' }
+  return {}
+}
+
+const filtered = computed(() => {
+  let result = contracts.value
+  if (search.value) {
+    const q = search.value.toLowerCase()
+    result = result.filter(c =>
+      (c.contract_number || '').toLowerCase().includes(q) ||
+      (c.address || '').toLowerCase().includes(q) ||
+      (c.city || '').toLowerCase().includes(q),
+    )
+  }
+  if (statusFilter.value) result = result.filter(c => c.status === statusFilter.value)
+  if (typeFilter.value) result = result.filter(c => c.project_type === typeFilter.value)
+  if (agentFilter.value) result = result.filter(c => c.agent_type === agentFilter.value)
+  // Сортировка
+  const items = [...result]
+  if (sortBy.value === 'date') items.sort((a, b) => new Date(b.contract_date || 0) - new Date(a.contract_date || 0))
+  else if (sortBy.value === 'agent') items.sort((a, b) => (a.agent_type || '').localeCompare(b.agent_type || '', 'ru'))
+  else if (sortBy.value === 'project_type') items.sort((a, b) => (a.project_type || '').localeCompare(b.project_type || '', 'ru'))
+  else if (sortBy.value === 'city') items.sort((a, b) => (a.city || '').localeCompare(b.city || '', 'ru'))
+  else if (sortBy.value === 'area') items.sort((a, b) => (b.area || 0) - (a.area || 0))
+  return items
+})
+
+function formatAmount(amount) {
+  if (!amount) return '—'
+  return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(amount)
+}
+
+function isFullyPaid(contract) {
+  if (isSupervisionContract(contract)) {
+    return !!contract.supervision_fully_paid
+  }
+  if (contract.project_type === 'Шаблонный') {
+    return !!contract.advance_payment_paid_date
+  }
+  // Индивидуальный — все три платежа должны быть оплачены
+  return !!contract.advance_payment_paid_date
+    && !!contract.additional_payment_paid_date
+    && !!contract.third_payment_paid_date
+}
+
+function isSupervisionContract(contract) {
+  return contract.project_type === 'Авторский надзор' || contract.status === 'АВТОРСКИЙ НАДЗОР'
+}
+
+function contractDisplaySum(contract) {
+  if (contract.project_type !== 'Авторский надзор' && contract.status === 'АВТОРСКИЙ НАДЗОР') {
+    // Конвертированный: проектная сумма + оплаченный надзор
+    return (contract.total_amount || 0) + (contract.supervision_payments_sum || 0)
+  }
+  if (isSupervisionContract(contract)) {
+    return contract.supervision_payments_sum || 0
+  }
+  return contract.total_amount || 0
+}
+
+function shortType(type) {
+  if (type === 'Индивидуальный') return 'Инд.'
+  if (type === 'Шаблонный') return 'Шабл.'
+  if (type === 'Авторский надзор') return 'Надзор'
+  return type || '—'
+}
+
+function shortStatus(status) {
+  if (!status) return '—'
+  if (status.includes('НАДЗОР') || status.includes('надзор')) return 'Автор. надзор'
+  return status
+}
+
+function statusColor(status) {
+  if (!status) return 'grey'
+  if (status === 'В работе') return 'orange'
+  if (status.includes('СДАН') || status.includes('Сдан')) return 'positive'
+  if (status.includes('РАСТОРГНУТ')) return 'negative'
+  if (status.includes('НАДЗОР') || status.includes('надзор')) return 'purple'
+  return 'blue'
+}
+
+async function loadContracts() {
+  loading.value = true
+  try {
+    const { data } = await contractsApi.getList({ limit: 200 })
+    contracts.value = data
+  } catch {
+    contracts.value = []
+  } finally {
+    loading.value = false
+  }
+}
+
+function onRefresh(done) {
+  loadContracts().finally(done)
+}
+
+onMounted(() => loadContracts())
+</script>
+
+<style scoped>
+/* Ландшафт — шапка + 1-строчные строки */
+.landscape-header {
+  display: flex;
+  align-items: center;
+  padding: 4px 10px;
+  background: var(--fc-bg-alt);
+  border: 1px solid var(--fc-border-light);
+  border-radius: 8px 8px 0 0;
+  font-size: 10px;
+  font-weight: bold;
+  color: var(--fc-text-light);
+  gap: 6px;
+}
+.contract-row-ls {
+  display: flex;
+  align-items: center;
+  padding: 5px 10px;
+  border: 1px solid var(--fc-border-light);
+  border-top: none;
+  gap: 6px;
+  cursor: pointer;
+  background: var(--fc-bg);
+  min-height: 32px;
+}
+.contract-row-ls:last-of-type { border-radius: 0 0 8px 8px; }
+.contract-row-ls:hover { background: var(--fc-bg-hover); }
+/* колонки ландшафта */
+.lh-num     { width: 96px; flex-shrink: 0; font-size: 11px; white-space: nowrap; overflow: hidden; }
+.lh-addr    { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.lh-amount  { width: 80px; flex-shrink: 0; font-size: 10px; text-align: right; white-space: nowrap; }
+.lh-paid    { width: 24px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.lh-type    { width: 40px; flex-shrink: 0; font-size: 11px; }
+.lh-subtype { width: 160px; flex-shrink: 0; font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lh-status  { width: 100px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.lh-agent   { width: 90px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+/* значения в строках */
+.ls-num    { font-weight: bold; color: var(--fc-text); line-height: 1; }
+.ls-addr   { color: var(--fc-text-medium); }
+.ls-meta   { color: var(--fc-text-light); }
+.ls-amount { color: var(--fc-text-medium); font-weight: 500; }
+
+/* Портретные карточки договоров */
+.contract-card {
+  border: 1px solid var(--fc-border-light);
+  border-radius: 8px;
+  margin-bottom: 6px;
+  padding: 8px 12px;
+  cursor: pointer;
+  background: var(--fc-bg);
+}
+.contract-card:active { background: var(--fc-bg-alt); }
+.contract-row1 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.contract-num {
+  font-size: 12px;
+  font-weight: bold;
+  color: var(--fc-text);
+}
+.contract-row2 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.contract-addr {
+  font-size: 12px;
+  color: var(--fc-text-medium);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.contract-agent {
+  color: #fff;
+  font-size: 10px;
+  font-weight: bold;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  width: 84px;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.contract-row2 .contract-agent {
+  width: 90px;
+}
+.contract-row3 {
+  margin-top: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.contract-type-info {
+  font-size: 10px;
+  color: var(--fc-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.contract-amount-info {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  flex-shrink: 0;
+  width: 90px;
+  border: 1px solid var(--fc-border-light);
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+.contract-amount {
+  font-size: 10px;
+  color: var(--fc-text);
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Радиус поиска и фильтров = радиус таблицы (8px) */
+.crm-search-input :deep(.q-field__control) { border-radius: 8px; }
+.crm-filter-select :deep(.q-field__control) { border-radius: 8px !important; }
+.crm-filter-select :deep(.q-field__control-container) { min-width: 0; overflow: hidden; }
+.crm-filter-select :deep(.q-field__native) { min-width: 0; overflow: hidden; flex-wrap: nowrap; }
+.crm-filter-select :deep(.q-field__native span) { overflow: hidden !important; text-overflow: ellipsis !important; white-space: nowrap !important; display: inline-block !important; vertical-align: middle !important; max-width: 100%; }
+.crm-filter-select :deep(.q-field__label) { font-size: 11px; }
+</style>
