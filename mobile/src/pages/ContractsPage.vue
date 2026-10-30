@@ -104,14 +104,13 @@
           </div>
           <div v-if="contract.project_type" class="contract-row3">
             <span class="contract-type-info">{{ shortType(contract.project_type) }}<template v-if="contract.project_subtype"> | {{ contract.project_subtype }}</template></span>
-            <span class="contract-amount-info">
+            <span v-if="contractDisplaySum(contract) > 0 || isFullyPaid(contract)" class="contract-amount-info">
               <span v-if="contractDisplaySum(contract) > 0" class="contract-amount">{{ formatAmount(contractDisplaySum(contract)) }} ₽</span>
               <q-icon
                 v-if="isFullyPaid(contract)"
                 name="check_circle"
                 color="positive"
                 size="13px"
-                class="q-ml-xs"
               />
             </span>
           </div>
@@ -378,7 +377,7 @@ onMounted(() => loadContracts())
 .lh-type    { width: 40px; flex-shrink: 0; font-size: 11px; }
 .lh-subtype { width: 160px; flex-shrink: 0; font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lh-status  { width: 100px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
-.lh-agent   { width: 80px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.lh-agent   { width: 90px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
 /* значения в строках */
 .ls-num    { font-weight: bold; color: var(--fc-text); line-height: 1; }
 .ls-addr   { color: var(--fc-text-medium); }
@@ -428,10 +427,13 @@ onMounted(() => loadContracts())
   border-radius: 4px;
   white-space: nowrap;
   flex-shrink: 0;
-  width: 72px;
+  width: 84px;
   text-align: center;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.contract-row2 .contract-agent {
+  width: 90px;
 }
 .contract-row3 {
   margin-top: 3px;
@@ -450,14 +452,21 @@ onMounted(() => loadContracts())
 .contract-amount-info {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 3px;
   flex-shrink: 0;
+  width: 90px;
+  border: 1px solid var(--fc-border-light);
+  border-radius: 4px;
+  padding: 2px 6px;
 }
 .contract-amount {
   font-size: 10px;
-  color: var(--fc-text-medium);
-  font-weight: 500;
+  color: var(--fc-text);
+  font-weight: 700;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 /* Радиус поиска и фильтров = радиус таблицы (8px) */
 .crm-search-input :deep(.q-field__control) { border-radius: 8px; }
