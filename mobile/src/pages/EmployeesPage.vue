@@ -93,11 +93,54 @@
                 </q-item-label>
               </q-item-section>
               <q-item-section side>
-                <q-badge
-                  :color="statusColor(emp.status)"
-                  :label="emp.status"
-                  dense
-                />
+                <div class="row items-center no-wrap" style="gap: 2px">
+                  <q-badge
+                    :color="statusColor(emp.status)"
+                    :label="emp.status"
+                    dense
+                  />
+                  <q-btn
+                    v-if="canSeePaymentInfo"
+                    flat
+                    round
+                    dense
+                    icon="more_vert"
+                    size="xs"
+                    color="grey-5"
+                    @click.stop
+                  >
+                    <q-menu auto-close>
+                      <div class="q-pa-md" style="min-width: 220px">
+                        <div class="text-subtitle2 q-mb-sm" style="color: var(--fc-text)">
+                          Реквизиты для оплаты
+                        </div>
+                        <template v-if="emp.payment_type">
+                          <div class="q-mb-xs">
+                            <span class="text-caption" style="color: var(--fc-text-light)">Способ:</span><span class="text-caption q-ml-xs text-weight-medium">{{ emp.payment_type }}</span>
+                          </div>
+                          <div v-if="emp.payment_phone" class="q-mb-xs">
+                            <span class="text-caption" style="color: var(--fc-text-light)">Телефон:</span><span class="text-caption q-ml-xs">{{ emp.payment_phone }}</span>
+                          </div>
+                          <div v-if="emp.payment_account" class="q-mb-xs">
+                            <span class="text-caption" style="color: var(--fc-text-light)">Счёт:</span><span class="text-caption q-ml-xs">{{ emp.payment_account }}</span>
+                          </div>
+                          <div v-if="emp.payment_bank_name" class="q-mb-xs">
+                            <span class="text-caption" style="color: var(--fc-text-light)">Банк:</span><span class="text-caption q-ml-xs">{{ emp.payment_bank_name }}</span>
+                          </div>
+                          <div v-if="emp.payment_bik" class="q-mb-xs">
+                            <span class="text-caption" style="color: var(--fc-text-light)">БИК:</span><span class="text-caption q-ml-xs">{{ emp.payment_bik }}</span>
+                          </div>
+                          <div v-if="emp.payment_corr_account" class="q-mb-xs">
+                            <span class="text-caption" style="color: var(--fc-text-light)">Кор. счёт:</span><span class="text-caption q-ml-xs">{{ emp.payment_corr_account }}</span>
+                          </div>
+                        </template>
+                        <div v-else class="text-caption" style="color: var(--fc-text-disabled)">
+                          Способ оплаты не указан
+                        </div>
+                      </div>
+                    </q-menu>
+                  </q-btn>
+                </div>
               </q-item-section>
             </q-item>
           </q-list>
@@ -134,6 +177,31 @@
           <span class="emph-dept empv-meta">{{ emp.department || '—' }}</span>
           <span class="emph-status">
             <q-badge :color="statusColor(emp.status)" :label="emp.status" dense style="font-size:9px" />
+            <q-btn
+              v-if="canSeePaymentInfo"
+              flat
+              round
+              dense
+              icon="more_vert"
+              size="xs"
+              color="grey-5"
+              @click.stop
+            >
+              <q-menu auto-close>
+                <div class="q-pa-md" style="min-width: 220px">
+                  <div class="text-subtitle2 q-mb-sm" style="color: var(--fc-text)">Реквизиты для оплаты</div>
+                  <template v-if="emp.payment_type">
+                    <div class="q-mb-xs"><span class="text-caption" style="color: var(--fc-text-light)">Способ:</span><span class="text-caption q-ml-xs text-weight-medium">{{ emp.payment_type }}</span></div>
+                    <div v-if="emp.payment_phone" class="q-mb-xs"><span class="text-caption" style="color: var(--fc-text-light)">Телефон:</span><span class="text-caption q-ml-xs">{{ emp.payment_phone }}</span></div>
+                    <div v-if="emp.payment_account" class="q-mb-xs"><span class="text-caption" style="color: var(--fc-text-light)">Счёт:</span><span class="text-caption q-ml-xs">{{ emp.payment_account }}</span></div>
+                    <div v-if="emp.payment_bank_name" class="q-mb-xs"><span class="text-caption" style="color: var(--fc-text-light)">Банк:</span><span class="text-caption q-ml-xs">{{ emp.payment_bank_name }}</span></div>
+                    <div v-if="emp.payment_bik" class="q-mb-xs"><span class="text-caption" style="color: var(--fc-text-light)">БИК:</span><span class="text-caption q-ml-xs">{{ emp.payment_bik }}</span></div>
+                    <div v-if="emp.payment_corr_account" class="q-mb-xs"><span class="text-caption" style="color: var(--fc-text-light)">Кор. счёт:</span><span class="text-caption q-ml-xs">{{ emp.payment_corr_account }}</span></div>
+                  </template>
+                  <div v-else class="text-caption" style="color: var(--fc-text-disabled)">Способ оплаты не указан</div>
+                </div>
+              </q-menu>
+            </q-btn>
           </span>
           <span class="emph-lastlogin empv-meta">{{ emp.last_login ? formatLastLogin(emp.last_login) : '—' }}</span>
         </div>
@@ -629,10 +697,19 @@ import PageDashboard from 'src/components/PageDashboard.vue'
 import AvatarCropDialog from 'src/components/AvatarCropDialog.vue'
 import { useReferencesStore } from 'src/stores/references'
 import { usePermission } from 'src/composables/usePermission'
+import { useAuthStore } from 'src/stores/auth'
 
 const $q = useQuasar()
 const refs = useReferencesStore()
+const auth = useAuthStore()
 const { can, isSuperuser } = usePermission()
+
+const canSeePaymentInfo = computed(() => {
+  if (isSuperuser.value) return true
+  const user = auth.user
+  if (!user) return false
+  return user.position === 'Старший менеджер проектов' || user.secondary_position === 'Старший менеджер проектов'
+})
 const canCreate = computed(() => can('employees.create'))
 
 // Админ. отдел может редактировать только Руководитель студии (как десктоп employees_tab.py:866-882)
@@ -868,7 +945,7 @@ onMounted(() => loadEmployees())
 .emph-name   { flex: 1; min-width: 0; display: flex; align-items: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .emph-pos    { width: 180px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
 .emph-dept   { width: 110px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
-.emph-status { width: 60px; flex-shrink: 0; }
+.emph-status { width: 90px; flex-shrink: 0; display: flex; align-items: center; gap: 2px; }
 .emph-lastlogin { width: 120px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
 .empv-name { font-size: 12px; font-weight: 500; color: var(--fc-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .empv-meta { color: var(--fc-text-secondary); }
