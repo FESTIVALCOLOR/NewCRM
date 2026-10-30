@@ -176,7 +176,7 @@
           <span class="emph-pos empv-meta">{{ emp.position }}{{ emp.secondary_position ? ' / ' + emp.secondary_position : '' }}</span>
           <span class="emph-dept empv-meta">{{ emp.department || '—' }}</span>
           <span class="emph-status">
-            <q-badge :color="statusColor(emp.status)" :label="emp.status" dense style="font-size:9px" />
+            <q-badge :color="statusColor(emp.status)" :label="emp.status" dense style="font-size:9px; min-width: 58px; justify-content: center" />
             <q-btn
               v-if="canSeePaymentInfo"
               flat
