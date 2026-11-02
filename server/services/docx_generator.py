@@ -98,13 +98,13 @@ REQUISITE_TYPE_MAP = {
 
 
 def _amount_in_words(amount: float) -> str:
-    """Сумма прописью на русском (рубли, без копеек)."""
+    """Сумма прописью: «Двести тысяч рублей 00 коп.»"""
     try:
         rubles = int(amount)
-        text = num2words(rubles, lang="ru", to="currency", currency="RUB")
-        # Убираем « 00 копеек» — передаём всегда целую сумму
-        text = text.replace(" 00 копеек", "").replace(" 0 копеек", "")
-        return text.capitalize()
+        kopecks = round((amount - rubles) * 100)
+        # to="cardinal" — количественное числительное, не делит на 100 как to="currency"
+        words = num2words(rubles, lang="ru", to="cardinal")
+        return f"{words.capitalize()} рублей {kopecks:02d} коп."
     except Exception:
         return ""
 
@@ -233,12 +233,10 @@ def _replace_text_in_runs(runs, ctx: dict) -> None:
         replaced = replaced.replace("{{" + key + "}}", value)
     if replaced == full_text:
         return
-    # Выбираем run-носитель: предпочитаем bold, иначе первый
-    best = next((r for r in runs if r.bold), runs[0])
-    best.text = replaced
-    for r in runs:
-        if r is not best:
-            r.text = ""
+    # Весь текст помещаем в runs[0], остальные очищаем
+    runs[0].text = replaced
+    for r in runs[1:]:
+        r.text = ""
 
 
 def _get_image_bytes(db: Session, placeholder: str, yd_service: YandexDiskService) -> bytes | None:
@@ -268,7 +266,7 @@ def _replace_image_in_paragraph(para, db: Session, placeholder: str, yd_service:
     """Заменяет параграф-плейсхолдер изображением из реквизитов."""
     img_bytes = _get_image_bytes(db, placeholder, yd_service)
     if not img_bytes:
-        # Если изображение не найдено — просто очищаем плейсхолдер
+        logger.warning(f"Изображение для {placeholder} не найдено — плейсхолдер очищен")
         for r in para.runs:
             r.text = ""
         return
@@ -279,8 +277,12 @@ def _replace_image_in_paragraph(para, db: Session, placeholder: str, yd_service:
 
     # Вставляем изображение в первый run (или создаём новый)
     run = para.runs[0] if para.runs else para.add_run()
-    stream = io.BytesIO(img_bytes)
-    run.add_picture(stream, width=Inches(1.5))
+    try:
+        stream = io.BytesIO(img_bytes)
+        run.add_picture(stream, width=Inches(1.5))
+        logger.info(f"Изображение {placeholder} вставлено ({len(img_bytes)} байт)")
+    except Exception as e:
+        logger.error(f"Ошибка вставки изображения {placeholder}: {e}")
 
 
 def _process_table(table, ctx: dict, db: Session, yd_service: YandexDiskService) -> None:
