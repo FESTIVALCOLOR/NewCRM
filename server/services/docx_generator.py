@@ -112,21 +112,42 @@ def _format_date(date_str: str | None) -> str:
 def _build_context(contract: Contract, client: Client, doc_type: str) -> dict:
     """Собирает словарь замен плейсхолдеров из данных договора и клиента."""
     amount = contract.total_amount or 0.0
+    advance = contract.advance_payment or 0.0
+    additional = contract.additional_payment or 0.0
+    third = contract.third_payment or 0.0
+    period = int(contract.contract_period or 0)
+
     ctx = {
         "НОМЕР_ДОГОВОРА": contract.contract_number or "",
         "ДАТА_ДОГОВОРА": _format_date(contract.contract_date),
         "АДРЕС": contract.address or "",
         "ПЛОЩАДЬ": str(contract.area or ""),
-        "СРОК": str(contract.contract_period or ""),
+        "СРОК": str(period),
         "СУММА": f"{amount:,.2f}".replace(",", " "),
         "СУММА_ПРОПИСЬЮ": _amount_in_words(amount),
         "ТИП_ПРОЕКТА": contract.project_type or "",
         "ПОДТИП_ПРОЕКТА": contract.project_subtype or "",
         "СЕГОДНЯ": _format_date(datetime.now().strftime("%Y-%m-%d")),
-        "АВАНС": f"{contract.advance_payment or 0:,.2f}".replace(",", " "),
-        "ДОПЛАТА": f"{contract.additional_payment or 0:,.2f}".replace(",", " "),
-        "ТРЕТИЙ_ПЛАТЕЖ": f"{contract.third_payment or 0:,.2f}".replace(",", " "),
+        "АВАНС": f"{advance:,.2f}".replace(",", " "),
+        "АВАНС_ПРОПИСЬЮ": _amount_in_words(advance),
+        "ДОПЛАТА": f"{additional:,.2f}".replace(",", " "),
+        "ДОПЛАТА_ПРОПИСЬЮ": _amount_in_words(additional),
+        "ТРЕТИЙ_ПЛАТЕЖ": f"{third:,.2f}".replace(",", " "),
+        "ТРЕТИЙ_ПЛАТЕЖ_ПРОПИСЬЮ": _amount_in_words(third),
     }
+
+    # Этапы: стоимость и срок (целое число, округление)
+    _stage_pct = [
+        ("ПР", 0.20, 0.16),  # планировочные решения
+        ("КД", 0.50, 0.50),  # концепция дизайна
+        ("РЧ", 0.25, 0.24),  # комплект чертежей (рабочие чертежи)
+        ("СМ", 0.05, 0.10),  # ведомость / смета
+    ]
+    for code, cost_pct, days_pct in _stage_pct:
+        stage_cost = amount * cost_pct
+        stage_days = round(period * days_pct)
+        ctx[f"ЭТАП_{code}_СТОИМОСТЬ"] = f"{stage_cost:,.2f}".replace(",", " ")
+        ctx[f"ЭТАП_{code}_СРОК"] = str(stage_days)
     if client:
         ctx.update(
             {
