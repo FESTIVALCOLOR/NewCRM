@@ -31,34 +31,62 @@ from database import Client, CompanyRequisite, Contract, ContractTemplate, Proje
 
 logger = logging.getLogger(__name__)
 
-# Маппинг doc_type → название файла и stage для ProjectFile
+# Маппинг doc_type → метаданные документа
+# yd_subfolder — подпапка внутри папки проекта на ЯД
+# db_stage    — значение ProjectFile.stage (совпадает с ContractDetailPage.vue)
 DOC_TYPE_META = {
     "contract": {
         "label": "Договор",
-        "file_suffix": "Договор",
-        "stage": "Договор",
+        "yd_subfolder": "Документы",
+        "db_stage": "documents",
     },
     "act_pr": {
-        "label": "Акт планировочных решений",
-        "file_suffix": "Акт_ПР",
-        "stage": "Акт ПР",
+        "label": "Акт ПР",
+        "yd_subfolder": "Документы/Акты",
+        "db_stage": "act_pr",
     },
     "act_kd": {
-        "label": "Акт концепции дизайна",
-        "file_suffix": "Акт_КД",
-        "stage": "Акт КД",
+        "label": "Акт КД",
+        "yd_subfolder": "Документы/Акты",
+        "db_stage": "act_kd",
     },
     "act_info": {
-        "label": "Информационное письмо о готовности",
-        "file_suffix": "Инф_письмо",
-        "stage": "Акт КД",
+        "label": "Инф. письмо",
+        "yd_subfolder": "Документы/Акты",
+        "db_stage": "act_kd",
     },
     "act_final": {
-        "label": "Акт финальной стадии",
-        "file_suffix": "Акт_финал",
-        "stage": "Акт РЧ",
+        "label": "Акт РЧ",
+        "yd_subfolder": "Документы/Акты",
+        "db_stage": "act_rch",
     },
 }
+
+# Сокращения агентов для имени файла
+_AGENT_SHORT: dict[str, str] = {
+    "ФЕСТИВАЛЬ": "Фестиваль",
+    "ПЕТРОВИЧ": "Петрович",
+}
+
+
+def _agent_short(agent_type: str | None) -> str:
+    """ФЕСТИВАЛЬ → Фестиваль"""
+    if not agent_type:
+        return ""
+    return _AGENT_SHORT.get(agent_type.strip().upper(), agent_type.strip().capitalize())
+
+
+def _client_short_name(full_name: str | None) -> str:
+    """Иванов Иван Андреевич → Иванов ИА"""
+    if not full_name:
+        return ""
+    parts = full_name.strip().split()
+    if not parts:
+        return ""
+    last = parts[0]
+    initials = "".join(p[0].upper() for p in parts[1:] if p)
+    return f"{last} {initials}" if initials else last
+
 
 # Имена плейсхолдеров изображений
 IMAGE_PLACEHOLDERS = {"{{ПОДПИСЬ}}", "{{ПЕЧАТЬ}}", "{{ПОДПИСЬ_РАСШ}}"}
@@ -316,7 +344,10 @@ def generate_document(
     if not os.path.exists(template_path):
         return {"success": False, "message": "Файл шаблона не найден на диске"}
 
-    meta = DOC_TYPE_META.get(doc_type, {"label": doc_type, "file_suffix": doc_type, "stage": doc_type})
+    meta = DOC_TYPE_META.get(
+        doc_type,
+        {"label": doc_type, "yd_subfolder": "Документы", "db_stage": doc_type},
+    )
 
     try:
         doc = Document(template_path)
@@ -324,29 +355,39 @@ def generate_document(
         _fill_docx(doc, ctx, db)
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            safe_num = re.sub(r"[^\w\-]", "_", contract.contract_number or str(contract_id))
-            base_name = f"{meta['file_suffix']}_{safe_num}"
+            # Имя файла: «Договор-Фестиваль-Иванов ИА.pdf»
+            agent = _agent_short(contract.agent_type)
+            client_name = _client_short_name(client.full_name if client else None)
+            name_parts = [p for p in [meta["label"], agent, client_name] if p]
+            # Убираем символы, запрещённые в именах файлов ЯД
+            base_name = re.sub(r'[<>:"/\\|?*]', "", "-".join(name_parts))
+            if not base_name:
+                base_name = f"{meta['label']}_{contract_id}"
+
             docx_path = os.path.join(tmpdir, base_name + ".docx")
             doc.save(docx_path)
 
             pdf_bytes = _convert_to_pdf(docx_path)
 
             pdf_name = base_name + ".pdf"
-            yd_folder = (contract.yandex_folder_path or "").lstrip("disk:")
-            if not yd_folder:
-                yd_folder = f"/CRM/Проекты/{contract.contract_number}"
-            yd_path = f"{yd_folder}/{pdf_name}"
+
+            # Путь на ЯД: папка проекта / подпапка (Документы или Документы/Акты)
+            yd_project = (contract.yandex_folder_path or "").lstrip("disk:").rstrip("/")
+            if not yd_project:
+                yd_project = f"/CRM/Проекты/{contract.contract_number}"
+            yd_path = f"{yd_project}/{meta['yd_subfolder']}/{pdf_name}"
 
             yd_service.upload_file_from_bytes(pdf_bytes, yd_path)
 
             file_info = yd_service.get_file_info(yd_path)
             public_url = file_info.get("public_url") or file_info.get("href") or ""
 
+            db_stage = meta["db_stage"]
             existing = (
                 db.query(ProjectFile)
                 .filter(
                     ProjectFile.contract_id == contract_id,
-                    ProjectFile.stage == meta["stage"],
+                    ProjectFile.stage == db_stage,
                     ProjectFile.file_name == pdf_name,
                 )
                 .first()
@@ -360,7 +401,7 @@ def generate_document(
             else:
                 pf = ProjectFile(
                     contract_id=contract_id,
-                    stage=meta["stage"],
+                    stage=db_stage,
                     file_type="pdf",
                     public_link=public_url,
                     yandex_path=yd_path,
