@@ -227,8 +227,19 @@ def _get_image_bytes(db: Session, placeholder: str, yd_service: YandexDiskServic
 _WP = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
 _A_NS = "http://schemas.openxmlformats.org/drawingml/2006/main"
 
+# Параметры вставки для каждого типа реквизита:
+#   width_inches — ширина изображения
+#   pos_h_emu    — смещение по горизонтали от позиции символа (EMU; 914400 = 1 дюйм)
+#   pos_v_emu    — смещение по вертикали от строки (EMU; отрицательное = вверх)
+_IMAGE_FLOAT_PARAMS: dict[str, dict] = {
+    "{{ПОДПИСЬ}}": {"width": 1.5, "pos_h": 0, "pos_v": -304800},  # 1/3" вверх
+    "{{ПОДПИСЬ_РАСШ}}": {"width": 1.5, "pos_h": 0, "pos_v": 304800},  # 1/3" вниз
+    "{{ПЕЧАТЬ}}": {"width": 2.2, "pos_h": -457200, "pos_v": -1371600},  # 0.5" влево, 1.5" вверх
+}
+_IMAGE_FLOAT_DEFAULT = {"width": 1.5, "pos_h": 0, "pos_v": 0}
 
-def _make_picture_floating(run) -> None:
+
+def _make_picture_floating(run, pos_h_emu: int = 0, pos_v_emu: int = 0) -> None:
     """Конвертирует inline картинку в run во floating поверх текста (wp:anchor + wrapNone)."""
     r_elem = run._r
     drawing = r_elem.find(qn("w:drawing"))
@@ -265,9 +276,9 @@ def _make_picture_floating(run) -> None:
     )
     etree.SubElement(anchor, f"{{{_WP}}}simplePos", x="0", y="0")
     posH = etree.SubElement(anchor, f"{{{_WP}}}positionH", relativeFrom="character")
-    etree.SubElement(posH, f"{{{_WP}}}posOffset").text = "0"
+    etree.SubElement(posH, f"{{{_WP}}}posOffset").text = str(pos_h_emu)
     posV = etree.SubElement(anchor, f"{{{_WP}}}positionV", relativeFrom="line")
-    etree.SubElement(posV, f"{{{_WP}}}posOffset").text = "0"
+    etree.SubElement(posV, f"{{{_WP}}}posOffset").text = str(pos_v_emu)
     etree.SubElement(anchor, f"{{{_WP}}}extent", cx=cx, cy=cy)
     etree.SubElement(anchor, f"{{{_WP}}}effectExtent", l="0", t="0", r="0", b="0")
     etree.SubElement(anchor, f"{{{_WP}}}wrapNone")
@@ -283,12 +294,70 @@ def _make_picture_floating(run) -> None:
     drawing.append(anchor)
 
 
+def _split_run_with_images(r, db: Session, yd_service: YandexDiskService, ctx: dict) -> None:
+    """Разбивает run, содержащий IMAGE_PLACEHOLDER среди текста, вставляет картинки.
+
+    Пример: "{{ПОДПИСЬ}} ( {{ПОДПИСЬ_РАСШ}} )"
+    → пустой оригинальный run, затем run{img}, run{" ( "}, run{img}, run{" )"}
+    """
+    from docx.oxml import OxmlElement
+    from docx.text.run import Run as DocxRun
+
+    pattern = "|".join(re.escape(ph) for ph in sorted(IMAGE_PLACEHOLDERS, key=len, reverse=True))
+    parts = re.split(f"({pattern})", r.text)
+    if len(parts) <= 1:
+        return
+
+    r_elem = r._r
+    rPr = r_elem.find(qn("w:rPr"))
+
+    # Очищаем оригинальный run
+    for t_el in r_elem.findall(qn("w:t")):
+        r_elem.remove(t_el)
+
+    insert_after = r_elem
+
+    for part in parts:
+        if not part:
+            continue
+
+        new_r_elem = OxmlElement("w:r")
+        if rPr is not None:
+            new_r_elem.append(copy.deepcopy(rPr))
+
+        if part in IMAGE_PLACEHOLDERS:
+            img_bytes = _get_image_bytes(db, part, yd_service)
+            if img_bytes:
+                insert_after.addnext(new_r_elem)
+                insert_after = new_r_elem
+                params = _IMAGE_FLOAT_PARAMS.get(part, _IMAGE_FLOAT_DEFAULT)
+                new_run = DocxRun(new_r_elem, r._parent)
+                try:
+                    new_run.add_picture(io.BytesIO(img_bytes), width=Inches(params["width"]))
+                    _make_picture_floating(new_run, params["pos_h"], params["pos_v"])
+                    logger.info(f"Изображение {part} вставлено (split, {len(img_bytes)} байт)")
+                except Exception as exc:
+                    logger.error(f"Ошибка вставки {part} (split): {exc}")
+        else:
+            # Заменяем текстовые плейсхолдеры прямо здесь
+            for key, value in ctx.items():
+                part = part.replace("{{" + key + "}}", value)
+            t_elem = OxmlElement("w:t")
+            t_elem.text = part
+            if part != part.strip():
+                t_elem.set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
+            new_r_elem.append(t_elem)
+            insert_after.addnext(new_r_elem)
+            insert_after = new_r_elem
+
+
 def _replace_text_in_runs(runs, ctx: dict, db: Session, yd_service: YandexDiskService) -> None:
     """Заменяет плейсхолдеры {{КЛЮЧ}} и изображения в runs параграфа.
 
     Проход 1: каждый run отдельно — сохраняет bold/italic/size.
-              Если run целиком содержит плейсхолдер изображения — вставляет картинку.
-    Проход 2: кросс-run плейсхолдеры (Word разбил {{КЛЮЧ}} на несколько runs).
+              Если run целиком содержит IMAGE_PLACEHOLDER — вставляет картинку (floating).
+              Если IMAGE_PLACEHOLDER смешан с текстом — разбивает run (_split_run_with_images).
+    Проход 2: кросс-run текстовые плейсхолдеры (Word разбил {{КЛЮЧ}} на несколько runs).
     """
     if not runs:
         return
@@ -297,18 +366,22 @@ def _replace_text_in_runs(runs, ctx: dict, db: Session, yd_service: YandexDiskSe
     for r in runs:
         stripped = r.text.strip()
         if stripped in IMAGE_PLACEHOLDERS:
-            # Весь run = плейсхолдер картинки
+            # Весь run = один плейсхолдер картинки
+            params = _IMAGE_FLOAT_PARAMS.get(stripped, _IMAGE_FLOAT_DEFAULT)
             img_bytes = _get_image_bytes(db, stripped, yd_service)
             r.text = ""
             if img_bytes:
                 try:
-                    r.add_picture(io.BytesIO(img_bytes), width=Inches(1.5))
-                    _make_picture_floating(r)
+                    r.add_picture(io.BytesIO(img_bytes), width=Inches(params["width"]))
+                    _make_picture_floating(r, params["pos_h"], params["pos_v"])
                     logger.info(f"Изображение {stripped} вставлено ({len(img_bytes)} байт)")
                 except Exception as e:
                     logger.error(f"Ошибка вставки {stripped}: {e}")
             else:
                 logger.warning(f"Изображение {stripped} не найдено — плейсхолдер очищен")
+        elif any(ph in r.text for ph in IMAGE_PLACEHOLDERS):
+            # IMAGE_PLACEHOLDER смешан с текстом — разбиваем run
+            _split_run_with_images(r, db, yd_service, ctx)
         elif "{{" in r.text:
             for key, value in ctx.items():
                 r.text = r.text.replace("{{" + key + "}}", value)
