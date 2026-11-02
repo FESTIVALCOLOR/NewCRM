@@ -1307,48 +1307,47 @@
         <div style="font-size: 14px; font-weight: 600; color: var(--fc-text); margin-bottom: 8px">
           Реквизиты компании
         </div>
-        <q-card flat bordered class="q-mb-md" style="border-radius: 8px">
-          <q-card-section class="q-pa-sm">
-            <div class="row q-gutter-sm">
-              <div v-for="req in requisiteSlots" :key="req.type" class="col-12">
-                <div class="row items-center q-gutter-sm">
-                  <div style="min-width: 180px; font-size: 13px; color: var(--fc-text-light)">
-                    {{ req.label }}
-                  </div>
-                  <div v-if="requisites[req.type]" class="row items-center q-gutter-xs">
-                    <q-icon name="check_circle" color="positive" size="16px" />
-                    <span style="font-size: 12px; color: var(--fc-text-light)">{{ requisites[req.type].file_name }}</span>
-                    <q-btn
-                      flat
-                      round
-                      dense
-                      icon="delete"
-                      color="negative"
-                      size="xs"
-                      @click="deleteRequisite(req.type)"
-                    />
-                  </div>
-                  <div v-else style="font-size: 12px; color: var(--fc-text-muted)">
-                    Не загружено
-                  </div>
-                  <q-btn
-                    outline
-                    size="xs"
-                    :label="requisites[req.type] ? 'Заменить' : 'Загрузить'"
-                    color="primary"
-                    @click="triggerRequisiteUpload(req.type)"
-                  />
-                  <input
-                    :ref="el => requisiteInputs[req.type] = el"
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    style="display:none"
-                    @change="e => onRequisiteFileSelected(req.type, e)"
-                  >
-                </div>
-              </div>
+        <q-card flat bordered class="q-mb-md" style="border-radius: 8px; overflow: hidden">
+          <div
+            v-for="(req, idx) in requisiteSlots"
+            :key="req.type"
+            class="tmpl-row"
+            :style="idx < requisiteSlots.length - 1 ? 'border-bottom: 1px solid var(--fc-border-light)' : ''"
+          >
+            <span class="tmpl-label">{{ req.label }}</span>
+            <span class="tmpl-dots" />
+            <div class="tmpl-right">
+              <template v-if="requisites[req.type]">
+                <q-icon name="check_circle" color="positive" size="16px" />
+                <span class="tmpl-filename">{{ requisites[req.type].file_name }}</span>
+                <q-btn
+                  flat
+                  round
+                  dense
+                  icon="delete"
+                  color="negative"
+                  size="xs"
+                  @click="deleteRequisite(req.type)"
+                />
+              </template>
+              <span v-else class="tmpl-empty">Не загружено</span>
+              <q-btn
+                outline
+                size="sm"
+                :label="requisites[req.type] ? 'Заменить' : 'Загрузить'"
+                color="primary"
+                class="tmpl-btn"
+                @click="triggerRequisiteUpload(req.type)"
+              />
+              <input
+                :ref="el => requisiteInputs[req.type] = el"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                style="display:none"
+                @change="e => onRequisiteFileSelected(req.type, e)"
+              >
             </div>
-          </q-card-section>
+          </div>
         </q-card>
 
         <!-- Шаблоны по типам проектов -->
@@ -1356,15 +1355,19 @@
           <div style="font-size: 14px; font-weight: 600; color: var(--fc-text); margin-bottom: 6px">
             {{ pt.label }}
           </div>
-          <q-card flat bordered style="border-radius: 8px">
-            <q-card-section class="q-pa-sm">
-              <div v-for="dt in pt.docTypes" :key="dt.type" class="row items-center q-gutter-sm q-mb-xs">
-                <div style="min-width: 220px; font-size: 13px; color: var(--fc-text-light)">
-                  {{ dt.label }}
-                </div>
-                <div v-if="getTemplate(pt.type, dt.type)" class="row items-center q-gutter-xs">
+          <q-card flat bordered style="border-radius: 8px; overflow: hidden">
+            <div
+              v-for="(dt, idx) in pt.docTypes"
+              :key="dt.type"
+              class="tmpl-row"
+              :style="idx < pt.docTypes.length - 1 ? 'border-bottom: 1px solid var(--fc-border-light)' : ''"
+            >
+              <span class="tmpl-label">{{ dt.label }}</span>
+              <span class="tmpl-dots" />
+              <div class="tmpl-right">
+                <template v-if="getTemplate(pt.type, dt.type)">
                   <q-icon name="check_circle" color="positive" size="16px" />
-                  <span style="font-size: 12px; color: var(--fc-text-light)">{{ getTemplate(pt.type, dt.type).file_name }}</span>
+                  <span class="tmpl-filename">{{ getTemplate(pt.type, dt.type).file_name }}</span>
                   <q-btn
                     flat
                     round
@@ -1374,15 +1377,14 @@
                     size="xs"
                     @click="deleteTemplate(pt.type, dt.type)"
                   />
-                </div>
-                <div v-else style="font-size: 12px; color: var(--fc-text-muted)">
-                  Не загружено
-                </div>
+                </template>
+                <span v-else class="tmpl-empty">Не загружено</span>
                 <q-btn
                   outline
-                  size="xs"
+                  size="sm"
                   :label="getTemplate(pt.type, dt.type) ? 'Заменить' : 'Загрузить'"
                   color="primary"
+                  class="tmpl-btn"
                   @click="triggerTemplateUpload(pt.type, dt.type)"
                 />
                 <input
@@ -1393,7 +1395,7 @@
                   @change="e => onTemplateFileSelected(pt.type, dt.type, e)"
                 >
               </div>
-            </q-card-section>
+            </div>
           </q-card>
         </div>
       </q-tab-panel>
@@ -2846,6 +2848,55 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+/* ─── Строки шаблонов / реквизитов ─── */
+.tmpl-row {
+  display: flex;
+  align-items: center;
+  padding: 10px 14px;
+  min-height: 44px;
+}
+
+.tmpl-label {
+  font-size: 13px;
+  color: var(--fc-text);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.tmpl-dots {
+  flex: 1;
+  min-width: 16px;
+  border-bottom: 1px dotted var(--fc-border);
+  margin: 0 10px;
+  margin-bottom: 2px;
+  align-self: flex-end;
+}
+
+.tmpl-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.tmpl-filename {
+  font-size: 12px;
+  color: var(--fc-text-light);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tmpl-empty {
+  font-size: 12px;
+  color: var(--fc-text-muted);
+}
+
+.tmpl-btn {
+  min-width: 90px;
+}
+
 .nd-group-header {
   background: var(--fc-accent);
   color: var(--fc-text);
