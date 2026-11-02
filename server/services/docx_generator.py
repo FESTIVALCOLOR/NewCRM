@@ -206,39 +206,6 @@ def _build_context(contract: Contract, client: Client, doc_type: str) -> dict:
     return ctx
 
 
-def _replace_text_in_runs(runs, ctx: dict) -> None:
-    """Заменяет плейсхолдеры {{КЛЮЧ}} в runs параграфа, сохраняя форматирование.
-
-    Проход 1: замена внутри каждого run отдельно — сохраняет bold/italic/size.
-    Проход 2: объединяет runs если плейсхолдер разбит на несколько runs Word-ом,
-              выбирает run с bold=True как носитель результата.
-    """
-    if not runs:
-        return
-
-    # Проход 1: замена внутри каждого run (плейсхолдер целиком в одном run)
-    for r in runs:
-        if "{{" in r.text:
-            for key, value in ctx.items():
-                marker = "{{" + key + "}}"
-                if marker in r.text:
-                    r.text = r.text.replace(marker, value)
-
-    # Проход 2: кросс-run плейсхолдеры (Word разбил {{КЛЮЧ}} на несколько runs)
-    full_text = "".join(r.text for r in runs)
-    if "{{" not in full_text:
-        return
-    replaced = full_text
-    for key, value in ctx.items():
-        replaced = replaced.replace("{{" + key + "}}", value)
-    if replaced == full_text:
-        return
-    # Весь текст помещаем в runs[0], остальные очищаем
-    runs[0].text = replaced
-    for r in runs[1:]:
-        r.text = ""
-
-
 def _get_image_bytes(db: Session, placeholder: str, yd_service: YandexDiskService) -> bytes | None:
     """Скачивает байты изображения реквизита с ЯД или возвращает None."""
     req_type = REQUISITE_TYPE_MAP.get(placeholder)
@@ -254,53 +221,60 @@ def _get_image_bytes(db: Session, placeholder: str, yd_service: YandexDiskServic
         return None
 
 
-def _paragraph_is_image_placeholder(para) -> str | None:
-    """Если весь параграф — плейсхолдер изображения, вернуть его имя."""
-    text = "".join(r.text for r in para.runs).strip()
-    if text in IMAGE_PLACEHOLDERS:
-        return text
-    return None
+def _replace_text_in_runs(runs, ctx: dict, db: Session, yd_service: YandexDiskService) -> None:
+    """Заменяет плейсхолдеры {{КЛЮЧ}} и изображения в runs параграфа.
 
-
-def _replace_image_in_paragraph(para, db: Session, placeholder: str, yd_service: YandexDiskService) -> None:
-    """Заменяет параграф-плейсхолдер изображением из реквизитов."""
-    img_bytes = _get_image_bytes(db, placeholder, yd_service)
-    if not img_bytes:
-        logger.warning(f"Изображение для {placeholder} не найдено — плейсхолдер очищен")
-        for r in para.runs:
-            r.text = ""
+    Проход 1: каждый run отдельно — сохраняет bold/italic/size.
+              Если run целиком содержит плейсхолдер изображения — вставляет картинку.
+    Проход 2: кросс-run плейсхолдеры (Word разбил {{КЛЮЧ}} на несколько runs).
+    """
+    if not runs:
         return
 
-    # Очищаем все runs параграфа
-    for r in para.runs:
-        r.text = ""
+    # Проход 1: замена внутри каждого run
+    for r in runs:
+        stripped = r.text.strip()
+        if stripped in IMAGE_PLACEHOLDERS:
+            # Весь run = плейсхолдер картинки
+            img_bytes = _get_image_bytes(db, stripped, yd_service)
+            r.text = ""
+            if img_bytes:
+                try:
+                    r.add_picture(io.BytesIO(img_bytes), width=Inches(1.5))
+                    logger.info(f"Изображение {stripped} вставлено ({len(img_bytes)} байт)")
+                except Exception as e:
+                    logger.error(f"Ошибка вставки {stripped}: {e}")
+            else:
+                logger.warning(f"Изображение {stripped} не найдено — плейсхолдер очищен")
+        elif "{{" in r.text:
+            for key, value in ctx.items():
+                r.text = r.text.replace("{{" + key + "}}", value)
 
-    # Вставляем изображение в первый run (или создаём новый)
-    run = para.runs[0] if para.runs else para.add_run()
-    try:
-        stream = io.BytesIO(img_bytes)
-        run.add_picture(stream, width=Inches(1.5))
-        logger.info(f"Изображение {placeholder} вставлено ({len(img_bytes)} байт)")
-    except Exception as e:
-        logger.error(f"Ошибка вставки изображения {placeholder}: {e}")
+    # Проход 2: кросс-run текстовые плейсхолдеры (Word разбил {{КЛЮЧ}} на несколько runs)
+    full_text = "".join(r.text for r in runs)
+    if "{{" not in full_text:
+        return
+    replaced = full_text
+    for key, value in ctx.items():
+        replaced = replaced.replace("{{" + key + "}}", value)
+    if replaced == full_text:
+        return
+    runs[0].text = replaced
+    for r in runs[1:]:
+        r.text = ""
 
 
 def _process_table(table, ctx: dict, db: Session, yd_service: YandexDiskService) -> None:
-    """Рекурсивно обходит таблицу (включая вложенные таблицы и merged cells)."""
-    seen = set()  # защита от дублирования merged cells
+    """Рекурсивно обходит таблицу (включая вложенные таблицы).
+
+    Без seen-dedup: id(cell._tc) ненадёжен (lxml переиспользует адреса памяти),
+    ложные дубликаты приводили к пропуску ячеек с плейсхолдерами.
+    Повторная обработка безопасна — замены идемпотентны.
+    """
     for row in table.rows:
         for cell in row.cells:
-            cid = id(cell._tc)
-            if cid in seen:
-                continue
-            seen.add(cid)
             for para in cell.paragraphs:
-                img_ph = _paragraph_is_image_placeholder(para)
-                if img_ph:
-                    _replace_image_in_paragraph(para, db, img_ph, yd_service)
-                else:
-                    _replace_text_in_runs(para.runs, ctx)
-            # Вложенные таблицы внутри ячейки
+                _replace_text_in_runs(para.runs, ctx, db, yd_service)
             for nested in cell.tables:
                 _process_table(nested, ctx, db, yd_service)
 
@@ -308,12 +282,7 @@ def _process_table(table, ctx: dict, db: Session, yd_service: YandexDiskService)
 def _fill_docx(doc: Document, ctx: dict, db: Session, yd_service: YandexDiskService) -> None:
     """Заполняет все плейсхолдеры в документе (параграфы + таблицы рекурсивно)."""
     for para in doc.paragraphs:
-        img_ph = _paragraph_is_image_placeholder(para)
-        if img_ph:
-            _replace_image_in_paragraph(para, db, img_ph, yd_service)
-        else:
-            _replace_text_in_runs(para.runs, ctx)
-
+        _replace_text_in_runs(para.runs, ctx, db, yd_service)
     for table in doc.tables:
         _process_table(table, ctx, db, yd_service)
 
