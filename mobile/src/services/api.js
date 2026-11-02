@@ -656,24 +656,26 @@ export const clientPushApi = {
 
 // === Шаблоны договоров ===
 export const contractDocsApi = {
-  getRequisites: () => api.get('/api/contract-templates/requisites'),
+  getRequisites: () => api.get('/api/v1/contract-templates/requisites'),
   uploadRequisite: (type, file) => {
     const fd = new FormData()
     fd.append('file', file)
-    return api.post(`/api/contract-templates/requisites/${type}`, fd)
+    return api.post(`/api/v1/contract-templates/requisites/${type}`, fd)
   },
-  deleteRequisite: (type) => api.delete(`/api/contract-templates/requisites/${type}`),
-  getTemplates: () => api.get('/api/contract-templates/templates'),
+  deleteRequisite: (type) => api.delete(`/api/v1/contract-templates/requisites/${type}`),
+  getTemplates: () => api.get('/api/v1/contract-templates/templates'),
   uploadTemplate: (projectType, docType, file) => {
     const fd = new FormData()
     fd.append('file', file)
     return api.post(
-      `/api/contract-templates/templates/${encodeURIComponent(projectType)}/${docType}`,
+      `/api/v1/contract-templates/templates/${encodeURIComponent(projectType)}/${docType}`,
       fd,
     )
   },
   deleteTemplate: (projectType, docType) =>
-    api.delete(`/api/contract-templates/templates/${encodeURIComponent(projectType)}/${docType}`),
+    api.delete(
+      `/api/v1/contract-templates/templates/${encodeURIComponent(projectType)}/${docType}`,
+    ),
   generate: (contractId, docType) =>
-    api.post('/api/contract-templates/generate', { contract_id: contractId, doc_type: docType }),
+    api.post('/api/v1/contract-templates/generate', { contract_id: contractId, doc_type: docType }),
 }

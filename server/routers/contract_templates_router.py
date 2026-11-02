@@ -30,7 +30,7 @@ from yandex_disk_service import YandexDiskService
 
 from database import CompanyRequisite, ContractTemplate, Employee, get_db
 
-router = APIRouter(prefix="/api/contract-templates", tags=["contract-templates"])
+router = APIRouter(prefix="/api/v1/contract-templates", tags=["contract-templates"])
 
 REQUISITES_DIR = os.path.join("uploads", "requisites")
 TEMPLATES_DIR = os.path.join("uploads", "contract_templates")
