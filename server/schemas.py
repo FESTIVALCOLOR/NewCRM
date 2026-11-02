@@ -1652,6 +1652,50 @@ class FileUploadToDataRequest(BaseModel):
 # =========================
 
 
+# =========================
+# ШАБЛОНЫ ДОГОВОРОВ
+# =========================
+
+
+class CompanyRequisiteResponse(BaseModel):
+    id: int
+    requisite_type: str
+    file_name: str
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class ContractTemplateResponse(BaseModel):
+    id: int
+    project_type: str
+    doc_type: str
+    file_name: str
+    uploaded_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class GenerateContractRequest(BaseModel):
+    contract_id: int
+    doc_type: str  # contract | act_pr | act_kd | act_info | act_final
+
+
+class GenerateContractResponse(BaseModel):
+    success: bool
+    file_id: Optional[int] = None
+    file_name: Optional[str] = None
+    public_url: Optional[str] = None
+    message: Optional[str] = None
+
+
+# =========================
+# БЮДЖЕТ НАДЗОРА (строительные работы + черновые материалы)
+# =========================
+
+
 class BudgetExtraUpdate(BaseModel):
     """Обновление данных строительных работ / черновых материалов"""
 

@@ -919,6 +919,10 @@ from routers.preview_router import router as preview_router
 app.include_router(admin_router, prefix="/api/v1/admin")
 app.include_router(preview_router, prefix="/api/v1/preview")
 
+from routers.contract_templates_router import router as contract_templates_router
+
+app.include_router(contract_templates_router)
+
 
 # =========================
 # СИНХРОНИЗАЦИЯ

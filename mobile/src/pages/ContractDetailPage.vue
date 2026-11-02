@@ -466,16 +466,29 @@
                 </q-item>
               </q-list>
               <q-card-section class="q-pt-xs">
-                <q-btn
-                  outline
-                  color="grey-7"
-                  icon="gavel"
-                  label="Загрузить договор"
-                  no-caps
-                  class="full-width"
-                  dense
-                  @click="uploadFor('documents')"
-                />
+                <div class="row q-gutter-xs">
+                  <q-btn
+                    outline
+                    color="primary"
+                    icon="auto_awesome"
+                    label="Сформировать"
+                    no-caps
+                    class="col"
+                    dense
+                    :loading="generating === 'contract'"
+                    @click="generateDoc('contract')"
+                  />
+                  <q-btn
+                    outline
+                    color="grey-7"
+                    icon="gavel"
+                    label="Загрузить"
+                    no-caps
+                    class="col"
+                    dense
+                    @click="uploadFor('documents')"
+                  />
+                </div>
               </q-card-section>
             </q-card>
 
@@ -641,40 +654,88 @@
               </div>
             </div>
             <q-card-section class="q-pt-xs">
-              <div class="row q-col-gutter-xs">
-                <div :class="contract.project_type === 'Шаблонный' ? 'col-6' : 'col-4'">
-                  <q-btn
-                    outline
-                    color="grey-7"
-                    label="Акт ПР"
-                    no-caps
-                    class="full-width"
-                    dense
-                    @click="uploadFor('act_pr')"
-                  />
-                </div>
-                <div v-if="contract.project_type !== 'Шаблонный'" class="col-4">
-                  <q-btn
-                    outline
-                    color="grey-7"
-                    label="Акт КД"
-                    no-caps
-                    class="full-width"
-                    dense
-                    @click="uploadFor('act_kd')"
-                  />
-                </div>
-                <div :class="contract.project_type === 'Шаблонный' ? 'col-6' : 'col-4'">
-                  <q-btn
-                    outline
-                    color="grey-7"
-                    label="Акт РЧ"
-                    no-caps
-                    class="full-width"
-                    dense
-                    @click="uploadFor('act_rch')"
-                  />
-                </div>
+              <!-- Акт ПР -->
+              <div class="row q-gutter-xs q-mb-xs">
+                <q-btn
+                  outline
+                  color="primary"
+                  icon="auto_awesome"
+                  label="Сформировать акт ПР"
+                  no-caps
+                  class="col"
+                  dense
+                  :loading="generating === 'act_pr'"
+                  @click="generateDoc('act_pr')"
+                />
+                <q-btn
+                  outline
+                  color="grey-7"
+                  label="Загрузить"
+                  no-caps
+                  class="col-auto"
+                  dense
+                  @click="uploadFor('act_pr')"
+                />
+              </div>
+              <!-- Акт КД (только Индивидуальный) -->
+              <div v-if="contract.project_type === 'Индивидуальный'" class="row q-gutter-xs q-mb-xs">
+                <q-btn
+                  outline
+                  color="primary"
+                  icon="auto_awesome"
+                  label="Сформировать акт КД"
+                  no-caps
+                  class="col"
+                  dense
+                  :loading="generating === 'act_kd'"
+                  @click="generateDoc('act_kd')"
+                />
+                <q-btn
+                  outline
+                  color="grey-7"
+                  label="Загрузить"
+                  no-caps
+                  class="col-auto"
+                  dense
+                  @click="uploadFor('act_kd')"
+                />
+              </div>
+              <!-- Инф. письмо (только Индивидуальный) -->
+              <div v-if="contract.project_type === 'Индивидуальный'" class="row q-gutter-xs q-mb-xs">
+                <q-btn
+                  outline
+                  color="primary"
+                  icon="auto_awesome"
+                  label="Сформировать инф. письмо"
+                  no-caps
+                  class="col"
+                  dense
+                  :loading="generating === 'act_info'"
+                  @click="generateDoc('act_info')"
+                />
+              </div>
+              <!-- Акт финальный -->
+              <div class="row q-gutter-xs">
+                <q-btn
+                  outline
+                  color="primary"
+                  icon="auto_awesome"
+                  :label="contract.project_type === 'Индивидуальный' ? 'Сформировать акт РЧ' : 'Сформировать акт финал'"
+                  no-caps
+                  class="col"
+                  dense
+                  :loading="generating === 'act_final'"
+                  @click="generateDoc('act_final')"
+                />
+                <q-btn
+                  outline
+                  color="grey-7"
+                  label="Загрузить"
+                  no-caps
+                  class="col-auto"
+                  dense
+                  @click="uploadFor('act_rch')"
+                />
               </div>
             </q-card-section>
           </q-card>
@@ -1231,7 +1292,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { addWorkingDays, countWorkingDaysUntil, countWorkingDaysBetween } from 'src/composables/useDeadline'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
-import { contractsApi, filesApi, crmApi, clientsApi, timelineApi, surveyApi, supervisionClientPaymentsApi } from 'src/services/api'
+import { contractsApi, filesApi, crmApi, clientsApi, timelineApi, surveyApi, supervisionClientPaymentsApi, contractDocsApi } from 'src/services/api'
 import { useReferencesStore } from 'src/stores/references'
 import { useAuthStore } from 'src/stores/auth'
 import { usePermission } from 'src/composables/usePermission'
@@ -2102,6 +2163,35 @@ async function handleSvClientPayReceiptUpload(event) {
   } catch { $q.notify({ type: 'negative', message: 'Ошибка загрузки' }) }
   finally { $q.loading.hide(); event.target.value = '' }
 }
+
+// ─── Генерация документов из шаблонов ────────────────────────────────────────
+
+const generating = ref(null)  // 'contract' | 'act_pr' | 'act_kd' | 'act_info' | 'act_final' | null
+
+async function generateDoc(docType) {
+  if (!contract.value?.id) return
+  generating.value = docType
+  try {
+    const { data } = await contractDocsApi.generate(contract.value.id, docType)
+    if (data.success) {
+      $q.notify({ type: 'positive', message: data.message || 'Документ сформирован', timeout: 3000 })
+      // Перезагружаем файлы
+      const fRes = await filesApi.getContractFiles(contract.value.id)
+      if (fRes.data) files.value = fRes.data
+      // Открываем файл сразу если есть URL
+      if (data.public_url) window.open(data.public_url, '_blank')
+    } else {
+      $q.notify({ type: 'negative', message: data.message || 'Ошибка генерации', timeout: 4000 })
+    }
+  } catch (e) {
+    const msg = e.response?.data?.detail || 'Ошибка соединения с сервером'
+    $q.notify({ type: 'negative', message: msg, timeout: 4000 })
+  } finally {
+    generating.value = null
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 onMounted(async () => {
   const id = route.params.id

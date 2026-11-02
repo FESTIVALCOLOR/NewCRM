@@ -1370,6 +1370,35 @@ class FilePreviewCache(Base):
     last_accessed_at = Column(DateTime, default=datetime.utcnow, index=True)
 
 
+class CompanyRequisite(Base):
+    """Реквизиты компании: подпись, подпись с расшифровкой, печать"""
+
+    __tablename__ = "company_requisites"
+
+    id = Column(Integer, primary_key=True, index=True)
+    requisite_type = Column(String(50), unique=True, nullable=False)  # signature | signature_name | seal
+    file_name = Column(String(255), nullable=False)
+    file_path = Column(String(500), nullable=False)  # относительный путь в uploads/requisites/
+    updated_at = Column(DateTime, default=datetime.utcnow)
+    updated_by = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+
+
+class ContractTemplate(Base):
+    """Шаблоны договоров и актов в формате DOCX"""
+
+    __tablename__ = "contract_templates"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_type = Column(String(100), nullable=False)  # Индивидуальный | Шаблонный | Авторский надзор
+    doc_type = Column(String(50), nullable=False)  # contract | act_pr | act_kd | act_info | act_final
+    file_name = Column(String(255), nullable=False)
+    file_path = Column(String(500), nullable=False)  # относительный путь в uploads/contract_templates/
+    uploaded_at = Column(DateTime, default=datetime.utcnow)
+    uploaded_by = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+
+    __table_args__ = (UniqueConstraint("project_type", "doc_type", name="uq_contract_template_type"),)
+
+
 def _auto_migrate_columns():
     """Автоматически добавляет недостающие столбцы в существующие таблицы.
 

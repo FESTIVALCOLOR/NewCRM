@@ -18,6 +18,7 @@
       <q-tab name="telegram" label="Telegram/Email" />
       <q-tab name="trash" label="Корзина" />
       <q-tab name="backup" label="Бекап" />
+      <q-tab name="doctemplates" label="Шаблоны" />
     </q-tabs>
 
     <q-tab-panels v-model="tab" animated class="bg-transparent">
@@ -1198,6 +1199,103 @@
           </div>
         </div>
       </q-tab-panel>
+
+      <!-- Вкладка Шаблоны договоров -->
+      <q-tab-panel name="doctemplates" class="q-pa-sm">
+        <!-- Реквизиты компании -->
+        <div style="font-size: 14px; font-weight: 600; color: var(--fc-text); margin-bottom: 8px">
+          Реквизиты компании
+        </div>
+        <q-card flat bordered class="q-mb-md" style="border-radius: 8px">
+          <q-card-section class="q-pa-sm">
+            <div class="row q-gutter-sm">
+              <div v-for="req in requisiteSlots" :key="req.type" class="col-12">
+                <div class="row items-center q-gutter-sm">
+                  <div style="min-width: 180px; font-size: 13px; color: var(--fc-text-light)">
+                    {{ req.label }}
+                  </div>
+                  <div v-if="requisites[req.type]" class="row items-center q-gutter-xs">
+                    <q-icon name="check_circle" color="positive" size="16px" />
+                    <span style="font-size: 12px; color: var(--fc-text-light)">{{ requisites[req.type].file_name }}</span>
+                    <q-btn
+                      flat
+                      round
+                      dense
+                      icon="delete"
+                      color="negative"
+                      size="xs"
+                      @click="deleteRequisite(req.type)"
+                    />
+                  </div>
+                  <div v-else style="font-size: 12px; color: var(--fc-text-muted)">
+                    Не загружено
+                  </div>
+                  <q-btn
+                    outline
+                    size="xs"
+                    :label="requisites[req.type] ? 'Заменить' : 'Загрузить'"
+                    color="primary"
+                    @click="triggerRequisiteUpload(req.type)"
+                  />
+                  <input
+                    :ref="el => requisiteInputs[req.type] = el"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    style="display:none"
+                    @change="e => onRequisiteFileSelected(req.type, e)"
+                  >
+                </div>
+              </div>
+            </div>
+          </q-card-section>
+        </q-card>
+
+        <!-- Шаблоны по типам проектов -->
+        <div v-for="pt in projectTypeSlots" :key="pt.type" class="q-mb-md">
+          <div style="font-size: 14px; font-weight: 600; color: var(--fc-text); margin-bottom: 6px">
+            {{ pt.label }}
+          </div>
+          <q-card flat bordered style="border-radius: 8px">
+            <q-card-section class="q-pa-sm">
+              <div v-for="dt in pt.docTypes" :key="dt.type" class="row items-center q-gutter-sm q-mb-xs">
+                <div style="min-width: 220px; font-size: 13px; color: var(--fc-text-light)">
+                  {{ dt.label }}
+                </div>
+                <div v-if="getTemplate(pt.type, dt.type)" class="row items-center q-gutter-xs">
+                  <q-icon name="check_circle" color="positive" size="16px" />
+                  <span style="font-size: 12px; color: var(--fc-text-light)">{{ getTemplate(pt.type, dt.type).file_name }}</span>
+                  <q-btn
+                    flat
+                    round
+                    dense
+                    icon="delete"
+                    color="negative"
+                    size="xs"
+                    @click="deleteTemplate(pt.type, dt.type)"
+                  />
+                </div>
+                <div v-else style="font-size: 12px; color: var(--fc-text-muted)">
+                  Не загружено
+                </div>
+                <q-btn
+                  outline
+                  size="xs"
+                  :label="getTemplate(pt.type, dt.type) ? 'Заменить' : 'Загрузить'"
+                  color="primary"
+                  @click="triggerTemplateUpload(pt.type, dt.type)"
+                />
+                <input
+                  :ref="el => setTemplateInput(pt.type, dt.type, el)"
+                  type="file"
+                  accept=".docx,.dotx,.doc"
+                  style="display:none"
+                  @change="e => onTemplateFileSelected(pt.type, dt.type, e)"
+                >
+              </div>
+            </q-card-section>
+          </q-card>
+        </div>
+      </q-tab-panel>
     </q-tab-panels>
 
     <!-- Диалог подтверждения восстановления -->
@@ -1588,7 +1686,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useQuasar } from 'quasar'
 import { api } from 'src/boot/axios'
 import { useReferencesStore } from 'src/stores/references'
-import { deletedContractsApi, messengerApi, adminApi } from 'src/services/api'
+import { deletedContractsApi, messengerApi, adminApi, contractDocsApi } from 'src/services/api'
 
 const $q = useQuasar()
 const refs = useReferencesStore()
@@ -2474,9 +2572,131 @@ watch(tab, (val) => {
   }
 })
 
+// ─── Шаблоны договоров ───────────────────────────────────────────────────────
+
+const requisiteSlots = [
+  { type: 'signature', label: 'Подпись' },
+  { type: 'signature_name', label: 'Подпись с расшифровкой' },
+  { type: 'seal', label: 'Печать' },
+]
+
+const projectTypeSlots = [
+  {
+    type: 'Индивидуальный',
+    label: 'Индивидуальный проект',
+    docTypes: [
+      { type: 'contract', label: 'Договор' },
+      { type: 'act_pr', label: 'Акт планировочных решений' },
+      { type: 'act_kd', label: 'Акт концепции дизайна' },
+      { type: 'act_info', label: 'Информационное письмо о готовности' },
+      { type: 'act_final', label: 'Акт финальной стадии/приёмки работ' },
+    ],
+  },
+  {
+    type: 'Шаблонный',
+    label: 'Шаблонный проект',
+    docTypes: [
+      { type: 'contract', label: 'Договор' },
+      { type: 'act_pr', label: 'Акт планировочного решения' },
+      { type: 'act_final', label: 'Акт финальной сдачи/приёмки работ' },
+    ],
+  },
+  {
+    type: 'Авторский надзор',
+    label: 'Авторский надзор',
+    docTypes: [
+      { type: 'contract', label: 'Договор' },
+      { type: 'act_final', label: 'Акт финальной сдачи/приёмки работ' },
+    ],
+  },
+]
+
+const requisites = ref({})        // { signature: {...}, seal: {...}, signature_name: {...} }
+const templates = ref([])         // ContractTemplateResponse[]
+const requisiteInputs = ref({})   // { signature: <input el>, ... }
+const templateInputs = ref({})    // { 'Индивидуальный::contract': <input el>, ... }
+
+function getTemplate(projectType, docType) {
+  return templates.value.find(t => t.project_type === projectType && t.doc_type === docType) || null
+}
+
+function setTemplateInput(projectType, docType, el) {
+  templateInputs.value[`${projectType}::${docType}`] = el
+}
+
+async function loadDocTemplates() {
+  try {
+    const [rRes, tRes] = await Promise.all([
+      contractDocsApi.getRequisites(),
+      contractDocsApi.getTemplates(),
+    ])
+    const map = {}
+    for (const r of rRes.data) map[r.requisite_type] = r
+    requisites.value = map
+    templates.value = tRes.data
+  } catch {}
+}
+
+function triggerRequisiteUpload(type) {
+  requisiteInputs.value[type]?.click()
+}
+
+async function onRequisiteFileSelected(type, e) {
+  const file = e.target.files?.[0]
+  if (!file) return
+  try {
+    await contractDocsApi.uploadRequisite(type, file)
+    await loadDocTemplates()
+    $q.notify({ type: 'positive', message: 'Реквизит загружен', timeout: 2000 })
+  } catch {
+    $q.notify({ type: 'negative', message: 'Ошибка загрузки', timeout: 2000 })
+  } finally {
+    e.target.value = ''
+  }
+}
+
+async function deleteRequisite(type) {
+  try {
+    await contractDocsApi.deleteRequisite(type)
+    await loadDocTemplates()
+  } catch {
+    $q.notify({ type: 'negative', message: 'Ошибка удаления', timeout: 2000 })
+  }
+}
+
+function triggerTemplateUpload(projectType, docType) {
+  templateInputs.value[`${projectType}::${docType}`]?.click()
+}
+
+async function onTemplateFileSelected(projectType, docType, e) {
+  const file = e.target.files?.[0]
+  if (!file) return
+  try {
+    await contractDocsApi.uploadTemplate(projectType, docType, file)
+    await loadDocTemplates()
+    $q.notify({ type: 'positive', message: 'Шаблон загружен', timeout: 2000 })
+  } catch {
+    $q.notify({ type: 'negative', message: 'Ошибка загрузки', timeout: 2000 })
+  } finally {
+    e.target.value = ''
+  }
+}
+
+async function deleteTemplate(projectType, docType) {
+  try {
+    await contractDocsApi.deleteTemplate(projectType, docType)
+    await loadDocTemplates()
+  } catch {
+    $q.notify({ type: 'negative', message: 'Ошибка удаления', timeout: 2000 })
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 onMounted(async () => {
   loadRates()
   loadCitiesFull()
+  loadDocTemplates()
   try {
     const { data } = await api.get('/api/v1/employees')
     inviteEmployeeOpts.value = data.filter(e => e.status === 'активный').map(e => ({ label: `${e.full_name} (${e.email || 'нет email'})`, value: e.id }))

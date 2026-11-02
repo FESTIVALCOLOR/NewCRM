@@ -653,3 +653,27 @@ export const clientPushApi = {
   subscribe: (token, subscription) => api.post(`/api/v1/client-chat/${token}/push/subscribe`, subscription),
   unsubscribe: (token) => api.post(`/api/v1/client-chat/${token}/push/unsubscribe`),
 }
+
+// === Шаблоны договоров ===
+export const contractDocsApi = {
+  getRequisites: () => api.get('/api/contract-templates/requisites'),
+  uploadRequisite: (type, file) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    return api.post(`/api/contract-templates/requisites/${type}`, fd)
+  },
+  deleteRequisite: (type) => api.delete(`/api/contract-templates/requisites/${type}`),
+  getTemplates: () => api.get('/api/contract-templates/templates'),
+  uploadTemplate: (projectType, docType, file) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    return api.post(
+      `/api/contract-templates/templates/${encodeURIComponent(projectType)}/${docType}`,
+      fd,
+    )
+  },
+  deleteTemplate: (projectType, docType) =>
+    api.delete(`/api/contract-templates/templates/${encodeURIComponent(projectType)}/${docType}`),
+  generate: (contractId, docType) =>
+    api.post('/api/contract-templates/generate', { contract_id: contractId, doc_type: docType }),
+}
