@@ -1052,12 +1052,17 @@ async def get_reports_summary(
 
         # --- KPI метрики ---
         filtered_client_ids = {c.client_id for c in filtered}
-        total_clients = len(filtered_client_ids)
-        total_contracts = len(filtered)
+        # Всего клиентов/договоров — общесистемные счётчики без фильтра периода
+        total_clients = db.query(Client).count()
+        total_individual = db.query(Client).filter(Client.client_type == "Физическое лицо").count()
+        total_legal = db.query(Client).filter(Client.client_type == "Юридическое лицо").count()
+        total_contracts = db.query(Contract).filter(Contract.project_type != "Авторский надзор").count()
+        # Суммы и площади — из отфильтрованных по периоду
+        period_contracts = len(filtered)
         total_amount = sum(c.total_amount or 0 for c in filtered)
-        avg_amount = total_amount / total_contracts if total_contracts else 0.0
+        avg_amount = total_amount / period_contracts if period_contracts else 0.0
         total_area = sum(c.area or 0 for c in filtered)
-        avg_area = total_area / total_contracts if total_contracts else 0.0
+        avg_area = total_area / period_contracts if period_contracts else 0.0
 
         # Новые клиенты: клиенты, у которых ПЕРВЫЙ договор (за всё время) попадает в период
         # Для этого берём все договоры без фильтра по периоду, но с теми же прочими фильтрами
@@ -1136,11 +1141,13 @@ async def get_reports_summary(
             prev_clients = len({c.client_id for c in prev_filtered})
             prev_contracts = len(prev_filtered)
             prev_amount = sum(c.total_amount or 0 for c in prev_filtered)
+            # Тренды считаем от period-filtered, а не от общесистемного total
+            period_clients = len(filtered_client_ids)
 
             if prev_clients > 0:
-                trend_clients = round((total_clients - prev_clients) / prev_clients * 100, 1)
+                trend_clients = round((period_clients - prev_clients) / prev_clients * 100, 1)
             if prev_contracts > 0:
-                trend_contracts = round((total_contracts - prev_contracts) / prev_contracts * 100, 1)
+                trend_contracts = round((period_contracts - prev_contracts) / prev_contracts * 100, 1)
             if prev_amount > 0:
                 trend_amount = round((total_amount - prev_amount) / prev_amount * 100, 1)
 
@@ -1180,6 +1187,8 @@ async def get_reports_summary(
 
         return {
             "total_clients": total_clients,
+            "total_individual": total_individual,
+            "total_legal": total_legal,
             "new_clients": new_clients,
             "returning_clients": returning_clients,
             "total_contracts": total_contracts,

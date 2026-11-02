@@ -451,8 +451,8 @@ const clientMini = computed(() => {
   const fromAgents = ba.reduce((sum, a) => sum + (a.clients || 0), 0)
   return [
     { label: 'Всего', value: s.total_clients ?? '—', color: '#F39C12' },
-    { label: 'Физлица', value: s.total_clients ? (s.total_clients - (s.returning_clients || 0)) : '—' },
-    { label: 'Юрлица', value: 0 },
+    { label: 'Физлица', value: s.total_individual ?? '—' },
+    { label: 'Юрлица', value: s.total_legal ?? '—' },
     { label: 'Новых', value: s.new_clients ?? '—', color: '#27AE60' },
     { label: 'Повторных', value: s.returning_clients ?? '—', color: '#9B59B6' },
     { label: 'От агентов', value: fromAgents || '—', color: '#E74C3C' },
