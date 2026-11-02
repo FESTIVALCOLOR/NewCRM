@@ -16,7 +16,7 @@ Endpoints:
 from datetime import datetime
 import os
 
-from auth import get_current_active_user
+from auth import get_current_user as get_current_active_user
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from schemas import (
     CompanyRequisiteResponse,
