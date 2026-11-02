@@ -713,6 +713,15 @@
                   :loading="generating === 'act_info'"
                   @click="generateDoc('act_info')"
                 />
+                <q-btn
+                  outline
+                  color="grey-7"
+                  label="Загрузить"
+                  no-caps
+                  class="col-auto"
+                  dense
+                  @click="uploadFor('act_info')"
+                />
               </div>
               <!-- Акт финальный -->
               <div class="row q-gutter-xs">
@@ -1401,7 +1410,7 @@ const clientPayments = computed(() => {
 // Файлы, сгруппированные по блокам
 const filesByGroup = computed(() => {
   const groups = { documents: [], tech_task: [], supervision: [], acts: [], actsSigned: [] }
-  const ACT_STAGES = ['act_pr', 'act_kd', 'act_rch', 'acts']
+  const ACT_STAGES = ['act_pr', 'act_kd', 'act_info', 'act_rch', 'acts']
   const ACT_SIGNED_STAGES = ['act_pr_signed', 'act_kd_signed', 'act_rch_signed']
   for (const f of files.value) {
     if (f.stage === 'documents') groups.documents.push(f)
@@ -1419,6 +1428,7 @@ const filesByGroup = computed(() => {
 const STAGE_LABELS = {
   act_pr: 'Акт ПР', act_pr_signed: 'Акт ПР (подписанный)',
   act_kd: 'Акт КД', act_kd_signed: 'Акт КД (подписанный)',
+  act_info: 'Инф. письмо',
   act_rch: 'Акт РЧ', act_rch_signed: 'Акт РЧ (подписанный)',
   stage1: 'Акт ПР', stage1_signed: 'Акт ПР (подписанный)',
   stage2_concept: 'Акт КД', stage2_signed: 'Акт КД (подписанный)',
@@ -1929,6 +1939,7 @@ async function handleFileUpload(event) {
       measurement: 'Замер',                           // Замер
       act_pr: 'Документы/Акты',                       // Акт ПР (без подписи)
       act_kd: 'Документы/Акты',                       // Акт КД (без подписи)
+      act_info: 'Документы/Акты',                     // Инф. письмо
       act_rch: 'Документы/Акты',                      // Акт РЧ (без подписи)
       act_pr_signed: 'Документы/Акты',                // Акт ПР (с подписью)
       act_kd_signed: 'Документы/Акты',                // Акт КД (с подписью)
@@ -1955,6 +1966,7 @@ async function handleFileUpload(event) {
       measurement: { link: 'measurement_image_link', path: 'measurement_yandex_path', name: 'measurement_file_name' },
       act_pr: { link: 'act_planning_link', path: 'act_planning_yandex_path', name: 'act_planning_file_name' },
       act_kd: { link: 'act_concept_link', path: 'act_concept_yandex_path', name: 'act_concept_file_name' },
+      act_info: { link: 'info_letter_link', path: 'info_letter_yandex_path', name: 'info_letter_file_name' },
       act_rch: { link: 'act_final_link', path: 'act_final_yandex_path', name: 'act_final_file_name' },
       act_pr_signed: { link: 'act_planning_signed_link', path: 'act_planning_signed_yandex_path', name: 'act_planning_signed_file_name' },
       act_kd_signed: { link: 'act_concept_signed_link', path: 'act_concept_signed_yandex_path', name: 'act_concept_signed_file_name' },
