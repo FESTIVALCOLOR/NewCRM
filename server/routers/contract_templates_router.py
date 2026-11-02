@@ -21,6 +21,7 @@ from datetime import datetime
 
 from auth import get_current_user as get_current_active_user
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from permissions import check_permission
 from schemas import (
     CompanyRequisiteResponse,
     ContractTemplateResponse,
@@ -242,6 +243,13 @@ def generate(
 ):
     if request.doc_type not in VALID_DOC_TYPES:
         raise HTTPException(status_code=400, detail=f"Неверный тип документа: {request.doc_type}")
+    # Проверка прав: договор vs акты
+    if request.doc_type == "contract":
+        required_perm = "contracts.generate_contract"
+    else:
+        required_perm = "contracts.generate_acts"
+    if not check_permission(current_user, required_perm, db):
+        raise HTTPException(status_code=403, detail="Недостаточно прав для формирования документа")
     yd_service = YandexDiskService()
     result = generate_document(db, request.contract_id, request.doc_type, yd_service)
     return GenerateContractResponse(**result)

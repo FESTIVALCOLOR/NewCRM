@@ -56,6 +56,8 @@ PERMISSION_NAMES: dict[str, str] = {
     "contracts.view": "Просмотр договоров",
     "contracts.update": "Редактирование договоров",
     "contracts.delete": "Удаление договоров",
+    "contracts.generate_contract": "Формирование договоров",
+    "contracts.generate_acts": "Формирование актов",
     # === CRM ===
     "crm_cards.update": "Редактирование CRM карточек",
     "crm_cards.view_archive": "Просмотр архива CRM",
@@ -171,6 +173,7 @@ _BASE_MANAGER = {
     "contracts.view",
     "contracts.update",
     "contracts.delete",
+    "contracts.generate_acts",
     # CRM
     "crm_cards.update",
     "crm_cards.view_archive",
@@ -248,6 +251,7 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, set[str]] = {
         "notifications.settings_duplication",
         "notifications.settings_supervision",
         "notifications.settings_payment",
+        "contracts.generate_contract",
     },
     POSITION_SENIOR_MANAGER: _ACCESS_MANAGER
     | _BASE_MANAGER
@@ -322,6 +326,7 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, set[str]] = {
         "access.contracts",
         "access.reports",
         "access.employees",
+        "contracts.generate_acts",
         # CRM workflow — Менеджер ведёт шаблонные проекты + назначает исполнителей
         "crm_cards.update",
         "crm_cards.move",
@@ -675,6 +680,15 @@ def _migrate_new_permissions(db: Session):
             POSITION_SENIOR_MANAGER,
             POSITION_SDP,
             POSITION_GAP,
+            POSITION_MANAGER,
+        ],
+        # Формирование документов договора — добавлены в v1.3.x
+        "contracts.generate_contract": [
+            POSITION_STUDIO_DIRECTOR,
+        ],
+        "contracts.generate_acts": [
+            POSITION_STUDIO_DIRECTOR,
+            POSITION_SENIOR_MANAGER,
             POSITION_MANAGER,
         ],
     }

@@ -1850,7 +1850,7 @@ const PERMISSION_GROUPS = {
   'Доступ к страницам': ['access.clients', 'access.contracts', 'access.crm', 'access.supervision', 'access.reports', 'access.employees', 'access.salaries', 'access.employee_reports', 'access.admin', 'access.dashboards'],
   'Сотрудники': ['employees.create', 'employees.update', 'employees.delete'],
   'Клиенты': ['clients.create', 'clients.view', 'clients.update', 'clients.delete'],
-  'Договоры': ['contracts.create', 'contracts.view', 'contracts.update', 'contracts.delete'],
+  'Договоры': ['contracts.create', 'contracts.view', 'contracts.update', 'contracts.delete', 'contracts.generate_contract', 'contracts.generate_acts'],
   'CRM': ['crm_cards.update', 'crm_cards.view_archive', 'crm_cards.move', 'crm_cards.delete', 'crm_cards.assign_executor', 'crm_cards.delete_executor', 'crm_cards.reset_stages', 'crm_cards.reset_approval', 'crm_cards.complete_approval', 'crm_cards.reset_designer', 'crm_cards.reset_draftsman', 'crm_cards.files_upload', 'crm_cards.files_delete', 'crm_cards.deadlines', 'crm_cards.payments'],
   'Надзор': ['supervision.view_archive', 'supervision.update', 'supervision.move', 'supervision.pause_resume', 'supervision.complete_stage', 'supervision.delete_order', 'supervision.assign_executor', 'supervision.files_upload', 'supervision.files_delete', 'supervision.deadlines', 'supervision.payments'],
   'Платежи': ['payments.create', 'payments.update', 'payments.delete'],
