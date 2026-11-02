@@ -1052,13 +1052,18 @@ async def get_reports_summary(
 
         # --- KPI метрики ---
         filtered_client_ids = {c.client_id for c in filtered}
-        # Всего клиентов/договоров — общесистемные счётчики без фильтра периода
-        total_clients = db.query(Client).count()
-        total_individual = db.query(Client).filter(Client.client_type == "Физическое лицо").count()
-        total_legal = db.query(Client).filter(Client.client_type == "Юридическое лицо").count()
-        total_contracts = db.query(Contract).filter(Contract.project_type != "Авторский надзор").count()
-        # Суммы и площади — из отфильтрованных по периоду
-        period_contracts = len(filtered)
+        # Всего клиентов/договоров — только за выбранный период
+        total_clients = len(filtered_client_ids)
+        total_contracts = len(filtered)
+        period_contracts = total_contracts
+        # Типы клиентов — из периода
+        if filtered_client_ids:
+            client_type_rows = db.query(Client.id, Client.client_type).filter(Client.id.in_(filtered_client_ids)).all()
+            total_individual = sum(1 for _, ct in client_type_rows if ct == "Физическое лицо")
+            total_legal = sum(1 for _, ct in client_type_rows if ct == "Юридическое лицо")
+        else:
+            total_individual = 0
+            total_legal = 0
         total_amount = sum(c.total_amount or 0 for c in filtered)
         avg_amount = total_amount / period_contracts if period_contracts else 0.0
         total_area = sum(c.area or 0 for c in filtered)
