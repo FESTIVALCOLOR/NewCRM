@@ -98,14 +98,13 @@ REQUISITE_TYPE_MAP = {
 
 
 def _amount_in_words(amount: float) -> str:
-    """Сумма прописью на русском (рубли)."""
+    """Сумма прописью на русском (рубли, без копеек)."""
     try:
         rubles = int(amount)
-        kopecks = round((amount - rubles) * 100)
-        words = num2words(rubles, lang="ru", to="currency").capitalize()
-        if kopecks:
-            return f"{words} {kopecks:02d} коп."
-        return words
+        text = num2words(rubles, lang="ru", to="currency", currency="RUB")
+        # Убираем « 00 копеек» — передаём всегда целую сумму
+        text = text.replace(" 00 копеек", "").replace(" 0 копеек", "")
+        return text.capitalize()
     except Exception:
         return ""
 
@@ -151,16 +150,16 @@ def _build_context(contract: Contract, client: Client, doc_type: str) -> dict:
         "АДРЕС": contract.address or "",
         "ПЛОЩАДЬ": str(contract.area or ""),
         "СРОК": str(period),
-        "СУММА": f"{amount:,.2f}".replace(",", " "),
+        "СУММА": f"{amount:,.0f}".replace(",", " "),
         "СУММА_ПРОПИСЬЮ": _amount_in_words(amount),
         "ТИП_ПРОЕКТА": contract.project_type or "",
         "ПОДТИП_ПРОЕКТА": contract.project_subtype or "",
         "СЕГОДНЯ": _format_date(datetime.now().strftime("%Y-%m-%d")),
-        "АВАНС": f"{advance:,.2f}".replace(",", " "),
+        "АВАНС": f"{advance:,.0f}".replace(",", " "),
         "АВАНС_ПРОПИСЬЮ": _amount_in_words(advance),
-        "ДОПЛАТА": f"{additional:,.2f}".replace(",", " "),
+        "ДОПЛАТА": f"{additional:,.0f}".replace(",", " "),
         "ДОПЛАТА_ПРОПИСЬЮ": _amount_in_words(additional),
-        "ТРЕТИЙ_ПЛАТЕЖ": f"{third:,.2f}".replace(",", " "),
+        "ТРЕТИЙ_ПЛАТЕЖ": f"{third:,.0f}".replace(",", " "),
         "ТРЕТИЙ_ПЛАТЕЖ_ПРОПИСЬЮ": _amount_in_words(third),
     }
 
@@ -184,7 +183,7 @@ def _build_context(contract: Contract, client: Client, doc_type: str) -> dict:
     for code, cost_pct, days_pct in _stage_pct:
         stage_cost = amount * cost_pct
         stage_days = round(period * days_pct)
-        ctx[f"ЭТАП_{code}_СТОИМОСТЬ"] = f"{stage_cost:,.2f}".replace(",", " ") if cost_pct else ""
+        ctx[f"ЭТАП_{code}_СТОИМОСТЬ"] = f"{stage_cost:,.0f}".replace(",", " ") if cost_pct else ""
         ctx[f"ЭТАП_{code}_СРОК"] = str(stage_days) if days_pct else ""
     if client:
         ctx.update(
@@ -208,17 +207,37 @@ def _build_context(contract: Contract, client: Client, doc_type: str) -> dict:
 
 
 def _replace_text_in_runs(runs, ctx: dict) -> None:
-    """Заменяет плейсхолдеры {{КЛЮЧ}} в runs параграфа."""
+    """Заменяет плейсхолдеры {{КЛЮЧ}} в runs параграфа, сохраняя форматирование.
+
+    Проход 1: замена внутри каждого run отдельно — сохраняет bold/italic/size.
+    Проход 2: объединяет runs если плейсхолдер разбит на несколько runs Word-ом,
+              выбирает run с bold=True как носитель результата.
+    """
+    if not runs:
+        return
+
+    # Проход 1: замена внутри каждого run (плейсхолдер целиком в одном run)
+    for r in runs:
+        if "{{" in r.text:
+            for key, value in ctx.items():
+                marker = "{{" + key + "}}"
+                if marker in r.text:
+                    r.text = r.text.replace(marker, value)
+
+    # Проход 2: кросс-run плейсхолдеры (Word разбил {{КЛЮЧ}} на несколько runs)
     full_text = "".join(r.text for r in runs)
+    if "{{" not in full_text:
+        return
     replaced = full_text
     for key, value in ctx.items():
         replaced = replaced.replace("{{" + key + "}}", value)
     if replaced == full_text:
         return
-    # Записываем результат в первый run, очищаем остальные
-    if runs:
-        runs[0].text = replaced
-        for r in runs[1:]:
+    # Выбираем run-носитель: предпочитаем bold, иначе первый
+    best = next((r for r in runs if r.bold), runs[0])
+    best.text = replaced
+    for r in runs:
+        if r is not best:
             r.text = ""
 
 
@@ -245,7 +264,7 @@ def _paragraph_is_image_placeholder(para) -> str | None:
     return None
 
 
-def _replace_image_in_paragraph(doc: Document, para, db: Session, placeholder: str, yd_service: YandexDiskService) -> None:
+def _replace_image_in_paragraph(para, db: Session, placeholder: str, yd_service: YandexDiskService) -> None:
     """Заменяет параграф-плейсхолдер изображением из реквизитов."""
     img_bytes = _get_image_bytes(db, placeholder, yd_service)
     if not img_bytes:
@@ -264,24 +283,37 @@ def _replace_image_in_paragraph(doc: Document, para, db: Session, placeholder: s
     run.add_picture(stream, width=Inches(1.5))
 
 
+def _process_table(table, ctx: dict, db: Session, yd_service: YandexDiskService) -> None:
+    """Рекурсивно обходит таблицу (включая вложенные таблицы и merged cells)."""
+    seen = set()  # защита от дублирования merged cells
+    for row in table.rows:
+        for cell in row.cells:
+            cid = id(cell._tc)
+            if cid in seen:
+                continue
+            seen.add(cid)
+            for para in cell.paragraphs:
+                img_ph = _paragraph_is_image_placeholder(para)
+                if img_ph:
+                    _replace_image_in_paragraph(para, db, img_ph, yd_service)
+                else:
+                    _replace_text_in_runs(para.runs, ctx)
+            # Вложенные таблицы внутри ячейки
+            for nested in cell.tables:
+                _process_table(nested, ctx, db, yd_service)
+
+
 def _fill_docx(doc: Document, ctx: dict, db: Session, yd_service: YandexDiskService) -> None:
-    """Заполняет все плейсхолдеры в документе (параграфы + таблицы)."""
+    """Заполняет все плейсхолдеры в документе (параграфы + таблицы рекурсивно)."""
     for para in doc.paragraphs:
         img_ph = _paragraph_is_image_placeholder(para)
         if img_ph:
-            _replace_image_in_paragraph(doc, para, db, img_ph, yd_service)
+            _replace_image_in_paragraph(para, db, img_ph, yd_service)
         else:
             _replace_text_in_runs(para.runs, ctx)
 
     for table in doc.tables:
-        for row in table.rows:
-            for cell in row.cells:
-                for para in cell.paragraphs:
-                    img_ph = _paragraph_is_image_placeholder(para)
-                    if img_ph:
-                        _replace_image_in_paragraph(doc, para, db, img_ph, yd_service)
-                    else:
-                        _replace_text_in_runs(para.runs, ctx)
+        _process_table(table, ctx, db, yd_service)
 
 
 def _convert_to_pdf(docx_path: str) -> bytes:
