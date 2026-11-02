@@ -2860,14 +2860,18 @@ onMounted(async () => {
   font-size: 13px;
   color: var(--fc-text);
   white-space: nowrap;
-  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: 42%;
 }
 
 .tmpl-dots {
   flex: 1;
-  min-width: 16px;
+  min-width: 4px;
   border-bottom: 1px dotted var(--fc-border);
-  margin: 0 10px;
+  margin: 0 8px;
   margin-bottom: 2px;
   align-self: flex-end;
 }
@@ -2875,14 +2879,14 @@ onMounted(async () => {
 .tmpl-right {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   flex-shrink: 0;
 }
 
 .tmpl-filename {
   font-size: 12px;
   color: var(--fc-text-light);
-  max-width: 200px;
+  max-width: 80px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2891,10 +2895,11 @@ onMounted(async () => {
 .tmpl-empty {
   font-size: 12px;
   color: var(--fc-text-muted);
+  white-space: nowrap;
 }
 
 .tmpl-btn {
-  min-width: 90px;
+  min-width: 82px;
 }
 
 .nd-group-header {
