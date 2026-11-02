@@ -655,12 +655,15 @@ export const clientPushApi = {
 }
 
 // === Шаблоны договоров ===
+const _multipartConfig = {
+  transformRequest: [(data, headers) => { delete headers['Content-Type']; return data }],
+}
 export const contractDocsApi = {
   getRequisites: () => api.get('/api/v1/contract-templates/requisites'),
   uploadRequisite: (type, file) => {
     const fd = new FormData()
     fd.append('file', file)
-    return api.post(`/api/v1/contract-templates/requisites/${type}`, fd)
+    return api.post(`/api/v1/contract-templates/requisites/${type}`, fd, _multipartConfig)
   },
   deleteRequisite: (type) => api.delete(`/api/v1/contract-templates/requisites/${type}`),
   getTemplates: () => api.get('/api/v1/contract-templates/templates'),
@@ -670,6 +673,7 @@ export const contractDocsApi = {
     return api.post(
       `/api/v1/contract-templates/templates/${encodeURIComponent(projectType)}/${docType}`,
       fd,
+      _multipartConfig,
     )
   },
   deleteTemplate: (projectType, docType) =>
