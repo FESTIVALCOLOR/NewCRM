@@ -1202,6 +1202,107 @@
 
       <!-- Вкладка Шаблоны договоров -->
       <q-tab-panel name="doctemplates" class="q-pa-sm">
+        <!-- Памятка по шаблонам -->
+        <q-expansion-item
+          dense
+          icon="help_outline"
+          label="Как подготовить шаблон"
+          header-style="font-size:13px; font-weight:600; color: var(--fc-primary); padding: 4px 8px"
+          class="q-mb-md"
+          style="border: 1px solid var(--fc-border); border-radius: 8px; background: var(--fc-surface)"
+        >
+          <div class="q-pa-sm" style="font-size: 12px; color: var(--fc-text-light); line-height: 1.6">
+            <div style="font-weight:600; color: var(--fc-text); margin-bottom: 4px">
+              Форматы файлов
+            </div>
+            <div class="q-mb-sm">
+              Поддерживаются <b>.docx</b>, <b>.dotx</b>, <b>.doc</b>
+              (Word 2007 и новее). Рекомендуется <b>.docx</b>.
+              Для реквизитов (подпись, печать) — <b>.png</b>, <b>.jpg</b>, <b>.webp</b>.
+            </div>
+
+            <div style="font-weight:600; color: var(--fc-text); margin-bottom: 4px">
+              Текстовые теги
+            </div>
+            <div class="q-mb-xs">
+              Вставляйте в текст шаблона двойными фигурными скобками: <code style="background:#f5f5f5;padding:1px 4px;border-radius:3px">&#123;&#123;ТЕГ&#125;&#125;</code>
+            </div>
+            <table style="width:100%; border-collapse:collapse; font-size:11px" class="q-mb-sm">
+              <thead>
+                <tr style="background: var(--fc-bg-alt)">
+                  <th style="text-align:left; padding:3px 6px; border-bottom:1px solid var(--fc-border)">
+                    Тег
+                  </th>
+                  <th style="text-align:left; padding:3px 6px; border-bottom:1px solid var(--fc-border)">
+                    Подставляется
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="tag in templateTags"
+                  :key="tag.tag"
+                  style="border-bottom:1px solid var(--fc-border-light)"
+                >
+                  <td style="padding:2px 6px; white-space:nowrap">
+                    <code style="background:#e8f5e9;color:#2e7d32;padding:1px 4px;border-radius:3px">
+                      &#123;&#123;{{ tag.tag }}&#125;&#125;
+                    </code>
+                  </td>
+                  <td style="padding:2px 6px; color: var(--fc-text)">
+                    {{ tag.desc }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div style="font-weight:600; color: var(--fc-text); margin-bottom: 4px">
+              Теги изображений
+            </div>
+            <div class="q-mb-xs">
+              Строка в шаблоне должна содержать <b>только</b> тег — изображение вставится на его место.
+            </div>
+            <table style="width:100%; border-collapse:collapse; font-size:11px">
+              <thead>
+                <tr style="background: var(--fc-bg-alt)">
+                  <th style="text-align:left; padding:3px 6px; border-bottom:1px solid var(--fc-border)">
+                    Тег
+                  </th>
+                  <th style="text-align:left; padding:3px 6px; border-bottom:1px solid var(--fc-border)">
+                    Вставляется
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr style="border-bottom:1px solid var(--fc-border-light)">
+                  <td style="padding:2px 6px">
+                    <code style="background:#e3f2fd;color:#1565c0;padding:1px 4px;border-radius:3px">&#123;&#123;ПОДПИСЬ&#125;&#125;</code>
+                  </td>
+                  <td style="padding:2px 6px">
+                    Подпись директора (без расшифровки)
+                  </td>
+                </tr>
+                <tr style="border-bottom:1px solid var(--fc-border-light)">
+                  <td style="padding:2px 6px">
+                    <code style="background:#e3f2fd;color:#1565c0;padding:1px 4px;border-radius:3px">&#123;&#123;ПОДПИСЬ_РАСШ&#125;&#125;</code>
+                  </td>
+                  <td style="padding:2px 6px">
+                    Подпись с расшифровкой ФИО
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:2px 6px">
+                    <code style="background:#e3f2fd;color:#1565c0;padding:1px 4px;border-radius:3px">&#123;&#123;ПЕЧАТЬ&#125;&#125;</code>
+                  </td>
+                  <td style="padding:2px 6px">
+                    Печать организации
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </q-expansion-item>
+
         <!-- Реквизиты компании -->
         <div style="font-size: 14px; font-weight: 600; color: var(--fc-text); margin-bottom: 8px">
           Реквизиты компании
@@ -2573,6 +2674,35 @@ watch(tab, (val) => {
 })
 
 // ─── Шаблоны договоров ───────────────────────────────────────────────────────
+
+const templateTags = [
+  { tag: 'НОМЕР_ДОГОВОРА', desc: 'Номер договора (напр. «ФЦ-2025-001»)' },
+  { tag: 'ДАТА_ДОГОВОРА', desc: 'Дата договора прописью (напр. «01 января 2025 г.»)' },
+  { tag: 'АДРЕС', desc: 'Адрес объекта' },
+  { tag: 'ПЛОЩАДЬ', desc: 'Площадь объекта (число)' },
+  { tag: 'СРОК', desc: 'Срок выполнения работ (дней)' },
+  { tag: 'СУММА', desc: 'Сумма договора цифрами' },
+  { tag: 'СУММА_ПРОПИСЬЮ', desc: 'Сумма договора прописью (рубли)' },
+  { tag: 'АВАНС', desc: 'Авансовый платёж цифрами' },
+  { tag: 'ДОПЛАТА', desc: 'Второй платёж цифрами' },
+  { tag: 'ТРЕТИЙ_ПЛАТЕЖ', desc: 'Третий платёж цифрами' },
+  { tag: 'ТИП_ПРОЕКТА', desc: 'Тип проекта (Индивидуальный / Шаблонный / Авторский надзор)' },
+  { tag: 'ПОДТИП_ПРОЕКТА', desc: 'Подтип проекта (Полный, Эскизный, Стандарт…)' },
+  { tag: 'СЕГОДНЯ', desc: 'Текущая дата прописью' },
+  { tag: 'КЛИЕНТ', desc: 'ФИО клиента' },
+  { tag: 'ТЕЛЕФОН', desc: 'Телефон клиента' },
+  { tag: 'EMAIL', desc: 'Email клиента' },
+  { tag: 'ПАСПОРТ_СЕРИЯ', desc: 'Серия паспорта' },
+  { tag: 'ПАСПОРТ_НОМЕР', desc: 'Номер паспорта' },
+  { tag: 'ПАСПОРТ_КЕМ_ВЫДАН', desc: 'Кем выдан паспорт' },
+  { tag: 'ПАСПОРТ_ДАТА', desc: 'Дата выдачи паспорта' },
+  { tag: 'АДРЕС_РЕГИСТРАЦИИ', desc: 'Адрес регистрации клиента' },
+  { tag: 'ИНН', desc: 'ИНН (для организаций)' },
+  { tag: 'ОГРН', desc: 'ОГРН (для организаций)' },
+  { tag: 'ОРГАНИЗАЦИЯ', desc: 'Название организации' },
+  { tag: 'РЕКВИЗИТЫ', desc: 'Банковские реквизиты' },
+  { tag: 'ОТВЕТСТВЕННЫЙ', desc: 'Ответственное лицо организации' },
+]
 
 const requisiteSlots = [
   { type: 'signature', label: 'Подпись' },
