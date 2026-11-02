@@ -687,6 +687,32 @@
               <q-card-section v-else class="q-py-sm text-center" style="color: var(--fc-text-disabled); font-size: 11px">
                 Нет файлов
               </q-card-section>
+              <!-- Дата анкеты -->
+              <q-card-section class="q-pt-xs q-pb-sm">
+                <div class="text-caption q-mb-xs" style="color: var(--fc-text-light)">
+                  Дата анкеты
+                </div>
+                <div class="row q-gutter-xs items-center">
+                  <q-input
+                    v-model="techTaskDateInput"
+                    outlined
+                    dense
+                    type="date"
+                    style="flex: 1; font-size: 12px"
+                    :readonly="isArchived || (isExecutor && !isSurveyor)"
+                  />
+                  <q-btn
+                    v-if="!isArchived && (!isExecutor || isSurveyor)"
+                    unelevated
+                    dense
+                    size="sm"
+                    no-caps
+                    label="Сохранить"
+                    style="background: #4CAF50; color: white; border-radius: 4px; height: 32px"
+                    @click="saveTechTaskDate"
+                  />
+                </div>
+              </q-card-section>
             </q-card>
 
             <!-- Замер (как десктоп: ссылка на папку + дата + загрузка множества файлов) -->
@@ -1715,6 +1741,14 @@
           </q-card-section>
           <q-card-actions align="right">
             <q-btn flat label="Отмена" no-caps @click="timelineEditVisible = false" />
+            <q-btn
+              v-if="timelineEditEntry?.status !== 'skipped'"
+              flat
+              label="Пропустить"
+              no-caps
+              color="grey-7"
+              @click="skipTimelineEntry"
+            />
             <q-btn
               unelevated
               label="Сохранить"
@@ -3214,6 +3248,7 @@ const timelineEditEntry = ref(null)
 const timelineEditNormDays = ref('')
 const timelineEditActualDate = ref('')
 const timelineEditVisible = ref(false)
+const techTaskDateInput = ref('')
 
 function editNormDays(entry) {
   if (!can('crm_cards.deadlines') || entry.executor_role === 'header') return
@@ -3221,6 +3256,34 @@ function editNormDays(entry) {
   timelineEditNormDays.value = String(entry.custom_norm_days || entry.norm_days || '')
   timelineEditActualDate.value = entry.actual_date || ''
   timelineEditVisible.value = true
+}
+
+async function saveTechTaskDate() {
+  if (!card.value?.contract_id) return
+  try {
+    const dateVal = techTaskDateInput.value || null
+    await contractsApi.update(card.value.contract_id, { tech_task_date: dateVal })
+    if (contractData.value) contractData.value.tech_task_date = dateVal
+    $q.notify({ type: 'positive', message: 'Дата анкеты сохранена' })
+    await autoSetStartDate()
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка сохранения' })
+  }
+}
+
+async function skipTimelineEntry() {
+  const entry = timelineEditEntry.value
+  if (!entry) return
+  try {
+    const { api: ax } = await import('src/boot/axios')
+    await ax.put(`/api/v1/timeline/${card.value.contract_id}/entry/${encodeURIComponent(entry.stage_code)}`, { status: 'skipped', actual_date: null })
+    entry.status = 'skipped'
+    entry.actual_date = null
+    timelineEditVisible.value = false
+    $q.notify({ type: 'positive', message: 'Подэтап пропущен' })
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
+  }
 }
 
 async function saveTimelineEntry() {
@@ -4229,6 +4292,10 @@ async function loadAdditionalData(cardId) {
 
   // Авто-пересчёт даты START (запускаем фоново, не блокируем загрузку)
   autoSetStartDate()
+
+  // Инициализировать поле даты анкеты
+  const ttd = contractData.value?.tech_task_date || card.value?.tech_task_date
+  techTaskDateInput.value = ttd || ''
 
   // Чат — грузим всегда, чтобы данные были готовы при открытии вкладки
   loadChat()
