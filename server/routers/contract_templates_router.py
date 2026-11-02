@@ -1,20 +1,23 @@
 """
 Роутер для управления шаблонами договоров и реквизитами компании.
 
+Файлы хранятся на Яндекс.Диске:
+  Реквизиты : disk:/CRM/Системные/Реквизиты/{type}.{ext}
+  Шаблоны   : disk:/CRM/Системные/Шаблоны/{project_type}_{doc_type}.docx
+
 Endpoints:
-  GET    /api/contract-templates/requisites                — список реквизитов
-  POST   /api/contract-templates/requisites/{type}         — загрузить реквизит (image)
-  DELETE /api/contract-templates/requisites/{type}         — удалить реквизит
+  GET    /api/v1/contract-templates/requisites                — список реквизитов
+  POST   /api/v1/contract-templates/requisites/{type}         — загрузить реквизит (image)
+  DELETE /api/v1/contract-templates/requisites/{type}         — удалить реквизит
 
-  GET    /api/contract-templates/templates                 — все шаблоны
-  POST   /api/contract-templates/templates/{project_type}/{doc_type}  — загрузить шаблон
-  DELETE /api/contract-templates/templates/{project_type}/{doc_type}  — удалить шаблон
+  GET    /api/v1/contract-templates/templates                 — все шаблоны
+  POST   /api/v1/contract-templates/templates/{project_type}/{doc_type}  — загрузить шаблон
+  DELETE /api/v1/contract-templates/templates/{project_type}/{doc_type}  — удалить шаблон
 
-  POST   /api/contract-templates/generate                  — сгенерировать документ
+  POST   /api/v1/contract-templates/generate                  — сгенерировать документ
 """
 
 from datetime import datetime
-import os
 
 from auth import get_current_user as get_current_active_user
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -32,22 +35,19 @@ from database import CompanyRequisite, ContractTemplate, Employee, get_db
 
 router = APIRouter(prefix="/api/v1/contract-templates", tags=["contract-templates"])
 
-REQUISITES_DIR = os.path.join("uploads", "requisites")
-TEMPLATES_DIR = os.path.join("uploads", "contract_templates")
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
 ALLOWED_DOC_TYPES = {
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "application/msword",
-    "application/octet-stream",  # браузеры иногда шлют .dotx как octet-stream
+    "application/octet-stream",
 }
 VALID_REQUISITE_TYPES = {"signature", "signature_name", "seal"}
 VALID_PROJECT_TYPES = {"Индивидуальный", "Шаблонный", "Авторский надзор"}
 VALID_DOC_TYPES = {"contract", "act_pr", "act_kd", "act_info", "act_final"}
 
-
-def _ensure_dirs():
-    os.makedirs(REQUISITES_DIR, exist_ok=True)
-    os.makedirs(TEMPLATES_DIR, exist_ok=True)
+# Папки на ЯД (без «disk:» префикса — YandexDiskService принимает без него)
+YD_REQUISITES_FOLDER = "/CRM/Системные/Реквизиты"
+YD_TEMPLATES_FOLDER = "/CRM/Системные/Шаблоны"
 
 
 def _require_admin(current_user: Employee = Depends(get_current_active_user)):
@@ -82,20 +82,22 @@ async def upload_requisite(
     if file.content_type not in ALLOWED_IMAGE_TYPES:
         raise HTTPException(status_code=400, detail="Разрешены только изображения (JPEG/PNG/WebP)")
 
-    _ensure_dirs()
+    import os
+
     ext = os.path.splitext(file.filename or "")[1] or ".png"
-    file_name = f"{requisite_type}{ext}"
-    file_path = file_name
-    full_path = os.path.join(REQUISITES_DIR, file_path)
+    yd_path = f"{YD_REQUISITES_FOLDER}/{requisite_type}{ext}"
 
     content = await file.read()
-    with open(full_path, "wb") as f:
-        f.write(content)
+    yd = YandexDiskService()
+    try:
+        yd.upload_file_from_bytes(content, yd_path)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки на ЯД: {e}")
 
     existing = db.query(CompanyRequisite).filter(CompanyRequisite.requisite_type == requisite_type).first()
     if existing:
-        existing.file_name = file_name
-        existing.file_path = file_path
+        existing.file_name = file.filename or f"{requisite_type}{ext}"
+        existing.file_path = yd_path
         existing.updated_at = datetime.utcnow()
         existing.updated_by = current_user.id
         db.commit()
@@ -104,8 +106,8 @@ async def upload_requisite(
 
     req = CompanyRequisite(
         requisite_type=requisite_type,
-        file_name=file_name,
-        file_path=file_path,
+        file_name=file.filename or f"{requisite_type}{ext}",
+        file_path=yd_path,
         updated_by=current_user.id,
     )
     db.add(req)
@@ -123,9 +125,11 @@ def delete_requisite(
     req = db.query(CompanyRequisite).filter(CompanyRequisite.requisite_type == requisite_type).first()
     if not req:
         raise HTTPException(status_code=404, detail="Реквизит не найден")
-    full_path = os.path.join(REQUISITES_DIR, req.file_path)
-    if os.path.exists(full_path):
-        os.remove(full_path)
+    yd = YandexDiskService()
+    try:
+        yd.delete_file(req.file_path)
+    except Exception:
+        pass  # файл мог быть удалён вручную, не блокируем удаление записи
     db.delete(req)
     db.commit()
 
@@ -153,19 +157,23 @@ async def upload_template(
         raise HTTPException(status_code=400, detail=f"Неверный тип проекта: {project_type}")
     if doc_type not in VALID_DOC_TYPES:
         raise HTTPException(status_code=400, detail=f"Неверный тип документа: {doc_type}")
+
+    import os
+
     ext = os.path.splitext(file.filename or "")[1].lower()
     if ext not in (".docx", ".dotx", ".doc"):
         raise HTTPException(status_code=400, detail="Разрешены только DOCX/DOC/DOTX файлы")
 
-    _ensure_dirs()
     safe_type = project_type.replace(" ", "_")
     file_name = f"{safe_type}_{doc_type}{ext}"
-    file_path = file_name
-    full_path = os.path.join(TEMPLATES_DIR, file_path)
+    yd_path = f"{YD_TEMPLATES_FOLDER}/{file_name}"
 
     content = await file.read()
-    with open(full_path, "wb") as f:
-        f.write(content)
+    yd = YandexDiskService()
+    try:
+        yd.upload_file_from_bytes(content, yd_path)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки на ЯД: {e}")
 
     existing = (
         db.query(ContractTemplate)
@@ -176,12 +184,8 @@ async def upload_template(
         .first()
     )
     if existing:
-        if existing.file_path != file_path:
-            old_path = os.path.join(TEMPLATES_DIR, existing.file_path)
-            if os.path.exists(old_path):
-                os.remove(old_path)
         existing.file_name = file.filename or file_name
-        existing.file_path = file_path
+        existing.file_path = yd_path
         existing.uploaded_at = datetime.utcnow()
         existing.uploaded_by = current_user.id
         db.commit()
@@ -192,7 +196,7 @@ async def upload_template(
         project_type=project_type,
         doc_type=doc_type,
         file_name=file.filename or file_name,
-        file_path=file_path,
+        file_path=yd_path,
         uploaded_by=current_user.id,
     )
     db.add(tmpl)
@@ -218,9 +222,11 @@ def delete_template(
     )
     if not tmpl:
         raise HTTPException(status_code=404, detail="Шаблон не найден")
-    full_path = os.path.join(TEMPLATES_DIR, tmpl.file_path)
-    if os.path.exists(full_path):
-        os.remove(full_path)
+    yd = YandexDiskService()
+    try:
+        yd.delete_file(tmpl.file_path)
+    except Exception:
+        pass
     db.delete(tmpl)
     db.commit()
 

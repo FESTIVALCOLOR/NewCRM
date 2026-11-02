@@ -222,20 +222,19 @@ def _replace_text_in_runs(runs, ctx: dict) -> None:
             r.text = ""
 
 
-def _get_image_bytes(db: Session, placeholder: str) -> bytes | None:
-    """Возвращает байты изображения реквизита или None."""
+def _get_image_bytes(db: Session, placeholder: str, yd_service: YandexDiskService) -> bytes | None:
+    """Скачивает байты изображения реквизита с ЯД или возвращает None."""
     req_type = REQUISITE_TYPE_MAP.get(placeholder)
     if not req_type:
         return None
     req = db.query(CompanyRequisite).filter(CompanyRequisite.requisite_type == req_type).first()
     if not req:
         return None
-    path = os.path.join("uploads", "requisites", req.file_path)
-    if not os.path.exists(path):
-        logger.warning(f"Файл реквизита не найден: {path}")
+    try:
+        return yd_service.download_file_to_bytes(req.file_path)
+    except Exception as e:
+        logger.warning(f"Не удалось скачать реквизит с ЯД ({req.file_path}): {e}")
         return None
-    with open(path, "rb") as f:
-        return f.read()
 
 
 def _paragraph_is_image_placeholder(para) -> str | None:
@@ -246,9 +245,9 @@ def _paragraph_is_image_placeholder(para) -> str | None:
     return None
 
 
-def _replace_image_in_paragraph(doc: Document, para, db: Session, placeholder: str) -> None:
+def _replace_image_in_paragraph(doc: Document, para, db: Session, placeholder: str, yd_service: YandexDiskService) -> None:
     """Заменяет параграф-плейсхолдер изображением из реквизитов."""
-    img_bytes = _get_image_bytes(db, placeholder)
+    img_bytes = _get_image_bytes(db, placeholder, yd_service)
     if not img_bytes:
         # Если изображение не найдено — просто очищаем плейсхолдер
         for r in para.runs:
@@ -265,12 +264,12 @@ def _replace_image_in_paragraph(doc: Document, para, db: Session, placeholder: s
     run.add_picture(stream, width=Inches(1.5))
 
 
-def _fill_docx(doc: Document, ctx: dict, db: Session) -> None:
+def _fill_docx(doc: Document, ctx: dict, db: Session, yd_service: YandexDiskService) -> None:
     """Заполняет все плейсхолдеры в документе (параграфы + таблицы)."""
     for para in doc.paragraphs:
         img_ph = _paragraph_is_image_placeholder(para)
         if img_ph:
-            _replace_image_in_paragraph(doc, para, db, img_ph)
+            _replace_image_in_paragraph(doc, para, db, img_ph, yd_service)
         else:
             _replace_text_in_runs(para.runs, ctx)
 
@@ -280,7 +279,7 @@ def _fill_docx(doc: Document, ctx: dict, db: Session) -> None:
                 for para in cell.paragraphs:
                     img_ph = _paragraph_is_image_placeholder(para)
                     if img_ph:
-                        _replace_image_in_paragraph(doc, para, db, img_ph)
+                        _replace_image_in_paragraph(doc, para, db, img_ph, yd_service)
                     else:
                         _replace_text_in_runs(para.runs, ctx)
 
@@ -340,19 +339,21 @@ def generate_document(
     if not template:
         return {"success": False, "message": f"Шаблон не найден для {contract.project_type} / {doc_type}"}
 
-    template_path = os.path.join("uploads", "contract_templates", template.file_path)
-    if not os.path.exists(template_path):
-        return {"success": False, "message": "Файл шаблона не найден на диске"}
-
     meta = DOC_TYPE_META.get(
         doc_type,
         {"label": doc_type, "yd_subfolder": "Документы", "db_stage": doc_type},
     )
 
     try:
-        doc = Document(template_path)
+        # Скачиваем шаблон с ЯД во временный файл
+        try:
+            template_bytes = yd_service.download_file_to_bytes(template.file_path)
+        except Exception as e:
+            return {"success": False, "message": f"Не удалось скачать шаблон с ЯД: {e}"}
+
+        doc = Document(io.BytesIO(template_bytes))
         ctx = _build_context(contract, client, doc_type)
-        _fill_docx(doc, ctx, db)
+        _fill_docx(doc, ctx, db, yd_service)
 
         with tempfile.TemporaryDirectory() as tmpdir:
             # Имя файла: «Договор-Фестиваль-Иванов ИА.pdf»

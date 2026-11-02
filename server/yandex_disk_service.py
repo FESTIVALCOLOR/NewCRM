@@ -87,6 +87,22 @@ class YandexDiskService:
 
         return self.get_file_info(yandex_path)
 
+    def download_file_to_bytes(self, yandex_path: str) -> bytes:
+        """Скачивает файл с ЯД и возвращает байты (без сохранения на диск)."""
+        resp = requests.get(
+            f"{self.base_url}/resources/download",
+            headers=self.headers,
+            params={"path": yandex_path},
+            timeout=30,
+        )
+        if resp.status_code != 200:
+            raise Exception(f"Ошибка получения ссылки скачивания: {resp.json()}")
+        download_url = resp.json().get("href")
+        file_resp = requests.get(download_url, timeout=120)
+        if file_resp.status_code != 200:
+            raise Exception(f"Ошибка скачивания файла с ЯД: {yandex_path}")
+        return file_resp.content
+
     def download_file(self, yandex_path: str, local_path: str) -> str:
         """
         Скачивание файла с Яндекс.Диска
