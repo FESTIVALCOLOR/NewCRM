@@ -13,6 +13,7 @@
 Изображения: вся строка должна содержать ТОЛЬКО плейсхолдер изображения.
 """
 
+import copy
 from datetime import datetime
 import io
 import logging
@@ -22,7 +23,9 @@ import subprocess
 import tempfile
 
 from docx import Document
+from docx.oxml.ns import qn
 from docx.shared import Inches
+from lxml import etree
 from num2words import num2words
 from sqlalchemy.orm import Session
 from yandex_disk_service import YandexDiskService
@@ -221,6 +224,65 @@ def _get_image_bytes(db: Session, placeholder: str, yd_service: YandexDiskServic
         return None
 
 
+_WP = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+_A_NS = "http://schemas.openxmlformats.org/drawingml/2006/main"
+
+
+def _make_picture_floating(run) -> None:
+    """Конвертирует inline картинку в run во floating поверх текста (wp:anchor + wrapNone)."""
+    r_elem = run._r
+    drawing = r_elem.find(qn("w:drawing"))
+    if drawing is None:
+        return
+    inline = drawing.find(qn("wp:inline"))
+    if inline is None:
+        return
+
+    extent = inline.find(qn("wp:extent"))
+    docPr = inline.find(qn("wp:docPr"))
+    cNvGFP = inline.find(qn("wp:cNvGraphicFramePr"))
+    graphic = inline.find(f"{{{_A_NS}}}graphic")
+
+    cx = extent.get("cx", "1371600") if extent is not None else "1371600"
+    cy = extent.get("cy", "571500") if extent is not None else "571500"
+    doc_id = docPr.get("id", "1") if docPr is not None else "1"
+    doc_name = docPr.get("name", "image") if docPr is not None else "image"
+
+    anchor = etree.Element(
+        f"{{{_WP}}}anchor",
+        {
+            "distT": "0",
+            "distB": "0",
+            "distL": "114300",
+            "distR": "114300",
+            "simplePos": "0",
+            "relativeHeight": "251659264",
+            "behindDoc": "0",
+            "locked": "0",
+            "layoutInCell": "1",
+            "allowOverlap": "1",
+        },
+    )
+    etree.SubElement(anchor, f"{{{_WP}}}simplePos", x="0", y="0")
+    posH = etree.SubElement(anchor, f"{{{_WP}}}positionH", relativeFrom="character")
+    etree.SubElement(posH, f"{{{_WP}}}posOffset").text = "0"
+    posV = etree.SubElement(anchor, f"{{{_WP}}}positionV", relativeFrom="line")
+    etree.SubElement(posV, f"{{{_WP}}}posOffset").text = "0"
+    etree.SubElement(anchor, f"{{{_WP}}}extent", cx=cx, cy=cy)
+    etree.SubElement(anchor, f"{{{_WP}}}effectExtent", l="0", t="0", r="0", b="0")
+    etree.SubElement(anchor, f"{{{_WP}}}wrapNone")
+    etree.SubElement(anchor, f"{{{_WP}}}docPr", id=doc_id, name=doc_name)
+    if cNvGFP is not None:
+        anchor.append(copy.deepcopy(cNvGFP))
+    else:
+        etree.SubElement(anchor, f"{{{_WP}}}cNvGraphicFramePr")
+    if graphic is not None:
+        anchor.append(copy.deepcopy(graphic))
+
+    drawing.remove(inline)
+    drawing.append(anchor)
+
+
 def _replace_text_in_runs(runs, ctx: dict, db: Session, yd_service: YandexDiskService) -> None:
     """Заменяет плейсхолдеры {{КЛЮЧ}} и изображения в runs параграфа.
 
@@ -241,6 +303,7 @@ def _replace_text_in_runs(runs, ctx: dict, db: Session, yd_service: YandexDiskSe
             if img_bytes:
                 try:
                     r.add_picture(io.BytesIO(img_bytes), width=Inches(1.5))
+                    _make_picture_floating(r)
                     logger.info(f"Изображение {stripped} вставлено ({len(img_bytes)} байт)")
                 except Exception as e:
                     logger.error(f"Ошибка вставки {stripped}: {e}")
@@ -280,11 +343,20 @@ def _process_table(table, ctx: dict, db: Session, yd_service: YandexDiskService)
 
 
 def _fill_docx(doc: Document, ctx: dict, db: Session, yd_service: YandexDiskService) -> None:
-    """Заполняет все плейсхолдеры в документе (параграфы + таблицы рекурсивно)."""
+    """Заполняет все плейсхолдеры в документе (параграфы + таблицы + колонтитулы)."""
     for para in doc.paragraphs:
         _replace_text_in_runs(para.runs, ctx, db, yd_service)
     for table in doc.tables:
         _process_table(table, ctx, db, yd_service)
+    # Верхние и нижние колонтитулы
+    for section in doc.sections:
+        for hf in (section.header, section.footer):
+            if hf is None or hf.is_linked_to_previous:
+                continue
+            for para in hf.paragraphs:
+                _replace_text_in_runs(para.runs, ctx, db, yd_service)
+            for table in hf.tables:
+                _process_table(table, ctx, db, yd_service)
 
 
 def _convert_to_pdf(docx_path: str) -> bytes:
