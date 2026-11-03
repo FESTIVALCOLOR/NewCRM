@@ -641,10 +641,16 @@ def generate_document(
         if logo_req:
             # Ширина лого = вся текстовая область (page_width - margins), в дюймах
             sec = doc.sections[0] if doc.sections else None
-            if sec and sec.page_width:
-                logo_width = (sec.page_width - sec.left_margin - sec.right_margin) / 914400 * 0.75
+            text_area_w = (
+                (sec.page_width - sec.left_margin - sec.right_margin) / 914400 if sec and sec.page_width else 6.3  # fallback: A4 типичная ширина текста
+            )
+            # Индивидуальный (все типы) и Шаблонный договор — уменьшить в 2 раза
+            # Шаблонный акты — полный 0.75
+            if contract.project_type == "Шаблонный" and doc_type != "contract":
+                logo_scale = 0.75
             else:
-                logo_width = 6.3 * 0.75  # fallback: A4 типичная ширина текста
+                logo_scale = 0.375
+            logo_width = text_area_w * logo_scale
             image_params["{{ЛОГО_АГЕНТА}}"] = {
                 **image_params["{{ЛОГО_АГЕНТА}}"],
                 "logo_req": logo_req,
