@@ -649,7 +649,7 @@ def generate_document(
             if contract.project_type == "Шаблонный" and doc_type != "contract":
                 logo_scale = 0.75
             else:
-                logo_scale = 0.375
+                logo_scale = 0.1875
             logo_width = text_area_w * logo_scale
             image_params["{{ЛОГО_АГЕНТА}}"] = {
                 **image_params["{{ЛОГО_АГЕНТА}}"],
