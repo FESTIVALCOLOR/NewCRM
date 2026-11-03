@@ -593,11 +593,37 @@ async def get_crm_card(card_id: int, current_user: Employee = Depends(get_curren
             .first()
         )
         if wf:
+            substep_code = wf.current_substep_code
+            # Проверяем, не указывает ли substep_code на уже выполненную/пропущенную запись.
+            # Если да — делаем глобальный поиск первого незаполненного подэтапа.
+            if substep_code and contract and contract.id:
+                stale_entry = (
+                    db.query(ProjectTimelineEntry)
+                    .filter(
+                        ProjectTimelineEntry.stage_code == substep_code,
+                        ProjectTimelineEntry.contract_id == contract.id,
+                    )
+                    .first()
+                )
+                is_stale = stale_entry and (stale_entry.status == "skipped" or (stale_entry.actual_date and stale_entry.actual_date not in ("", None)))
+                if is_stale:
+                    true_next = (
+                        db.query(ProjectTimelineEntry)
+                        .filter(
+                            ProjectTimelineEntry.contract_id == contract.id,
+                            ProjectTimelineEntry.executor_role != "header",
+                            or_(ProjectTimelineEntry.actual_date.is_(None), ProjectTimelineEntry.actual_date == ""),
+                            or_(ProjectTimelineEntry.status.is_(None), ProjectTimelineEntry.status != "skipped"),
+                        )
+                        .order_by(ProjectTimelineEntry.sort_order)
+                        .first()
+                    )
+                    substep_code = true_next.stage_code if true_next else None
             substep_name = None
-            if wf.current_substep_code:
-                tle = db.query(ProjectTimelineEntry.stage_name).filter(ProjectTimelineEntry.stage_code == wf.current_substep_code).first()
+            if substep_code:
+                tle = db.query(ProjectTimelineEntry.stage_name).filter(ProjectTimelineEntry.stage_code == substep_code).first()
                 substep_name = tle.stage_name if tle else None
-            result["current_substep_code"] = wf.current_substep_code
+            result["current_substep_code"] = substep_code
             result["current_substep_name"] = substep_name
             result["workflow_status"] = wf.status
             result["revision_count"] = wf.revision_count
@@ -1977,10 +2003,12 @@ async def workflow_repair(card_id: int, current_user: Employee = Depends(require
         wf.updated_at = datetime.utcnow()
         logger.info(f"[WorkflowRepair] status={wf.status}, substep={next_entry.stage_code} ({next_entry.executor_role})")
     else:
-        # Все строки заполнены — стадия завершена, можно перевести в act_signing
-        if wf.status not in ("act_signing", "stage_completed"):
-            wf.status = "act_signing"
-            wf.updated_at = datetime.utcnow()
+        # Все строки заполнены — стадия завершена
+        wf.status = "stage_completed"
+        wf.current_substep_code = None
+        wf.current_substage_group = None
+        wf.updated_at = datetime.utcnow()
+        logger.info(f"[WorkflowRepair] card={card_id}: stage {stage_name} завершена — stage_completed")
 
     # Пересчёт дедлайна
     _update_executor_deadline_for_next_substep(db, card_id, stage_name, contract_id)
