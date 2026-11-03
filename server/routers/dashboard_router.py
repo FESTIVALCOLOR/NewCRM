@@ -1164,9 +1164,9 @@ async def get_reports_summary(
         agents_list = db.query(Agent).filter(Agent.status == "активный").order_by(Agent.name).all()
         agent_color_map = {a.name: a.color for a in agents_list}
 
-        # Группировка отфильтрованных договоров по agent_type
+        # Группировка всех договоров (включая надзор) по agent_type
         agent_data: dict = defaultdict(lambda: {"clients": set(), "contracts": 0, "amount": 0.0, "area": 0.0})
-        for c in filtered:
+        for c in filtered_full:
             key = c.agent_type or "Не указан"
             agent_data[key]["clients"].add(c.client_id)
             agent_data[key]["contracts"] += 1
@@ -1187,9 +1187,9 @@ async def get_reports_summary(
                 }
             )
 
-        # По городам (из отфильтрованных договоров)
+        # По городам (все договоры включая надзор)
         cities_counter: dict = defaultdict(int)
-        for c in filtered:
+        for c in filtered_full:
             if c.city:
                 cities_counter[c.city] += 1
         by_cities = dict(sorted(cities_counter.items(), key=lambda x: -x[1]))

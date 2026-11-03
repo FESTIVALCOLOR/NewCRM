@@ -78,16 +78,16 @@
         >
           <div class="client-row1">
             <q-icon
-              :name="client.organization_name ? 'business' : 'person'"
-              :color="client.organization_name ? 'blue-6' : 'green-6'"
+              :name="client.client_type === 'Юридическое лицо' ? 'business' : 'person'"
+              :color="client.client_type === 'Юридическое лицо' ? 'blue-6' : 'green-6'"
               size="16px"
               class="q-mr-xs"
               style="flex-shrink:0"
             />
             <span class="client-name">{{ clientDisplayName(client) }}</span>
             <q-badge
-              :style="{ background: client.organization_name ? 'var(--fc-blue)' : 'var(--fc-green)', color: 'white', fontSize: '9px', flexShrink: '0' }"
-              :label="client.organization_name ? 'Юр.' : 'Физ.'"
+              :style="{ background: client.client_type === 'Юридическое лицо' ? 'var(--fc-blue)' : 'var(--fc-green)', color: 'white', fontSize: '9px', flexShrink: '0' }"
+              :label="client.client_type === 'Юридическое лицо' ? 'Юр.' : 'Физ.'"
               dense
             />
           </div>
@@ -117,15 +117,15 @@
           @click="openClient(client.id)"
         >
           <span class="clh-name cls-name">
-            <q-icon :name="client.organization_name ? 'business' : 'person'" :color="client.organization_name ? 'blue-6' : 'green-6'" size="14px" style="margin-right:4px;flex-shrink:0" />
+            <q-icon :name="client.client_type === 'Юридическое лицо' ? 'business' : 'person'" :color="client.client_type === 'Юридическое лицо' ? 'blue-6' : 'green-6'" size="14px" style="margin-right:4px;flex-shrink:0" />
             {{ clientDisplayName(client) }}
           </span>
           <span class="clh-phone cls-meta">{{ client.phone || '—' }}</span>
           <span class="clh-email cls-meta">{{ client.email || '—' }}</span>
           <span class="clh-type">
             <q-badge
-              :style="{ background: client.organization_name ? 'var(--fc-blue)' : 'var(--fc-green)', color: 'white', fontSize: '9px' }"
-              :label="client.organization_name ? 'Юр.' : 'Физ.'"
+              :style="{ background: client.client_type === 'Юридическое лицо' ? 'var(--fc-blue)' : 'var(--fc-green)', color: 'white', fontSize: '9px' }"
+              :label="client.client_type === 'Юридическое лицо' ? 'Юр.' : 'Физ.'"
               dense
             />
           </span>
@@ -185,9 +185,9 @@ const displayedClients = computed(() => {
   // Фильтр по типу
   if (clientType.value && clientType.value !== 'Все') {
     if (clientType.value === 'Юридическое лицо') {
-      items = items.filter(c => c.organization_name && c.organization_name.trim())
+      items = items.filter(c => c.client_type === 'Юридическое лицо')
     } else {
-      items = items.filter(c => !c.organization_name || !c.organization_name.trim())
+      items = items.filter(c => c.client_type === 'Физическое лицо')
     }
   }
 
