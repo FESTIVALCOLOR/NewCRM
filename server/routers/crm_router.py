@@ -593,39 +593,24 @@ async def get_crm_card(card_id: int, current_user: Employee = Depends(get_curren
             .first()
         )
         if wf:
-            substep_code = wf.current_substep_code
-            # Если substep_code пустой или указывает на выполненную/пропущенную запись —
-            # делаем глобальный поиск первого незаполненного подэтапа по всему договору.
+            # Всегда вычисляем substep из таймлайна напрямую — это единственный источник
+            # истины. WF.current_substep_code устаревает после ручного сброса/repair.
+            substep_code = None
             if contract and contract.id:
-                need_global_fallback = False
-                if not substep_code:
-                    # substep обнулён (например после repair stage_completed) — ищем глобально
-                    need_global_fallback = True
-                else:
-                    stale_entry = (
-                        db.query(ProjectTimelineEntry)
-                        .filter(
-                            ProjectTimelineEntry.stage_code == substep_code,
-                            ProjectTimelineEntry.contract_id == contract.id,
-                        )
-                        .first()
+                true_next = (
+                    db.query(ProjectTimelineEntry)
+                    .filter(
+                        ProjectTimelineEntry.contract_id == contract.id,
+                        ProjectTimelineEntry.executor_role != "header",
+                        or_(ProjectTimelineEntry.actual_date.is_(None), ProjectTimelineEntry.actual_date == ""),
+                        or_(ProjectTimelineEntry.status.is_(None), ProjectTimelineEntry.status != "skipped"),
                     )
-                    is_stale = stale_entry and (stale_entry.status == "skipped" or (stale_entry.actual_date and stale_entry.actual_date not in ("", None)))
-                    if is_stale:
-                        need_global_fallback = True
-                if need_global_fallback:
-                    true_next = (
-                        db.query(ProjectTimelineEntry)
-                        .filter(
-                            ProjectTimelineEntry.contract_id == contract.id,
-                            ProjectTimelineEntry.executor_role != "header",
-                            or_(ProjectTimelineEntry.actual_date.is_(None), ProjectTimelineEntry.actual_date == ""),
-                            or_(ProjectTimelineEntry.status.is_(None), ProjectTimelineEntry.status != "skipped"),
-                        )
-                        .order_by(ProjectTimelineEntry.sort_order)
-                        .first()
-                    )
-                    substep_code = true_next.stage_code if true_next else None
+                    .order_by(ProjectTimelineEntry.sort_order)
+                    .first()
+                )
+                substep_code = true_next.stage_code if true_next else None
+            else:
+                substep_code = wf.current_substep_code
             substep_name = None
             if substep_code:
                 tle = db.query(ProjectTimelineEntry.stage_name).filter(ProjectTimelineEntry.stage_code == substep_code).first()
