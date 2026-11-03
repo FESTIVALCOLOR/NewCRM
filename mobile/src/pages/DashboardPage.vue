@@ -381,14 +381,16 @@ async function loadMyTasks() {
     ])
     const svData = svResp?.data || []
 
+    const permsStore = usePermissionsStore()
+
     // CRM карточки (уже не архивные — archived=false передан в getCards)
     const crmFiltered = [...(ind || []), ...(tmpl || [])].filter(c =>
-      isDirector ? true : _isAssignedCrm(c, userId),
+      isDirector || permsStore.has('crm_cards.view_all') ? true : _isAssignedCrm(c, userId),
     )
 
     // Карточки надзора (status=active, включая паузированные — они выделяются цветом)
     const svFiltered = svData
-      .filter(c => (isDirector ? true : _isAssignedSupervision(c, userId)))
+      .filter(c => (isDirector || permsStore.has('supervision.view_all') ? true : _isAssignedSupervision(c, userId)))
       .map(c => ({ ...c, _card_type: 'supervision' }))
 
     const byDeadline = (a, b) => {

@@ -74,6 +74,7 @@ PERMISSION_NAMES: dict[str, str] = {
     "crm_cards.files_delete": "Удаление файлов в CRM",
     "crm_cards.deadlines": "Управление дедлайнами CRM",
     "crm_cards.payments": "Оплаты в CRM карточках",
+    "crm_cards.view_all": "Показывать все карточки СРМ (не только свои)",
     # === Надзор ===
     "supervision.update": "Редактирование карточек надзора",
     "supervision.move": "Перемещение карточек надзора",
@@ -87,6 +88,7 @@ PERMISSION_NAMES: dict[str, str] = {
     "supervision.deadlines": "Управление дедлайнами надзора",
     "supervision.payments": "Оплаты в карточках надзора",
     "supervision.view_archive": "Просмотр архива надзора",
+    "supervision.view_all": "Показывать все карточки надзора (не только свои)",
     # === Платежи (глобальные) ===
     "payments.create": "Создание платежей",
     "payments.update": "Редактирование платежей",

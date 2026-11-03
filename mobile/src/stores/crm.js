@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { crmApi } from 'src/services/api'
 import { useAuthStore } from './auth'
+import { usePermissionsStore } from './permissions'
 
 // Колонки CRM доски — ТОЧНЫЕ названия из десктопа
 const COLUMNS_INDIVIDUAL = [
@@ -50,6 +51,10 @@ export const useCrmStore = defineStore('crm', () => {
 
     // Руководитель и старший менеджер видят всё
     if (hasPos('Руководитель студии', 'Старший менеджер проектов')) return cards.value
+
+    // Право view_all — показывать все карточки (для СДП/ГАП по выдаче администратора)
+    const perms = usePermissionsStore()
+    if (perms.has('crm_cards.view_all')) return cards.value
 
     const empId = auth.user.id
 
