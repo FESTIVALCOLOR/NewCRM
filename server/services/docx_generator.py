@@ -352,12 +352,63 @@ def _split_run_with_images(r, db: Session, yd_service: YandexDiskService, ctx: d
             insert_after = new_r_elem
 
 
+def _replace_cross_run_images(runs, ctx: dict, db: Session, yd_service: YandexDiskService) -> None:
+    """Проход 2.5: кросс-run IMAGE_PLACEHOLDERS.
+
+    Word разбивает {{ПОДПИСЬ_РАСШ}} или {{ПЕЧАТЬ}} по нескольким runs.
+    Нормализует плейсхолдер в один run и вставляет картинку.
+    """
+    for placeholder in IMAGE_PLACEHOLDERS:
+        texts = [r.text for r in runs]
+        full = "".join(texts)
+        if placeholder not in full:
+            continue
+        ph_start = full.index(placeholder)
+        ph_end = ph_start + len(placeholder)
+        pos = 0
+        start_run = end_run = None
+        start_off = end_off = 0
+        for i, t in enumerate(texts):
+            rend = pos + len(t)
+            if start_run is None and pos <= ph_start < rend:
+                start_run = i
+                start_off = ph_start - pos
+            if end_run is None and pos < ph_end <= rend:
+                end_run = i
+                end_off = ph_end - pos
+                break
+            pos = rend
+        if start_run is None or end_run is None or start_run == end_run:
+            continue  # Уже обработано в Проходе 1
+        runs[start_run].text = texts[start_run][:start_off] + placeholder
+        for i in range(start_run + 1, end_run):
+            runs[i].text = ""
+        runs[end_run].text = texts[end_run][end_off:]
+        r = runs[start_run]
+        if r.text.strip() == placeholder:
+            params = _IMAGE_FLOAT_PARAMS.get(placeholder, _IMAGE_FLOAT_DEFAULT)
+            img_bytes = _get_image_bytes(db, placeholder, yd_service)
+            r.text = ""
+            if img_bytes:
+                try:
+                    r.add_picture(io.BytesIO(img_bytes), width=Inches(params["width"]))
+                    _make_picture_floating(r, params["pos_h"], params["pos_v"])
+                    logger.info(f"Изображение {placeholder} вставлено (cross-run, {len(img_bytes)} байт)")
+                except Exception as e:
+                    logger.error(f"Ошибка вставки {placeholder} (cross-run): {e}")
+            else:
+                logger.warning(f"Изображение {placeholder} не найдено (cross-run)")
+        elif any(ph in r.text for ph in IMAGE_PLACEHOLDERS):
+            _split_run_with_images(r, db, yd_service, ctx)
+
+
 def _replace_text_in_runs(runs, ctx: dict, db: Session, yd_service: YandexDiskService) -> None:
     """Заменяет плейсхолдеры {{КЛЮЧ}} и изображения в runs параграфа.
 
     Проход 1: каждый run отдельно — сохраняет bold/italic/size.
               Если run целиком содержит IMAGE_PLACEHOLDER — вставляет картинку (floating).
               Если IMAGE_PLACEHOLDER смешан с текстом — разбивает run (_split_run_with_images).
+    Проход 2.5: кросс-run IMAGE_PLACEHOLDERS (_replace_cross_run_images).
     Проход 2: кросс-run текстовые плейсхолдеры (Word разбил {{КЛЮЧ}} на несколько runs).
     """
     if not runs:
@@ -386,6 +437,9 @@ def _replace_text_in_runs(runs, ctx: dict, db: Session, yd_service: YandexDiskSe
         elif "{{" in r.text:
             for key, value in ctx.items():
                 r.text = r.text.replace("{{" + key + "}}", value)
+
+    # Проход 2.5: кросс-run IMAGE_PLACEHOLDERS
+    _replace_cross_run_images(runs, ctx, db, yd_service)
 
     # Проход 2: кросс-run текстовые плейсхолдеры (Word разбил {{КЛЮЧ}} на несколько runs)
     # Заменяем каждый плейсхолдер точечно — только затронутые runs, сохраняя форматирование.
