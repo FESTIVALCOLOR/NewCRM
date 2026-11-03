@@ -1036,26 +1036,30 @@ async def get_reports_summary(
     """Агрегация KPI-метрик с разбивкой по агентам для страницы Отчёты."""
     try:
         # --- Загрузить все договоры одним запросом, потом фильтровать в Python ---
-        # Исключаем Авторский надзор — для него отдельная секция
-        query = db.query(Contract).filter(Contract.project_type != "Авторский надзор")
+        # Базовый фильтр (без исключения Авторского надзора) — для KPI-счётчиков
+        base_query = db.query(Contract)
         if agent_type:
-            query = query.filter(Contract.agent_type == agent_type)
+            base_query = base_query.filter(Contract.agent_type == agent_type)
         if city:
-            query = query.filter(Contract.city == city)
+            base_query = base_query.filter(Contract.city == city)
         if project_type:
-            query = query.filter(Contract.project_type == project_type)
+            base_query = base_query.filter(Contract.project_type == project_type)
 
-        all_contracts = query.all()
+        # Все договоры включая Авторский надзор — для итоговых счётчиков
+        all_contracts_full = base_query.all()
+        # Без Авторского надзора — для графиков по агентам/типам
+        all_contracts = [c for c in all_contracts_full if c.project_type != "Авторский надзор"]
 
         # Применяем фильтр по периоду в Python (дата хранится как VARCHAR)
+        filtered_full = _apply_period_filter(all_contracts_full, year, quarter, month)
         filtered = _apply_period_filter(all_contracts, year, quarter, month)
 
-        # --- KPI метрики ---
-        filtered_client_ids = {c.client_id for c in filtered}
+        # --- KPI метрики (включают Авторский надзор) ---
+        filtered_client_ids = {c.client_id for c in filtered_full}
         # Всего клиентов/договоров — только за выбранный период
         total_clients = len(filtered_client_ids)
-        total_contracts = len(filtered)
-        period_contracts = total_contracts
+        total_contracts = len(filtered_full)
+        period_contracts = len(filtered)  # для средних значений используем только не-надзор
         # Типы клиентов — из периода
         if filtered_client_ids:
             client_type_rows = db.query(Client.id, Client.client_type).filter(Client.id.in_(filtered_client_ids)).all()
@@ -1074,7 +1078,7 @@ async def get_reports_summary(
         client_ids_in_period = filtered_client_ids
         # Первые даты договора для каждого клиента (по всем договорам с теми же прочими фильтрами)
         client_first_date: dict = {}
-        for c in all_contracts:
+        for c in all_contracts_full:
             dt = _parse_contract_date(c.contract_date)
             if dt is None:
                 continue
@@ -1094,7 +1098,7 @@ async def get_reports_summary(
 
         # Повторные клиенты: клиенты с >1 договором (за всё время), имеющие договор в периоде
         client_contract_count: dict = defaultdict(int)
-        for c in all_contracts:
+        for c in all_contracts_full:
             client_contract_count[c.client_id] += 1
         returning_clients = sum(1 for cid in client_ids_in_period if client_contract_count.get(cid, 0) > 1)
 
@@ -1142,7 +1146,7 @@ async def get_reports_summary(
         trend_amount = 0.0
 
         if prev_year is not None:
-            prev_filtered = _apply_period_filter(all_contracts, prev_year, prev_quarter, prev_month)
+            prev_filtered = _apply_period_filter(all_contracts_full, prev_year, prev_quarter, prev_month)
             prev_clients = len({c.client_id for c in prev_filtered})
             prev_contracts = len(prev_filtered)
             prev_amount = sum(c.total_amount or 0 for c in prev_filtered)

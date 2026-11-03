@@ -157,39 +157,54 @@ async def reinit_project_timeline(contract_id: int, request: TimelineInitRequest
     return {"status": "reinitialized", "count": len(entries), "contract_term": contract_term, "area_coefficient": K}
 
 
-def _sync_substep_after_date_entry(db: Session, contract_id: int) -> None:
+def _stage_group_from_col(col: str) -> str:
+    """Определить STAGEN по нижнерегистровому имени колонки."""
+    m = re.search(r"стадия\s*(\d+)", col)
+    if m:
+        return f"STAGE{m.group(1)}"
+    if "планировочн" in col:
+        return "STAGE1"
+    if "концепция" in col or "дизайн" in col:
+        return "STAGE2"
+    if "рабоч" in col or "чертеж" in col or "чертёж" in col:
+        return "STAGE3"
+    if "визуализац" in col or "3д" in col or "3d" in col:
+        return "STAGE3"
+    return ""
+
+
+def _wf_for_stage_group(wf_states: list, sg_num: str, column_name: str) -> "StageWorkflowState | None":
+    """Найти WF state, чья stage_name соответствует номеру стадии sg_num."""
+    for w in wf_states:
+        sn = (w.stage_name or "").lower()
+        m2 = re.search(r"стадия\s*(\d+)", sn)
+        if m2 and m2.group(1) == sg_num:
+            return w
+        if sg_num == "1" and "планировочн" in sn:
+            return w
+        if sg_num == "2" and ("концепция" in sn or "дизайн" in sn):
+            return w
+        if sg_num == "3" and ("визуализац" in sn or "3д" in sn or "3d" in sn):
+            return w
+    return next((w for w in wf_states if w.stage_name == column_name), None)
+
+
+def _sync_substep_after_date_entry(db: Session, contract_id: int, entry_stage_group: str | None = None) -> None:
     """После ручного ввода даты в таблице сроков синхронизировать current_substep_code.
 
     Гарантирует что зелёная рамка активного подэтапа перемещается на следующий
     незаполненный подэтап, когда менеджер/СДП вводит дату вручную.
     """
     card = db.query(CRMCard).filter(CRMCard.contract_id == contract_id).first()
-    if not card or not card.column_name:
+    if not card:
         return
 
-    col = card.column_name.lower()
-    m = re.search(r"стадия\s*(\d+)", col)
-    if m:
-        stage_group = f"STAGE{m.group(1)}"
-    elif "планировочн" in col:
-        stage_group = "STAGE1"
-    elif "концепция" in col or "дизайн" in col:
-        stage_group = "STAGE2"
-    elif "рабоч" in col or "чертеж" in col or "чертёж" in col:
-        stage_group = "STAGE3"
-    elif "визуализац" in col or "3д" in col or "3d" in col:
-        stage_group = "STAGE3"
-    else:
+    stage_group = entry_stage_group or _stage_group_from_col((card.column_name or "").lower())
+    if not stage_group:
         return
 
-    wf = (
-        db.query(StageWorkflowState)
-        .filter(
-            StageWorkflowState.crm_card_id == card.id,
-            StageWorkflowState.stage_name == card.column_name,
-        )
-        .first()
-    )
+    wf_states = db.query(StageWorkflowState).filter(StageWorkflowState.crm_card_id == card.id).all()
+    wf = _wf_for_stage_group(wf_states, stage_group.replace("STAGE", ""), card.column_name or "")
     if not wf:
         return
 
@@ -335,7 +350,7 @@ async def update_timeline_entry(contract_id: int, stage_code: str, update: Timel
     # db.flush() необходим т.к. SessionLocal имеет autoflush=False
     if "actual_date" in update_data or (update_data.get("status") == "skipped"):
         db.flush()
-        _sync_substep_after_date_entry(db, contract_id)
+        _sync_substep_after_date_entry(db, contract_id, entry_stage_group=entry.stage_group)
 
     # При изменении custom_norm_days — пересчитать дедлайн StageExecutor текущей стадии
     if "custom_norm_days" in update_data:

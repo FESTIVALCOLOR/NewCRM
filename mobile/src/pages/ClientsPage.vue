@@ -166,8 +166,8 @@ const showForm = ref(false)
 
 const dashItems = computed(() => [
   { label: 'Всего клиентов', value: clientsStore.items?.length || 0, color: 'var(--fc-text)' },
-  { label: 'Физ. лица', value: clientsStore.items?.filter(c => !c.organization_name).length || 0, color: '#27AE60' },
-  { label: 'Юр. лица', value: clientsStore.items?.filter(c => c.organization_name).length || 0, color: '#3498DB' },
+  { label: 'Физ. лица', value: clientsStore.items?.filter(c => c.client_type === 'Физическое лицо').length || 0, color: '#27AE60' },
+  { label: 'Юр. лица', value: clientsStore.items?.filter(c => c.client_type === 'Юридическое лицо').length || 0, color: '#3498DB' },
 ])
 const clientType = ref('Все')
 const sortBy = ref('name')
