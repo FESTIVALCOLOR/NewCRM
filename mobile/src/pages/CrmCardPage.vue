@@ -689,27 +689,22 @@
               </q-card-section>
               <!-- Дата анкеты -->
               <q-card-section class="q-pt-xs q-pb-sm">
-                <div class="text-caption q-mb-xs" style="color: var(--fc-text-light)">
-                  Дата анкеты
-                </div>
-                <div class="row q-gutter-xs items-center">
-                  <q-input
-                    v-model="techTaskDateInput"
-                    outlined
-                    dense
-                    type="date"
-                    style="flex: 1; font-size: 12px"
-                    :readonly="isArchived || (isExecutor && !isSurveyor)"
-                  />
-                  <q-btn
+                <div
+                  class="row items-center q-gutter-xs"
+                  :style="(!isArchived && (!isExecutor || isSurveyor)) ? 'cursor: pointer' : ''"
+                  @click="(!isArchived && (!isExecutor || isSurveyor)) && (techTaskDateDialogVisible = true)"
+                >
+                  <div class="text-caption" style="color: var(--fc-text-light)">
+                    Дата анкеты:
+                  </div>
+                  <div class="text-caption" style="color: var(--fc-text); font-weight: 500">
+                    {{ techTaskDateInput ? fmtDate(techTaskDateInput) : 'Не установлена' }}
+                  </div>
+                  <q-icon
                     v-if="!isArchived && (!isExecutor || isSurveyor)"
-                    unelevated
-                    dense
-                    size="sm"
-                    no-caps
-                    label="Сохранить"
-                    style="background: #4CAF50; color: white; border-radius: 4px; height: 32px"
-                    @click="saveTechTaskDate"
+                    name="edit"
+                    size="12px"
+                    color="grey-6"
                   />
                 </div>
               </q-card-section>
@@ -1755,6 +1750,55 @@
               no-caps
               style="background: #4CAF50; color: white; border-radius: 4px"
               @click="saveTimelineEntry"
+            />
+          </q-card-actions>
+        </q-card>
+      </q-dialog>
+
+      <!-- Диалог даты анкеты -->
+      <q-dialog v-model="techTaskDateDialogVisible">
+        <q-card style="min-width: 280px; border-radius: 10px">
+          <q-toolbar style="background: var(--fc-accent); color: var(--fc-text)">
+            <q-toolbar-title class="text-weight-bold" style="font-size: 13px">
+              Дата анкеты
+            </q-toolbar-title>
+            <q-btn
+              flat
+              round
+              dense
+              icon="close"
+              @click="techTaskDateDialogVisible = false"
+            />
+          </q-toolbar>
+          <q-card-section class="q-pb-sm">
+            <div class="text-caption text-grey-7 q-mb-xs">
+              Дата заполнения анкеты
+            </div>
+            <q-input
+              v-model="techTaskDateInput"
+              outlined
+              dense
+              type="date"
+              class="q-mb-xs"
+            >
+              <template #append>
+                <q-icon
+                  v-if="techTaskDateInput"
+                  name="cancel"
+                  style="cursor: pointer; font-size: 18px; color: rgba(0,0,0,0.4)"
+                  @click.stop="techTaskDateInput = ''"
+                />
+              </template>
+            </q-input>
+          </q-card-section>
+          <q-card-actions align="right">
+            <q-btn flat label="Отмена" no-caps @click="techTaskDateDialogVisible = false" />
+            <q-btn
+              unelevated
+              label="Сохранить"
+              no-caps
+              style="background: #4CAF50; color: white; border-radius: 4px"
+              @click="saveTechTaskDate"
             />
           </q-card-actions>
         </q-card>
@@ -3249,6 +3293,7 @@ const timelineEditNormDays = ref('')
 const timelineEditActualDate = ref('')
 const timelineEditVisible = ref(false)
 const techTaskDateInput = ref('')
+const techTaskDateDialogVisible = ref(false)
 
 function editNormDays(entry) {
   if (!can('crm_cards.deadlines') || entry.executor_role === 'header') return
@@ -3264,6 +3309,7 @@ async function saveTechTaskDate() {
     const dateVal = techTaskDateInput.value || null
     await contractsApi.update(card.value.contract_id, { tech_task_date: dateVal })
     if (contractData.value) contractData.value.tech_task_date = dateVal
+    techTaskDateDialogVisible.value = false
     $q.notify({ type: 'positive', message: 'Дата анкеты сохранена' })
     await autoSetStartDate()
   } catch (err) {
@@ -3281,6 +3327,7 @@ async function skipTimelineEntry() {
     entry.actual_date = null
     timelineEditVisible.value = false
     $q.notify({ type: 'positive', message: 'Подэтап пропущен' })
+    await reloadCard()
   } catch (err) {
     $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
   }

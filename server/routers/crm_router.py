@@ -1898,7 +1898,7 @@ async def workflow_repair(card_id: int, current_user: Employee = Depends(require
     contract_id = card.contract_id
     stage_group = _resolve_stage_group(stage_name)
     if not stage_group or not contract_id:
-        raise HTTPException(status_code=400, detail="Невозможно определить стадию")
+        return {"status": "no_op", "message": f"Карточка находится в колонке «{stage_name}» — ремонт применяется только к рабочим стадиям"}
 
     wf = db.query(StageWorkflowState).filter(StageWorkflowState.crm_card_id == card_id, StageWorkflowState.stage_name == stage_name).first()
     if not wf:
