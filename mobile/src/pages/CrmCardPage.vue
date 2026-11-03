@@ -1737,6 +1737,14 @@
           <q-card-actions align="right">
             <q-btn flat label="Отмена" no-caps @click="timelineEditVisible = false" />
             <q-btn
+              v-if="timelineEditEntry?.actual_date || timelineEditEntry?.status === 'skipped'"
+              flat
+              label="Сбросить"
+              no-caps
+              color="red-7"
+              @click="resetTimelineEntry"
+            />
+            <q-btn
               v-if="timelineEditEntry?.status !== 'skipped'"
               flat
               label="Пропустить"
@@ -1750,6 +1758,34 @@
               no-caps
               style="background: #4CAF50; color: white; border-radius: 4px"
               @click="saveTimelineEntry"
+            />
+          </q-card-actions>
+        </q-card>
+      </q-dialog>
+
+      <!-- Диалог перемещения карточки в следующую стадию -->
+      <q-dialog v-model="stageCompleteDlgVisible" persistent>
+        <q-card style="min-width: 320px; max-width: 400px; border-radius: 10px">
+          <q-toolbar style="background: var(--fc-accent); color: var(--fc-text)">
+            <q-toolbar-title class="text-weight-bold" style="font-size: 13px">
+              Стадия завершена
+            </q-toolbar-title>
+          </q-toolbar>
+          <q-card-section>
+            <div style="font-size: 14px; line-height: 1.5">
+              Все подэтапы текущей стадии выполнены.<br>
+              Переместить карточку в<br>
+              <strong>«{{ stageCompleteNextCol }}»</strong>?
+            </div>
+          </q-card-section>
+          <q-card-actions align="right">
+            <q-btn flat label="Нет, оставить" no-caps @click="stageCompleteDlgVisible = false" />
+            <q-btn
+              unelevated
+              label="Переместить"
+              no-caps
+              style="background: #4CAF50; color: white; border-radius: 4px"
+              @click="moveToNextStage"
             />
           </q-card-actions>
         </q-card>
@@ -3266,8 +3302,9 @@ function isActiveSubstep(e) {
 }
 function timelineRowStyle(e) {
   if (e.executor_role === 'header') return 'background: var(--fc-bg-alt)'
-  if (e.is_in_contract_scope === false) return 'background: var(--fc-border-light)'  // вне объёма договора — серый
+  // Активный подэтап — зелёная рамка имеет приоритет над is_in_contract_scope
   if (isActiveSubstep(e)) return 'border: 2px solid #4CAF50; border-radius: 4px'
+  if (e.is_in_contract_scope === false) return 'background: var(--fc-border-light)'  // вне объёма договора — серый
   if (e.actual_date && isOverdue(e)) return 'background: #FFEBEE'
   if (e.actual_date && !isOverdue(e)) return 'background: var(--fc-state-success-bg)'
   if (e.status === 'skipped') return 'background: var(--fc-bg-alt); opacity: 0.6'
@@ -3328,8 +3365,30 @@ async function skipTimelineEntry() {
     timelineEditVisible.value = false
     $q.notify({ type: 'positive', message: 'Подэтап пропущен' })
     await reloadCard()
+    await checkStageDone()
   } catch (err) {
     $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
+  }
+}
+
+async function resetTimelineEntry() {
+  const entry = timelineEditEntry.value
+  if (!entry) return
+  try {
+    const { api: ax } = await import('src/boot/axios')
+    await ax.put(`/api/v1/timeline/${card.value.contract_id}/entry/${encodeURIComponent(entry.stage_code)}`, {
+      actual_date: null,
+      actual_days: null,
+      status: null,
+    })
+    entry.actual_date = null
+    entry.actual_days = null
+    entry.status = null
+    timelineEditVisible.value = false
+    $q.notify({ type: 'positive', message: 'Подэтап сброшен' })
+    await reloadCard()
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка сброса' })
   }
 }
 
@@ -3352,8 +3411,55 @@ async function saveTimelineEntry() {
     $q.notify({ type: 'positive', message: 'Сохранено' })
     if (update.actual_date) await updateBalanceFromTimeline(entry)
     if ('actual_date' in update || 'custom_norm_days' in update || 'status' in update) await reloadCard()
+    if (update.actual_date) await checkStageDone()
   } catch (err) {
     $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
+  }
+}
+
+// Авто-перемещение карточки — refs и логика
+const stageCompleteDlgVisible = ref(false)
+const stageCompleteNextCol = ref('')
+
+function _getNextColumn(col, projectType) {
+  const isTemplate = projectType === 'Шаблонный'
+  const stageCols = isTemplate
+    ? ['Стадия 1: планировочные решения', 'Стадия 2: рабочие чертежи', 'Стадия 3: 3д визуализация (Дополнительная)']
+    : ['Стадия 1: планировочные решения', 'Стадия 2: концепция дизайна', 'Стадия 3: рабочие чертежи']
+  const idx = stageCols.indexOf(col)
+  return idx >= 0 && idx < stageCols.length - 1 ? stageCols[idx + 1] : null
+}
+
+async function checkStageDone() {
+  if (!card.value) return
+  const col = card.value.column_name
+  if (!col || !col.startsWith('Стадия')) return
+  const sgMap = card.value.project_type === 'Шаблонный'
+    ? { 'Стадия 1: планировочные решения': 'STAGE1', 'Стадия 2: рабочие чертежи': 'STAGE2', 'Стадия 3: 3д визуализация (Дополнительная)': 'STAGE3' }
+    : { 'Стадия 1: планировочные решения': 'STAGE1', 'Стадия 2: концепция дизайна': 'STAGE2', 'Стадия 3: рабочие чертежи': 'STAGE3' }
+  const sg = sgMap[col]
+  if (!sg) return
+  const stageEntries = timelineEntries.value.filter(e => e.stage_group === sg && e.executor_role !== 'header')
+  if (!stageEntries.length) return
+  // Нужен хотя бы один подэтап в объёме
+  if (!stageEntries.some(e => e.is_in_contract_scope !== false)) return
+  const allDone = stageEntries.every(e => e.actual_date || e.status === 'skipped')
+  if (!allDone) return
+  const nextCol = _getNextColumn(col, card.value.project_type)
+  if (!nextCol) return
+  stageCompleteNextCol.value = nextCol
+  stageCompleteDlgVisible.value = true
+}
+
+async function moveToNextStage() {
+  if (!stageCompleteNextCol.value || !card.value) return
+  try {
+    await crmApi.moveCard(card.value.id, stageCompleteNextCol.value)
+    stageCompleteDlgVisible.value = false
+    $q.notify({ type: 'positive', message: `Карточка перемещена в «${stageCompleteNextCol.value}»` })
+    await reloadCard()
+  } catch (err) {
+    $q.notify({ type: 'negative', message: 'Ошибка перемещения карточки' })
   }
 }
 
