@@ -1290,12 +1290,20 @@
                     Подпись с расшифровкой ФИО
                   </td>
                 </tr>
-                <tr>
+                <tr style="border-bottom:1px solid var(--fc-border-light)">
                   <td style="padding:2px 6px">
                     <code style="background:#e3f2fd;color:#1565c0;padding:1px 4px;border-radius:3px">&#123;&#123;ПЕЧАТЬ&#125;&#125;</code>
                   </td>
                   <td style="padding:2px 6px">
                     Печать организации
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:2px 6px">
+                    <code style="background:#e3f2fd;color:#1565c0;padding:1px 4px;border-radius:3px">&#123;&#123;ЛОГО_АГЕНТА&#125;&#125;</code>
+                  </td>
+                  <td style="padding:2px 6px">
+                    Логотип агента (подставляется автоматически по агенту договора)
                   </td>
                 </tr>
               </tbody>
@@ -1347,6 +1355,61 @@
                 @change="e => onRequisiteFileSelected(req.type, e)"
               >
             </div>
+          </div>
+        </q-card>
+
+        <!-- Логотипы агентов -->
+        <div style="font-size: 14px; font-weight: 600; color: var(--fc-text); margin-bottom: 8px">
+          Логотипы агентов
+        </div>
+        <div class="q-mb-xs" style="font-size:12px; color:var(--fc-text-secondary)">
+          Используйте тег
+          <code style="background:#e3f2fd;color:#1565c0;padding:1px 4px;border-radius:3px">&#123;&#123;ЛОГО_АГЕНТА&#125;&#125;</code>
+          в шаблоне — логотип подставится автоматически по агенту договора.
+        </div>
+        <q-card flat bordered class="q-mb-md" style="border-radius: 8px; overflow: hidden">
+          <div
+            v-for="(logo, idx) in agentLogoSlots"
+            :key="logo.type"
+            class="tmpl-row"
+            :style="idx < agentLogoSlots.length - 1 ? 'border-bottom: 1px solid var(--fc-border-light)' : ''"
+          >
+            <span class="tmpl-label">{{ logo.label }}</span>
+            <span class="tmpl-dots" />
+            <div class="tmpl-right">
+              <template v-if="requisites[logo.type]">
+                <q-icon name="check_circle" color="positive" size="16px" />
+                <span class="tmpl-filename">{{ requisites[logo.type].file_name }}</span>
+                <q-btn
+                  flat
+                  round
+                  dense
+                  icon="delete"
+                  color="negative"
+                  size="xs"
+                  @click="deleteRequisite(logo.type)"
+                />
+              </template>
+              <span v-else class="tmpl-empty">Не загружено</span>
+              <q-btn
+                outline
+                size="sm"
+                :label="requisites[logo.type] ? 'Заменить' : 'Загрузить'"
+                color="primary"
+                class="tmpl-btn"
+                @click="triggerRequisiteUpload(logo.type)"
+              />
+              <input
+                :ref="el => requisiteInputs[logo.type] = el"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                style="display:none"
+                @change="e => onRequisiteFileSelected(logo.type, e)"
+              >
+            </div>
+          </div>
+          <div v-if="agentLogoSlots.length === 0" class="q-pa-md text-caption text-grey">
+            Агенты не найдены — добавьте агентов на вкладке «Агенты»
           </div>
         </q-card>
 
@@ -2736,6 +2799,14 @@ const requisiteSlots = [
   { type: 'signature_name', label: 'Подпись с расшифровкой' },
   { type: 'seal', label: 'Печать' },
 ]
+
+// Динамические слоты лого агентов: logo_<agent_name_lower> для каждого агента
+const agentLogoSlots = computed(() =>
+  (refs.agents || []).map((a) => ({
+    type: `logo_${(a.name || '').trim().toLowerCase()}`,
+    label: `Лого ${a.name}`,
+  })),
+)
 
 const projectTypeSlots = [
   {

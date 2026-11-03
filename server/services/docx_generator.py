@@ -93,12 +93,22 @@ def _client_short_name(full_name: str | None) -> str:
 
 
 # Имена плейсхолдеров изображений
-IMAGE_PLACEHOLDERS = {"{{ПОДПИСЬ}}", "{{ПЕЧАТЬ}}", "{{ПОДПИСЬ_РАСШ}}"}
+IMAGE_PLACEHOLDERS = {"{{ПОДПИСЬ}}", "{{ПЕЧАТЬ}}", "{{ПОДПИСЬ_РАСШ}}", "{{ЛОГО_АГЕНТА}}"}
 REQUISITE_TYPE_MAP = {
     "{{ПОДПИСЬ}}": "signature",
     "{{ПЕЧАТЬ}}": "seal",
     "{{ПОДПИСЬ_РАСШ}}": "signature_name",
+    "{{ЛОГО_АГЕНТА}}": None,  # динамически — зависит от агента договора
 }
+
+
+def _agent_logo_req_type(agent_type: str | None) -> str | None:
+    """Возвращает requisite_type логотипа агента: logo_<agent_type_lower>.
+    Динамически — не требует хардкода при добавлении новых агентов.
+    """
+    if not agent_type or not agent_type.strip():
+        return None
+    return f"logo_{agent_type.strip().lower()}"
 
 
 def _amount_in_words(amount: float) -> str:
@@ -210,11 +220,12 @@ def _build_context(contract: Contract, client: Client, doc_type: str) -> dict:
     return ctx
 
 
-def _get_image_bytes(db: Session, placeholder: str, yd_service: YandexDiskService) -> bytes | None:
+def _get_image_bytes(db: Session, placeholder: str, yd_service: YandexDiskService, req_type: str | None = None) -> bytes | None:
     """Скачивает байты изображения реквизита с ЯД или возвращает None."""
-    req_type = REQUISITE_TYPE_MAP.get(placeholder)
-    if not req_type:
+    effective_req = req_type or REQUISITE_TYPE_MAP.get(placeholder)
+    if not effective_req:
         return None
+    req_type = effective_req
     req = db.query(CompanyRequisite).filter(CompanyRequisite.requisite_type == req_type).first()
     if not req:
         return None
@@ -236,6 +247,7 @@ _IMAGE_FLOAT_PARAMS: dict[str, dict] = {
     "{{ПОДПИСЬ}}": {"width": 1.5, "pos_h": -342900, "pos_v": -160800},  # 0.375" влево, 4мм ниже
     "{{ПОДПИСЬ_РАСШ}}": {"width": 1.5, "pos_h": 1208700, "pos_v": -232800},  # +5мм вправо, -1мм вниз
     "{{ПЕЧАТЬ}}": {"width": 2.2, "pos_h": -457200, "pos_v": -1371600},  # без изменений
+    "{{ЛОГО_АГЕНТА}}": {"width": 3.0, "pos_h": 0, "pos_v": 0, "inline": True},  # inline, без floating
 }
 _IMAGE_FLOAT_DEFAULT = {"width": 1.5, "pos_h": 0, "pos_v": 0}
 
@@ -342,16 +354,17 @@ def _split_run_with_images(r, db: Session, yd_service: YandexDiskService, ctx: d
             new_r_elem.append(copy.deepcopy(rPr))
 
         if part in IMAGE_PLACEHOLDERS:
-            img_bytes = _get_image_bytes(db, part, yd_service)
+            _iparams = image_params if image_params is not None else _IMAGE_FLOAT_PARAMS
+            params = _iparams.get(part, _IMAGE_FLOAT_DEFAULT)
+            img_bytes = _get_image_bytes(db, part, yd_service, params.get("logo_req"))
             if img_bytes:
                 insert_after.addnext(new_r_elem)
                 insert_after = new_r_elem
-                _iparams = image_params if image_params is not None else _IMAGE_FLOAT_PARAMS
-                params = _iparams.get(part, _IMAGE_FLOAT_DEFAULT)
                 new_run = DocxRun(new_r_elem, r._parent)
                 try:
                     new_run.add_picture(io.BytesIO(img_bytes), width=Inches(params["width"]))
-                    _make_picture_floating(new_run, params["pos_h"], params["pos_v"])
+                    if not params.get("inline", False):
+                        _make_picture_floating(new_run, params["pos_h"], params["pos_v"])
                     logger.info(f"Изображение {part} вставлено (split, {len(img_bytes)} байт)")
                 except Exception as exc:
                     logger.error(f"Ошибка вставки {part} (split): {exc}")
@@ -404,12 +417,13 @@ def _replace_cross_run_images(runs, ctx: dict, db: Session, yd_service: YandexDi
         if r.text.strip() == placeholder:
             _iparams = image_params if image_params is not None else _IMAGE_FLOAT_PARAMS
             params = _iparams.get(placeholder, _IMAGE_FLOAT_DEFAULT)
-            img_bytes = _get_image_bytes(db, placeholder, yd_service)
+            img_bytes = _get_image_bytes(db, placeholder, yd_service, params.get("logo_req"))
             r.text = ""
             if img_bytes:
                 try:
                     r.add_picture(io.BytesIO(img_bytes), width=Inches(params["width"]))
-                    _make_picture_floating(r, params["pos_h"], params["pos_v"])
+                    if not params.get("inline", False):
+                        _make_picture_floating(r, params["pos_h"], params["pos_v"])
                     logger.info(f"Изображение {placeholder} вставлено (cross-run, {len(img_bytes)} байт)")
                 except Exception as e:
                     logger.error(f"Ошибка вставки {placeholder} (cross-run): {e}")
@@ -439,12 +453,13 @@ def _replace_text_in_runs(runs, ctx: dict, db: Session, yd_service: YandexDiskSe
         if stripped in IMAGE_PLACEHOLDERS:
             # Весь run = один плейсхолдер картинки
             params = _iparams.get(stripped, _IMAGE_FLOAT_DEFAULT)
-            img_bytes = _get_image_bytes(db, stripped, yd_service)
+            img_bytes = _get_image_bytes(db, stripped, yd_service, params.get("logo_req"))
             r.text = ""
             if img_bytes:
                 try:
                     r.add_picture(io.BytesIO(img_bytes), width=Inches(params["width"]))
-                    _make_picture_floating(r, params["pos_h"], params["pos_v"])
+                    if not params.get("inline", False):
+                        _make_picture_floating(r, params["pos_h"], params["pos_v"])
                     logger.info(f"Изображение {stripped} вставлено ({len(img_bytes)} байт)")
                 except Exception as e:
                     logger.error(f"Ошибка вставки {stripped}: {e}")
@@ -621,7 +636,11 @@ def generate_document(
 
         doc = Document(io.BytesIO(template_bytes))
         ctx = _build_context(contract, client, doc_type)
-        _fill_docx(doc, ctx, db, yd_service, _get_image_params(doc_type))
+        image_params = _get_image_params(doc_type)
+        logo_req = _agent_logo_req_type(contract.agent_type)
+        if logo_req:
+            image_params["{{ЛОГО_АГЕНТА}}"] = {**image_params["{{ЛОГО_АГЕНТА}}"], "logo_req": logo_req}
+        _fill_docx(doc, ctx, db, yd_service, image_params)
 
         with tempfile.TemporaryDirectory() as tmpdir:
             # Имя файла: «Договор-Фестиваль-Иванов ИА.pdf»
