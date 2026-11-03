@@ -43,6 +43,13 @@ ALLOWED_DOC_TYPES = {
     "application/octet-stream",
 }
 VALID_REQUISITE_TYPES = {"signature", "signature_name", "seal"}
+# Логотипы агентов — динамические типы вида logo_<agent_name>
+
+
+def _is_valid_requisite_type(req_type: str) -> bool:
+    return req_type in VALID_REQUISITE_TYPES or req_type.startswith("logo_")
+
+
 VALID_PROJECT_TYPES = {"Индивидуальный", "Шаблонный", "Авторский надзор"}
 VALID_DOC_TYPES = {"contract", "act_pr", "act_kd", "act_info", "act_final"}
 
@@ -78,7 +85,7 @@ async def upload_requisite(
     db: Session = Depends(get_db),
     current_user: Employee = Depends(_require_admin),
 ):
-    if requisite_type not in VALID_REQUISITE_TYPES:
+    if not _is_valid_requisite_type(requisite_type):
         raise HTTPException(status_code=400, detail=f"Неверный тип реквизита: {requisite_type}")
     if file.content_type not in ALLOWED_IMAGE_TYPES:
         raise HTTPException(status_code=400, detail="Разрешены только изображения (JPEG/PNG/WebP)")
