@@ -502,6 +502,18 @@
                 Таблица сроков
               </div>
             </q-card-section>
+            <!-- Баннер: карточка в ожидании — активная стадия не назначена -->
+            <div
+              v-if="card?.column_name === 'В ожидании' || card?.column_name === 'Новый заказ'"
+              class="row items-center q-px-md q-py-sm"
+              style="background: #FFF8E1; border-bottom: 1px solid #FFE082; gap: 8px"
+            >
+              <q-icon name="info" color="amber-8" size="18px" />
+              <span style="font-size: 12px; color: #795548">
+                Карточка находится в колонке <strong>«{{ card.column_name }}»</strong> — активная стадия не назначена.
+                Переместите карточку в стадию для начала работы.
+              </span>
+            </div>
             <q-list v-if="timelineEntries.length > 0" dense separator>
               <q-item
                 v-for="e in timelineEntries"
