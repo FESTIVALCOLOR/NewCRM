@@ -639,7 +639,17 @@ def generate_document(
         image_params = _get_image_params(doc_type)
         logo_req = _agent_logo_req_type(contract.agent_type)
         if logo_req:
-            image_params["{{ЛОГО_АГЕНТА}}"] = {**image_params["{{ЛОГО_АГЕНТА}}"], "logo_req": logo_req}
+            # Ширина лого = вся текстовая область (page_width - margins), в дюймах
+            sec = doc.sections[0] if doc.sections else None
+            if sec and sec.page_width:
+                logo_width = (sec.page_width - sec.left_margin - sec.right_margin) / 914400
+            else:
+                logo_width = 6.3  # fallback: A4 типичная ширина текста
+            image_params["{{ЛОГО_АГЕНТА}}"] = {
+                **image_params["{{ЛОГО_АГЕНТА}}"],
+                "logo_req": logo_req,
+                "width": logo_width,
+            }
         _fill_docx(doc, ctx, db, yd_service, image_params)
 
         with tempfile.TemporaryDirectory() as tmpdir:
