@@ -239,6 +239,21 @@ _IMAGE_FLOAT_PARAMS: dict[str, dict] = {
 }
 _IMAGE_FLOAT_DEFAULT = {"width": 1.5, "pos_h": 0, "pos_v": 0}
 
+# Переопределения по типу документа (перекрывают _IMAGE_FLOAT_PARAMS)
+_IMAGE_FLOAT_OVERRIDES: dict[str, dict[str, dict]] = {
+    "act_info": {
+        "{{ПЕЧАТЬ}}": {"width": 2.2, "pos_h": -1463040, "pos_v": -1371600},  # влево на 0.5 ширины
+    },
+}
+
+
+def _get_image_params(doc_type: str) -> dict[str, dict]:
+    """Возвращает словарь параметров вставки с учётом переопределений для doc_type."""
+    params = dict(_IMAGE_FLOAT_PARAMS)
+    if doc_type in _IMAGE_FLOAT_OVERRIDES:
+        params.update(_IMAGE_FLOAT_OVERRIDES[doc_type])
+    return params
+
 
 def _make_picture_floating(run, pos_h_emu: int = 0, pos_v_emu: int = 0) -> None:
     """Конвертирует inline картинку в run во floating поверх текста (wp:anchor + wrapNone)."""
@@ -295,7 +310,7 @@ def _make_picture_floating(run, pos_h_emu: int = 0, pos_v_emu: int = 0) -> None:
     drawing.append(anchor)
 
 
-def _split_run_with_images(r, db: Session, yd_service: YandexDiskService, ctx: dict) -> None:
+def _split_run_with_images(r, db: Session, yd_service: YandexDiskService, ctx: dict, image_params: dict | None = None) -> None:
     """Разбивает run, содержащий IMAGE_PLACEHOLDER среди текста, вставляет картинки.
 
     Пример: "{{ПОДПИСЬ}} ( {{ПОДПИСЬ_РАСШ}} )"
@@ -331,7 +346,8 @@ def _split_run_with_images(r, db: Session, yd_service: YandexDiskService, ctx: d
             if img_bytes:
                 insert_after.addnext(new_r_elem)
                 insert_after = new_r_elem
-                params = _IMAGE_FLOAT_PARAMS.get(part, _IMAGE_FLOAT_DEFAULT)
+                _iparams = image_params if image_params is not None else _IMAGE_FLOAT_PARAMS
+                params = _iparams.get(part, _IMAGE_FLOAT_DEFAULT)
                 new_run = DocxRun(new_r_elem, r._parent)
                 try:
                     new_run.add_picture(io.BytesIO(img_bytes), width=Inches(params["width"]))
@@ -352,7 +368,7 @@ def _split_run_with_images(r, db: Session, yd_service: YandexDiskService, ctx: d
             insert_after = new_r_elem
 
 
-def _replace_cross_run_images(runs, ctx: dict, db: Session, yd_service: YandexDiskService) -> None:
+def _replace_cross_run_images(runs, ctx: dict, db: Session, yd_service: YandexDiskService, image_params: dict | None = None) -> None:
     """Проход 2.5: кросс-run IMAGE_PLACEHOLDERS.
 
     Word разбивает {{ПОДПИСЬ_РАСШ}} или {{ПЕЧАТЬ}} по нескольким runs.
@@ -386,7 +402,8 @@ def _replace_cross_run_images(runs, ctx: dict, db: Session, yd_service: YandexDi
         runs[end_run].text = texts[end_run][end_off:]
         r = runs[start_run]
         if r.text.strip() == placeholder:
-            params = _IMAGE_FLOAT_PARAMS.get(placeholder, _IMAGE_FLOAT_DEFAULT)
+            _iparams = image_params if image_params is not None else _IMAGE_FLOAT_PARAMS
+            params = _iparams.get(placeholder, _IMAGE_FLOAT_DEFAULT)
             img_bytes = _get_image_bytes(db, placeholder, yd_service)
             r.text = ""
             if img_bytes:
@@ -399,10 +416,10 @@ def _replace_cross_run_images(runs, ctx: dict, db: Session, yd_service: YandexDi
             else:
                 logger.warning(f"Изображение {placeholder} не найдено (cross-run)")
         elif any(ph in r.text for ph in IMAGE_PLACEHOLDERS):
-            _split_run_with_images(r, db, yd_service, ctx)
+            _split_run_with_images(r, db, yd_service, ctx, image_params)
 
 
-def _replace_text_in_runs(runs, ctx: dict, db: Session, yd_service: YandexDiskService) -> None:
+def _replace_text_in_runs(runs, ctx: dict, db: Session, yd_service: YandexDiskService, image_params: dict | None = None) -> None:
     """Заменяет плейсхолдеры {{КЛЮЧ}} и изображения в runs параграфа.
 
     Проход 1: каждый run отдельно — сохраняет bold/italic/size.
@@ -414,12 +431,14 @@ def _replace_text_in_runs(runs, ctx: dict, db: Session, yd_service: YandexDiskSe
     if not runs:
         return
 
+    _iparams = image_params if image_params is not None else _IMAGE_FLOAT_PARAMS
+
     # Проход 1: замена внутри каждого run
     for r in runs:
         stripped = r.text.strip()
         if stripped in IMAGE_PLACEHOLDERS:
             # Весь run = один плейсхолдер картинки
-            params = _IMAGE_FLOAT_PARAMS.get(stripped, _IMAGE_FLOAT_DEFAULT)
+            params = _iparams.get(stripped, _IMAGE_FLOAT_DEFAULT)
             img_bytes = _get_image_bytes(db, stripped, yd_service)
             r.text = ""
             if img_bytes:
@@ -433,13 +452,13 @@ def _replace_text_in_runs(runs, ctx: dict, db: Session, yd_service: YandexDiskSe
                 logger.warning(f"Изображение {stripped} не найдено — плейсхолдер очищен")
         elif any(ph in r.text for ph in IMAGE_PLACEHOLDERS):
             # IMAGE_PLACEHOLDER смешан с текстом — разбиваем run
-            _split_run_with_images(r, db, yd_service, ctx)
+            _split_run_with_images(r, db, yd_service, ctx, image_params)
         elif "{{" in r.text:
             for key, value in ctx.items():
                 r.text = r.text.replace("{{" + key + "}}", value)
 
     # Проход 2.5: кросс-run IMAGE_PLACEHOLDERS
-    _replace_cross_run_images(runs, ctx, db, yd_service)
+    _replace_cross_run_images(runs, ctx, db, yd_service, image_params)
 
     # Проход 2: кросс-run текстовые плейсхолдеры (Word разбил {{КЛЮЧ}} на несколько runs)
     # Заменяем каждый плейсхолдер точечно — только затронутые runs, сохраняя форматирование.
@@ -480,7 +499,7 @@ def _replace_text_in_runs(runs, ctx: dict, db: Session, yd_service: YandexDiskSe
             runs[end_run].text = texts[end_run][end_off:]
 
 
-def _process_table(table, ctx: dict, db: Session, yd_service: YandexDiskService) -> None:
+def _process_table(table, ctx: dict, db: Session, yd_service: YandexDiskService, image_params: dict | None = None) -> None:
     """Рекурсивно обходит таблицу (включая вложенные таблицы).
 
     Без seen-dedup: id(cell._tc) ненадёжен (lxml переиспользует адреса памяти),
@@ -490,17 +509,17 @@ def _process_table(table, ctx: dict, db: Session, yd_service: YandexDiskService)
     for row in table.rows:
         for cell in row.cells:
             for para in cell.paragraphs:
-                _replace_text_in_runs(para.runs, ctx, db, yd_service)
+                _replace_text_in_runs(para.runs, ctx, db, yd_service, image_params)
             for nested in cell.tables:
-                _process_table(nested, ctx, db, yd_service)
+                _process_table(nested, ctx, db, yd_service, image_params)
 
 
-def _fill_docx(doc: Document, ctx: dict, db: Session, yd_service: YandexDiskService) -> None:
+def _fill_docx(doc: Document, ctx: dict, db: Session, yd_service: YandexDiskService, image_params: dict | None = None) -> None:
     """Заполняет все плейсхолдеры в документе (параграфы + таблицы + колонтитулы)."""
     for para in doc.paragraphs:
-        _replace_text_in_runs(para.runs, ctx, db, yd_service)
+        _replace_text_in_runs(para.runs, ctx, db, yd_service, image_params)
     for table in doc.tables:
-        _process_table(table, ctx, db, yd_service)
+        _process_table(table, ctx, db, yd_service, image_params)
     # Верхние и нижние колонтитулы (все варианты: default, first_page, even_page)
     for section in doc.sections:
         for hf in (
@@ -514,9 +533,9 @@ def _fill_docx(doc: Document, ctx: dict, db: Session, yd_service: YandexDiskServ
             if hf is None or hf.is_linked_to_previous:
                 continue
             for para in hf.paragraphs:
-                _replace_text_in_runs(para.runs, ctx, db, yd_service)
+                _replace_text_in_runs(para.runs, ctx, db, yd_service, image_params)
             for table in hf.tables:
-                _process_table(table, ctx, db, yd_service)
+                _process_table(table, ctx, db, yd_service, image_params)
 
 
 _lo_lock = threading.Lock()
@@ -602,7 +621,7 @@ def generate_document(
 
         doc = Document(io.BytesIO(template_bytes))
         ctx = _build_context(contract, client, doc_type)
-        _fill_docx(doc, ctx, db, yd_service)
+        _fill_docx(doc, ctx, db, yd_service, _get_image_params(doc_type))
 
         with tempfile.TemporaryDirectory() as tmpdir:
             # Имя файла: «Договор-Фестиваль-Иванов ИА.pdf»
