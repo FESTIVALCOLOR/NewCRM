@@ -1937,16 +1937,18 @@ async def workflow_repair(card_id: int, current_user: Employee = Depends(require
                 corr_q = corr_q.filter(ProjectTimelineEntry.substage_group == current_substage)
             next_entry = corr_q.order_by(ProjectTimelineEntry.sort_order).first()
 
-        # Также очищаем ошибочно заполненные даты после текущего подэтапа
-        if current_entry:
+        # Очищаем ошибочно заполненные даты после текущего подэтапа — только внутри той же substage_group
+        if current_entry and current_entry.substage_group:
             future_entries = (
                 db.query(ProjectTimelineEntry)
                 .filter(
                     ProjectTimelineEntry.contract_id == contract_id,
                     ProjectTimelineEntry.stage_group == stage_group,
+                    ProjectTimelineEntry.substage_group == current_entry.substage_group,
                     ProjectTimelineEntry.sort_order > current_entry.sort_order,
                     ProjectTimelineEntry.actual_date.isnot(None),
                     ProjectTimelineEntry.actual_date != "",
+                    or_(ProjectTimelineEntry.status.is_(None), ProjectTimelineEntry.status != "skipped"),
                 )
                 .all()
             )
@@ -1997,7 +1999,7 @@ async def workflow_repair(card_id: int, current_user: Employee = Depends(require
         for ex in executors:
             ex.completed = False
             ex.completed_date = None
-            logger.info(f"[WorkflowRepair] Сброс completed для {ex.executor_name}")
+            logger.info(f"[WorkflowRepair] Сброс completed для executor_id={ex.executor_id}")
 
     db.add(
         ActionHistory(
