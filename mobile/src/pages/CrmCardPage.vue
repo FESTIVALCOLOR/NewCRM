@@ -1791,6 +1791,34 @@
         </q-card>
       </q-dialog>
 
+      <!-- Диалог отката карточки на предыдущую стадию -->
+      <q-dialog v-model="stageRegressDlgVisible" persistent>
+        <q-card style="min-width: 320px; max-width: 400px; border-radius: 10px">
+          <q-toolbar style="background: var(--fc-accent); color: var(--fc-text)">
+            <q-toolbar-title class="text-weight-bold" style="font-size: 13px">
+              Дата убрана
+            </q-toolbar-title>
+          </q-toolbar>
+          <q-card-section>
+            <div style="font-size: 14px; line-height: 1.5">
+              Активный подэтап теперь находится в предыдущей стадии.<br>
+              Переместить карточку обратно в<br>
+              <strong>«{{ stageRegressCol }}»</strong>?
+            </div>
+          </q-card-section>
+          <q-card-actions align="right">
+            <q-btn flat label="Нет, оставить" no-caps @click="stageRegressDlgVisible = false" />
+            <q-btn
+              unelevated
+              label="Переместить назад"
+              no-caps
+              style="background: #FF9800; color: white; border-radius: 4px"
+              @click="moveToRegress"
+            />
+          </q-card-actions>
+        </q-card>
+      </q-dialog>
+
       <!-- Диалог даты анкеты -->
       <q-dialog v-model="techTaskDateDialogVisible">
         <q-card style="min-width: 280px; border-radius: 10px">
@@ -3387,8 +3415,47 @@ async function resetTimelineEntry() {
     timelineEditVisible.value = false
     $q.notify({ type: 'positive', message: 'Подэтап сброшен' })
     await reloadCard()
+    await checkStageRegress()
   } catch (err) {
     $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка сброса' })
+  }
+}
+
+const stageRegressDlgVisible = ref(false)
+const stageRegressCol = ref('')
+
+async function checkStageRegress() {
+  if (!card.value) return
+  const col = card.value.column_name
+  if (!col || !col.startsWith('Стадия')) return
+  const newSubstepCode = card.value.current_substep_code
+  if (!newSubstepCode) return
+  const substepEntry = timelineEntries.value.find(e => e.stage_code === newSubstepCode)
+  if (!substepEntry?.stage_group) return
+  const sgOrder = { STAGE1: 1, STAGE2: 2, STAGE3: 3 }
+  const sgMap = card.value.project_type === 'Шаблонный'
+    ? { 'Стадия 1: планировочные решения': 'STAGE1', 'Стадия 2: рабочие чертежи': 'STAGE2', 'Стадия 3: 3д визуализация (Дополнительная)': 'STAGE3' }
+    : { 'Стадия 1: планировочные решения': 'STAGE1', 'Стадия 2: концепция дизайна': 'STAGE2', 'Стадия 3: рабочие чертежи': 'STAGE3' }
+  const colSg = sgMap[col]
+  if (!colSg) return
+  if ((sgOrder[substepEntry.stage_group] || 0) < (sgOrder[colSg] || 0)) {
+    const reverseMap = Object.fromEntries(Object.entries(sgMap).map(([k, v]) => [v, k]))
+    const targetCol = reverseMap[substepEntry.stage_group]
+    if (!targetCol) return
+    stageRegressCol.value = targetCol
+    stageRegressDlgVisible.value = true
+  }
+}
+
+async function moveToRegress() {
+  if (!stageRegressCol.value || !card.value) return
+  try {
+    await crmApi.moveCard(card.value.id, stageRegressCol.value)
+    stageRegressDlgVisible.value = false
+    $q.notify({ type: 'positive', message: `Карточка перемещена обратно в «${stageRegressCol.value}»` })
+    await reloadCard()
+  } catch (err) {
+    $q.notify({ type: 'negative', message: 'Ошибка перемещения карточки' })
   }
 }
 
