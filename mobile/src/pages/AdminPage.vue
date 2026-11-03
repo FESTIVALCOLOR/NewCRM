@@ -2282,6 +2282,20 @@ async function viewRolePermissions(role) {
     const matrix = matrixRes.status === 'fulfilled' ? matrixRes.value.data?.roles || {} : {}
     const rolePerms = matrix[role] || []
     rolePermissions.value = defs.map(d => ({ name: d.name, description: d.description, granted: rolePerms.includes(d.name) }))
+    // Добавляем права из PERMISSION_GROUPS которых нет в definitions API (новые права до rebuild)
+    const LOCAL_PERM_DESCRIPTIONS = {
+      'crm_cards.view_all': 'Показывать все карточки СРМ (не только свои)',
+      'supervision.view_all': 'Показывать все карточки надзора (не только свои)',
+    }
+    const knownNames = new Set(rolePermissions.value.map(p => p.name))
+    for (const permNames of Object.values(PERMISSION_GROUPS)) {
+      for (const name of permNames) {
+        if (!knownNames.has(name)) {
+          rolePermissions.value.push({ name, description: LOCAL_PERM_DESCRIPTIONS[name] || name, granted: rolePerms.includes(name) })
+          knownNames.add(name)
+        }
+      }
+    }
     showRoleDialog.value = true
   } catch {}
 }
