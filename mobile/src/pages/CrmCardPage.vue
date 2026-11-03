@@ -1789,6 +1789,37 @@
               Переместить карточку в<br>
               <strong>«{{ stageCompleteNextCol }}»</strong>?
             </div>
+            <!-- Уведомление о необходимости подписания акта -->
+            <div v-if="stageCompleteActType" style="margin-top: 12px; padding: 10px 12px; background: #FFF8E1; border-radius: 8px; border: 1px solid #FFC107">
+              <div style="font-size: 13px; font-weight: 600; color: #E65100; display: flex; align-items: center; gap: 6px; margin-bottom: 6px">
+                <q-icon name="assignment" size="16px" />
+                Подписание акта
+              </div>
+              <div v-if="stageCompleteActLoading" style="font-size: 12px; color: #888">
+                Проверяем акт...
+              </div>
+              <template v-else>
+                <div style="font-size: 12px; color: #555; margin-bottom: 6px">
+                  <template v-if="stageCompleteActFile">
+                    {{ ACT_LABELS_CARD[stageCompleteActType] }} сформирован — подпишите его с клиентом.
+                  </template>
+                  <template v-else>
+                    {{ ACT_LABELS_CARD[stageCompleteActType] }} ещё не сформирован.
+                  </template>
+                </div>
+                <a
+                  v-if="stageCompleteActFile && stageCompleteActFile.public_link"
+                  :href="stageCompleteActFile.public_link"
+                  target="_blank"
+                  style="font-size: 12px; color: #1565C0; text-decoration: underline"
+                >Открыть {{ ACT_LABELS_CARD[stageCompleteActType] }}</a>
+                <span
+                  v-else
+                  style="font-size: 12px; color: #1565C0; cursor: pointer; text-decoration: underline"
+                  @click="$router.push('/contracts/' + card.contract_id)"
+                >{{ stageCompleteActFile ? 'Открыть в договоре' : 'Сформировать акт в договоре' }}</span>
+              </template>
+            </div>
           </q-card-section>
           <q-card-actions align="right">
             <q-btn flat label="Нет, оставить" no-caps @click="stageCompleteDlgVisible = false" />
@@ -3499,6 +3530,18 @@ async function saveTimelineEntry() {
 // Авто-перемещение карточки — refs и логика
 const stageCompleteDlgVisible = ref(false)
 const stageCompleteNextCol = ref('')
+const stageCompleteActType = ref('')
+const stageCompleteActFile = ref(null)
+const stageCompleteActLoading = ref(false)
+
+const ACT_LABELS_CARD = { act_pr: 'Акт ПР', act_kd: 'Акт КД', act_rch: 'Акт РЧ' }
+
+function _getActTypeForStage(columnName, projectType) {
+  if (columnName.includes('Стадия 1')) return 'act_pr'
+  if (columnName.includes('Стадия 2') && projectType !== 'Шаблонный') return 'act_kd'
+  if (columnName.includes('Стадия 3')) return 'act_rch'
+  return null
+}
 
 function _getNextColumn(col, projectType) {
   const isTemplate = projectType === 'Шаблонный'
@@ -3527,6 +3570,19 @@ async function checkStageDone() {
   const nextCol = _getNextColumn(col, card.value.project_type)
   if (!nextCol) return
   stageCompleteNextCol.value = nextCol
+  // Определяем акт для текущей стадии и загружаем данные о нём
+  const actType = _getActTypeForStage(col, card.value.project_type)
+  stageCompleteActType.value = actType || ''
+  stageCompleteActFile.value = null
+  if (actType && card.value.contract_id) {
+    stageCompleteActLoading.value = true
+    filesApi.getContractFiles(card.value.contract_id, actType)
+      .then(({ data }) => {
+        stageCompleteActFile.value = (Array.isArray(data) ? data : []).find(f => f.stage === actType) || null
+      })
+      .catch(() => {})
+      .finally(() => { stageCompleteActLoading.value = false })
+  }
   stageCompleteDlgVisible.value = true
 }
 

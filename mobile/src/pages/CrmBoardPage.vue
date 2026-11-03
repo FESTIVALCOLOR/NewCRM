@@ -322,6 +322,23 @@
             <div v-if="moveNormDays > 0" style="font-size: 11px; color: #2F5496; font-weight: 600; margin-bottom: 8px">
               Норма дней: {{ moveNormDays }} раб. дн.<span v-if="moveSubstepName" style="font-weight: 400; color: var(--fc-text-secondary)"> · {{ moveSubstepName }}</span>
             </div>
+            <!-- Уведомление об акте если уходим из стадии -->
+            <div v-if="moveActType" style="margin-top: 8px; padding: 10px 12px; background: #FFF8E1; border-radius: 8px; border: 1px solid #FFC107">
+              <div style="font-size: 12px; font-weight: 600; color: #E65100; display: flex; align-items: center; gap: 5px; margin-bottom: 4px">
+                <q-icon name="assignment" size="14px" />
+                Подписание акта
+              </div>
+              <div v-if="moveActLoading" style="font-size: 11px; color: #888">
+                Проверяем акт...
+              </div>
+              <template v-else>
+                <div style="font-size: 11px; color: #555; margin-bottom: 4px">
+                  {{ moveActFile ? ACT_LABELS_BOARD[moveActType] + ' сформирован — подпишите с клиентом.' : ACT_LABELS_BOARD[moveActType] + ' не сформирован.' }}
+                </div>
+                <a v-if="moveActFile && moveActFile.public_link" :href="moveActFile.public_link" target="_blank" style="font-size: 11px; color: #1565C0; text-decoration: underline">Открыть {{ ACT_LABELS_BOARD[moveActType] }}</a>
+                <span v-else style="font-size: 11px; color: #1565C0; cursor: pointer; text-decoration: underline" @click="$router.push('/contracts/' + moveCard.contract_id)">{{ moveActFile ? 'Открыть в договоре' : 'Сформировать акт в договоре' }}</span>
+              </template>
+            </div>
           </q-card-section>
           <q-card-actions align="right">
             <q-btn flat label="Назад" no-caps @click="moveStep = 1" />
@@ -372,6 +389,55 @@
               no-caps
               :loading="moveLoading"
               @click="doCompleteProject"
+            />
+          </q-card-actions>
+        </template>
+
+        <!-- Шаг 4: подтверждение перемещения с информацией об акте -->
+        <template v-if="moveStep === 4">
+          <q-card-section>
+            <div style="font-size: 14px; margin-bottom: 12px">
+              Переместить карточку в<br><strong>«{{ moveTargetCol }}»</strong>?
+            </div>
+            <div style="padding: 10px 12px; background: #FFF8E1; border-radius: 8px; border: 1px solid #FFC107">
+              <div style="font-size: 13px; font-weight: 600; color: #E65100; display: flex; align-items: center; gap: 6px; margin-bottom: 6px">
+                <q-icon name="assignment" size="16px" />
+                Подписание акта
+              </div>
+              <div v-if="moveActLoading" style="font-size: 12px; color: #888">
+                Проверяем акт...
+              </div>
+              <template v-else>
+                <div style="font-size: 12px; color: #555; margin-bottom: 6px">
+                  <template v-if="moveActFile">
+                    {{ ACT_LABELS_BOARD[moveActType] }} сформирован — подпишите его с клиентом.
+                  </template>
+                  <template v-else>
+                    {{ ACT_LABELS_BOARD[moveActType] }} ещё не сформирован.
+                  </template>
+                </div>
+                <a
+                  v-if="moveActFile && moveActFile.public_link"
+                  :href="moveActFile.public_link"
+                  target="_blank"
+                  style="font-size: 12px; color: #1565C0; text-decoration: underline"
+                >Открыть {{ ACT_LABELS_BOARD[moveActType] }}</a>
+                <span
+                  v-else
+                  style="font-size: 12px; color: #1565C0; cursor: pointer; text-decoration: underline"
+                  @click="$router.push('/contracts/' + moveCard.contract_id)"
+                >{{ moveActFile ? 'Открыть в договоре' : 'Сформировать акт в договоре' }}</span>
+              </template>
+            </div>
+          </q-card-section>
+          <q-card-actions align="right">
+            <q-btn flat label="Назад" no-caps @click="moveStep = 1" />
+            <q-btn
+              unelevated
+              label="Переместить"
+              style="background: #4CAF50; color: white; border-radius: 4px"
+              no-caps
+              @click="doMoveCard(moveTargetCol)"
             />
           </q-card-actions>
         </template>
@@ -495,6 +561,18 @@ const moveExecutorId = ref(null)
 const moveDeadline = ref('')
 const moveNormDays = ref(0)
 const moveSubstepName = ref('')
+const moveActType = ref('')
+const moveActFile = ref(null)
+const moveActLoading = ref(false)
+
+const ACT_LABELS_BOARD = { act_pr: 'Акт ПР', act_kd: 'Акт КД', act_rch: 'Акт РЧ' }
+
+function _getBoardActType(columnName, projectType) {
+  if (columnName.includes('Стадия 1')) return 'act_pr'
+  if (columnName.includes('Стадия 2') && projectType !== 'Шаблонный') return 'act_kd'
+  if (columnName.includes('Стадия 3')) return 'act_rch'
+  return null
+}
 const moveLoading = ref(false)
 const employeeOpts = ref([])
 const completionStatus = ref('СДАН')
@@ -590,7 +668,7 @@ async function onDragEnd() {
     moveDeadline.value = ''
     filteredMoveEmployees.value = employeeOpts.value
     await selectMoveColumn(targetCol)
-    if (moveStep.value === 2 || moveStep.value === 3) {
+    if (moveStep.value === 2 || moveStep.value === 3 || moveStep.value === 4) {
       moveDialogVisible.value = true
     }
   }
@@ -891,6 +969,24 @@ async function selectMoveColumn(colName) {
   }
 
   moveTargetCol.value = colName
+
+  // Загружаем акт если уходим из стадии вперёд (не в "В ожидании")
+  moveActType.value = ''
+  moveActFile.value = null
+  if (fromCol.includes('Стадия') && colName !== 'В ожидании') {
+    const actType = _getBoardActType(fromCol, moveCard.value.project_type)
+    moveActType.value = actType || ''
+    if (actType && moveCard.value.contract_id) {
+      moveActLoading.value = true
+      filesApi.getContractFiles(moveCard.value.contract_id, actType)
+        .then(({ data }) => {
+          moveActFile.value = (Array.isArray(data) ? data : []).find(f => f.stage === actType) || null
+        })
+        .catch(() => {})
+        .finally(() => { moveActLoading.value = false })
+    }
+  }
+
   if (stageNeedsExecutor(colName)) {
     moveStep.value = 2
     moveExecutorId.value = null
@@ -966,6 +1062,9 @@ async function selectMoveColumn(colName) {
     completionStatus.value = 'СДАН'
     terminationReason.value = ''
     moveStep.value = 3
+  } else if (moveActType.value) {
+    // Прямое перемещение из стадии — показываем подтверждение с информацией об акте
+    moveStep.value = 4
   } else {
     doMoveCard(colName)
   }
