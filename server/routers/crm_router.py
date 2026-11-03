@@ -594,19 +594,26 @@ async def get_crm_card(card_id: int, current_user: Employee = Depends(get_curren
         )
         if wf:
             substep_code = wf.current_substep_code
-            # Проверяем, не указывает ли substep_code на уже выполненную/пропущенную запись.
-            # Если да — делаем глобальный поиск первого незаполненного подэтапа.
-            if substep_code and contract and contract.id:
-                stale_entry = (
-                    db.query(ProjectTimelineEntry)
-                    .filter(
-                        ProjectTimelineEntry.stage_code == substep_code,
-                        ProjectTimelineEntry.contract_id == contract.id,
+            # Если substep_code пустой или указывает на выполненную/пропущенную запись —
+            # делаем глобальный поиск первого незаполненного подэтапа по всему договору.
+            if contract and contract.id:
+                need_global_fallback = False
+                if not substep_code:
+                    # substep обнулён (например после repair stage_completed) — ищем глобально
+                    need_global_fallback = True
+                else:
+                    stale_entry = (
+                        db.query(ProjectTimelineEntry)
+                        .filter(
+                            ProjectTimelineEntry.stage_code == substep_code,
+                            ProjectTimelineEntry.contract_id == contract.id,
+                        )
+                        .first()
                     )
-                    .first()
-                )
-                is_stale = stale_entry and (stale_entry.status == "skipped" or (stale_entry.actual_date and stale_entry.actual_date not in ("", None)))
-                if is_stale:
+                    is_stale = stale_entry and (stale_entry.status == "skipped" or (stale_entry.actual_date and stale_entry.actual_date not in ("", None)))
+                    if is_stale:
+                        need_global_fallback = True
+                if need_global_fallback:
                     true_next = (
                         db.query(ProjectTimelineEntry)
                         .filter(
