@@ -21,6 +21,7 @@ import os
 import re
 import subprocess
 import tempfile
+import threading
 
 from docx import Document
 from docx.oxml.ns import qn
@@ -387,17 +388,42 @@ def _replace_text_in_runs(runs, ctx: dict, db: Session, yd_service: YandexDiskSe
                 r.text = r.text.replace("{{" + key + "}}", value)
 
     # Проход 2: кросс-run текстовые плейсхолдеры (Word разбил {{КЛЮЧ}} на несколько runs)
-    full_text = "".join(r.text for r in runs)
-    if "{{" not in full_text:
-        return
-    replaced = full_text
+    # Заменяем каждый плейсхолдер точечно — только затронутые runs, сохраняя форматирование.
     for key, value in ctx.items():
-        replaced = replaced.replace("{{" + key + "}}", value)
-    if replaced == full_text:
-        return
-    runs[0].text = replaced
-    for r in runs[1:]:
-        r.text = ""
+        ph = "{{" + key + "}}"
+        texts = [r.text for r in runs]
+        full = "".join(texts)
+        if ph not in full:
+            continue
+        ph_start = full.index(ph)
+        ph_end = ph_start + len(ph)
+        # Найти run-ы, на которые попадает плейсхолдер
+        pos = 0
+        start_run = end_run = None
+        start_off = end_off = 0
+        for i, t in enumerate(texts):
+            rend = pos + len(t)
+            if start_run is None and pos <= ph_start < rend:
+                start_run = i
+                start_off = ph_start - pos
+            if end_run is None and pos < ph_end <= rend:
+                end_run = i
+                end_off = ph_end - pos
+                break
+            pos = rend
+        if start_run is None or end_run is None:
+            continue
+        if start_run == end_run:
+            # Плейсхолдер целиком в одном run — должно было поймано в Проходе 1
+            t = texts[start_run]
+            runs[start_run].text = t[:start_off] + value + t[end_off:]
+        else:
+            # Плейсхолдер распределён по runs: prefix в start_run, value туда же,
+            # средние runs очищаются, suffix остаётся в end_run
+            runs[start_run].text = texts[start_run][:start_off] + value
+            for i in range(start_run + 1, end_run):
+                runs[i].text = ""
+            runs[end_run].text = texts[end_run][end_off:]
 
 
 def _process_table(table, ctx: dict, db: Session, yd_service: YandexDiskService) -> None:
@@ -421,9 +447,16 @@ def _fill_docx(doc: Document, ctx: dict, db: Session, yd_service: YandexDiskServ
         _replace_text_in_runs(para.runs, ctx, db, yd_service)
     for table in doc.tables:
         _process_table(table, ctx, db, yd_service)
-    # Верхние и нижние колонтитулы
+    # Верхние и нижние колонтитулы (все варианты: default, first_page, even_page)
     for section in doc.sections:
-        for hf in (section.header, section.footer):
+        for hf in (
+            section.header,
+            section.footer,
+            section.first_page_header,
+            section.first_page_footer,
+            section.even_page_header,
+            section.even_page_footer,
+        ):
             if hf is None or hf.is_linked_to_previous:
                 continue
             for para in hf.paragraphs:
@@ -432,23 +465,37 @@ def _fill_docx(doc: Document, ctx: dict, db: Session, yd_service: YandexDiskServ
                 _process_table(table, ctx, db, yd_service)
 
 
+_lo_lock = threading.Lock()
+
+
 def _convert_to_pdf(docx_path: str) -> bytes:
-    """Конвертирует DOCX в PDF через LibreOffice headless."""
+    """Конвертирует DOCX в PDF через LibreOffice headless.
+
+    Использует глобальный lock и уникальный профиль LO на вызов,
+    чтобы параллельные запросы не конфликтовали по ~/.config/libreoffice.
+    """
     out_dir = os.path.dirname(docx_path)
-    result = subprocess.run(
-        [
-            "libreoffice",
-            "--headless",
-            "--convert-to",
-            "pdf",
-            "--outdir",
-            out_dir,
-            docx_path,
-        ],
-        capture_output=True,
-        text=True,
-        timeout=120,
-    )
+    profile_dir = os.path.join(out_dir, "lo_profile")
+    os.makedirs(profile_dir, exist_ok=True)
+    profile_url = f"file://{profile_dir}"
+
+    with _lo_lock:
+        result = subprocess.run(
+            [
+                "libreoffice",
+                "--headless",
+                "--norestore",
+                f"-env:UserInstallation={profile_url}",
+                "--convert-to",
+                "pdf",
+                "--outdir",
+                out_dir,
+                docx_path,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
     if result.returncode != 0:
         raise RuntimeError(f"LibreOffice ошибка: {result.stderr}")
     pdf_path = os.path.splitext(docx_path)[0] + ".pdf"
