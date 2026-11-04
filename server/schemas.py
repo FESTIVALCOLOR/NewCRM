@@ -249,6 +249,7 @@ class ContractBase(BaseModel):
     floors: Optional[int] = 1
     agent_type: Optional[str] = None
     city: Optional[str] = None
+    client_type: Optional[str] = "физ"  # физ | юр
     contract_number: str
     contract_date: Optional[str] = None
     address: Optional[str] = None
@@ -1671,6 +1672,7 @@ class ContractTemplateResponse(BaseModel):
     id: int
     project_type: str
     doc_type: str
+    client_type: str = "физ"
     file_name: str
     uploaded_at: Optional[datetime] = None
 

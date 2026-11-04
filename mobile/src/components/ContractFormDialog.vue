@@ -82,6 +82,22 @@
             @update:model-value="onProjectTypeChange"
           />
 
+          <!-- Тип клиента (физ / юр) — влияет на выбор шаблона договора -->
+          <div class="row q-gutter-sm items-center">
+            <span style="font-size: 13px; color: var(--fc-text-light)">Тип клиента:</span>
+            <q-btn-toggle
+              v-model="form.client_type"
+              unelevated
+              dense
+              :options="[{ label: 'Физ. лицо', value: 'физ' }, { label: 'Юр. лицо', value: 'юр' }]"
+              color="grey-4"
+              text-color="grey-8"
+              toggle-color="primary"
+              toggle-text-color="white"
+              style="font-size: 12px"
+            />
+          </div>
+
           <!-- Подтип проекта -->
           <q-select
             v-model="form.project_subtype"
@@ -424,7 +440,7 @@ const emptyForm = () => ({
   address: '', city: 'МСК', area: null, floors: 1, agent_type: '',
   contract_date: today, contract_period: 45,
   total_amount: null, advance_payment: null, additional_payment: null, third_payment: null,
-  status: 'Новый заказ', comments: '',
+  status: 'Новый заказ', comments: '', client_type: 'физ',
 })
 
 const form = ref(emptyForm())

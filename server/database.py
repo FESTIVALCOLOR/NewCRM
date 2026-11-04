@@ -496,6 +496,8 @@ class Contract(Base):
     third_receipt_yandex_path = Column(String)
     third_receipt_file_name = Column(String)
 
+    client_type = Column(String(10), nullable=False, server_default="физ")  # физ | юр
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -1391,12 +1393,13 @@ class ContractTemplate(Base):
     id = Column(Integer, primary_key=True, index=True)
     project_type = Column(String(100), nullable=False)  # Индивидуальный | Шаблонный | Авторский надзор
     doc_type = Column(String(50), nullable=False)  # contract | act_pr | act_kd | act_info | act_final
+    client_type = Column(String(10), nullable=False, server_default="физ")  # физ | юр
     file_name = Column(String(255), nullable=False)
-    file_path = Column(String(500), nullable=False)  # путь на ЯД, напр. /CRM/Системные/Шаблоны/Индивидуальный_contract.docx
+    file_path = Column(String(500), nullable=False)  # путь на ЯД, напр. /CRM/Системные/Шаблоны/Индивидуальный_contract_физ.docx
     uploaded_at = Column(DateTime, default=datetime.utcnow)
     uploaded_by = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
 
-    __table_args__ = (UniqueConstraint("project_type", "doc_type", name="uq_contract_template_type"),)
+    __table_args__ = (UniqueConstraint("project_type", "doc_type", "client_type", name="uq_contract_template_type_v2"),)
 
 
 def _auto_migrate_columns():
@@ -1465,12 +1468,33 @@ def _ensure_chat_indexes():
         logger.warning(f"_ensure_chat_indexes warning: {e}")
 
 
+def _migrate_contract_template_client_type():
+    """Мигрируем уникальный индекс: (project_type, doc_type) → (project_type, doc_type, client_type)."""
+    if engine.dialect.name != "postgresql":
+        return
+    import logging
+
+    from sqlalchemy import text as _text
+
+    logger = logging.getLogger(__name__)
+    try:
+        with engine.begin() as conn:
+            # Удаляем старый уникальный constraint если существует
+            conn.execute(_text("ALTER TABLE contract_templates DROP CONSTRAINT IF EXISTS uq_contract_template_type"))
+            # Создаём новый unique index если не существует
+            conn.execute(_text("CREATE UNIQUE INDEX IF NOT EXISTS uq_contract_template_type_v2 ON contract_templates(project_type, doc_type, client_type)"))
+            logger.info("contract_templates: unique constraint migrated to include client_type")
+    except Exception as e:
+        logger.warning(f"_migrate_contract_template_client_type warning: {e}")
+
+
 def init_db():
     """Инициализация базы данных"""
     try:
         Base.metadata.create_all(bind=engine)
         _auto_migrate_columns()
         _ensure_chat_indexes()
+        _migrate_contract_template_client_type()
     except Exception as e:
         # Race condition при 2+ workers: один уже создал таблицы
         import logging

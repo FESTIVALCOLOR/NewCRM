@@ -52,6 +52,7 @@ def _is_valid_requisite_type(req_type: str) -> bool:
 
 VALID_PROJECT_TYPES = {"Индивидуальный", "Шаблонный", "Авторский надзор"}
 VALID_DOC_TYPES = {"contract", "act_pr", "act_kd", "act_info", "act_final"}
+VALID_CLIENT_TYPES = {"физ", "юр"}
 
 # Папки на ЯД (без «disk:» префикса — YandexDiskService принимает без него)
 YD_REQUISITES_FOLDER = "/CRM/Системные/Реквизиты"
@@ -153,10 +154,11 @@ def get_templates(
     return db.query(ContractTemplate).all()
 
 
-@router.post("/templates/{project_type}/{doc_type}", response_model=ContractTemplateResponse)
+@router.post("/templates/{project_type}/{doc_type}/{client_type}", response_model=ContractTemplateResponse)
 async def upload_template(
     project_type: str,
     doc_type: str,
+    client_type: str,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: Employee = Depends(_require_admin),
@@ -165,6 +167,8 @@ async def upload_template(
         raise HTTPException(status_code=400, detail=f"Неверный тип проекта: {project_type}")
     if doc_type not in VALID_DOC_TYPES:
         raise HTTPException(status_code=400, detail=f"Неверный тип документа: {doc_type}")
+    if client_type not in VALID_CLIENT_TYPES:
+        raise HTTPException(status_code=400, detail=f"Неверный тип клиента: {client_type}. Допустимо: физ, юр")
 
     import os
 
@@ -173,7 +177,7 @@ async def upload_template(
         raise HTTPException(status_code=400, detail="Разрешены только DOCX/DOC/DOTX файлы")
 
     safe_type = project_type.replace(" ", "_")
-    file_name = f"{safe_type}_{doc_type}{ext}"
+    file_name = f"{safe_type}_{doc_type}_{client_type}{ext}"
     yd_path = f"{YD_TEMPLATES_FOLDER}/{file_name}"
 
     content = await file.read()
@@ -188,6 +192,7 @@ async def upload_template(
         .filter(
             ContractTemplate.project_type == project_type,
             ContractTemplate.doc_type == doc_type,
+            ContractTemplate.client_type == client_type,
         )
         .first()
     )
@@ -203,6 +208,7 @@ async def upload_template(
     tmpl = ContractTemplate(
         project_type=project_type,
         doc_type=doc_type,
+        client_type=client_type,
         file_name=file.filename or file_name,
         file_path=yd_path,
         uploaded_by=current_user.id,
@@ -213,10 +219,11 @@ async def upload_template(
     return tmpl
 
 
-@router.delete("/templates/{project_type}/{doc_type}", status_code=204)
+@router.delete("/templates/{project_type}/{doc_type}/{client_type}", status_code=204)
 def delete_template(
     project_type: str,
     doc_type: str,
+    client_type: str,
     db: Session = Depends(get_db),
     current_user: Employee = Depends(_require_admin),
 ):
@@ -225,6 +232,7 @@ def delete_template(
         .filter(
             ContractTemplate.project_type == project_type,
             ContractTemplate.doc_type == doc_type,
+            ContractTemplate.client_type == client_type,
         )
         .first()
     )

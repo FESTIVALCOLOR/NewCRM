@@ -1413,7 +1413,21 @@
           </div>
         </q-card>
 
-        <!-- Шаблоны по типам проектов -->
+        <!-- Шаблоны по типам проектов — вкладки Физ. лица / Юр. лица -->
+        <div class="q-mb-sm">
+          <q-tabs
+            v-model="activeClientType"
+            dense
+            align="left"
+            active-color="primary"
+            indicator-color="primary"
+            class="q-mb-md"
+            style="border-bottom: 1px solid var(--fc-border-light)"
+          >
+            <q-tab name="физ" label="Физ. лица" />
+            <q-tab name="юр" label="Юр. лица" />
+          </q-tabs>
+        </div>
         <div v-for="pt in projectTypeSlots" :key="pt.type" class="q-mb-md">
           <div style="font-size: 14px; font-weight: 600; color: var(--fc-text); margin-bottom: 6px">
             {{ pt.label }}
@@ -1428,9 +1442,9 @@
               <span class="tmpl-label">{{ dt.label }}</span>
               <span class="tmpl-dots" />
               <div class="tmpl-right">
-                <template v-if="getTemplate(pt.type, dt.type)">
+                <template v-if="getTemplate(pt.type, dt.type, activeClientType)">
                   <q-icon name="check_circle" color="positive" size="16px" />
-                  <span class="tmpl-filename">{{ getTemplate(pt.type, dt.type).file_name }}</span>
+                  <span class="tmpl-filename">{{ getTemplate(pt.type, dt.type, activeClientType).file_name }}</span>
                   <q-btn
                     flat
                     round
@@ -1438,24 +1452,24 @@
                     icon="delete"
                     color="negative"
                     size="xs"
-                    @click="deleteTemplate(pt.type, dt.type)"
+                    @click="deleteTemplate(pt.type, dt.type, activeClientType)"
                   />
                 </template>
                 <span v-else class="tmpl-empty">Не загружено</span>
                 <q-btn
                   outline
                   size="sm"
-                  :label="getTemplate(pt.type, dt.type) ? 'Заменить' : 'Загрузить'"
+                  :label="getTemplate(pt.type, dt.type, activeClientType) ? 'Заменить' : 'Загрузить'"
                   color="primary"
                   class="tmpl-btn"
-                  @click="triggerTemplateUpload(pt.type, dt.type)"
+                  @click="triggerTemplateUpload(pt.type, dt.type, activeClientType)"
                 />
                 <input
-                  :ref="el => setTemplateInput(pt.type, dt.type, el)"
+                  :ref="el => setTemplateInput(pt.type, dt.type, activeClientType, el)"
                   type="file"
                   accept=".docx,.dotx,.doc"
                   style="display:none"
-                  @change="e => onTemplateFileSelected(pt.type, dt.type, e)"
+                  @change="e => onTemplateFileSelected(pt.type, dt.type, activeClientType, e)"
                 >
               </div>
             </div>
@@ -2842,14 +2856,17 @@ const projectTypeSlots = [
 const requisites = ref({})        // { signature: {...}, seal: {...}, signature_name: {...} }
 const templates = ref([])         // ContractTemplateResponse[]
 const requisiteInputs = ref({})   // { signature: <input el>, ... }
-const templateInputs = ref({})    // { 'Индивидуальный::contract': <input el>, ... }
+const templateInputs = ref({})    // { 'Индивидуальный::contract::физ': <input el>, ... }
+const activeClientType = ref('физ')  // 'физ' | 'юр'
 
-function getTemplate(projectType, docType) {
-  return templates.value.find(t => t.project_type === projectType && t.doc_type === docType) || null
+function getTemplate(projectType, docType, clientType = 'физ') {
+  return templates.value.find(
+    t => t.project_type === projectType && t.doc_type === docType && (t.client_type || 'физ') === clientType,
+  ) || null
 }
 
-function setTemplateInput(projectType, docType, el) {
-  templateInputs.value[`${projectType}::${docType}`] = el
+function setTemplateInput(projectType, docType, clientType, el) {
+  templateInputs.value[`${projectType}::${docType}::${clientType}`] = el
 }
 
 async function loadDocTemplates() {
@@ -2892,15 +2909,15 @@ async function deleteRequisite(type) {
   }
 }
 
-function triggerTemplateUpload(projectType, docType) {
-  templateInputs.value[`${projectType}::${docType}`]?.click()
+function triggerTemplateUpload(projectType, docType, clientType) {
+  templateInputs.value[`${projectType}::${docType}::${clientType}`]?.click()
 }
 
-async function onTemplateFileSelected(projectType, docType, e) {
+async function onTemplateFileSelected(projectType, docType, clientType, e) {
   const file = e.target.files?.[0]
   if (!file) return
   try {
-    await contractDocsApi.uploadTemplate(projectType, docType, file)
+    await contractDocsApi.uploadTemplate(projectType, docType, clientType, file)
     await loadDocTemplates()
     $q.notify({ type: 'positive', message: 'Шаблон загружен', timeout: 2000 })
   } catch {
@@ -2910,9 +2927,9 @@ async function onTemplateFileSelected(projectType, docType, e) {
   }
 }
 
-async function deleteTemplate(projectType, docType) {
+async function deleteTemplate(projectType, docType, clientType) {
   try {
-    await contractDocsApi.deleteTemplate(projectType, docType)
+    await contractDocsApi.deleteTemplate(projectType, docType, clientType)
     await loadDocTemplates()
   } catch {
     $q.notify({ type: 'negative', message: 'Ошибка удаления', timeout: 2000 })

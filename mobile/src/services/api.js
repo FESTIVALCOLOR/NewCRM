@@ -667,18 +667,18 @@ export const contractDocsApi = {
   },
   deleteRequisite: (type) => api.delete(`/api/v1/contract-templates/requisites/${type}`),
   getTemplates: () => api.get('/api/v1/contract-templates/templates'),
-  uploadTemplate: (projectType, docType, file) => {
+  uploadTemplate: (projectType, docType, clientType, file) => {
     const fd = new FormData()
     fd.append('file', file)
     return api.post(
-      `/api/v1/contract-templates/templates/${encodeURIComponent(projectType)}/${docType}`,
+      `/api/v1/contract-templates/templates/${encodeURIComponent(projectType)}/${docType}/${encodeURIComponent(clientType)}`,
       fd,
       _multipartConfig,
     )
   },
-  deleteTemplate: (projectType, docType) =>
+  deleteTemplate: (projectType, docType, clientType) =>
     api.delete(
-      `/api/v1/contract-templates/templates/${encodeURIComponent(projectType)}/${docType}`,
+      `/api/v1/contract-templates/templates/${encodeURIComponent(projectType)}/${docType}/${encodeURIComponent(clientType)}`,
     ),
   generate: (contractId, docType) =>
     api.post('/api/v1/contract-templates/generate', { contract_id: contractId, doc_type: docType }),

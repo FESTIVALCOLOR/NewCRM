@@ -757,7 +757,7 @@
               </div>
             </q-card-section>
             <div v-if="filesByGroup.actsSigned.length > 0" class="row q-col-gutter-sm q-pa-sm">
-              <div v-for="f in filesByGroup.actsSigned" :key="f.id" class="col-xs-12 col-sm-4">
+              <div v-for="f in filesByGroup.actsSigned" :key="f.id" :class="actSignedColClass">
                 <q-card flat bordered class="q-pa-sm" style="border-radius: 4px">
                   <div style="font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fc-text)">
                     {{ f.file_name }}
@@ -1427,6 +1427,14 @@ const filesByGroup = computed(() => {
 
 const actColClass = computed(() => {
   const n = filesByGroup.value.acts.length
+  if (n <= 1) return 'col-xs-12'
+  if (n === 2) return 'col-xs-6'
+  if (n === 3) return 'col-xs-6 col-sm-4'
+  return 'col-xs-6 col-sm-3'
+})
+
+const actSignedColClass = computed(() => {
+  const n = filesByGroup.value.actsSigned.length
   if (n <= 1) return 'col-xs-12'
   if (n === 2) return 'col-xs-6'
   if (n === 3) return 'col-xs-6 col-sm-4'

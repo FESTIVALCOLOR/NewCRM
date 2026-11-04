@@ -611,16 +611,21 @@ def generate_document(
 
     client = db.query(Client).filter(Client.id == contract.client_id).first()
 
+    client_type = getattr(contract, "client_type", None) or "физ"
     template = (
         db.query(ContractTemplate)
         .filter(
             ContractTemplate.project_type == contract.project_type,
             ContractTemplate.doc_type == doc_type,
+            ContractTemplate.client_type == client_type,
         )
         .first()
     )
     if not template:
-        return {"success": False, "message": f"Шаблон не найден для {contract.project_type} / {doc_type}"}
+        return {
+            "success": False,
+            "message": f"Шаблон не найден для {contract.project_type} / {doc_type} / {client_type}",
+        }
 
     meta = DOC_TYPE_META.get(
         doc_type,
