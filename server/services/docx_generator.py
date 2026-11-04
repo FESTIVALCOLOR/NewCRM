@@ -612,7 +612,13 @@ def generate_document(
 
     client = db.query(Client).filter(Client.id == contract.client_id).first()
 
-    client_type = getattr(contract, "client_type", None) or "физ"
+    # Определяем тип клиента: юр. лицо если явно указано OR у клиента заполнен organization_type
+    explicit = getattr(contract, "client_type", None) or "физ"
+    if explicit == "юр" or (client and getattr(client, "organization_type", None)):
+        client_type = "юр"
+    else:
+        client_type = "физ"
+
     template = (
         db.query(ContractTemplate)
         .filter(
@@ -623,10 +629,22 @@ def generate_document(
         .first()
     )
     if not template:
-        return {
-            "success": False,
-            "message": f"Шаблон не найден для {contract.project_type} / {doc_type} / {client_type}",
-        }
+        # Фолбэк: если юр-шаблон не загружен — пробуем физ
+        if client_type == "юр":
+            template = (
+                db.query(ContractTemplate)
+                .filter(
+                    ContractTemplate.project_type == contract.project_type,
+                    ContractTemplate.doc_type == doc_type,
+                    ContractTemplate.client_type == "физ",
+                )
+                .first()
+            )
+        if not template:
+            return {
+                "success": False,
+                "message": f"Шаблон не найден для {contract.project_type} / {doc_type} / {client_type}",
+            }
 
     meta = DOC_TYPE_META.get(
         doc_type,
