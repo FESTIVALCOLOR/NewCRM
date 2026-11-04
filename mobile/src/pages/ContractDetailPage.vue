@@ -619,7 +619,7 @@
               </div>
             </q-card-section>
             <div v-if="filesByGroup.acts.length > 0" class="row q-col-gutter-sm q-pa-sm">
-              <div v-for="f in filesByGroup.acts" :key="f.id" class="col-xs-12 col-sm-4">
+              <div v-for="f in filesByGroup.acts" :key="f.id" class="col-xs-6 col-sm-3">
                 <q-card flat bordered class="q-pa-sm" style="border-radius: 4px">
                   <div style="font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fc-text)">
                     {{ f.file_name }}
