@@ -1425,10 +1425,18 @@ def _auto_migrate_columns():
             for col in table.columns:
                 if col.name not in db_columns:
                     col_type = col.type.compile(engine.dialect)
-                    nullable = "NULL" if col.nullable else "NOT NULL"
+                    # Для NOT NULL столбца без DEFAULT PostgreSQL отказывает при наличии строк.
+                    # Если есть server_default — добавляем DEFAULT, иначе делаем nullable.
+                    has_default = col.default is not None or col.server_default is not None
+                    if not col.nullable and not has_default:
+                        nullable = "NULL"  # безопаснее, чем падать
+                    else:
+                        nullable = "NULL" if col.nullable else "NOT NULL"
                     default = ""
                     if col.default is not None:
                         default = f" DEFAULT {col.default.arg!r}"
+                    elif col.server_default is not None:
+                        default = f" DEFAULT {col.server_default.arg!r}"
                     sql = f"ALTER TABLE {table.name} ADD COLUMN {col.name} {col_type} {nullable}{default}"
                     with engine.begin() as conn:
                         conn.execute(text(sql))
@@ -1479,11 +1487,15 @@ def _migrate_contract_template_client_type():
     logger = logging.getLogger(__name__)
     try:
         with engine.begin() as conn:
+            # Добавляем столбец client_type в contract_templates если нет
+            conn.execute(_text("ALTER TABLE contract_templates ADD COLUMN IF NOT EXISTS client_type VARCHAR(10) NOT NULL DEFAULT 'физ'"))
+            # Добавляем столбец client_type в contracts если нет
+            conn.execute(_text("ALTER TABLE contracts ADD COLUMN IF NOT EXISTS client_type VARCHAR(10) NOT NULL DEFAULT 'физ'"))
             # Удаляем старый уникальный constraint если существует
             conn.execute(_text("ALTER TABLE contract_templates DROP CONSTRAINT IF EXISTS uq_contract_template_type"))
             # Создаём новый unique index если не существует
             conn.execute(_text("CREATE UNIQUE INDEX IF NOT EXISTS uq_contract_template_type_v2 ON contract_templates(project_type, doc_type, client_type)"))
-            logger.info("contract_templates: unique constraint migrated to include client_type")
+            logger.info("contract_templates: client_type column + unique index migrated")
     except Exception as e:
         logger.warning(f"_migrate_contract_template_client_type warning: {e}")
 
