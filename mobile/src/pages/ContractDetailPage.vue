@@ -624,7 +624,7 @@
                   <div style="font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fc-text)">
                     {{ f.file_name }}
                   </div>
-                  <div class="text-caption" style="color: var(--fc-text-light)">
+                  <div class="text-caption" style="color: var(--fc-text-light); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                     {{ stageLabel(f.stage) }}
                   </div>
                   <div class="row q-gutter-xs q-mt-xs">
@@ -762,7 +762,7 @@
                   <div style="font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fc-text)">
                     {{ f.file_name }}
                   </div>
-                  <div class="text-caption" style="color: var(--fc-text-light)">
+                  <div class="text-caption" style="color: var(--fc-text-light); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                     {{ stageLabel(f.stage) }}
                   </div>
                   <div class="row q-gutter-xs q-mt-xs">
