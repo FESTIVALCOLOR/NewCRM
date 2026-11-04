@@ -1391,8 +1391,11 @@ function scoreBar(v) { return v != null ? `${v}/10` : '—' }
 const clientName = ref(null)
 const clientData = ref(null)
 const clientDisplayName = computed(() => {
+  const cd = clientData.value
+  if (cd?.organization_type && cd?.organization_name) return `${cd.organization_type} ${cd.organization_name}`
+  if (cd?.organization_name) return cd.organization_name
+  if (cd?.full_name) return cd.full_name
   if (contract.value?.client_name) return contract.value.client_name
-  if (clientData.value?.full_name) return clientData.value.full_name
   if (clientName.value) return clientName.value
   return contract.value?.client_id ? `Клиент #${contract.value.client_id}` : 'Неизвестен'
 })
