@@ -168,6 +168,7 @@ def _build_context(contract: Contract, client: Client, doc_type: str) -> dict:
         "СУММА_ПРОПИСЬЮ": _amount_in_words(amount),
         "ТИП_ПРОЕКТА": contract.project_type or "",
         "ПОДТИП_ПРОЕКТА": contract.project_subtype or "",
+        "ТИП_ОРГАНИЗАЦИИ": "физическое лицо" if (getattr(contract, "client_type", None) or "физ") == "физ" else "юридическое лицо",
         "СЕГОДНЯ": _format_date(datetime.now().strftime("%Y-%m-%d")),
         "АВАНС": f"{advance:,.0f}".replace(",", " "),
         "АВАНС_ПРОПИСЬЮ": _amount_in_words(advance),
