@@ -57,7 +57,7 @@ DOC_TYPE_META = {
     "act_info": {
         "label": "Инф. письмо",
         "yd_subfolder": "Документы/Акты",
-        "db_stage": "act_kd",
+        "db_stage": "act_info",
     },
     "act_final": {
         "label": "Акт РЧ",
