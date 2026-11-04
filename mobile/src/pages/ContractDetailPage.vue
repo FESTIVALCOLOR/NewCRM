@@ -619,7 +619,7 @@
               </div>
             </q-card-section>
             <div v-if="filesByGroup.acts.length > 0" class="row q-col-gutter-sm q-pa-sm">
-              <div v-for="f in filesByGroup.acts" :key="f.id" class="col-xs-6 col-sm-3">
+              <div v-for="f in filesByGroup.acts" :key="f.id" :class="actColClass">
                 <q-card flat bordered class="q-pa-sm" style="border-radius: 4px">
                   <div style="font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fc-text)">
                     {{ f.file_name }}
@@ -1423,6 +1423,14 @@ const filesByGroup = computed(() => {
     else if (['stage1', 'stage2_concept', 'stage3'].includes(f.stage) && f.yandex_path?.includes('Документы')) groups.acts.push(f)
   }
   return groups
+})
+
+const actColClass = computed(() => {
+  const n = filesByGroup.value.acts.length
+  if (n <= 1) return 'col-xs-12'
+  if (n === 2) return 'col-xs-6'
+  if (n === 3) return 'col-xs-6 col-sm-4'
+  return 'col-xs-6 col-sm-3'
 })
 
 const STAGE_LABELS = {
