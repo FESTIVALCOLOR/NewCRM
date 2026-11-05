@@ -17,7 +17,7 @@ import logging
 import secrets
 from typing import Any
 
-from auth import get_current_employee
+from auth import get_current_user as get_current_employee
 from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
