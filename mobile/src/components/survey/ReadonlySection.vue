@@ -9,12 +9,14 @@
         {{ q.label }}
       </div>
 
+      <!-- text / textarea -->
       <template v-if="q.type === 'text' || q.type === 'textarea'">
         <div class="ro-value">
           {{ answers[q.id] || '—' }}
         </div>
       </template>
 
+      <!-- contacts -->
       <template v-else-if="q.type === 'contacts'">
         <div class="ro-value">
           <div v-for="sf in q.subfields" :key="sf.key">
@@ -24,34 +26,74 @@
         </div>
       </template>
 
+      <!-- checkbox_group -->
       <template v-else-if="q.type === 'checkbox_group'">
         <div class="ro-value">
           <div
             v-for="opt in q.options"
             :key="opt.value"
-            class="ro-checkbox-row"
           >
-            <template v-if="opt.type === 'text_field'">
-              <span class="ro-sub-label">{{ opt.label }}</span>
-              <span>{{ answers[q.id + '_text_' + opt.value] || '—' }}</span>
+            <!-- Разделитель секции -->
+            <template v-if="opt.type === 'separator'">
+              <div class="ro-separator">
+                <span class="ro-separator-label">{{ opt.label }}</span>
+              </div>
             </template>
+
+            <!-- Поле ввода текста (text_field) -->
+            <template v-else-if="opt.type === 'text_field'">
+              <div class="ro-checkbox-row">
+                <span class="ro-sub-label">{{ opt.label }}: </span>
+                <span :class="answers[q.id + '_text_' + opt.value] ? 'ro-inline-text' : 'text-grey-5'">
+                  {{ answers[q.id + '_text_' + opt.value] || '—' }}
+                </span>
+              </div>
+            </template>
+
+            <!-- Да / Нет inline -->
+            <template v-else-if="opt.type === 'yes_no_inline'">
+              <div class="ro-yn-row">
+                <span class="ro-yn-label">{{ opt.label }}</span>
+                <span
+                  class="ro-yn-badge"
+                  :class="getCheckboxText(q.id, opt.value) === 'Да' ? 'ro-yn-yes'
+                    : getCheckboxText(q.id, opt.value) === 'Нет' ? 'ro-yn-no'
+                      : 'ro-yn-empty'"
+                >
+                  {{ getCheckboxText(q.id, opt.value) || '—' }}
+                </span>
+              </div>
+            </template>
+
+            <!-- Обычный чекбокс -->
             <template v-else>
-              <q-icon
-                :name="isChecked(q.id, opt.value) ? 'check_box' : 'check_box_outline_blank'"
-                :color="isChecked(q.id, opt.value) ? 'purple' : 'grey-5'"
-                size="16px"
-              />
-              <span :class="opt.italic ? 'text-italic text-grey-7' : ''">{{ opt.label }}</span>
-              <span
-                v-if="opt.has_text_input && answers[q.id + '_text_' + opt.value]"
-                class="ro-inline-text"
-              >: {{ answers[q.id + '_text_' + opt.value] }}</span>
-              <!-- Дочерние -->
+              <div class="ro-checkbox-row">
+                <q-icon
+                  :name="isChecked(q.id, opt.value) ? 'check_box' : 'check_box_outline_blank'"
+                  :color="isChecked(q.id, opt.value) ? 'purple' : 'grey-5'"
+                  size="16px"
+                />
+                <span :class="opt.italic ? 'text-italic text-grey-7' : ''">{{ opt.label }}</span>
+                <!-- Текст ручного ввода -->
+                <span
+                  v-if="opt.has_text_input && answers[q.id + '_text_' + opt.value]"
+                  class="ro-inline-text"
+                >: {{ answers[q.id + '_text_' + opt.value] }}</span>
+                <!-- Выпадающий список -->
+                <span
+                  v-if="opt.has_select && answers[q.id + '_text_' + opt.value + '_sel']"
+                  class="ro-select-value"
+                >
+                  <q-icon name="arrow_drop_down" size="12px" />
+                  {{ opt.select_label ? opt.select_label + ' ' : '' }}{{ answers[q.id + '_text_' + opt.value + '_sel'] }}
+                </span>
+              </div>
+              <!-- Дочерние чекбоксы -->
               <div v-if="opt.children && isChecked(q.id, opt.value)" class="ro-children">
                 <div v-for="child in opt.children" :key="child.value" class="ro-checkbox-row ro-child">
                   <q-icon
-                    :name="isChecked(q.id + '_children', child.value) ? 'check_box' : 'check_box_outline_blank'"
-                    :color="isChecked(q.id + '_children', child.value) ? 'purple' : 'grey-5'"
+                    :name="isChecked(q.id + '_sub_' + opt.value, child.value) ? 'check_box' : 'check_box_outline_blank'"
+                    :color="isChecked(q.id + '_sub_' + opt.value, child.value) ? 'purple' : 'grey-5'"
                     size="14px"
                   />
                   <span :class="child.italic ? 'text-italic text-grey-7' : ''">{{ child.label }}</span>
@@ -62,31 +104,61 @@
         </div>
       </template>
 
+      <!-- electro_block -->
       <template v-else-if="q.type === 'electro_block'">
         <div class="ro-value">
+          <!-- Subfields -->
           <div v-for="sf in q.subfields" :key="sf.key" class="ro-sub-row">
-            <span class="ro-sub-label">{{ sf.label }}</span>
-            <span>{{ getElectroValue(q.id, sf.key) || '—' }}</span>
+            <span class="ro-sub-label">{{ sf.label }}: </span>
+            <!-- yes_no — цветной бэджик -->
+            <template v-if="sf.type === 'yes_no'">
+              <span
+                class="ro-yn-badge"
+                :class="getElectroValue(q.id, sf.key) === 'Да' ? 'ro-yn-yes'
+                  : getElectroValue(q.id, sf.key) === 'Нет' ? 'ro-yn-no'
+                    : 'ro-yn-empty'"
+              >
+                {{ getElectroValue(q.id, sf.key) || '—' }}
+              </span>
+            </template>
+            <!-- Текст -->
+            <template v-else>
+              <span :class="getElectroValue(q.id, sf.key) ? 'ro-inline-text' : ''">
+                {{ getElectroValue(q.id, sf.key) || '—' }}
+              </span>
+            </template>
           </div>
+
+          <!-- Checkboxes -->
           <div v-if="q.checkboxes?.length" class="q-mt-xs">
             <div
               v-for="opt in q.checkboxes"
               :key="opt.value"
-              class="ro-checkbox-row"
+              class="q-mb-xs"
             >
-              <q-icon
-                :name="isElectroChecked(q.id, opt.value) ? 'check_box' : 'check_box_outline_blank'"
-                :color="isElectroChecked(q.id, opt.value) ? 'purple' : 'grey-5'"
-                size="16px"
-              />
-              <span>{{ opt.label }}</span>
-              <span v-if="opt.has_text_input && getElectroValue(q.id, opt.value + '_text')" class="ro-inline-text">
-                : {{ getElectroValue(q.id, opt.value + '_text') }}
-              </span>
+              <div class="ro-checkbox-row">
+                <q-icon
+                  :name="isElectroChecked(q.id, opt.value) ? 'check_box' : 'check_box_outline_blank'"
+                  :color="isElectroChecked(q.id, opt.value) ? 'purple' : 'grey-5'"
+                  size="16px"
+                />
+                <span>{{ opt.label }}</span>
+                <!-- Текст ручного ввода -->
+                <span v-if="opt.has_text_input && getElectroValue(q.id, opt.value + '_text')" class="ro-inline-text">
+                  : {{ getElectroValue(q.id, opt.value + '_text') }}
+                </span>
+                <!-- Выпадающий список -->
+                <span v-if="opt.has_select && getElectroValue(q.id, opt.value + '_select')" class="ro-select-value">
+                  <q-icon name="arrow_drop_down" size="12px" />
+                  {{ opt.select_label ? opt.select_label + ' ' : '' }}{{ getElectroValue(q.id, opt.value + '_select') }}
+                </span>
+              </div>
             </div>
           </div>
-          <div v-if="q.has_comment && getElectroValue(q.id, '_comment')" class="q-mt-xs">
-            <span class="ro-sub-label">{{ q.comment_label }}</span>
+
+          <!-- Комментарий -->
+          <div v-if="q.has_comment && getElectroValue(q.id, '_comment')" class="q-mt-xs ro-comment">
+            <span class="ro-sub-label">{{ q.comment_label || 'Пожелания' }}: </span>
             <span>{{ getElectroValue(q.id, '_comment') }}</span>
           </div>
         </div>
@@ -105,6 +177,10 @@ function isChecked(questionId, value) {
   const ans = props.answers[questionId]
   if (Array.isArray(ans)) return ans.includes(value)
   return ans === value
+}
+
+function getCheckboxText(questionId, optValue) {
+  return props.answers[questionId + '_text_' + optValue] || ''
 }
 
 function getElectroValue(questionId, key) {
@@ -161,6 +237,8 @@ function isElectroChecked(questionId, value) {
   margin-left: 22px;
   margin-top: 2px;
   width: 100%;
+  border-left: 2px solid #e0d9f0;
+  padding-left: 8px;
 }
 
 .ro-child {
@@ -172,13 +250,105 @@ function isElectroChecked(questionId, value) {
   font-weight: 500;
 }
 
+.ro-select-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 12px;
+  color: #6B4FA0;
+  font-weight: 500;
+  background: #f0ebff;
+  padding: 1px 7px 1px 4px;
+  border-radius: 10px;
+  margin-left: 2px;
+}
+
 .ro-sub-label {
   font-weight: 500;
   color: #555;
-  margin-right: 4px;
 }
 
 .ro-sub-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+
+.ro-comment {
+  font-style: italic;
+  color: #555;
+}
+
+/* Да / Нет бэджик */
+.ro-yn-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 8px;
+  background: #fafafa;
+  border: 1px solid #ede8f5;
+  border-radius: 6px;
+  margin-bottom: 3px;
+}
+
+.ro-yn-label {
+  flex: 1;
+  font-size: 13px;
+  color: #333;
+  line-height: 1.4;
+}
+
+.ro-yn-badge {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 12px;
+  border-radius: 4px;
+  min-width: 40px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.ro-yn-yes {
+  background: #EDE8F5;
+  color: #6B4FA0;
+}
+
+.ro-yn-no {
+  background: #FFEBEE;
+  color: #C62828;
+}
+
+.ro-yn-empty {
+  background: #f5f5f5;
+  color: #999;
+}
+
+/* Разделитель секции */
+.ro-separator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 4px;
+  width: 100%;
+}
+
+.ro-separator::before,
+.ro-separator::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: #d0c8e8;
+}
+
+.ro-separator-label {
+  font-size: 11px;
+  color: #7c6fa8;
+  font-weight: 600;
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 </style>
