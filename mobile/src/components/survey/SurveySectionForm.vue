@@ -5,8 +5,15 @@
       :key="q.id"
       class="survey-question-row"
     >
+      <!-- Заметка (note) -->
+      <template v-if="q.type === 'note'">
+        <div class="survey-note">
+          {{ q.text }}
+        </div>
+      </template>
+
       <!-- Текстовое поле -->
-      <template v-if="q.type === 'text'">
+      <template v-else-if="q.type === 'text'">
         <div class="q-label">
           {{ q.label }}
         </div>
@@ -115,18 +122,23 @@
                 @update:model-value="val => toggleCheckbox(q.id, opt.value, val, q.multiple)"
               />
 
+              <!-- Описание под чекбоксом (description) — скрыть только если есть children И выбрано -->
+              <div v-if="opt.description && !(opt.children && isChecked(q.id, opt.value))" class="opt-description">
+                {{ opt.description }}
+              </div>
+
               <!-- Дочерние опции -->
               <div v-if="opt.children && isChecked(q.id, opt.value)" class="children-block">
                 <q-checkbox
                   v-for="child in opt.children"
                   :key="child.value"
-                  :model-value="isChecked(q.id + '_children', child.value)"
+                  :model-value="isChecked(q.id + '_sub_' + opt.value, child.value)"
                   :label="child.label"
                   :class="child.italic ? 'italic-opt' : ''"
                   color="purple"
                   dense
                   class="q-ml-md"
-                  @update:model-value="val => toggleCheckbox(q.id + '_children', child.value, val, true)"
+                  @update:model-value="val => toggleCheckbox(q.id + '_sub_' + opt.value, child.value, val, true)"
                 />
               </div>
 
@@ -419,5 +431,26 @@ function toggleElectro(questionId, value, checked) {
   color: #333;
   flex: 1;
   line-height: 1.4;
+}
+
+.opt-description {
+  font-size: 11px;
+  color: #888;
+  font-style: italic;
+  margin-left: 28px;
+  margin-top: -2px;
+  line-height: 1.3;
+}
+
+.survey-note {
+  font-size: 12px;
+  color: #666;
+  font-style: italic;
+  background: #f5f5f5;
+  border-left: 3px solid #9c89b8;
+  padding: 8px 12px;
+  border-radius: 4px;
+  line-height: 1.5;
+  white-space: pre-line;
 }
 </style>
