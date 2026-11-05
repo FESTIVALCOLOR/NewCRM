@@ -520,53 +520,65 @@
                       {{ new Date(tzSurvey.completed_at).toLocaleDateString('ru-RU') }}
                     </q-chip>
                   </div>
-                  <!-- Кнопки действий — только иконки, не переносятся -->
+                  <!-- Кнопки действий — при широком экране иконка+текст, при узком только иконка -->
                   <div class="row items-center no-wrap q-mt-xs" style="gap: 4px">
                     <q-btn
                       outline
                       color="purple"
                       icon="visibility"
+                      :label="showSurveyBtnLabels ? 'Просмотр' : ''"
                       dense
                       size="sm"
                       style="border-radius: 4px; flex: 1"
                       @click="openTzSurveyView"
                     >
-                      <q-tooltip>Просмотр анкеты</q-tooltip>
+                      <q-tooltip v-if="!showSurveyBtnLabels">
+                        Просмотр анкеты
+                      </q-tooltip>
                     </q-btn>
                     <q-btn
                       v-if="tzSurvey.status === 'completed' || tzSurvey.status === 'edited'"
                       outline
                       color="purple"
                       icon="edit"
+                      :label="showSurveyBtnLabels ? 'Изменить' : ''"
                       dense
                       size="sm"
                       style="border-radius: 4px; flex: 1"
                       @click="openTzSurveyEdit"
                     >
-                      <q-tooltip>Редактировать анкету</q-tooltip>
+                      <q-tooltip v-if="!showSurveyBtnLabels">
+                        Редактировать анкету
+                      </q-tooltip>
                     </q-btn>
                     <q-btn
                       v-if="tzSurvey.status === 'completed' || tzSurvey.status === 'edited'"
                       outline
                       color="grey-7"
                       icon="picture_as_pdf"
+                      :label="showSurveyBtnLabels ? 'PDF' : ''"
                       dense
                       size="sm"
                       style="border-radius: 4px; flex: 1"
                       @click="downloadTzPdf"
                     >
-                      <q-tooltip>Скачать PDF</q-tooltip>
+                      <q-tooltip v-if="!showSurveyBtnLabels">
+                        Скачать PDF
+                      </q-tooltip>
                     </q-btn>
                     <q-btn
                       outline
                       color="grey-7"
                       icon="link"
+                      :label="showSurveyBtnLabels ? 'Ссылка' : ''"
                       dense
                       size="sm"
                       style="border-radius: 4px; flex: 1"
                       @click="copyTzLink"
                     >
-                      <q-tooltip>Скопировать ссылку</q-tooltip>
+                      <q-tooltip v-if="!showSurveyBtnLabels">
+                        Скопировать ссылку
+                      </q-tooltip>
                     </q-btn>
                     <q-btn
                       outline
@@ -1468,6 +1480,8 @@ async function loadSurveys() {
 const tzSurvey = ref(null)
 const tzSurveyCreating = ref(false)
 let _tzPollInterval = null
+
+const showSurveyBtnLabels = computed(() => $q.screen.width >= 600)
 
 async function loadTzSurvey() {
   if (!contract.value?.id) return

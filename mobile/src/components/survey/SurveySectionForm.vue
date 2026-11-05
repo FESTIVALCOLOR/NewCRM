@@ -97,6 +97,7 @@
             <template v-else-if="opt.type === 'yes_no_inline'">
               <div class="yes-no-row">
                 <span class="opt-label-text">{{ opt.label }}</span>
+                <span class="yn-line" />
                 <div class="yes-no-btns">
                   <q-btn
                     unelevated
@@ -198,6 +199,7 @@
             <template v-if="sf.type === 'yes_no'">
               <div class="yes-no-subfield">
                 <span class="sf-label">{{ sf.label }}</span>
+                <span class="yn-line" />
                 <div class="yes-no-btns">
                   <q-btn
                     unelevated
@@ -425,7 +427,8 @@ function toggleElectro(questionId, value, checked) {
 .opt-label-text {
   font-size: 13px;
   color: #333;
-  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
 }
 
 .inline-text-input {
@@ -436,13 +439,13 @@ function toggleElectro(questionId, value, checked) {
 .yes-no-row {
   display: flex;
   align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
+  gap: 0;
 }
 
 .yes-no-btns {
   display: flex;
   gap: 4px;
+  flex-shrink: 0;
 }
 
 .yn-btn {
@@ -461,8 +464,7 @@ function toggleElectro(questionId, value, checked) {
 .yes-no-subfield {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 0;
   padding: 6px 8px;
   background: white;
   border: 1px solid #e0d9f0;
@@ -472,8 +474,15 @@ function toggleElectro(questionId, value, checked) {
 .sf-label {
   font-size: 13px;
   color: #333;
-  flex: 1;
   line-height: 1.4;
+}
+
+.yn-line {
+  flex: 1;
+  border-bottom: 1px dashed #c8c0d8;
+  align-self: flex-end;
+  margin: 0 8px 3px;
+  min-width: 8px;
 }
 
 .opt-description {
@@ -520,4 +529,30 @@ function toggleElectro(questionId, value, checked) {
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
+
+/* ─── Тёмная тема ─────────────────────────────────────────────── */
+:global(.body--dark .q-label) { color: #9d94c0; }
+:global(.body--dark .opt-label-text) { color: #d0cce8; }
+:global(.body--dark .sf-label) { color: #d0cce8; }
+:global(.body--dark .opt-description) { color: #7a7599; }
+:global(.body--dark .electro-block) {
+  background: #1e1e3a;
+  border-color: #3d3060;
+}
+:global(.body--dark .yes-no-subfield) {
+  background: #22203a;
+  border-color: #3d3060;
+}
+:global(.body--dark .survey-note) {
+  background: #252040;
+  color: #c8c0e8;
+  border-left-color: #7c6fa8;
+}
+:global(.body--dark .yn-btn) { border-color: #4d3d80; }
+:global(.body--dark .yn-line) { border-bottom-color: #4d3d80; }
+:global(.body--dark .children-block) { border-left-color: #4d3d80; }
+:global(.body--dark .opt-separator::before),
+:global(.body--dark .opt-separator::after) { background: #4d3d80; }
+:global(.body--dark .opt-separator-label) { color: #b89ee0; }
+:global(.body--dark .italic-opt) :deep(.q-checkbox__label) { color: #8a84a8; }
 </style>

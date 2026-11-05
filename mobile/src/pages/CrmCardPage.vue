@@ -688,18 +688,21 @@
                   </q-chip>
                 </div>
 
-                <!-- Кнопки если анкета есть — иконки без текста, не переносятся -->
+                <!-- Кнопки если анкета есть — иконки, при широком экране + текст -->
                 <div v-if="tzSurvey" class="row items-center no-wrap q-mt-xs" style="gap: 4px">
                   <q-btn
                     outline
                     dense
                     size="xs"
                     icon="visibility"
+                    :label="showSurveyBtnLabels ? 'Просмотр' : ''"
                     color="grey-7"
                     style="border-radius: 4px; flex: 1"
                     @click="openTzSurveyView"
                   >
-                    <q-tooltip>Просмотр анкеты</q-tooltip>
+                    <q-tooltip v-if="!showSurveyBtnLabels">
+                      Просмотр анкеты
+                    </q-tooltip>
                   </q-btn>
                   <q-btn
                     v-if="!isArchived"
@@ -707,22 +710,28 @@
                     dense
                     size="xs"
                     icon="edit"
+                    :label="showSurveyBtnLabels ? 'Изменить' : ''"
                     color="purple"
                     style="border-radius: 4px; flex: 1"
                     @click="openTzSurveyEdit"
                   >
-                    <q-tooltip>Редактировать анкету</q-tooltip>
+                    <q-tooltip v-if="!showSurveyBtnLabels">
+                      Редактировать анкету
+                    </q-tooltip>
                   </q-btn>
                   <q-btn
                     outline
                     dense
                     size="xs"
                     icon="link"
+                    :label="showSurveyBtnLabels ? 'Ссылка' : ''"
                     color="grey-7"
                     style="border-radius: 4px; flex: 1"
                     @click="copyTzLink"
                   >
-                    <q-tooltip>Скопировать ссылку</q-tooltip>
+                    <q-tooltip v-if="!showSurveyBtnLabels">
+                      Скопировать ссылку
+                    </q-tooltip>
                   </q-btn>
                   <q-btn
                     v-if="tzSurvey.status === 'completed' || tzSurvey.status === 'edited'"
@@ -730,11 +739,14 @@
                     dense
                     size="xs"
                     icon="picture_as_pdf"
+                    :label="showSurveyBtnLabels ? 'PDF' : ''"
                     color="grey-7"
                     style="border-radius: 4px; flex: 1"
                     @click="downloadTzPdf"
                   >
-                    <q-tooltip>Скачать PDF</q-tooltip>
+                    <q-tooltip v-if="!showSurveyBtnLabels">
+                      Скачать PDF
+                    </q-tooltip>
                   </q-btn>
                   <q-btn
                     v-if="!isArchived && !isExecutor"
@@ -2674,6 +2686,8 @@ const showContractEdit = ref(false)
 const tzSurvey = ref(null)
 const tzSurveyCreating = ref(false)
 let _tzPollInterval = null
+
+const showSurveyBtnLabels = computed(() => $q.screen.width >= 600)
 
 const tzSurveyStatusLabel = computed(() => {
   const s = tzSurvey.value?.status

@@ -54,6 +54,7 @@
             <template v-else-if="opt.type === 'yes_no_inline'">
               <div class="ro-yn-row">
                 <span class="ro-yn-label">{{ opt.label }}</span>
+                <span class="ro-yn-line" />
                 <span
                   class="ro-yn-badge"
                   :class="getCheckboxText(q.id, opt.value) === 'Да' ? 'ro-yn-yes'
@@ -219,6 +220,18 @@ function isElectroChecked(questionId, value) {
     font-size: 11px;
     padding-bottom: 2px;
   }
+
+  .ro-inline-text {
+    flex-basis: 100%;
+    padding-left: 22px;
+    margin-top: 1px;
+  }
+
+  .ro-select-value {
+    flex-basis: 100%;
+    margin-left: 22px;
+    margin-top: 2px;
+  }
 }
 
 .readonly-row:last-child {
@@ -299,8 +312,7 @@ function isElectroChecked(questionId, value) {
 .ro-yn-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  gap: 0;
   padding: 4px 8px;
   background: #fafafa;
   border: 1px solid #ede8f5;
@@ -309,10 +321,17 @@ function isElectroChecked(questionId, value) {
 }
 
 .ro-yn-label {
-  flex: 1;
   font-size: 13px;
   color: #333;
   line-height: 1.4;
+}
+
+.ro-yn-line {
+  flex: 1;
+  border-bottom: 1px dashed #c8c0d8;
+  align-self: flex-end;
+  margin: 0 8px 3px;
+  min-width: 8px;
 }
 
 .ro-yn-badge {
@@ -364,6 +383,10 @@ function isElectroChecked(questionId, value) {
 :global(.body--dark .ro-yn-row) {
   background: #22203a;
   border-color: #3d3060;
+}
+
+:global(.body--dark .ro-yn-line) {
+  border-bottom-color: #4d3d80;
 }
 
 :global(.body--dark .ro-yn-label) {
