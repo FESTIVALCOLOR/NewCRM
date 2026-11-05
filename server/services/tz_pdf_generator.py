@@ -189,6 +189,14 @@ def _build_styles(font: str, font_bold: str, font_italic: str):
             textColor=TEXT_BLACK,
             leftIndent=0,
         ),
+        "checkbox_checked": ParagraphStyle(
+            "TZCheckboxChecked",
+            fontName=font_bold,
+            fontSize=9,
+            leading=14,
+            textColor=BRAND_PURPLE,
+            leftIndent=0,
+        ),
         "checkbox_italic": ParagraphStyle(
             "TZCheckboxItalic",
             fontName=font_italic,
@@ -203,6 +211,14 @@ def _build_styles(font: str, font_bold: str, font_italic: str):
             fontSize=8,
             leading=12,
             textColor=LABEL_COLOR,
+            leftIndent=20,
+        ),
+        "checkbox_child_checked": ParagraphStyle(
+            "TZCheckboxChildChecked",
+            fontName=font_bold,
+            fontSize=8,
+            leading=12,
+            textColor=BRAND_PURPLE,
             leftIndent=20,
         ),
         "contract_ref": ParagraphStyle(
@@ -279,18 +295,7 @@ class _TZPageTemplate:
             except Exception:
                 pass
 
-        # Фиолетовый треугольник (правый верх) — имитируем прямоугольником с треугольным вырезом
-        canvas.setFillColor(BRAND_PURPLE)
-        # Рисуем трапецию/треугольник справа
-        p = canvas.beginPath()
-        p.moveTo(w - 60 * mm, h)
-        p.lineTo(w, h)
-        p.lineTo(w, h - 25 * mm)
-        p.lineTo(w - 60 * mm, h - 10 * mm)
-        p.close()
-        canvas.drawPath(p, fill=1, stroke=0)
-
-        # Текст "www.festivalcolor.ru" под треугольником
+        # Текст "www.festivalcolor.ru"
         canvas.setFont(self.font_italic, 7)
         canvas.setFillColor(LABEL_COLOR)
         canvas.drawRightString(w - 15 * mm, h - 29 * mm, "www.festivalcolor.ru")
@@ -344,7 +349,11 @@ def _yn_html(text: str) -> str:
 def _checkbox_opt_line(opt: dict, is_checked: bool, q_id: str, answers: dict) -> str:
     """Строит HTML-строку для одного чекбокса checkbox_group."""
     mark = CHECKBOX_CHECKED if is_checked else CHECKBOX_EMPTY
-    line = f"{mark}  {opt.get('label', '')}"
+    label = opt.get("label", "")
+    if is_checked:
+        line = f'<b><font color="#6B4FA0">{mark}  {label}</font></b>'
+    else:
+        line = f"{mark}  {label}"
     if opt.get("has_text_input") and is_checked:
         extra = answers.get(q_id + "_text_" + opt["value"], "")
         if extra:
@@ -377,25 +386,42 @@ def _render_checkbox_group(q_id: str, question: dict, answer, answers: dict, sty
         else:
             is_checked = opt.get("value", "") in selected
             line = _checkbox_opt_line(opt, is_checked, q_id, answers)
-            style_key = "checkbox_italic" if opt.get("italic") else "checkbox"
+            if is_checked:
+                style_key = "checkbox_checked"
+            elif opt.get("italic"):
+                style_key = "checkbox_italic"
+            else:
+                style_key = "checkbox"
             value_lines.append(Paragraph(line, styles[style_key]))
             if is_checked and opt.get("children"):
                 children_ans = answers.get(q_id + "_sub_" + opt["value"], [])
                 children_sel = children_ans if isinstance(children_ans, list) else []
                 for child in opt["children"]:
-                    c_mark = CHECKBOX_CHECKED if child.get("value", "") in children_sel else CHECKBOX_EMPTY
-                    value_lines.append(Paragraph(f"   {c_mark}  {child.get('label', '')}", styles["checkbox_child"]))
+                    c_val = child.get("value", "")
+                    child_checked = c_val in children_sel
+                    c_mark = CHECKBOX_CHECKED if child_checked else CHECKBOX_EMPTY
+                    child_label = child.get("label", "")
+                    if child_checked:
+                        c_line = f'<b><font color="#6B4FA0">{c_mark}  {child_label}</font></b>'
+                        value_lines.append(Paragraph(c_line, styles["checkbox_child_checked"]))
+                    else:
+                        value_lines.append(Paragraph(f"   {c_mark}  {child_label}", styles["checkbox_child"]))
     return value_lines
 
 
 def _electro_opt_line(opt: dict, is_checked: bool, answer_obj: dict) -> str:
     """Строит HTML-строку для одного чекбокса electro_block."""
     mark = CHECKBOX_CHECKED if is_checked else CHECKBOX_EMPTY
-    line = f"{mark}  {opt.get('label', '')}"
+    label = opt.get("label", "")
+    if is_checked:
+        line = f'<b><font color="#6B4FA0">{mark}  {label}</font></b>'
+    else:
+        line = f"{mark}  {label}"
     if opt.get("has_text_input") and is_checked:
         extra = answer_obj.get(opt["value"] + "_text", "")
         if extra:
-            line += f'  <font color="#6B4FA0">{extra}</font>'
+            tl = opt.get("text_input_label", "Количество")
+            line += f'  <font color="#6B4FA0">{tl}: {extra}</font>'
     if opt.get("has_select"):
         sel_val = answer_obj.get(opt["value"] + "_select", "")
         if sel_val:

@@ -145,7 +145,7 @@
                 <span>{{ opt.label }}</span>
                 <!-- Текст ручного ввода -->
                 <span v-if="opt.has_text_input && getElectroValue(q.id, opt.value + '_text')" class="ro-inline-text">
-                  : {{ getElectroValue(q.id, opt.value + '_text') }}
+                  {{ opt.text_input_label ? opt.text_input_label + ': ' : ': ' }}{{ getElectroValue(q.id, opt.value + '_text') }}
                 </span>
                 <!-- Выпадающий список -->
                 <span v-if="opt.has_select && getElectroValue(q.id, opt.value + '_select')" class="ro-select-value">

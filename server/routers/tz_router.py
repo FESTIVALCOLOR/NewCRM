@@ -97,16 +97,28 @@ def _get_agent_logo_url(db: Session, agent_type: str | None) -> str | None:
 
 
 def _save_pdf_to_yd(db: Session, survey: TechnicalSurvey, contract: Contract, pdf_bytes: bytes) -> None:
-    """Сохраняет PDF анкеты на ЯД в папку договора. Обновляет pdf_yandex_path."""
+    """Сохраняет PDF в подпапку {договор}/анкета/ на ЯД. Имя: анкета-{адрес}-{дата}.pdf"""
     try:
+        from datetime import date as _date
+
         from yandex_disk_service import YandexDiskService
 
         folder = (contract.yandex_folder_path or "").removeprefix("disk:").rstrip("/")
         if not folder:
             return
-        pdf_name = f"anketa_{contract.contract_number or survey.id}.pdf"
-        pdf_path = f"{folder}/{pdf_name}"
+        # Подпапка «анкета»
+        subfolder = f"{folder}/анкета"
         yd = YandexDiskService()
+        try:
+            yd.create_folder(subfolder)
+        except Exception:
+            pass  # Папка может уже существовать
+        # Имя файла: анкета-{адрес}-{дата}.pdf
+        addr = (contract.address or "").strip()
+        addr_slug = "".join(c if c.isalnum() or c in " _-" else "-" for c in addr)[:40].strip("-")
+        date_str = _date.today().strftime("%d.%m.%Y")
+        pdf_name = f"анкета-{addr_slug}-{date_str}.pdf" if addr_slug else f"анкета-{date_str}.pdf"
+        pdf_path = f"{subfolder}/{pdf_name}"
         yd.upload_file_from_bytes(pdf_bytes, pdf_path)
         survey.pdf_yandex_path = f"disk:{pdf_path}"
         db.commit()
@@ -354,7 +366,13 @@ def get_survey_pdf(
     if contract and not survey.pdf_yandex_path:
         _save_pdf_to_yd(db, survey, contract, pdf_bytes)
 
-    filename = f"anketa_{contract_number or survey_id}.pdf"
+    # Имя файла при скачивании: анкета-{адрес}-{дата}.pdf
+    from datetime import date as _date
+
+    addr = (contract.address if contract else "") or ""
+    addr_slug = "".join(c if c.isalnum() or c in " _-" else "-" for c in addr)[:40].strip("-")
+    date_str = _date.today().strftime("%d.%m.%Y")
+    filename = f"анкета-{addr_slug}-{date_str}.pdf" if addr_slug else f"анкета-{date_str}.pdf"
     encoded = quote(filename.encode("utf-8"))
     return Response(
         content=pdf_bytes,
@@ -364,6 +382,36 @@ def get_survey_pdf(
 
 
 # ── Публичные эндпоинты (клиент заполняет по токену) ─────────────────────────
+
+
+@router.get("/surveys/agent-logo/{agent_type_slug}")
+def get_agent_logo_image(
+    agent_type_slug: str,
+    db: Session = Depends(get_db),
+):
+    """Публичный: логотип агента как изображение (для страницы анкеты)."""
+    try:
+        from yandex_disk_service import YandexDiskService
+
+        from database import CompanyRequisite
+
+        req = db.query(CompanyRequisite).filter(CompanyRequisite.requisite_type == f"logo_{agent_type_slug}").first()
+        if not req or not req.file_path:
+            raise HTTPException(status_code=404, detail="Логотип не найден")
+        yd = YandexDiskService()
+        logo_bytes = yd.download_file_to_bytes(req.file_path)
+        ext = req.file_path.rsplit(".", 1)[-1].lower() if "." in req.file_path else "png"
+        content_type = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "svg": "image/svg+xml"}.get(ext, "image/png")
+        return Response(
+            content=logo_bytes,
+            media_type=content_type,
+            headers={"Cache-Control": "public, max-age=3600"},
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"Не удалось отдать лого агента {agent_type_slug}: {e}")
+        raise HTTPException(status_code=404, detail="Логотип не найден")
 
 
 @router.get("/surveys/fill/{token}")
@@ -385,7 +433,16 @@ def get_survey_for_client(
     agent_type = contract.agent_type if contract else None
 
     template_data = _get_or_create_template(db, project_type)
-    agent_logo_url = _get_agent_logo_url(db, agent_type)
+
+    # Лого агента — возвращаем URL к прокси-эндпоинту (не YD public link)
+    agent_logo_url = None
+    if agent_type:
+        from database import CompanyRequisite
+
+        slug = agent_type.strip().lower()
+        req = db.query(CompanyRequisite).filter(CompanyRequisite.requisite_type == f"logo_{slug}").first()
+        if req and req.file_path:
+            agent_logo_url = f"/api/v1/surveys/agent-logo/{slug}"
 
     # После заполнения клиент видит только просмотр
     readonly = survey.status in ("completed", "edited")
