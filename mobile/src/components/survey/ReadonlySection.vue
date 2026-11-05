@@ -68,26 +68,33 @@
 
             <!-- Обычный чекбокс -->
             <template v-else>
-              <div class="ro-checkbox-row">
-                <q-icon
-                  :name="isChecked(q.id, opt.value) ? 'check_box' : 'check_box_outline_blank'"
-                  :color="isChecked(q.id, opt.value) ? 'purple' : 'grey-5'"
-                  size="16px"
-                />
-                <span :class="opt.italic ? 'text-italic text-grey-7' : ''">{{ opt.label }}</span>
-                <!-- Текст ручного ввода -->
-                <span
+              <div class="ro-checkbox-wrap">
+                <div class="ro-checkbox-row">
+                  <q-icon
+                    :name="isChecked(q.id, opt.value) ? 'check_box' : 'check_box_outline_blank'"
+                    :color="isChecked(q.id, opt.value) ? 'purple' : 'grey-5'"
+                    size="16px"
+                    class="ro-cb-icon"
+                  />
+                  <span :class="opt.italic ? 'text-italic text-grey-7 ro-cb-label' : 'ro-cb-label'">{{ opt.label }}</span>
+                </div>
+                <!-- Текст ручного ввода — всегда под чекбоксом -->
+                <div
                   v-if="opt.has_text_input && answers[q.id + '_text_' + opt.value]"
-                  class="ro-inline-text"
-                >: {{ answers[q.id + '_text_' + opt.value] }}</span>
-                <!-- Выпадающий список -->
-                <span
-                  v-if="opt.has_select && answers[q.id + '_text_' + opt.value + '_sel']"
-                  class="ro-select-value"
+                  class="ro-extra-data"
                 >
-                  <q-icon name="arrow_drop_down" size="12px" />
-                  {{ opt.select_label ? opt.select_label + ' ' : '' }}{{ answers[q.id + '_text_' + opt.value + '_sel'] }}
-                </span>
+                  <span class="ro-inline-text">: {{ answers[q.id + '_text_' + opt.value] }}</span>
+                </div>
+                <!-- Выпадающий список — всегда под чекбоксом -->
+                <div
+                  v-if="opt.has_select && answers[q.id + '_text_' + opt.value + '_sel']"
+                  class="ro-extra-data"
+                >
+                  <span class="ro-select-value">
+                    <q-icon name="arrow_drop_down" size="12px" />
+                    {{ opt.select_label ? opt.select_label + ' ' : '' }}{{ answers[q.id + '_text_' + opt.value + '_sel'] }}
+                  </span>
+                </div>
               </div>
               <!-- Дочерние чекбоксы -->
               <div v-if="opt.children && isChecked(q.id, opt.value)" class="ro-children">
@@ -221,23 +228,6 @@ function isElectroChecked(questionId, value) {
     font-size: 11px;
     padding-bottom: 2px;
   }
-
-  .ro-inline-text {
-    flex-basis: 100%;
-    margin-top: 2px;
-    margin-left: 20px;
-    border-left: 2px solid #e0d9f0;
-    padding-left: 6px;
-  }
-
-  .ro-select-value {
-    flex-basis: 100%;
-    margin-left: 20px;
-    margin-top: 2px;
-    border-left: 2px solid #e0d9f0;
-    padding-left: 6px;
-    border-radius: 0;
-  }
 }
 
 .readonly-row:last-child {
@@ -257,12 +247,33 @@ function isElectroChecked(questionId, value) {
   color: #222;
 }
 
+.ro-checkbox-wrap {
+  margin-bottom: 2px;
+}
+
 .ro-checkbox-row {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 6px;
-  margin-bottom: 2px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+}
+
+.ro-cb-icon {
+  flex-shrink: 0;
+}
+
+.ro-cb-label {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+  line-height: 1.4;
+}
+
+.ro-extra-data {
+  margin-left: 22px;
+  margin-top: 2px;
+  border-left: 2px solid #e0d9f0;
+  padding-left: 6px;
 }
 
 .ro-children {
@@ -400,6 +411,10 @@ function isElectroChecked(questionId, value) {
 }
 
 :global(.body--dark .ro-select-value) {
+  border-left-color: #4d3d80;
+}
+
+:global(.body--dark .ro-extra-data) {
   border-left-color: #4d3d80;
 }
 
