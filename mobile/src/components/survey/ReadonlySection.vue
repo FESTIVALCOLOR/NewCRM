@@ -248,6 +248,7 @@ function isElectroChecked(questionId, value) {
 .ro-inline-text {
   color: #6B4FA0;
   font-weight: 500;
+  font-size: 11px;
 }
 
 .ro-select-value {
@@ -324,6 +325,64 @@ function isElectroChecked(questionId, value) {
 .ro-yn-empty {
   background: #f5f5f5;
   color: #999;
+}
+
+/* ─── Тёмная тема ─────────────────────────────────────────────── */
+:global(.body--dark) .readonly-section .readonly-row {
+  border-bottom-color: #3d3060;
+}
+
+:global(.body--dark) .readonly-section .ro-label {
+  color: #9d94c0;
+}
+
+:global(.body--dark) .readonly-section .ro-value {
+  color: #d0cce8;
+}
+
+:global(.body--dark) .readonly-section .ro-sub-label {
+  color: #b8b0d8;
+}
+
+:global(.body--dark) .readonly-section .ro-comment {
+  color: #aaa;
+}
+
+:global(.body--dark) .readonly-section .ro-yn-row {
+  background: #22203a;
+  border-color: #3d3060;
+}
+
+:global(.body--dark) .readonly-section .ro-yn-label {
+  color: #d0cce8;
+}
+
+:global(.body--dark) .readonly-section .ro-yn-yes {
+  background: #2d2558;
+  color: #c5b0f0;
+}
+
+:global(.body--dark) .readonly-section .ro-yn-no {
+  background: #2a1515;
+  color: #ef9a9a;
+}
+
+:global(.body--dark) .readonly-section .ro-yn-empty {
+  background: #2a2a2a;
+  color: #777;
+}
+
+:global(.body--dark) .readonly-section .ro-children {
+  border-left-color: #4d3d80;
+}
+
+:global(.body--dark) .readonly-section .ro-separator-label {
+  color: #b89ee0;
+}
+
+:global(.body--dark) .readonly-section .ro-separator::before,
+:global(.body--dark) .readonly-section .ro-separator::after {
+  background: #4d3d80;
 }
 
 /* Разделитель секции */

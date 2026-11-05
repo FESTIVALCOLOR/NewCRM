@@ -97,7 +97,7 @@ def _get_agent_logo_url(db: Session, agent_type: str | None) -> str | None:
 
 
 def _save_pdf_to_yd(db: Session, survey: TechnicalSurvey, contract: Contract, pdf_bytes: bytes) -> None:
-    """Сохраняет PDF в подпапку {договор}/анкета/ на ЯД. Имя: анкета-{адрес}-{дата}.pdf"""
+    """Сохраняет PDF в подпапку {договор}/Анкета/ на ЯД. Имя: анкета-{адрес}-{дата}.pdf"""
     try:
         from datetime import date as _date
 
@@ -106,8 +106,8 @@ def _save_pdf_to_yd(db: Session, survey: TechnicalSurvey, contract: Contract, pd
         folder = (contract.yandex_folder_path or "").removeprefix("disk:").rstrip("/")
         if not folder:
             return
-        # Подпапка «анкета»
-        subfolder = f"{folder}/анкета"
+        # Подпапка «Анкета» (с заглавной буквы — папка уже создаётся при создании договора)
+        subfolder = f"{folder}/Анкета"
         yd = YandexDiskService()
         try:
             yd.create_folder(subfolder)

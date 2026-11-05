@@ -421,7 +421,7 @@ def _electro_opt_line(opt: dict, is_checked: bool, answer_obj: dict) -> str:
         extra = answer_obj.get(opt["value"] + "_text", "")
         if extra:
             tl = opt.get("text_input_label", "Количество")
-            line += f'  <font color="#6B4FA0">{tl}: {extra}</font>'
+            line += f'  <font size="7" color="#6B4FA0">{tl}: {extra}</font>'
     if opt.get("has_select"):
         sel_val = answer_obj.get(opt["value"] + "_select", "")
         if sel_val:

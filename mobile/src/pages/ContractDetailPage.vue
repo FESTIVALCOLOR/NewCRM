@@ -1401,7 +1401,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { addWorkingDays, countWorkingDaysUntil, countWorkingDaysBetween } from 'src/composables/useDeadline'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
@@ -1466,6 +1466,7 @@ async function loadSurveys() {
 // Анкета ТЗ
 const tzSurvey = ref(null)
 const tzSurveyCreating = ref(false)
+let _tzPollInterval = null
 
 async function loadTzSurvey() {
   if (!contract.value?.id) return
@@ -2434,6 +2435,9 @@ onMounted(async () => {
     loadSurveys()
     // Загрузка анкеты ТЗ
     loadTzSurvey()
+    _tzPollInterval = setInterval(() => {
+      if (tzSurvey.value?.status === 'sent') loadTzSurvey()
+    }, 30000)
 
     // Платежи клиента по надзору (если Авторский надзор)
     if ((contract.value?.project_type === 'Авторский надзор' || contract.value?.status === 'АВТОРСКИЙ НАДЗОР') && contract.value?.supervision_card_id) {
@@ -2444,6 +2448,10 @@ onMounted(async () => {
       } catch {}
     }
   } finally { loading.value = false }
+})
+
+onBeforeUnmount(() => {
+  if (_tzPollInterval) clearInterval(_tzPollInterval)
 })
 </script>
 

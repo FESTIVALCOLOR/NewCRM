@@ -2676,6 +2676,7 @@ const showContractEdit = ref(false)
 // Анкета ТЗ
 const tzSurvey = ref(null)
 const tzSurveyCreating = ref(false)
+let _tzPollInterval = null
 
 const tzSurveyStatusLabel = computed(() => {
   const s = tzSurvey.value?.status
@@ -5308,6 +5309,10 @@ onMounted(async () => {
     await loadAdditionalData(id)
     await acquireLock(id)
     loadTzSurvey()
+    // Polling анкеты: проверяем каждые 30 сек пока статус 'sent'
+    _tzPollInterval = setInterval(() => {
+      if (tzSurvey.value?.status === 'sent') loadTzSurvey()
+    }, 30000)
     // Блокируем внешний скролл если стартуем на вкладке чата
     if (['chat', 'notes'].includes(activeTab.value)) {
       _setChatScrollLock(true)
@@ -5318,6 +5323,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   releaseLock()
   _setChatScrollLock(false) // Восстанавливаем скролл при уходе со страницы
+  if (_tzPollInterval) clearInterval(_tzPollInterval)
 })
 </script>
 
