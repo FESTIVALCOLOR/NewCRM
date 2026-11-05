@@ -469,59 +469,59 @@ onMounted(loadSurvey)
 }
 
 /* ─── Тёмная тема ─────────────────────────────────────────────── */
-:global(.body--dark) .survey-fill-page {
+:global(.body--dark .survey-fill-page) {
   background: #1a1a2e;
 }
 
-:global(.body--dark) .survey-header {
+:global(.body--dark .survey-header) {
   background: #16213e;
   border-bottom-color: #9b7fd4;
   box-shadow: 0 2px 8px rgba(0,0,0,0.4);
 }
 
-:global(.body--dark) .survey-title {
+:global(.body--dark .survey-title) {
   color: #e8e0f8;
 }
 
-:global(.body--dark) .survey-subtitle {
+:global(.body--dark .survey-subtitle) {
   color: #aaa;
 }
 
-:global(.body--dark) .survey-contract-ref {
+:global(.body--dark .survey-contract-ref) {
   color: #b89ee0;
 }
 
-:global(.body--dark) .survey-section {
+:global(.body--dark .survey-section) {
   background: #1e1e3a;
   box-shadow: 0 1px 4px rgba(0,0,0,0.3);
 }
 
-:global(.body--dark) .survey-section-header {
+:global(.body--dark .survey-section-header) {
   background: #2d2558;
   color: #e8e0f8;
   border-bottom-color: #9b7fd4;
 }
 
-:global(.body--dark) .rooms-header {
+:global(.body--dark .rooms-header) {
   background: #4a3580;
   border-bottom-color: #3d2b6e;
 }
 
-:global(.body--dark) .survey-room {
+:global(.body--dark .survey-room) {
   background: #1e1e3a;
   border-color: #3d3060;
 }
 
-:global(.body--dark) .room-idx {
+:global(.body--dark .room-idx) {
   color: #b89ee0;
 }
 
-:global(.body--dark) .survey-consent-block {
+:global(.body--dark .survey-consent-block) {
   background: #2a1f0a;
   border-color: #c07828;
 }
 
-:global(.body--dark) .consent-label {
+:global(.body--dark .consent-label) {
   color: #d0cce8;
 }
 </style>

@@ -520,64 +520,65 @@
                       {{ new Date(tzSurvey.completed_at).toLocaleDateString('ru-RU') }}
                     </q-chip>
                   </div>
-                  <!-- Кнопки действий на всю ширину, кнопка удаления — фиксированная -->
-                  <div class="row items-center q-mt-xs" style="gap: 6px">
+                  <!-- Кнопки действий — только иконки, не переносятся -->
+                  <div class="row items-center no-wrap q-mt-xs" style="gap: 4px">
                     <q-btn
-                      class="col"
                       outline
                       color="purple"
                       icon="visibility"
-                      label="Просмотр"
-                      no-caps
                       dense
                       size="sm"
+                      style="border-radius: 4px; flex: 1"
                       @click="openTzSurveyView"
-                    />
+                    >
+                      <q-tooltip>Просмотр анкеты</q-tooltip>
+                    </q-btn>
                     <q-btn
                       v-if="tzSurvey.status === 'completed' || tzSurvey.status === 'edited'"
-                      class="col"
                       outline
                       color="purple"
                       icon="edit"
-                      label="Редактировать"
-                      no-caps
                       dense
                       size="sm"
+                      style="border-radius: 4px; flex: 1"
                       @click="openTzSurveyEdit"
-                    />
+                    >
+                      <q-tooltip>Редактировать анкету</q-tooltip>
+                    </q-btn>
                     <q-btn
                       v-if="tzSurvey.status === 'completed' || tzSurvey.status === 'edited'"
-                      class="col"
                       outline
                       color="grey-7"
                       icon="picture_as_pdf"
-                      label="PDF"
-                      no-caps
                       dense
                       size="sm"
+                      style="border-radius: 4px; flex: 1"
                       @click="downloadTzPdf"
-                    />
+                    >
+                      <q-tooltip>Скачать PDF</q-tooltip>
+                    </q-btn>
                     <q-btn
-                      class="col"
                       outline
                       color="grey-7"
                       icon="link"
-                      label="Ссылка"
-                      no-caps
                       dense
                       size="sm"
+                      style="border-radius: 4px; flex: 1"
                       @click="copyTzLink"
-                    />
+                    >
+                      <q-tooltip>Скопировать ссылку</q-tooltip>
+                    </q-btn>
                     <q-btn
                       outline
                       color="negative"
                       icon="delete_outline"
-                      no-caps
                       dense
                       size="sm"
-                      style="flex-shrink: 0"
+                      style="border-radius: 4px; padding: 2px 6px; flex-shrink: 0"
                       @click="deleteTzSurvey"
-                    />
+                    >
+                      <q-tooltip>Удалить анкету</q-tooltip>
+                    </q-btn>
                   </div>
                 </template>
                 <!-- Если анкеты ещё нет -->
@@ -1518,7 +1519,10 @@ async function downloadTzPdf() {
     const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }))
     const a = document.createElement('a')
     a.href = url
-    a.download = `anketa_${contract.value?.contract_number || tzSurvey.value.id}.pdf`
+    // Читаем имя файла из Content-Disposition (сервер отдаёт filename*=UTF-8'')
+    const cd = res.headers?.['content-disposition'] || ''
+    const encoded = cd.match(/filename\*=UTF-8''([^\s;]+)/i)?.[1]
+    a.download = encoded ? decodeURIComponent(encoded) : `анкета-${contract.value?.contract_number || tzSurvey.value.id}.pdf`
     a.click()
     URL.revokeObjectURL(url)
   } catch (e) {
@@ -2436,8 +2440,8 @@ onMounted(async () => {
     // Загрузка анкеты ТЗ
     loadTzSurvey()
     _tzPollInterval = setInterval(() => {
-      if (tzSurvey.value?.status === 'sent') loadTzSurvey()
-    }, 30000)
+      if (!tzSurvey.value || tzSurvey.value.status === 'sent') loadTzSurvey()
+    }, 10000)
 
     // Платежи клиента по надзору (если Авторский надзор)
     if ((contract.value?.project_type === 'Авторский надзор' || contract.value?.status === 'АВТОРСКИЙ НАДЗОР') && contract.value?.supervision_card_id) {

@@ -688,69 +688,66 @@
                   </q-chip>
                 </div>
 
-                <!-- Кнопки если анкета есть — на всю ширину, кнопка удаления фиксированная -->
-                <div v-if="tzSurvey" class="row items-center q-mt-xs" style="gap: 6px">
+                <!-- Кнопки если анкета есть — иконки без текста, не переносятся -->
+                <div v-if="tzSurvey" class="row items-center no-wrap q-mt-xs" style="gap: 4px">
                   <q-btn
-                    class="col"
                     outline
                     dense
                     size="xs"
                     icon="visibility"
-                    label="Просмотр"
-                    no-caps
                     color="grey-7"
-                    style="border-radius: 4px"
+                    style="border-radius: 4px; flex: 1"
                     @click="openTzSurveyView"
-                  />
+                  >
+                    <q-tooltip>Просмотр анкеты</q-tooltip>
+                  </q-btn>
                   <q-btn
                     v-if="!isArchived"
-                    class="col"
                     outline
                     dense
                     size="xs"
                     icon="edit"
-                    label="Редактировать"
-                    no-caps
                     color="purple"
-                    style="border-radius: 4px"
+                    style="border-radius: 4px; flex: 1"
                     @click="openTzSurveyEdit"
-                  />
+                  >
+                    <q-tooltip>Редактировать анкету</q-tooltip>
+                  </q-btn>
                   <q-btn
-                    class="col"
                     outline
                     dense
                     size="xs"
                     icon="link"
-                    label="Ссылка"
-                    no-caps
                     color="grey-7"
-                    style="border-radius: 4px"
+                    style="border-radius: 4px; flex: 1"
                     @click="copyTzLink"
-                  />
+                  >
+                    <q-tooltip>Скопировать ссылку</q-tooltip>
+                  </q-btn>
                   <q-btn
                     v-if="tzSurvey.status === 'completed' || tzSurvey.status === 'edited'"
-                    class="col"
                     outline
                     dense
                     size="xs"
                     icon="picture_as_pdf"
-                    label="PDF"
-                    no-caps
                     color="grey-7"
-                    style="border-radius: 4px"
+                    style="border-radius: 4px; flex: 1"
                     @click="downloadTzPdf"
-                  />
+                  >
+                    <q-tooltip>Скачать PDF</q-tooltip>
+                  </q-btn>
                   <q-btn
                     v-if="!isArchived && !isExecutor"
                     outline
                     dense
                     size="xs"
                     icon="delete_outline"
-                    no-caps
                     color="negative"
                     style="border-radius: 4px; padding: 2px 6px; flex-shrink: 0"
                     @click="deleteTzSurvey"
-                  />
+                  >
+                    <q-tooltip>Удалить анкету</q-tooltip>
+                  </q-btn>
                 </div>
 
                 <!-- Кнопка создания если анкеты нет -->
@@ -2743,7 +2740,10 @@ async function downloadTzPdf() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `ТЗ_анкета_${tzSurvey.value.id}.pdf`
+    // Читаем имя файла из Content-Disposition (сервер отдаёт filename*=UTF-8'')
+    const cd = response.headers?.['content-disposition'] || ''
+    const encoded = cd.match(/filename\*=UTF-8''([^\s;]+)/i)?.[1]
+    a.download = encoded ? decodeURIComponent(encoded) : `анкета-${tzSurvey.value.id}.pdf`
     a.click()
     URL.revokeObjectURL(url)
   } catch {
@@ -5309,10 +5309,10 @@ onMounted(async () => {
     await loadAdditionalData(id)
     await acquireLock(id)
     loadTzSurvey()
-    // Polling анкеты: проверяем каждые 30 сек пока статус 'sent'
+    // Polling анкеты: проверяем каждые 10 сек пока статус 'sent' или анкеты ещё нет
     _tzPollInterval = setInterval(() => {
-      if (tzSurvey.value?.status === 'sent') loadTzSurvey()
-    }, 30000)
+      if (!tzSurvey.value || tzSurvey.value.status === 'sent') loadTzSurvey()
+    }, 10000)
     // Блокируем внешний скролл если стартуем на вкладке чата
     if (['chat', 'notes'].includes(activeTab.value)) {
       _setChatScrollLock(true)
