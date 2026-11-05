@@ -720,6 +720,94 @@
                   />
                 </div>
               </q-card-section>
+
+              <!-- Анкета ТЗ (онлайн-форма) -->
+              <q-card-section class="q-pt-xs q-pb-sm">
+                <div class="row items-center justify-between" style="flex-wrap: wrap; gap: 4px">
+                  <div class="text-caption" style="color: var(--fc-text-light); font-weight: 600">
+                    Онлайн-анкета ТЗ
+                  </div>
+                  <q-chip
+                    v-if="tzSurvey"
+                    dense
+                    :color="tzSurveyStatusColor"
+                    text-color="white"
+                    size="xs"
+                    style="font-size: 10px"
+                  >
+                    {{ tzSurveyStatusLabel }}
+                  </q-chip>
+                </div>
+
+                <!-- Кнопки если анкета есть -->
+                <div v-if="tzSurvey" class="row q-gutter-xs q-mt-xs" style="flex-wrap: wrap">
+                  <q-btn
+                    outline
+                    dense
+                    size="xs"
+                    icon="visibility"
+                    label="Просмотр"
+                    no-caps
+                    color="grey-7"
+                    style="border-radius: 4px; padding: 2px 8px"
+                    @click="openTzSurveyView"
+                  />
+                  <q-btn
+                    v-if="!isArchived"
+                    outline
+                    dense
+                    size="xs"
+                    icon="edit"
+                    label="Редактировать"
+                    no-caps
+                    color="purple"
+                    style="border-radius: 4px; padding: 2px 8px"
+                    @click="openTzSurveyEdit"
+                  />
+                  <q-btn
+                    outline
+                    dense
+                    size="xs"
+                    icon="link"
+                    label="Ссылка"
+                    no-caps
+                    color="grey-7"
+                    style="border-radius: 4px; padding: 2px 8px"
+                    @click="copyTzLink"
+                  />
+                  <q-btn
+                    v-if="tzSurvey.status === 'completed' || tzSurvey.status === 'edited'"
+                    outline
+                    dense
+                    size="xs"
+                    icon="picture_as_pdf"
+                    label="PDF"
+                    no-caps
+                    color="grey-7"
+                    style="border-radius: 4px; padding: 2px 8px"
+                    @click="downloadTzPdf"
+                  />
+                </div>
+
+                <!-- Кнопка создания если анкеты нет -->
+                <div v-else-if="!isArchived && !isExecutor" class="q-mt-xs">
+                  <q-btn
+                    outline
+                    dense
+                    size="xs"
+                    icon="add"
+                    label="Создать анкету"
+                    no-caps
+                    color="purple"
+                    style="border-radius: 4px; padding: 2px 8px"
+                    :loading="tzSurveyCreating"
+                    @click="createTzSurvey"
+                  />
+                </div>
+                <div v-else-if="!tzSurvey" class="text-caption" style="color: var(--fc-text-disabled); font-size: 10px; margin-top: 4px">
+                  Анкета не создана
+                </div>
+              </q-card-section>
             </q-card>
 
             <!-- Замер (как десктоп: ссылка на папку + дата + загрузка множества файлов) -->
@@ -2443,7 +2531,7 @@ import { useReferencesStore } from 'src/stores/references'
 import { useChatUnreadStore } from 'src/stores/chatUnread'
 import { usePermission } from 'src/composables/usePermission'
 import { addWorkingDays, calcDeadlineFromTimeline, countWorkingDaysUntil, countWorkingDaysBetween } from 'src/composables/useDeadline'
-import { crmApi, employeesApi, filesApi, contractsApi, paymentsApi, locksApi, messengerApi } from 'src/services/api'
+import { crmApi, employeesApi, filesApi, contractsApi, paymentsApi, locksApi, messengerApi, tzApi } from 'src/services/api'
 import MeasurementDialog from 'src/components/MeasurementDialog.vue'
 import InlineChatRoom from 'src/components/InlineChatRoom.vue'
 import ContractFormDialog from 'src/components/ContractFormDialog.vue'
@@ -2558,6 +2646,83 @@ const showCreatePayment = ref(false)
 const actionHistory = ref([])
 const contractData = ref(null)
 const showContractEdit = ref(false)
+
+// Анкета ТЗ
+const tzSurvey = ref(null)
+const tzSurveyCreating = ref(false)
+
+const tzSurveyStatusLabel = computed(() => {
+  const s = tzSurvey.value?.status
+  if (!s) return ''
+  const map = { pending: 'Ожидает заполнения', sent: 'Ссылка отправлена', completed: 'Заполнена', edited: 'Отредактирована' }
+  return map[s] || s
+})
+
+const tzSurveyStatusColor = computed(() => {
+  const s = tzSurvey.value?.status
+  if (s === 'completed' || s === 'edited') return 'positive'
+  if (s === 'sent') return 'info'
+  return 'warning'
+})
+
+async function loadTzSurvey() {
+  if (!card.value?.contract_id) return
+  try {
+    const { data } = await tzApi.getSurveyByContract(card.value.contract_id)
+    tzSurvey.value = data
+  } catch {
+    tzSurvey.value = null
+  }
+}
+
+async function createTzSurvey() {
+  if (tzSurveyCreating.value || !card.value?.contract_id) return
+  try {
+    tzSurveyCreating.value = true
+    const { data } = await tzApi.createSurvey(card.value.contract_id, true)
+    tzSurvey.value = data
+    $q.notify({ type: 'positive', message: 'Анкета ТЗ создана' })
+  } catch (e) {
+    $q.notify({ type: 'negative', message: 'Ошибка создания анкеты' })
+  } finally {
+    tzSurveyCreating.value = false
+  }
+}
+
+function copyTzLink() {
+  if (!tzSurvey.value?.access_token) return
+  const link = `${window.location.origin}/survey/${tzSurvey.value.access_token}`
+  navigator.clipboard.writeText(link).then(() => {
+    $q.notify({ type: 'positive', message: 'Ссылка скопирована' })
+  })
+}
+
+function openTzSurveyView() {
+  if (!tzSurvey.value?.access_token) return
+  const url = `/survey/${tzSurvey.value.access_token}`
+  window.open(url, '_blank')
+}
+
+function openTzSurveyEdit() {
+  if (!tzSurvey.value?.id) return
+  router.push({ name: 'tz-survey-edit', params: { id: tzSurvey.value.id } })
+}
+
+async function downloadTzPdf() {
+  if (!tzSurvey.value?.id) return
+  try {
+    const response = await tzApi.downloadPdf(tzSurvey.value.id)
+    const blob = new Blob([response.data], { type: 'application/pdf' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `ТЗ_анкета_${tzSurvey.value.id}.pdf`
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch {
+    $q.notify({ type: 'negative', message: 'Ошибка скачивания PDF' })
+  }
+}
 const projectFiles = ref([])
 const timelineEntries = ref([])
 const hasCustomNormDays = computed(() =>
@@ -5098,6 +5263,7 @@ onMounted(async () => {
     await crmStore.loadCard(id)
     await loadAdditionalData(id)
     await acquireLock(id)
+    loadTzSurvey()
     // Блокируем внешний скролл если стартуем на вкладке чата
     if (['chat', 'notes'].includes(activeTab.value)) {
       _setChatScrollLock(true)

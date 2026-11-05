@@ -549,6 +549,87 @@
                   @click="uploadFor('tech_task')"
                 />
               </q-card-section>
+              <!-- Анкета ТЗ -->
+              <q-separator />
+              <q-card-section class="q-pt-sm q-pb-sm">
+                <div class="text-caption text-grey-6 q-mb-xs">
+                  Анкета ТЗ
+                </div>
+                <!-- Если анкета уже создана -->
+                <template v-if="tzSurvey">
+                  <div class="row q-gutter-xs q-mb-xs">
+                    <q-chip
+                      :color="tzSurvey.status === 'completed' || tzSurvey.status === 'edited' ? 'positive' : 'orange'"
+                      text-color="white"
+                      dense
+                      size="sm"
+                    >
+                      {{ tzSurveyStatusLabel(tzSurvey.status) }}
+                    </q-chip>
+                    <q-chip v-if="tzSurvey.completed_at" dense size="sm" color="grey-3">
+                      {{ new Date(tzSurvey.completed_at).toLocaleDateString('ru-RU') }}
+                    </q-chip>
+                  </div>
+                  <div class="row q-gutter-xs">
+                    <q-btn
+                      outline
+                      color="purple"
+                      icon="visibility"
+                      label="Просмотр"
+                      no-caps
+                      dense
+                      size="sm"
+                      @click="openTzSurveyView"
+                    />
+                    <q-btn
+                      v-if="tzSurvey.status === 'completed' || tzSurvey.status === 'edited'"
+                      outline
+                      color="purple"
+                      icon="edit"
+                      label="Редактировать"
+                      no-caps
+                      dense
+                      size="sm"
+                      @click="openTzSurveyEdit"
+                    />
+                    <q-btn
+                      v-if="tzSurvey.status === 'completed' || tzSurvey.status === 'edited'"
+                      outline
+                      color="grey-7"
+                      icon="picture_as_pdf"
+                      label="PDF"
+                      no-caps
+                      dense
+                      size="sm"
+                      @click="downloadTzPdf"
+                    />
+                    <q-btn
+                      outline
+                      color="grey-7"
+                      icon="link"
+                      label="Ссылка"
+                      no-caps
+                      dense
+                      size="sm"
+                      @click="copyTzLink"
+                    />
+                  </div>
+                </template>
+                <!-- Если анкеты ещё нет -->
+                <template v-else>
+                  <q-btn
+                    outline
+                    color="purple"
+                    icon="assignment"
+                    label="Создать анкету ТЗ"
+                    no-caps
+                    class="full-width"
+                    dense
+                    :loading="tzSurveyCreating"
+                    @click="createTzSurvey"
+                  />
+                </template>
+              </q-card-section>
             </q-card>
 
             <!-- Файлы: Доп. соглашения -->
@@ -1301,7 +1382,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { addWorkingDays, countWorkingDaysUntil, countWorkingDaysBetween } from 'src/composables/useDeadline'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
-import { contractsApi, filesApi, crmApi, clientsApi, timelineApi, surveyApi, supervisionClientPaymentsApi, contractDocsApi } from 'src/services/api'
+import { contractsApi, filesApi, crmApi, clientsApi, timelineApi, surveyApi, supervisionClientPaymentsApi, contractDocsApi, tzApi } from 'src/services/api'
 import { useReferencesStore } from 'src/stores/references'
 import { useAuthStore } from 'src/stores/auth'
 import { usePermission } from 'src/composables/usePermission'
@@ -1357,6 +1438,73 @@ async function loadSurveys() {
     surveys.value = Array.isArray(data) ? data : []
   } catch { surveys.value = [] }
   finally { surveysLoading.value = false }
+}
+
+// Анкета ТЗ
+const tzSurvey = ref(null)
+const tzSurveyCreating = ref(false)
+
+async function loadTzSurvey() {
+  if (!contract.value?.id) return
+  try {
+    const { data } = await tzApi.getSurveyByContract(contract.value.id)
+    tzSurvey.value = data
+  } catch (e) {
+    if (e.response?.status !== 404) console.warn('TZ survey load error', e)
+    tzSurvey.value = null
+  }
+}
+
+async function createTzSurvey() {
+  if (!contract.value?.id || tzSurveyCreating.value) return
+  tzSurveyCreating.value = true
+  try {
+    const { data } = await tzApi.createSurvey(contract.value.id, true)
+    tzSurvey.value = data
+    $q.notify({ type: 'positive', message: 'Анкета ТЗ создана. Скопируйте ссылку для клиента.' })
+  } catch (e) {
+    $q.notify({ type: 'negative', message: e.response?.data?.detail || 'Ошибка создания анкеты' })
+  } finally {
+    tzSurveyCreating.value = false
+  }
+}
+
+function copyTzLink() {
+  if (!tzSurvey.value?.access_token) return
+  const url = `${window.location.origin}/survey/${tzSurvey.value.access_token}`
+  navigator.clipboard.writeText(url).then(() => {
+    $q.notify({ type: 'positive', message: 'Ссылка скопирована в буфер обмена' })
+  })
+}
+
+function openTzSurveyView() {
+  if (!tzSurvey.value?.access_token) return
+  window.open(`/survey/${tzSurvey.value.access_token}`, '_blank')
+}
+
+function openTzSurveyEdit() {
+  if (!tzSurvey.value) return
+  router.push({ name: 'tz-survey-edit', params: { id: tzSurvey.value.id } })
+}
+
+async function downloadTzPdf() {
+  if (!tzSurvey.value?.id) return
+  try {
+    const res = await tzApi.downloadPdf(tzSurvey.value.id)
+    const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `anketa_${contract.value?.contract_number || tzSurvey.value.id}.pdf`
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch (e) {
+    $q.notify({ type: 'negative', message: 'Ошибка скачивания PDF' })
+  }
+}
+
+function tzSurveyStatusLabel(status) {
+  const labels = { pending: 'Не заполнена', sent: 'Отправлена', completed: 'Заполнена', edited: 'Отредактирована' }
+  return labels[status] || status
 }
 
 const PT_RU_EN = { 'Индивидуальный': 'individual', 'Шаблонный': 'template', 'Авторский надзор': 'supervision' }
@@ -2243,6 +2391,8 @@ onMounted(async () => {
     }
     // Загрузка опросов
     loadSurveys()
+    // Загрузка анкеты ТЗ
+    loadTzSurvey()
 
     // Платежи клиента по надзору (если Авторский надзор)
     if ((contract.value?.project_type === 'Авторский надзор' || contract.value?.status === 'АВТОРСКИЙ НАДЗОР') && contract.value?.supervision_card_id) {

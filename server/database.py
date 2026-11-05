@@ -1500,6 +1500,53 @@ def _migrate_contract_template_client_type():
         logger.warning(f"_migrate_contract_template_client_type warning: {e}")
 
 
+# =========================
+# АНКЕТЫ (ТЕХНИЧЕСКОЕ ЗАДАНИЕ)
+# =========================
+
+
+class TZSurveyTemplate(Base):
+    """Шаблон анкеты технического задания"""
+
+    __tablename__ = "tz_survey_templates"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_type = Column(String(30), unique=True, nullable=False, index=True)
+    # Индивидуальный / Шаблонный
+    template_data = Column(JSON, nullable=False)
+    # {sections: [...], room_templates: [...]}
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_by = Column(Integer, ForeignKey("employees.id"), nullable=True)
+
+
+class TechnicalSurvey(Base):
+    """Экземпляр анкеты ТЗ для конкретного договора"""
+
+    __tablename__ = "technical_surveys"
+
+    id = Column(Integer, primary_key=True, index=True)
+    contract_id = Column(Integer, ForeignKey("contracts.id", ondelete="CASCADE"), nullable=False, index=True)
+    access_token = Column(String(64), unique=True, nullable=False, index=True)
+    status = Column(String(20), nullable=False, default="pending")
+    # pending → sent → completed → edited
+
+    answers = Column(JSON)
+    # {general_answers: {...}, rooms: [{room_template_id, room_name, answers}]}
+
+    pdf_yandex_path = Column(String(500))
+
+    created_by = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    sent_at = Column(DateTime)
+    completed_at = Column(DateTime)
+    last_edited_at = Column(DateTime)
+    last_edited_by = Column(Integer, ForeignKey("employees.id"), nullable=True)
+
+    contract = relationship("Contract")
+    creator = relationship("Employee", foreign_keys=[created_by])
+    editor = relationship("Employee", foreign_keys=[last_edited_by])
+
+
 def init_db():
     """Инициализация базы данных"""
     try:

@@ -904,6 +904,10 @@ from routers.survey_router import router as survey_router
 app.include_router(employee_analytics_router, prefix="/api/v1/employee-analytics")
 app.include_router(survey_router, prefix="/api/v1/surveys")
 
+from routers.tz_router import router as tz_router
+
+app.include_router(tz_router)
+
 from routers.chat_router import router as chat_router
 from routers.client_chat_router import router as client_chat_router
 from routers.deleted_contracts_router import router as deleted_contracts_router

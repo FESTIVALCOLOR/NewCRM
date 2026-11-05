@@ -683,3 +683,32 @@ export const contractDocsApi = {
   generate: (contractId, docType) =>
     api.post('/api/v1/contract-templates/generate', { contract_id: contractId, doc_type: docType }),
 }
+
+// === Анкеты ТЗ ===
+export const tzApi = {
+  // Шаблоны (admin)
+  getTemplate: (projectType) =>
+    api.get(`/api/v1/tz-templates/${encodeURIComponent(projectType)}`),
+  updateTemplate: (projectType, templateData) =>
+    api.put(`/api/v1/tz-templates/${encodeURIComponent(projectType)}`, { template_data: templateData }),
+  resetTemplate: (projectType) =>
+    api.post(`/api/v1/tz-templates/${encodeURIComponent(projectType)}/reset`),
+  // Анкеты (сотрудники)
+  createSurvey: (contractId, sendLink = true) =>
+    api.post(`/api/v1/technical-surveys/${contractId}`, { send_link: sendLink }),
+  getSurveyByContract: (contractId) =>
+    api.get(`/api/v1/technical-surveys/contract/${contractId}`),
+  getSurvey: (surveyId) =>
+    api.get(`/api/v1/technical-surveys/${surveyId}`),
+  editAnswers: (surveyId, answers) =>
+    api.patch(`/api/v1/technical-surveys/${surveyId}`, { answers }),
+  deleteSurvey: (surveyId) =>
+    api.delete(`/api/v1/technical-surveys/${surveyId}`),
+  downloadPdf: (surveyId) =>
+    api.get(`/api/v1/technical-surveys/${surveyId}/pdf`, { responseType: 'blob' }),
+  // Публичные (клиент, без JWT)
+  getForClient: (token) =>
+    api.get(`/api/v1/surveys/fill/${token}`),
+  submitByClient: (token, answers) =>
+    api.post(`/api/v1/surveys/fill/${token}`, { answers }),
+}

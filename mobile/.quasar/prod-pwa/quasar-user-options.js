@@ -13,9 +13,9 @@
 
 
 
-import {Notify,Dialog,Loading,LocalStorage,SessionStorage,Meta} from 'quasar'
+import {Notify,Dialog,Dark,Loading,LocalStorage,SessionStorage,Meta} from 'quasar'
 
 
 
-export default { config: {"brand":{"primary":"#333333","secondary":"#F8F9FA","accent":"#ffd93c","dark":"#333333","positive":"#27AE60","negative":"#E74C3C","info":"#85C1E9","warning":"#F39C12"},"notify":{"position":"top","timeout":3000},"loading":{}},plugins: {Notify,Dialog,Loading,LocalStorage,SessionStorage,Meta} }
+export default { config: {"dark":"auto","brand":{"primary":"#333333","secondary":"#F8F9FA","accent":"#ffd93c","dark":"#1E1E1E","dark-page":"#1E1E1E","positive":"#27AE60","negative":"#E74C3C","info":"#85C1E9","warning":"#F39C12"},"notify":{"position":"top","timeout":3000},"loading":{}},plugins: {Notify,Dialog,Dark,Loading,LocalStorage,SessionStorage,Meta} }
 
