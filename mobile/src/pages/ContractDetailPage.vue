@@ -499,6 +499,110 @@
                   Техническое задание
                 </div>
               </q-card-section>
+              <!-- Анкета ТЗ -->
+              <q-separator />
+              <q-card-section class="q-pt-sm q-pb-sm">
+                <div class="text-caption text-grey-6 q-mb-xs">
+                  Анкета ТЗ
+                </div>
+                <!-- Если анкета уже создана -->
+                <template v-if="tzSurvey">
+                  <div class="row q-gutter-xs q-mb-xs">
+                    <q-chip
+                      :color="tzSurvey.status === 'completed' || tzSurvey.status === 'edited' ? 'positive' : 'orange'"
+                      text-color="white"
+                      dense
+                      size="sm"
+                    >
+                      {{ tzSurveyStatusLabel(tzSurvey.status) }}
+                    </q-chip>
+                    <q-chip v-if="tzSurvey.completed_at" dense size="sm" color="grey-3">
+                      {{ new Date(tzSurvey.completed_at).toLocaleDateString('ru-RU') }}
+                    </q-chip>
+                  </div>
+                  <!-- Кнопки действий на всю ширину, кнопка удаления — фиксированная -->
+                  <div class="row items-center q-mt-xs" style="gap: 6px">
+                    <q-btn
+                      class="col"
+                      outline
+                      color="purple"
+                      icon="visibility"
+                      label="Просмотр"
+                      no-caps
+                      dense
+                      size="sm"
+                      @click="openTzSurveyView"
+                    />
+                    <q-btn
+                      v-if="tzSurvey.status === 'completed' || tzSurvey.status === 'edited'"
+                      class="col"
+                      outline
+                      color="purple"
+                      icon="edit"
+                      label="Редактировать"
+                      no-caps
+                      dense
+                      size="sm"
+                      @click="openTzSurveyEdit"
+                    />
+                    <q-btn
+                      v-if="tzSurvey.status === 'completed' || tzSurvey.status === 'edited'"
+                      class="col"
+                      outline
+                      color="grey-7"
+                      icon="picture_as_pdf"
+                      label="PDF"
+                      no-caps
+                      dense
+                      size="sm"
+                      @click="downloadTzPdf"
+                    />
+                    <q-btn
+                      class="col"
+                      outline
+                      color="grey-7"
+                      icon="link"
+                      label="Ссылка"
+                      no-caps
+                      dense
+                      size="sm"
+                      @click="copyTzLink"
+                    />
+                    <q-btn
+                      outline
+                      color="negative"
+                      icon="delete_outline"
+                      no-caps
+                      dense
+                      size="sm"
+                      style="flex-shrink: 0"
+                      @click="deleteTzSurvey"
+                    />
+                  </div>
+                </template>
+                <!-- Если анкеты ещё нет -->
+                <template v-else>
+                  <q-btn
+                    outline
+                    color="purple"
+                    icon="assignment"
+                    label="Создать анкету ТЗ"
+                    no-caps
+                    class="full-width"
+                    dense
+                    :loading="tzSurveyCreating"
+                    @click="createTzSurvey"
+                  />
+                </template>
+              </q-card-section>
+              <!-- Примечание о ручной загрузке -->
+              <q-card-section class="q-pt-none q-pb-xs">
+                <div class="text-caption" style="color: var(--fc-text-light); font-style: italic">
+                  <q-icon name="info_outline" size="12px" class="q-mr-xs" />
+                  При невозможности заполнить анкету электронно можно загрузить файлы анкеты вручную
+                </div>
+              </q-card-section>
+              <!-- Ручная загрузка файлов ТЗ -->
               <q-list v-if="filesByGroup.tech_task.length > 0" dense>
                 <q-item v-for="f in filesByGroup.tech_task" :key="f.id" clickable @click="openFile(f)">
                   <q-item-section avatar>
@@ -537,7 +641,7 @@
                   </q-item-section>
                 </q-item>
               </q-list>
-              <q-card-section class="q-pt-xs">
+              <q-card-section class="q-pt-xs q-pb-sm">
                 <q-btn
                   outline
                   color="grey-7"
@@ -548,96 +652,6 @@
                   dense
                   @click="uploadFor('tech_task')"
                 />
-              </q-card-section>
-              <!-- Анкета ТЗ -->
-              <q-separator />
-              <q-card-section class="q-pt-sm q-pb-sm">
-                <div class="text-caption text-grey-6 q-mb-xs">
-                  Анкета ТЗ
-                </div>
-                <!-- Если анкета уже создана -->
-                <template v-if="tzSurvey">
-                  <div class="row q-gutter-xs q-mb-xs">
-                    <q-chip
-                      :color="tzSurvey.status === 'completed' || tzSurvey.status === 'edited' ? 'positive' : 'orange'"
-                      text-color="white"
-                      dense
-                      size="sm"
-                    >
-                      {{ tzSurveyStatusLabel(tzSurvey.status) }}
-                    </q-chip>
-                    <q-chip v-if="tzSurvey.completed_at" dense size="sm" color="grey-3">
-                      {{ new Date(tzSurvey.completed_at).toLocaleDateString('ru-RU') }}
-                    </q-chip>
-                  </div>
-                  <div class="row q-gutter-xs">
-                    <q-btn
-                      outline
-                      color="purple"
-                      icon="visibility"
-                      label="Просмотр"
-                      no-caps
-                      dense
-                      size="sm"
-                      @click="openTzSurveyView"
-                    />
-                    <q-btn
-                      v-if="tzSurvey.status === 'completed' || tzSurvey.status === 'edited'"
-                      outline
-                      color="purple"
-                      icon="edit"
-                      label="Редактировать"
-                      no-caps
-                      dense
-                      size="sm"
-                      @click="openTzSurveyEdit"
-                    />
-                    <q-btn
-                      v-if="tzSurvey.status === 'completed' || tzSurvey.status === 'edited'"
-                      outline
-                      color="grey-7"
-                      icon="picture_as_pdf"
-                      label="PDF"
-                      no-caps
-                      dense
-                      size="sm"
-                      @click="downloadTzPdf"
-                    />
-                    <q-btn
-                      outline
-                      color="grey-7"
-                      icon="link"
-                      label="Ссылка"
-                      no-caps
-                      dense
-                      size="sm"
-                      @click="copyTzLink"
-                    />
-                    <q-btn
-                      outline
-                      color="negative"
-                      icon="delete_outline"
-                      no-caps
-                      dense
-                      size="sm"
-                      @click="deleteTzSurvey"
-                    />
-                  </div>
-                </template>
-                <!-- Если анкеты ещё нет -->
-                <template v-else>
-                  <q-btn
-                    outline
-                    color="purple"
-                    icon="assignment"
-                    label="Создать анкету ТЗ"
-                    no-caps
-                    class="full-width"
-                    dense
-                    :loading="tzSurveyCreating"
-                    @click="createTzSurvey"
-                  />
-                </template>
               </q-card-section>
             </q-card>
 

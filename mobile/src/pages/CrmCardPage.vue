@@ -632,18 +632,6 @@
                   </div>
                   <div class="row q-gutter-xs">
                     <q-btn
-                      v-if="can('crm_cards.files_upload') && !isArchived && !isExecutor"
-                      outline
-                      dense
-                      size="xs"
-                      icon="upload"
-                      label="Загрузить"
-                      no-caps
-                      color="grey-7"
-                      style="border-radius: 4px; padding: 2px 8px; min-width: 88px"
-                      @click="uploadCrmFile('tech_task')"
-                    />
-                    <q-btn
                       v-if="contractData?.tech_task_link"
                       outline
                       dense
@@ -659,6 +647,142 @@
                   </div>
                 </div>
               </q-card-section>
+              <!-- Дата анкеты -->
+              <q-card-section class="q-pt-xs q-pb-sm">
+                <div
+                  class="row items-center q-gutter-xs"
+                  :style="(!isArchived && (!isExecutor || isSurveyor)) ? 'cursor: pointer' : ''"
+                  @click="(!isArchived && (!isExecutor || isSurveyor)) && (techTaskDateDialogVisible = true)"
+                >
+                  <div class="text-caption" style="color: var(--fc-text-light)">
+                    Дата анкеты:
+                  </div>
+                  <div class="text-caption" style="color: var(--fc-text); font-weight: 500">
+                    {{ techTaskDateInput ? fmtDate(techTaskDateInput) : 'Не установлена' }}
+                  </div>
+                  <q-icon
+                    v-if="!isArchived && (!isExecutor || isSurveyor)"
+                    name="edit"
+                    size="12px"
+                    color="grey-6"
+                  />
+                </div>
+              </q-card-section>
+
+              <!-- Анкета ТЗ (онлайн-форма) -->
+              <q-separator />
+              <q-card-section class="q-pt-xs q-pb-sm">
+                <div class="row items-center justify-between" style="flex-wrap: wrap; gap: 4px">
+                  <div class="text-caption" style="color: var(--fc-text-light); font-weight: 600">
+                    Онлайн-анкета ТЗ
+                  </div>
+                  <q-chip
+                    v-if="tzSurvey"
+                    dense
+                    :color="tzSurveyStatusColor"
+                    text-color="white"
+                    size="xs"
+                    style="font-size: 10px"
+                  >
+                    {{ tzSurveyStatusLabel }}
+                  </q-chip>
+                </div>
+
+                <!-- Кнопки если анкета есть — на всю ширину, кнопка удаления фиксированная -->
+                <div v-if="tzSurvey" class="row items-center q-mt-xs" style="gap: 6px">
+                  <q-btn
+                    class="col"
+                    outline
+                    dense
+                    size="xs"
+                    icon="visibility"
+                    label="Просмотр"
+                    no-caps
+                    color="grey-7"
+                    style="border-radius: 4px"
+                    @click="openTzSurveyView"
+                  />
+                  <q-btn
+                    v-if="!isArchived"
+                    class="col"
+                    outline
+                    dense
+                    size="xs"
+                    icon="edit"
+                    label="Редактировать"
+                    no-caps
+                    color="purple"
+                    style="border-radius: 4px"
+                    @click="openTzSurveyEdit"
+                  />
+                  <q-btn
+                    class="col"
+                    outline
+                    dense
+                    size="xs"
+                    icon="link"
+                    label="Ссылка"
+                    no-caps
+                    color="grey-7"
+                    style="border-radius: 4px"
+                    @click="copyTzLink"
+                  />
+                  <q-btn
+                    v-if="tzSurvey.status === 'completed' || tzSurvey.status === 'edited'"
+                    class="col"
+                    outline
+                    dense
+                    size="xs"
+                    icon="picture_as_pdf"
+                    label="PDF"
+                    no-caps
+                    color="grey-7"
+                    style="border-radius: 4px"
+                    @click="downloadTzPdf"
+                  />
+                  <q-btn
+                    v-if="!isArchived && !isExecutor"
+                    outline
+                    dense
+                    size="xs"
+                    icon="delete_outline"
+                    no-caps
+                    color="negative"
+                    style="border-radius: 4px; padding: 2px 6px; flex-shrink: 0"
+                    @click="deleteTzSurvey"
+                  />
+                </div>
+
+                <!-- Кнопка создания если анкеты нет -->
+                <div v-else-if="!isArchived && !isExecutor" class="q-mt-xs">
+                  <q-btn
+                    outline
+                    dense
+                    size="xs"
+                    icon="add"
+                    label="Создать анкету"
+                    no-caps
+                    color="purple"
+                    class="full-width"
+                    style="border-radius: 4px"
+                    :loading="tzSurveyCreating"
+                    @click="createTzSurvey"
+                  />
+                </div>
+                <div v-else-if="!tzSurvey" class="text-caption" style="color: var(--fc-text-disabled); font-size: 10px; margin-top: 4px">
+                  Анкета не создана
+                </div>
+              </q-card-section>
+
+              <!-- Примечание о ручной загрузке -->
+              <q-card-section class="q-pt-none q-pb-xs">
+                <div class="text-caption" style="color: var(--fc-text-light); font-style: italic">
+                  <q-icon name="info_outline" size="12px" class="q-mr-xs" />
+                  При невозможности заполнить анкету электронно можно загрузить файлы анкеты вручную
+                </div>
+              </q-card-section>
+
+              <!-- Ручная загрузка файлов ТЗ -->
               <q-list v-if="filesByStage('tech_task').length > 0" dense class="q-pb-xs">
                 <q-item v-for="f in filesByStage('tech_task')" :key="f.id">
                   <q-item-section avatar>
@@ -696,128 +820,19 @@
                   </q-item-section>
                 </q-item>
               </q-list>
-              <q-card-section v-else class="q-py-sm text-center" style="color: var(--fc-text-disabled); font-size: 11px">
-                Нет файлов
-              </q-card-section>
-              <!-- Дата анкеты -->
-              <q-card-section class="q-pt-xs q-pb-sm">
-                <div
-                  class="row items-center q-gutter-xs"
-                  :style="(!isArchived && (!isExecutor || isSurveyor)) ? 'cursor: pointer' : ''"
-                  @click="(!isArchived && (!isExecutor || isSurveyor)) && (techTaskDateDialogVisible = true)"
-                >
-                  <div class="text-caption" style="color: var(--fc-text-light)">
-                    Дата анкеты:
-                  </div>
-                  <div class="text-caption" style="color: var(--fc-text); font-weight: 500">
-                    {{ techTaskDateInput ? fmtDate(techTaskDateInput) : 'Не установлена' }}
-                  </div>
-                  <q-icon
-                    v-if="!isArchived && (!isExecutor || isSurveyor)"
-                    name="edit"
-                    size="12px"
-                    color="grey-6"
-                  />
-                </div>
-              </q-card-section>
-
-              <!-- Анкета ТЗ (онлайн-форма) -->
-              <q-card-section class="q-pt-xs q-pb-sm">
-                <div class="row items-center justify-between" style="flex-wrap: wrap; gap: 4px">
-                  <div class="text-caption" style="color: var(--fc-text-light); font-weight: 600">
-                    Онлайн-анкета ТЗ
-                  </div>
-                  <q-chip
-                    v-if="tzSurvey"
-                    dense
-                    :color="tzSurveyStatusColor"
-                    text-color="white"
-                    size="xs"
-                    style="font-size: 10px"
-                  >
-                    {{ tzSurveyStatusLabel }}
-                  </q-chip>
-                </div>
-
-                <!-- Кнопки если анкета есть -->
-                <div v-if="tzSurvey" class="row q-gutter-xs q-mt-xs" style="flex-wrap: wrap">
-                  <q-btn
-                    outline
-                    dense
-                    size="xs"
-                    icon="visibility"
-                    label="Просмотр"
-                    no-caps
-                    color="grey-7"
-                    style="border-radius: 4px; padding: 2px 8px"
-                    @click="openTzSurveyView"
-                  />
-                  <q-btn
-                    v-if="!isArchived"
-                    outline
-                    dense
-                    size="xs"
-                    icon="edit"
-                    label="Редактировать"
-                    no-caps
-                    color="purple"
-                    style="border-radius: 4px; padding: 2px 8px"
-                    @click="openTzSurveyEdit"
-                  />
-                  <q-btn
-                    outline
-                    dense
-                    size="xs"
-                    icon="link"
-                    label="Ссылка"
-                    no-caps
-                    color="grey-7"
-                    style="border-radius: 4px; padding: 2px 8px"
-                    @click="copyTzLink"
-                  />
-                  <q-btn
-                    v-if="tzSurvey.status === 'completed' || tzSurvey.status === 'edited'"
-                    outline
-                    dense
-                    size="xs"
-                    icon="picture_as_pdf"
-                    label="PDF"
-                    no-caps
-                    color="grey-7"
-                    style="border-radius: 4px; padding: 2px 8px"
-                    @click="downloadTzPdf"
-                  />
-                  <q-btn
-                    v-if="!isArchived && !isExecutor"
-                    outline
-                    dense
-                    size="xs"
-                    icon="delete_outline"
-                    no-caps
-                    color="negative"
-                    style="border-radius: 4px; padding: 2px 6px"
-                    @click="deleteTzSurvey"
-                  />
-                </div>
-
-                <!-- Кнопка создания если анкеты нет -->
-                <div v-else-if="!isArchived && !isExecutor" class="q-mt-xs">
-                  <q-btn
-                    outline
-                    dense
-                    size="xs"
-                    icon="add"
-                    label="Создать анкету"
-                    no-caps
-                    color="purple"
-                    style="border-radius: 4px; padding: 2px 8px"
-                    :loading="tzSurveyCreating"
-                    @click="createTzSurvey"
-                  />
-                </div>
-                <div v-else-if="!tzSurvey" class="text-caption" style="color: var(--fc-text-disabled); font-size: 10px; margin-top: 4px">
-                  Анкета не создана
-                </div>
+              <q-card-section v-if="can('crm_cards.files_upload') && !isArchived && !isExecutor" class="q-pt-xs q-pb-sm">
+                <q-btn
+                  outline
+                  dense
+                  size="xs"
+                  icon="upload"
+                  label="Загрузить файл ТЗ"
+                  no-caps
+                  color="grey-7"
+                  class="full-width"
+                  style="border-radius: 4px"
+                  @click="uploadCrmFile('tech_task')"
+                />
               </q-card-section>
             </q-card>
 
