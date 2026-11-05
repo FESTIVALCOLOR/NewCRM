@@ -398,10 +398,11 @@ def submit_survey_by_client(
                 yd = YandexDiskService()
                 folder = contract.yandex_folder_path or ""
                 if folder:
-                    folder_clean = folder.removeprefix("disk:")
-                    pdf_path = f"disk:{folder_clean}/anketa_{contract.contract_number}.pdf"
-                    yd.upload_bytes(pdf_bytes, pdf_path)
-                    survey.pdf_yandex_path = pdf_path
+                    folder_clean = folder.removeprefix("disk:").rstrip("/")
+                    pdf_name = f"anketa_{contract.contract_number or survey.id}.pdf"
+                    pdf_path = f"{folder_clean}/{pdf_name}"
+                    yd.upload_file_from_bytes(pdf_bytes, pdf_path)
+                    survey.pdf_yandex_path = f"disk:{pdf_path}"
                     db.commit()
             except Exception as e:
                 logger.warning(f"Не удалось сохранить PDF на ЯД: {e}")

@@ -332,6 +332,103 @@ class _TZPageTemplate:
         canvas.restoreState()
 
 
+def _yn_html(text: str) -> str:
+    """Возвращает цветной HTML-текст для Да/Нет ответов (используется в Paragraph)."""
+    if text == "Да":
+        return '<font color="#6B4FA0"><b> Да </b></font>'
+    elif text == "Нет":
+        return '<font color="#C62828"><b> Нет </b></font>'
+    return text or "—"
+
+
+def _checkbox_opt_line(opt: dict, is_checked: bool, q_id: str, answers: dict) -> str:
+    """Строит HTML-строку для одного чекбокса checkbox_group."""
+    mark = CHECKBOX_CHECKED if is_checked else CHECKBOX_EMPTY
+    line = f"{mark}  {opt.get('label', '')}"
+    if opt.get("has_text_input") and is_checked:
+        extra = answers.get(q_id + "_text_" + opt["value"], "")
+        if extra:
+            tl = opt.get("text_input_label", "")
+            line += f'  <font color="#6B4FA0">{tl + ": " if tl else ""}{extra}</font>'
+    if opt.get("has_select"):
+        sel_val = answers.get(q_id + "_text_" + opt["value"] + "_sel", "")
+        if sel_val:
+            sl = opt.get("select_label", "")
+            line += f'  <font color="#6B4FA0">({sl + ": " if sl else ""}{sel_val})</font>'
+    return line
+
+
+def _render_checkbox_group(q_id: str, question: dict, answer, answers: dict, styles: dict) -> list:
+    """Возвращает список Paragraph для checkbox_group вопроса."""
+    options = question.get("options", [])
+    selected = answer if isinstance(answer, list) else ([answer] if answer else [])
+    value_lines = []
+    for opt in options:
+        opt_type = opt.get("type", "")
+        if opt_type == "separator":
+            value_lines.append(Paragraph(f"── {opt.get('label', '')} ──", styles["checkbox_italic"]))
+        elif opt_type == "yes_no_inline":
+            yn_val = answers.get(q_id + "_text_" + opt["value"], "")
+            value_lines.append(Paragraph(f"{opt.get('label', '')}:  {_yn_html(yn_val)}", styles["checkbox"]))
+        elif opt_type == "text_field":
+            text_val = answers.get(q_id + "_text_" + opt["value"], "")
+            val_html = f'<font color="#6B4FA0">{text_val}</font>' if text_val else "—"
+            value_lines.append(Paragraph(f"{opt.get('label', '')}: {val_html}", styles["label"]))
+        else:
+            is_checked = opt.get("value", "") in selected
+            line = _checkbox_opt_line(opt, is_checked, q_id, answers)
+            style_key = "checkbox_italic" if opt.get("italic") else "checkbox"
+            value_lines.append(Paragraph(line, styles[style_key]))
+            if is_checked and opt.get("children"):
+                children_ans = answers.get(q_id + "_sub_" + opt["value"], [])
+                children_sel = children_ans if isinstance(children_ans, list) else []
+                for child in opt["children"]:
+                    c_mark = CHECKBOX_CHECKED if child.get("value", "") in children_sel else CHECKBOX_EMPTY
+                    value_lines.append(Paragraph(f"   {c_mark}  {child.get('label', '')}", styles["checkbox_child"]))
+    return value_lines
+
+
+def _electro_opt_line(opt: dict, is_checked: bool, answer_obj: dict) -> str:
+    """Строит HTML-строку для одного чекбокса electro_block."""
+    mark = CHECKBOX_CHECKED if is_checked else CHECKBOX_EMPTY
+    line = f"{mark}  {opt.get('label', '')}"
+    if opt.get("has_text_input") and is_checked:
+        extra = answer_obj.get(opt["value"] + "_text", "")
+        if extra:
+            line += f'  <font color="#6B4FA0">{extra}</font>'
+    if opt.get("has_select"):
+        sel_val = answer_obj.get(opt["value"] + "_select", "")
+        if sel_val:
+            sl = opt.get("select_label", "")
+            line += f'  <font color="#6B4FA0">({sl + ": " if sl else ""}{sel_val})</font>'
+    return line
+
+
+def _render_electro_block(question: dict, answer_obj: dict, styles: dict) -> list:
+    """Возвращает список Paragraph для electro_block вопроса."""
+    value_lines = []
+    for sf in question.get("subfields", []):
+        sf_val = answer_obj.get(sf.get("key", ""), "")
+        if sf.get("type") == "yes_no":
+            value_lines.append(Paragraph(f"{sf.get('label', '')}:  {_yn_html(sf_val)}", styles["checkbox"]))
+        else:
+            val_html = f'<font color="#6B4FA0">{sf_val}</font>' if sf_val else "—"
+            value_lines.append(Paragraph(f"{sf.get('label', '')}: {val_html}", styles["label"]))
+    checked_list = answer_obj.get("_checked", [])
+    if not isinstance(checked_list, list):
+        checked_list = []
+    for opt in question.get("checkboxes", []):
+        is_checked = opt.get("value", "") in checked_list
+        line = _electro_opt_line(opt, is_checked, answer_obj)
+        value_lines.append(Paragraph(line, styles["checkbox"]))
+    if question.get("has_comment"):
+        comment = answer_obj.get("_comment", "")
+        if comment:
+            cl = question.get("comment_label", "Пожелания")
+            value_lines.append(Paragraph(f'<i>{cl}: <font color="#6B4FA0">{comment}</font></i>', styles["value"]))
+    return value_lines
+
+
 def _render_question_rows(question: dict, answers: dict, styles: dict) -> list:
     """Рендерит один вопрос как список строк для таблицы [(label_para, value_para)]."""
     rows = []
@@ -339,71 +436,22 @@ def _render_question_rows(question: dict, answers: dict, styles: dict) -> list:
     q_type = question.get("type", "text")
     label = question.get("label", "")
     answer = answers.get(q_id, "") if answers else ""
-
     label_para = Paragraph(label, styles["label"])
 
     if q_type in ("text", "textarea"):
-        text = str(answer) if answer else ""
-        value_para = Paragraph(text, styles["value_bold"])
-        rows.append((label_para, value_para))
-
+        rows.append((label_para, Paragraph(str(answer) if answer else "", styles["value_bold"])))
     elif q_type == "contacts":
-        subfields = question.get("subfields", [])
-        sub_lines = []
         answer_dict = answer if isinstance(answer, dict) else {}
-        for sf in subfields:
-            val = answer_dict.get(sf["key"], "")
-            sub_lines.append(f"{sf['label']}: {val}")
-        value_para = Paragraph("<br/>".join(sub_lines), styles["value"])
-        rows.append((label_para, value_para))
-
+        sub_lines = [f"{sf['label']}: {answer_dict.get(sf['key'], '')}" for sf in question.get("subfields", [])]
+        rows.append((label_para, Paragraph("<br/>".join(sub_lines), styles["value"])))
     elif q_type == "checkbox_group":
-        options = question.get("options", [])
-        multiple = question.get("multiple", False)
-
-        if isinstance(answer, dict):
-            selected = answer.get("selected", [])
-            extra_texts = answer.get("texts", {})
-        elif isinstance(answer, list):
-            selected = answer
-            extra_texts = {}
-        elif answer:
-            selected = [answer]
-            extra_texts = {}
-        else:
-            selected = []
-            extra_texts = {}
-
-        # Строим содержимое правой колонки
-        value_lines = []
-        for opt in options:
-            is_checked = opt["value"] in selected
-            mark = CHECKBOX_CHECKED if is_checked else CHECKBOX_EMPTY
-            italic = opt.get("italic", False)
-            children = opt.get("children", [])
-            has_text = opt.get("has_text_input", False)
-
-            style_key = "checkbox_italic" if italic else "checkbox"
-            value_lines.append(Paragraph(f"{mark}  {opt['label']}", styles[style_key]))
-
-            # Дочерние опции
-            for child in children:
-                c_checked = child["value"] in selected
-                c_mark = CHECKBOX_CHECKED if c_checked else CHECKBOX_EMPTY
-                value_lines.append(Paragraph(f"   {c_mark}  {child['label']}", styles["checkbox_child"]))
-
-            # Текстовый ввод под чекбоксом
-            if has_text and is_checked:
-                text_key = opt["value"]
-                extra = extra_texts.get(text_key, "")
-                text_label = opt.get("text_input_label", "")
-                if text_label:
-                    value_lines.append(Paragraph(f"   {text_label} {extra}", styles["checkbox_italic"]))
-                elif extra:
-                    value_lines.append(Paragraph(f"   {extra}", styles["value"]))
-
-        # Упаковываем в один Paragraph через таблицу (нет вложенных таблиц в ячейках ReportLab)
-        # Вместо этого делаем несколько строк таблицы — первую с label, остальные пустые слева
+        value_lines = _render_checkbox_group(q_id, question, answer, answers, styles)
+        for i, line in enumerate(value_lines):
+            lbl = label_para if i == 0 else Paragraph("", styles["label"])
+            rows.append((lbl, line))
+    elif q_type == "electro_block":
+        answer_obj = answer if isinstance(answer, dict) else {}
+        value_lines = _render_electro_block(question, answer_obj, styles)
         for i, line in enumerate(value_lines):
             lbl = label_para if i == 0 else Paragraph("", styles["label"])
             rows.append((lbl, line))
@@ -587,11 +635,11 @@ def generate_tz_pdf(
 
                 req_type = f"logo_{agent_type.strip().lower()}"
                 req = db.query(CompanyRequisite).filter(CompanyRequisite.requisite_type == req_type).first()
-                if req and req.yandex_path:
+                if req and req.file_path:
                     from yandex_disk_service import YandexDiskService
 
                     yd = YandexDiskService()
-                    logo_bytes = yd.download_file(req.yandex_path)
+                    logo_bytes = yd.download_file_to_bytes(req.file_path)
             except Exception as e:
                 logger.warning(f"Не удалось загрузить лого агента {agent_type}: {e}")
 
