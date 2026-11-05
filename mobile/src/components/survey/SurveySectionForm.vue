@@ -72,8 +72,15 @@
             :key="opt.value"
             class="checkbox-option"
           >
+            <!-- Разделитель секции -->
+            <template v-if="opt.type === 'separator'">
+              <div class="opt-separator">
+                <span class="opt-separator-label">{{ opt.label }}</span>
+              </div>
+            </template>
+
             <!-- Поле-только-текст (например "Желаемые габариты ванны:") -->
-            <template v-if="opt.type === 'text_field'">
+            <template v-else-if="opt.type === 'text_field'">
               <div class="text-field-inline">
                 <span class="opt-label-text">{{ opt.label }}</span>
                 <q-input
@@ -92,17 +99,19 @@
                 <span class="opt-label-text">{{ opt.label }}</span>
                 <div class="yes-no-btns">
                   <q-btn
-                    flat
+                    unelevated
                     size="sm"
-                    :color="getCheckboxTextValue(q.id, opt.value) === 'Да' ? 'purple' : 'grey'"
+                    :color="getCheckboxTextValue(q.id, opt.value) === 'Да' ? 'purple' : 'grey-3'"
+                    :text-color="getCheckboxTextValue(q.id, opt.value) === 'Да' ? 'white' : 'grey-8'"
                     label="Да"
                     class="yn-btn"
                     @click="setCheckboxText(q.id, opt.value, 'Да')"
                   />
                   <q-btn
-                    flat
+                    unelevated
                     size="sm"
-                    :color="getCheckboxTextValue(q.id, opt.value) === 'Нет' ? 'purple' : 'grey'"
+                    :color="getCheckboxTextValue(q.id, opt.value) === 'Нет' ? 'negative' : 'grey-3'"
+                    :text-color="getCheckboxTextValue(q.id, opt.value) === 'Нет' ? 'white' : 'grey-8'"
                     label="Нет"
                     class="yn-btn"
                     @click="setCheckboxText(q.id, opt.value, 'Нет')"
@@ -142,6 +151,22 @@
                 />
               </div>
 
+              <!-- Выпадающий список при выборе (has_select) -->
+              <div v-if="opt.has_select && isChecked(q.id, opt.value)" class="checkbox-text-field">
+                <q-select
+                  :label="opt.select_label || 'Выбрать'"
+                  :model-value="getCheckboxTextValue(q.id, opt.value + '_sel')"
+                  :options="opt.select_options || []"
+                  outlined
+                  dense
+                  emit-value
+                  map-options
+                  class="q-ml-lg q-mt-xs"
+                  style="min-width: 200px"
+                  @update:model-value="val => setCheckboxText(q.id, opt.value + '_sel', val)"
+                />
+              </div>
+
               <!-- Текстовое поле под чекбоксом -->
               <div v-if="opt.has_text_input && isChecked(q.id, opt.value)" class="checkbox-text-field">
                 <q-input
@@ -175,17 +200,19 @@
                 <span class="sf-label">{{ sf.label }}</span>
                 <div class="yes-no-btns">
                   <q-btn
-                    flat
+                    unelevated
                     size="sm"
-                    :color="getElectroValue(q.id, sf.key) === 'Да' ? 'purple' : 'grey-5'"
+                    :color="getElectroValue(q.id, sf.key) === 'Да' ? 'purple' : 'grey-3'"
+                    :text-color="getElectroValue(q.id, sf.key) === 'Да' ? 'white' : 'grey-8'"
                     label="Да"
                     class="yn-btn"
                     @click="setElectroValue(q.id, sf.key, 'Да')"
                   />
                   <q-btn
-                    flat
+                    unelevated
                     size="sm"
-                    :color="getElectroValue(q.id, sf.key) === 'Нет' ? 'negative' : 'grey-5'"
+                    :color="getElectroValue(q.id, sf.key) === 'Нет' ? 'negative' : 'grey-3'"
+                    :text-color="getElectroValue(q.id, sf.key) === 'Нет' ? 'white' : 'grey-8'"
                     label="Нет"
                     class="yn-btn"
                     @click="setElectroValue(q.id, sf.key, 'Нет')"
@@ -220,6 +247,22 @@
                 dense
                 @update:model-value="val => toggleElectro(q.id, opt.value, val)"
               />
+              <!-- Выпадающий список при выборе (has_select) -->
+              <div v-if="opt.has_select && isElectroChecked(q.id, opt.value)" class="checkbox-text-field">
+                <q-select
+                  :label="opt.select_label || 'Выбрать'"
+                  :model-value="getElectroValue(q.id, opt.value + '_select')"
+                  :options="opt.select_options || []"
+                  outlined
+                  dense
+                  emit-value
+                  map-options
+                  class="q-ml-lg q-mt-xs"
+                  style="min-width: 200px"
+                  @update:model-value="val => setElectroValue(q.id, opt.value + '_select', val)"
+                />
+              </div>
+              <!-- Текстовое поле при выборе (has_text_input) -->
               <div v-if="opt.has_text_input && isElectroChecked(q.id, opt.value)" class="checkbox-text-field">
                 <q-input
                   :label="opt.text_input_label || ''"
@@ -452,5 +495,29 @@ function toggleElectro(questionId, value, checked) {
   border-radius: 4px;
   line-height: 1.5;
   white-space: pre-line;
+}
+
+.opt-separator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 4px;
+}
+
+.opt-separator::before,
+.opt-separator::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: #d0c8e8;
+}
+
+.opt-separator-label {
+  font-size: 11px;
+  color: #7c6fa8;
+  font-weight: 600;
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 </style>
