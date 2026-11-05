@@ -1,18 +1,23 @@
 <template>
   <q-page class="survey-edit-page">
-    <q-header elevated class="bg-purple">
-      <q-toolbar>
-        <q-btn flat round icon="arrow_back" @click="router.back()" />
-        <q-toolbar-title>Редактирование анкеты ТЗ</q-toolbar-title>
-        <q-btn
-          flat
-          round
-          icon="save"
-          :loading="saving"
-          @click="saveSurvey"
-        />
-      </q-toolbar>
-    </q-header>
+    <div class="survey-edit-topbar">
+      <q-btn
+        flat
+        round
+        icon="arrow_back"
+        color="white"
+        @click="router.back()"
+      />
+      <span class="topbar-title">Редактирование анкеты ТЗ</span>
+      <q-btn
+        flat
+        round
+        icon="save"
+        color="white"
+        :loading="saving"
+        @click="saveSurvey"
+      />
+    </div>
 
     <div v-if="loading" class="flex flex-center q-pa-xl">
       <q-spinner-oval color="purple" size="48px" />
@@ -232,6 +237,25 @@ onMounted(loadSurvey)
 .survey-edit-page {
   max-width: 820px;
   margin: 0 auto;
+}
+
+.survey-edit-topbar {
+  display: flex;
+  align-items: center;
+  background: #6B4FA0;
+  padding: 4px 8px;
+  color: white;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.topbar-title {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 600;
+  text-align: center;
+  color: white;
 }
 
 .survey-section {

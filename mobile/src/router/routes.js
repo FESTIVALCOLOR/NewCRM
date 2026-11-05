@@ -188,17 +188,29 @@ export default [
   // === Анкета ТЗ (публичная, без авторизации) ===
   {
     path: '/survey/:token',
-    name: 'survey-fill',
-    component: () => import('src/pages/SurveyFillPage.vue'),
-    meta: { requiresAuth: false },
+    component: () => import('src/layouts/SurveyLayout.vue'),
+    children: [
+      {
+        path: '',
+        name: 'survey-fill',
+        component: () => import('src/pages/SurveyFillPage.vue'),
+        meta: { requiresAuth: false },
+      },
+    ],
   },
 
   // === Редактирование анкеты ТЗ менеджером ===
   {
     path: '/tz-survey-edit/:id',
-    name: 'tz-survey-edit',
-    component: () => import('src/pages/TzSurveyEditPage.vue'),
-    meta: { requiresAuth: true },
+    component: () => import('src/layouts/SurveyLayout.vue'),
+    children: [
+      {
+        path: '',
+        name: 'tz-survey-edit',
+        component: () => import('src/pages/TzSurveyEditPage.vue'),
+        meta: { requiresAuth: true },
+      },
+    ],
   },
 
   // 404

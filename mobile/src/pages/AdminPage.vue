@@ -19,6 +19,7 @@
       <q-tab name="trash" label="Корзина" />
       <q-tab name="backup" label="Бекап" />
       <q-tab name="doctemplates" label="Шаблоны" />
+      <q-tab name="tz-survey" label="Анкета ТЗ" />
     </q-tabs>
 
     <q-tab-panels v-model="tab" animated class="bg-transparent">
@@ -1476,6 +1477,90 @@
           </q-card>
         </div>
       </q-tab-panel>
+
+      <!-- === Анкеты ТЗ === -->
+      <q-tab-panel name="tz-survey" class="q-pa-sm">
+        <div class="text-subtitle1 text-weight-bold q-mb-sm" style="color: var(--fc-text)">
+          Шаблоны анкет технического задания
+        </div>
+
+        <div class="row q-gutter-sm q-mb-md items-center">
+          <q-btn-toggle
+            v-model="tzSurveyProjectType"
+            toggle-color="purple"
+            :options="[
+              { label: 'Индивидуальный', value: 'Индивидуальный' },
+              { label: 'Шаблонный', value: 'Шаблонный' },
+            ]"
+            dense
+            unelevated
+            size="sm"
+            @update:model-value="loadTzSurveyTemplate"
+          />
+          <q-btn
+            outline
+            dense
+            size="sm"
+            icon="download"
+            label="Загрузить"
+            color="purple"
+            :loading="tzSurveyTemplateLoading"
+            @click="loadTzSurveyTemplate"
+          />
+        </div>
+
+        <div v-if="tzSurveyTemplate">
+          <div class="row q-gutter-xs q-mb-sm items-center">
+            <div class="text-caption" style="color: var(--fc-text-light)">
+              Последнее обновление: {{ tzSurveyTemplate.updated_at ? new Date(tzSurveyTemplate.updated_at).toLocaleString('ru') : 'никогда' }}
+            </div>
+            <q-space />
+            <q-btn
+              outline
+              dense
+              size="sm"
+              icon="restart_alt"
+              label="Сбросить"
+              color="negative"
+              :loading="tzSurveyTemplateResetting"
+              @click="resetTzSurveyTemplate"
+            />
+            <q-btn
+              unelevated
+              dense
+              size="sm"
+              icon="save"
+              label="Сохранить"
+              color="purple"
+              :loading="tzSurveyTemplateSaving"
+              @click="saveTzSurveyTemplate"
+            />
+          </div>
+
+          <div
+            v-if="tzSurveyTemplateJsonError"
+            class="text-negative q-mb-xs"
+            style="font-size: 12px"
+          >
+            {{ tzSurveyTemplateJsonError }}
+          </div>
+
+          <q-input
+            v-model="tzSurveyTemplateJson"
+            type="textarea"
+            outlined
+            dense
+            :rows="30"
+            :error="!!tzSurveyTemplateJsonError"
+            style="font-family: monospace; font-size: 12px; line-height: 1.4"
+            @update:model-value="tzSurveyTemplateJsonError = ''"
+          />
+        </div>
+
+        <div v-else class="text-center q-pa-xl" style="color: var(--fc-text-disabled)">
+          Выберите тип проекта и нажмите «Загрузить»
+        </div>
+      </q-tab-panel>
     </q-tab-panels>
 
     <!-- Диалог подтверждения восстановления -->
@@ -1866,7 +1951,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useQuasar } from 'quasar'
 import { api } from 'src/boot/axios'
 import { useReferencesStore } from 'src/stores/references'
-import { deletedContractsApi, messengerApi, adminApi, contractDocsApi } from 'src/services/api'
+import { deletedContractsApi, messengerApi, adminApi, contractDocsApi, tzApi } from 'src/services/api'
 
 const $q = useQuasar()
 const refs = useReferencesStore()
@@ -2938,6 +3023,64 @@ async function deleteTemplate(projectType, docType, clientType) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+
+// === Шаблоны анкет ТЗ ===
+const tzSurveyProjectType = ref('Индивидуальный')
+const tzSurveyTemplate = ref(null)
+const tzSurveyTemplateLoading = ref(false)
+const tzSurveyTemplateSaving = ref(false)
+const tzSurveyTemplateResetting = ref(false)
+const tzSurveyTemplateJson = ref('')
+const tzSurveyTemplateJsonError = ref('')
+
+async function loadTzSurveyTemplate() {
+  if (tzSurveyTemplateLoading.value) return
+  try {
+    tzSurveyTemplateLoading.value = true
+    tzSurveyTemplateJsonError.value = ''
+    const { data } = await tzApi.getTemplate(tzSurveyProjectType.value)
+    tzSurveyTemplate.value = data
+    tzSurveyTemplateJson.value = JSON.stringify(data.template_data, null, 2)
+  } catch {
+    $q.notify({ type: 'negative', message: 'Ошибка загрузки шаблона анкеты' })
+  } finally {
+    tzSurveyTemplateLoading.value = false
+  }
+}
+
+async function saveTzSurveyTemplate() {
+  try {
+    JSON.parse(tzSurveyTemplateJson.value)
+  } catch {
+    tzSurveyTemplateJsonError.value = 'Невалидный JSON'
+    return
+  }
+  tzSurveyTemplateJsonError.value = ''
+  try {
+    tzSurveyTemplateSaving.value = true
+    await tzApi.updateTemplate(tzSurveyProjectType.value, JSON.parse(tzSurveyTemplateJson.value))
+    $q.notify({ type: 'positive', message: 'Шаблон сохранён' })
+  } catch {
+    $q.notify({ type: 'negative', message: 'Ошибка сохранения шаблона' })
+  } finally {
+    tzSurveyTemplateSaving.value = false
+  }
+}
+
+async function resetTzSurveyTemplate() {
+  try {
+    tzSurveyTemplateResetting.value = true
+    const { data } = await tzApi.resetTemplate(tzSurveyProjectType.value)
+    tzSurveyTemplate.value = data
+    tzSurveyTemplateJson.value = JSON.stringify(data.template_data, null, 2)
+    tzSurveyTemplateJsonError.value = ''
+    $q.notify({ type: 'positive', message: 'Шаблон сброшен к начальному' })
+  } catch {
+    $q.notify({ type: 'negative', message: 'Ошибка сброса шаблона' })
+  } finally {
+    tzSurveyTemplateResetting.value = false
+  }
+}
 
 onMounted(async () => {
   loadRates()
