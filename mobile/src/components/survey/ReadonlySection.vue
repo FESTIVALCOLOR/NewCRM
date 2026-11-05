@@ -208,6 +208,19 @@ function isElectroChecked(questionId, value) {
   align-items: start;
 }
 
+@media (max-width: 540px) {
+  .readonly-row {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
+  .ro-label {
+    color: #888;
+    font-size: 11px;
+    padding-bottom: 2px;
+  }
+}
+
 .readonly-row:last-child {
   border-bottom: none;
 }

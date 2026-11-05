@@ -468,6 +468,31 @@ onMounted(loadSurvey)
   line-height: 1.5;
 }
 
+@media (max-width: 540px) {
+  .survey-fill-page {
+    max-width: 100%;
+  }
+
+  .survey-header {
+    gap: 12px;
+    padding: 12px 12px 10px;
+  }
+
+  .survey-logo {
+    max-height: 38px;
+    max-width: 90px;
+  }
+
+  .survey-title {
+    font-size: 16px;
+  }
+
+  .survey-section-header {
+    font-size: 14px;
+    padding: 10px 12px 8px;
+  }
+}
+
 /* ─── Тёмная тема ─────────────────────────────────────────────── */
 :global(.body--dark .survey-fill-page) {
   background: #1a1a2e;
