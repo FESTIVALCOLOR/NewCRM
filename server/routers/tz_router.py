@@ -69,6 +69,52 @@ def _get_or_create_template(db: Session, project_type: str) -> dict:
     return INITIAL_TEMPLATES.get(project_type, INITIAL_TEMPLATES.get("Индивидуальный"))
 
 
+def _get_agent_logo_url(db: Session, agent_type: str | None) -> str | None:
+    """Возвращает публичную ссылку на логотип агента с ЯД (или None)."""
+    if not agent_type:
+        return None
+    try:
+        from yandex_disk_service import YandexDiskService
+
+        from database import CompanyRequisite
+
+        req_type = f"logo_{agent_type.strip().lower()}"
+        req = db.query(CompanyRequisite).filter(CompanyRequisite.requisite_type == req_type).first()
+        if not req or not req.file_path:
+            return None
+        yd = YandexDiskService()
+        # Если файл уже опубликован — берём ссылку без блокирующих sleep
+        try:
+            info = yd.get_file_info(req.file_path)
+            if info.get("public_url"):
+                return info["public_url"]
+        except Exception:
+            pass
+        return yd.get_public_link(req.file_path)
+    except Exception as e:
+        logger.warning(f"Не удалось получить лого агента {agent_type}: {e}")
+        return None
+
+
+def _save_pdf_to_yd(db: Session, survey: TechnicalSurvey, contract: Contract, pdf_bytes: bytes) -> None:
+    """Сохраняет PDF анкеты на ЯД в папку договора. Обновляет pdf_yandex_path."""
+    try:
+        from yandex_disk_service import YandexDiskService
+
+        folder = (contract.yandex_folder_path or "").removeprefix("disk:").rstrip("/")
+        if not folder:
+            return
+        pdf_name = f"anketa_{contract.contract_number or survey.id}.pdf"
+        pdf_path = f"{folder}/{pdf_name}"
+        yd = YandexDiskService()
+        yd.upload_file_from_bytes(pdf_bytes, pdf_path)
+        survey.pdf_yandex_path = f"disk:{pdf_path}"
+        db.commit()
+        logger.info(f"PDF анкеты сохранён на ЯД: disk:{pdf_path}")
+    except Exception as e:
+        logger.warning(f"Не удалось сохранить PDF на ЯД: {e}")
+
+
 def _survey_to_dict(survey: TechnicalSurvey, include_answers: bool = True) -> dict:
     result = {
         "id": survey.id,
@@ -304,6 +350,10 @@ def get_survey_pdf(
     if not pdf_bytes:
         raise HTTPException(status_code=500, detail="Ошибка генерации PDF")
 
+    # Сохраняем на ЯД если ещё не сохранён
+    if contract and not survey.pdf_yandex_path:
+        _save_pdf_to_yd(db, survey, contract, pdf_bytes)
+
     filename = f"anketa_{contract_number or survey_id}.pdf"
     encoded = quote(filename.encode("utf-8"))
     return Response(
@@ -335,6 +385,7 @@ def get_survey_for_client(
     agent_type = contract.agent_type if contract else None
 
     template_data = _get_or_create_template(db, project_type)
+    agent_logo_url = _get_agent_logo_url(db, agent_type)
 
     # После заполнения клиент видит только просмотр
     readonly = survey.status in ("completed", "edited")
@@ -346,6 +397,7 @@ def get_survey_for_client(
         "project_type": project_type,
         "contract_number": contract_number,
         "agent_type": agent_type,
+        "agent_logo_url": agent_logo_url,
         "template_data": template_data,
         "answers": survey.answers if readonly else None,
     }
@@ -391,21 +443,7 @@ def submit_survey_by_client(
             db=db,
         )
         if pdf_bytes and contract:
-            # Сохранение PDF на Яндекс.Диск если папка договора задана
-            try:
-                from yandex_disk_service import YandexDiskService
-
-                yd = YandexDiskService()
-                folder = contract.yandex_folder_path or ""
-                if folder:
-                    folder_clean = folder.removeprefix("disk:").rstrip("/")
-                    pdf_name = f"anketa_{contract.contract_number or survey.id}.pdf"
-                    pdf_path = f"{folder_clean}/{pdf_name}"
-                    yd.upload_file_from_bytes(pdf_bytes, pdf_path)
-                    survey.pdf_yandex_path = f"disk:{pdf_path}"
-                    db.commit()
-            except Exception as e:
-                logger.warning(f"Не удалось сохранить PDF на ЯД: {e}")
+            _save_pdf_to_yd(db, survey, contract, pdf_bytes)
     except Exception as e:
         logger.error(f"Ошибка генерации PDF после заполнения анкеты: {e}")
 

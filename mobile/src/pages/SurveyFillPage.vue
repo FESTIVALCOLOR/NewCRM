@@ -274,6 +274,7 @@ async function loadSurvey() {
     projectType.value = data.project_type || ''
     contractNumber.value = data.contract_number || ''
     agentType.value = data.agent_type || null
+    agentLogo.value = data.agent_logo_url || null
     if (data.readonly && data.answers) {
       answers.value = data.answers
     }
