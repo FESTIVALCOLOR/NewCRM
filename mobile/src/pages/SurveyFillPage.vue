@@ -165,18 +165,35 @@
           />
         </div>
 
+        <!-- Согласие перед отправкой -->
+        <div class="survey-consent-block q-mt-lg">
+          <q-checkbox
+            v-model="consentChecked"
+            color="purple"
+            class="consent-checkbox"
+          >
+            <span class="consent-label">
+              Я подтверждаю достоверность указанных данных и несу ответственность за их актуальность.
+              Понимаю, что дизайн-проект будет разрабатываться на основании предоставленной мной информации.
+            </span>
+          </q-checkbox>
+        </div>
+
         <!-- Кнопка отправки -->
-        <div class="q-mt-xl q-mb-xl text-center">
+        <div class="q-mt-md q-mb-xl text-center">
           <q-btn
             color="purple"
             size="lg"
             label="Отправить анкету"
             :loading="submitting"
-            :disable="submitting"
+            :disable="submitting || !consentChecked"
             class="survey-submit-btn"
             @click="submitSurvey"
           />
-          <div class="text-caption text-grey q-mt-sm">
+          <div v-if="!consentChecked" class="text-caption text-orange q-mt-sm">
+            Необходимо подтвердить достоверность данных
+          </div>
+          <div v-else class="text-caption text-grey q-mt-sm">
             После отправки редактирование будет недоступно
           </div>
         </div>
@@ -199,6 +216,7 @@ const $q = useQuasar()
 const loading = ref(true)
 const error = ref(null)
 const submitting = ref(false)
+const consentChecked = ref(false)
 
 const surveyId = ref(null)
 const readonly = ref(false)
@@ -369,11 +387,13 @@ onMounted(loadSurvey)
 
 .survey-section-header {
   background: #EDE8F5;
-  color: #222;
-  font-weight: 600;
-  font-size: 14px;
-  padding: 10px 16px;
-  border-bottom: 1px solid #d8d0ef;
+  color: #2a1a4e;
+  font-weight: 700;
+  font-size: 16px;
+  padding: 12px 16px 10px;
+  border-bottom: 2px solid #6B4FA0;
+  letter-spacing: 0.01em;
+  position: relative;
 }
 
 .rooms-header {
@@ -432,5 +452,18 @@ onMounted(loadSurvey)
 
 .survey-readonly-notice {
   margin-top: 12px;
+}
+
+.survey-consent-block {
+  background: #fff9f0;
+  border: 1px solid #f0a040;
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+
+.consent-label {
+  font-size: 13px;
+  color: #333;
+  line-height: 1.5;
 }
 </style>

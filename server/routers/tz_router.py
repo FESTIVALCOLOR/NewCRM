@@ -16,6 +16,7 @@ from datetime import datetime
 import logging
 import secrets
 from typing import Any
+from urllib.parse import quote
 
 from auth import get_current_user as get_current_employee
 from fastapi import APIRouter, Depends, HTTPException, Response
@@ -304,10 +305,11 @@ def get_survey_pdf(
         raise HTTPException(status_code=500, detail="Ошибка генерации PDF")
 
     filename = f"anketa_{contract_number or survey_id}.pdf"
+    encoded = quote(filename.encode("utf-8"))
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": f"attachment; filename=\"anketa.pdf\"; filename*=UTF-8''{encoded}"},
     )
 
 

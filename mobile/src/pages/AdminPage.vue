@@ -1515,6 +1515,14 @@
               Последнее обновление: {{ tzSurveyTemplate.updated_at ? new Date(tzSurveyTemplate.updated_at).toLocaleString('ru') : 'никогда' }}
             </div>
             <q-space />
+            <q-btn-toggle
+              v-model="tzEditorMode"
+              toggle-color="purple"
+              dense
+              size="sm"
+              :options="[{ label: 'Визуальный', value: 'visual' }, { label: 'JSON', value: 'json' }]"
+              class="q-mr-sm"
+            />
             <q-btn
               outline
               dense
@@ -1537,24 +1545,34 @@
             />
           </div>
 
-          <div
-            v-if="tzSurveyTemplateJsonError"
-            class="text-negative q-mb-xs"
-            style="font-size: 12px"
-          >
-            {{ tzSurveyTemplateJsonError }}
-          </div>
-
-          <q-input
-            v-model="tzSurveyTemplateJson"
-            type="textarea"
-            outlined
-            dense
-            :rows="30"
-            :error="!!tzSurveyTemplateJsonError"
-            style="font-family: monospace; font-size: 12px; line-height: 1.4"
-            @update:model-value="tzSurveyTemplateJsonError = ''"
+          <!-- Визуальный редактор -->
+          <TzTemplateEditor
+            v-if="tzEditorMode === 'visual' && tzSurveyTemplateData"
+            v-model="tzSurveyTemplateData"
+            class="q-mb-md"
           />
+
+          <!-- JSON редактор -->
+          <template v-if="tzEditorMode === 'json'">
+            <div
+              v-if="tzSurveyTemplateJsonError"
+              class="text-negative q-mb-xs"
+              style="font-size: 12px"
+            >
+              {{ tzSurveyTemplateJsonError }}
+            </div>
+
+            <q-input
+              v-model="tzSurveyTemplateJson"
+              type="textarea"
+              outlined
+              dense
+              :rows="30"
+              :error="!!tzSurveyTemplateJsonError"
+              style="font-family: monospace; font-size: 12px; line-height: 1.4"
+              @update:model-value="onJsonEdit"
+            />
+          </template>
         </div>
 
         <div v-else class="text-center q-pa-xl" style="color: var(--fc-text-disabled)">
@@ -1952,6 +1970,7 @@ import { useQuasar } from 'quasar'
 import { api } from 'src/boot/axios'
 import { useReferencesStore } from 'src/stores/references'
 import { deletedContractsApi, messengerApi, adminApi, contractDocsApi, tzApi } from 'src/services/api'
+import TzTemplateEditor from 'src/components/survey/TzTemplateEditor.vue'
 
 const $q = useQuasar()
 const refs = useReferencesStore()
@@ -3027,11 +3046,44 @@ async function deleteTemplate(projectType, docType, clientType) {
 // === Шаблоны анкет ТЗ ===
 const tzSurveyProjectType = ref('Индивидуальный')
 const tzSurveyTemplate = ref(null)
+const tzSurveyTemplateData = ref(null)
 const tzSurveyTemplateLoading = ref(false)
 const tzSurveyTemplateSaving = ref(false)
 const tzSurveyTemplateResetting = ref(false)
 const tzSurveyTemplateJson = ref('')
 const tzSurveyTemplateJsonError = ref('')
+const tzEditorMode = ref('visual')
+
+function onJsonEdit(val) {
+  tzSurveyTemplateJsonError.value = ''
+  try {
+    tzSurveyTemplateData.value = JSON.parse(val)
+  } catch {
+    // ошибку покажем при сохранении
+  }
+}
+
+watch(tzSurveyTemplateData, (val) => {
+  if (tzEditorMode.value === 'visual' && val) {
+    tzSurveyTemplateJson.value = JSON.stringify(val, null, 2)
+  }
+}, { deep: true })
+
+watch(tzEditorMode, (mode) => {
+  if (mode === 'json' && tzSurveyTemplateData.value) {
+    tzSurveyTemplateJson.value = JSON.stringify(tzSurveyTemplateData.value, null, 2)
+  }
+  if (mode === 'visual') {
+    try {
+      if (tzSurveyTemplateJson.value) {
+        tzSurveyTemplateData.value = JSON.parse(tzSurveyTemplateJson.value)
+      }
+    } catch {
+      $q.notify({ type: 'warning', message: 'JSON содержит ошибки, визуальный режим недоступен' })
+      tzEditorMode.value = 'json'
+    }
+  }
+})
 
 async function loadTzSurveyTemplate() {
   if (tzSurveyTemplateLoading.value) return
@@ -3040,6 +3092,7 @@ async function loadTzSurveyTemplate() {
     tzSurveyTemplateJsonError.value = ''
     const { data } = await tzApi.getTemplate(tzSurveyProjectType.value)
     tzSurveyTemplate.value = data
+    tzSurveyTemplateData.value = data.template_data
     tzSurveyTemplateJson.value = JSON.stringify(data.template_data, null, 2)
   } catch {
     $q.notify({ type: 'negative', message: 'Ошибка загрузки шаблона анкеты' })
@@ -3049,16 +3102,19 @@ async function loadTzSurveyTemplate() {
 }
 
 async function saveTzSurveyTemplate() {
-  try {
-    JSON.parse(tzSurveyTemplateJson.value)
-  } catch {
-    tzSurveyTemplateJsonError.value = 'Невалидный JSON'
-    return
+  let dataToSave = tzSurveyTemplateData.value
+  if (tzEditorMode.value === 'json') {
+    try {
+      dataToSave = JSON.parse(tzSurveyTemplateJson.value)
+    } catch {
+      tzSurveyTemplateJsonError.value = 'Невалидный JSON'
+      return
+    }
   }
   tzSurveyTemplateJsonError.value = ''
   try {
     tzSurveyTemplateSaving.value = true
-    await tzApi.updateTemplate(tzSurveyProjectType.value, JSON.parse(tzSurveyTemplateJson.value))
+    await tzApi.updateTemplate(tzSurveyProjectType.value, dataToSave)
     $q.notify({ type: 'positive', message: 'Шаблон сохранён' })
   } catch {
     $q.notify({ type: 'negative', message: 'Ошибка сохранения шаблона' })
@@ -3072,6 +3128,7 @@ async function resetTzSurveyTemplate() {
     tzSurveyTemplateResetting.value = true
     const { data } = await tzApi.resetTemplate(tzSurveyProjectType.value)
     tzSurveyTemplate.value = data
+    tzSurveyTemplateData.value = data.template_data
     tzSurveyTemplateJson.value = JSON.stringify(data.template_data, null, 2)
     tzSurveyTemplateJsonError.value = ''
     $q.notify({ type: 'positive', message: 'Шаблон сброшен к начальному' })

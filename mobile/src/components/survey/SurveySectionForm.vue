@@ -152,18 +152,48 @@
           {{ q.label }}
         </div>
         <div class="electro-block q-mt-xs">
-          <q-input
+          <div
             v-for="sf in q.subfields"
             :key="sf.key"
-            :label="sf.label"
-            :model-value="getElectroValue(q.id, sf.key)"
-            outlined
-            dense
-            :type="sf.type === 'textarea' ? 'textarea' : 'text'"
-            :rows="sf.type === 'textarea' ? 2 : undefined"
             class="q-mb-sm"
-            @update:model-value="val => setElectroValue(q.id, sf.key, val)"
-          />
+          >
+            <!-- Да/Нет вопрос -->
+            <template v-if="sf.type === 'yes_no'">
+              <div class="yes-no-subfield">
+                <span class="sf-label">{{ sf.label }}</span>
+                <div class="yes-no-btns">
+                  <q-btn
+                    flat
+                    size="sm"
+                    :color="getElectroValue(q.id, sf.key) === 'Да' ? 'purple' : 'grey-5'"
+                    label="Да"
+                    class="yn-btn"
+                    @click="setElectroValue(q.id, sf.key, 'Да')"
+                  />
+                  <q-btn
+                    flat
+                    size="sm"
+                    :color="getElectroValue(q.id, sf.key) === 'Нет' ? 'negative' : 'grey-5'"
+                    label="Нет"
+                    class="yn-btn"
+                    @click="setElectroValue(q.id, sf.key, 'Нет')"
+                  />
+                </div>
+              </div>
+            </template>
+            <!-- Текст / textarea -->
+            <template v-else>
+              <q-input
+                :label="sf.label"
+                :model-value="getElectroValue(q.id, sf.key)"
+                outlined
+                dense
+                :type="sf.type === 'textarea' ? 'textarea' : 'text'"
+                :rows="sf.type === 'textarea' ? 2 : undefined"
+                @update:model-value="val => setElectroValue(q.id, sf.key, val)"
+              />
+            </template>
+          </div>
 
           <div v-if="q.checkboxes?.length" class="checkboxes-block q-mt-xs">
             <div
@@ -371,5 +401,23 @@ function toggleElectro(questionId, value, checked) {
   border-radius: 8px;
   padding: 12px;
   background: #faf9ff;
+}
+
+.yes-no-subfield {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 8px;
+  background: white;
+  border: 1px solid #e0d9f0;
+  border-radius: 6px;
+}
+
+.sf-label {
+  font-size: 13px;
+  color: #333;
+  flex: 1;
+  line-height: 1.4;
 }
 </style>
