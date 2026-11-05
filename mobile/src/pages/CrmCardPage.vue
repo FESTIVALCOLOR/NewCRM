@@ -787,6 +787,17 @@
                     style="border-radius: 4px; padding: 2px 8px"
                     @click="downloadTzPdf"
                   />
+                  <q-btn
+                    v-if="!isArchived && !isExecutor"
+                    outline
+                    dense
+                    size="xs"
+                    icon="delete_outline"
+                    no-caps
+                    color="negative"
+                    style="border-radius: 4px; padding: 2px 6px"
+                    @click="deleteTzSurvey"
+                  />
                 </div>
 
                 <!-- Кнопка создания если анкеты нет -->
@@ -2722,6 +2733,24 @@ async function downloadTzPdf() {
   } catch {
     $q.notify({ type: 'negative', message: 'Ошибка скачивания PDF' })
   }
+}
+
+function deleteTzSurvey() {
+  if (!tzSurvey.value?.id) return
+  $q.dialog({
+    title: 'Удалить анкету ТЗ?',
+    message: 'Анкета и все ответы клиента будут удалены безвозвратно.',
+    cancel: { label: 'Нет', flat: true, noCaps: true },
+    ok: { label: 'Удалить', noCaps: true, color: 'negative' },
+  }).onOk(async () => {
+    try {
+      await tzApi.deleteSurvey(tzSurvey.value.id)
+      tzSurvey.value = null
+      $q.notify({ type: 'positive', message: 'Анкета ТЗ удалена' })
+    } catch {
+      $q.notify({ type: 'negative', message: 'Ошибка удаления анкеты' })
+    }
+  })
 }
 const projectFiles = ref([])
 const timelineEntries = ref([])

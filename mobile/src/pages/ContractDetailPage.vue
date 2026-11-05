@@ -613,6 +613,15 @@
                       size="sm"
                       @click="copyTzLink"
                     />
+                    <q-btn
+                      outline
+                      color="negative"
+                      icon="delete_outline"
+                      no-caps
+                      dense
+                      size="sm"
+                      @click="deleteTzSurvey"
+                    />
                   </div>
                 </template>
                 <!-- Если анкеты ещё нет -->
@@ -1500,6 +1509,24 @@ async function downloadTzPdf() {
   } catch (e) {
     $q.notify({ type: 'negative', message: 'Ошибка скачивания PDF' })
   }
+}
+
+function deleteTzSurvey() {
+  if (!tzSurvey.value?.id) return
+  $q.dialog({
+    title: 'Удалить анкету ТЗ?',
+    message: 'Анкета и все ответы клиента будут удалены безвозвратно.',
+    cancel: { label: 'Нет', flat: true, noCaps: true },
+    ok: { label: 'Удалить', noCaps: true, color: 'negative' },
+  }).onOk(async () => {
+    try {
+      await tzApi.deleteSurvey(tzSurvey.value.id)
+      tzSurvey.value = null
+      $q.notify({ type: 'positive', message: 'Анкета ТЗ удалена' })
+    } catch {
+      $q.notify({ type: 'negative', message: 'Ошибка удаления анкеты' })
+    }
+  })
 }
 
 function tzSurveyStatusLabel(status) {
