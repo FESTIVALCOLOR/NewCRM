@@ -531,28 +531,28 @@ function toggleElectro(questionId, value, checked) {
 }
 
 /* ─── Тёмная тема ─────────────────────────────────────────────── */
-:global(.body--dark .q-label) { color: #9d94c0; }
-:global(.body--dark .opt-label-text) { color: #d0cce8; }
-:global(.body--dark .sf-label) { color: #d0cce8; }
-:global(.body--dark .opt-description) { color: #7a7599; }
-:global(.body--dark .electro-block) {
-  background: #1e1e3a;
-  border-color: #3d3060;
+/* Используем .survey-section-form для специфичности 0,3,0 > scoped 0,2,0 */
+:global(.body--dark .survey-section-form .q-label) { color: #9d94c0; }
+:global(.body--dark .survey-section-form .opt-label-text) { color: #d0cce8; }
+:global(.body--dark .survey-section-form .sf-label) { color: #d0cce8; }
+:global(.body--dark .survey-section-form .opt-description) { color: #7a7599; }
+:global(.body--dark .survey-section-form .electro-block) {
+  background: #1e1e3a !important;
+  border-color: #3d3060 !important;
 }
-:global(.body--dark .yes-no-subfield) {
-  background: #22203a;
-  border-color: #3d3060;
+:global(.body--dark .survey-section-form .yes-no-subfield) {
+  background: #22203a !important;
+  border-color: #3d3060 !important;
 }
-:global(.body--dark .survey-note) {
-  background: #252040;
+:global(.body--dark .survey-section-form .survey-note) {
+  background: #252040 !important;
   color: #c8c0e8;
   border-left-color: #7c6fa8;
 }
-:global(.body--dark .yn-btn) { border-color: #4d3d80; }
-:global(.body--dark .yn-line) { border-bottom-color: #4d3d80; }
-:global(.body--dark .children-block) { border-left-color: #4d3d80; }
-:global(.body--dark .opt-separator::before),
-:global(.body--dark .opt-separator::after) { background: #4d3d80; }
-:global(.body--dark .opt-separator-label) { color: #b89ee0; }
-:global(.body--dark .italic-opt) :deep(.q-checkbox__label) { color: #8a84a8; }
+:global(.body--dark .survey-section-form .yn-btn) { border-color: #4d3d80; }
+:global(.body--dark .survey-section-form .yn-line) { border-bottom-color: #4d3d80; }
+:global(.body--dark .survey-section-form .children-block) { border-left-color: #4d3d80; }
+:global(.body--dark .survey-section-form .opt-separator::before),
+:global(.body--dark .survey-section-form .opt-separator::after) { background: #4d3d80; }
+:global(.body--dark .survey-section-form .opt-separator-label) { color: #b89ee0; }
 </style>

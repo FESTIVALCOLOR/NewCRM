@@ -110,9 +110,10 @@
         <div class="ro-value">
           <!-- Subfields -->
           <div v-for="sf in q.subfields" :key="sf.key" class="ro-sub-row">
-            <span class="ro-sub-label">{{ sf.label }}: </span>
-            <!-- yes_no — цветной бэджик -->
+            <span class="ro-sub-label">{{ sf.label }}</span>
+            <!-- yes_no — линия + цветной бэджик -->
             <template v-if="sf.type === 'yes_no'">
+              <span class="ro-yn-line" />
               <span
                 class="ro-yn-badge"
                 :class="getElectroValue(q.id, sf.key) === 'Да' ? 'ro-yn-yes'
@@ -223,14 +224,19 @@ function isElectroChecked(questionId, value) {
 
   .ro-inline-text {
     flex-basis: 100%;
-    padding-left: 22px;
-    margin-top: 1px;
+    margin-top: 2px;
+    margin-left: 20px;
+    border-left: 2px solid #e0d9f0;
+    padding-left: 6px;
   }
 
   .ro-select-value {
     flex-basis: 100%;
-    margin-left: 22px;
+    margin-left: 20px;
     margin-top: 2px;
+    border-left: 2px solid #e0d9f0;
+    padding-left: 6px;
+    border-radius: 0;
   }
 }
 
@@ -298,7 +304,7 @@ function isElectroChecked(questionId, value) {
 .ro-sub-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 0;
   margin-bottom: 4px;
   flex-wrap: wrap;
 }
@@ -387,6 +393,14 @@ function isElectroChecked(questionId, value) {
 
 :global(.body--dark .ro-yn-line) {
   border-bottom-color: #4d3d80;
+}
+
+:global(.body--dark .ro-inline-text) {
+  border-left-color: #4d3d80;
+}
+
+:global(.body--dark .ro-select-value) {
+  border-left-color: #4d3d80;
 }
 
 :global(.body--dark .ro-yn-label) {
