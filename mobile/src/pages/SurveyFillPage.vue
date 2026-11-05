@@ -106,8 +106,8 @@
                 <q-input
                   v-model="room.room_name"
                   dense
-                  borderless
-                  placeholder="Название комнаты (напр. Гостиная)"
+                  outlined
+                  placeholder="Название помещения (напр. Гостиная, Санузел 1)"
                   class="room-name-input"
                 />
               </div>
