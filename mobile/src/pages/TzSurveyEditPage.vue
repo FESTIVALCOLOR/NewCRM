@@ -266,18 +266,18 @@ onMounted(loadSurvey)
 }
 
 .survey-section-header {
-  background: #EDE8F5;
-  color: #222;
+  background: #f0f0f0;
+  color: #2a2a2a;
   font-weight: 600;
   font-size: 14px;
   padding: 10px 16px;
-  border-bottom: 1px solid #d8d0ef;
+  border-bottom: 1px solid #ccc;
 }
 
 .rooms-header {
-  background: #6B4FA0;
+  background: #555;
   color: white;
-  border-bottom-color: #5a3f8a;
+  border-bottom-color: #444;
 }
 
 .survey-room {
@@ -333,14 +333,14 @@ onMounted(loadSurvey)
 }
 
 :global(.body--dark .survey-section-header) {
-  background: #2d2558 !important;
-  color: #e8e0f8 !important;
-  border-bottom-color: #3d3060 !important;
+  background: #2a2a2a !important;
+  color: #e0e0e0 !important;
+  border-bottom-color: #444 !important;
 }
 
 :global(.body--dark .rooms-header) {
-  background: #4a3580 !important;
-  border-bottom-color: #3d2b6e !important;
+  background: #3a3a3a !important;
+  border-bottom-color: #4a4a4a !important;
 }
 
 :global(.body--dark .survey-room) {

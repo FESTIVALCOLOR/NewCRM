@@ -84,6 +84,7 @@
           <SurveySectionForm
             :section="section"
             :answers="formAnswers.general_answers"
+            :invalid-fields="invalidFieldIds"
             @update="(id, val) => updateGeneralAnswer(id, val)"
           />
         </div>
@@ -161,6 +162,7 @@
           <SurveySectionForm
             :section="section"
             :answers="formAnswers.general_answers"
+            :invalid-fields="invalidFieldIds"
             @update="(id, val) => updateGeneralAnswer(id, val)"
           />
         </div>
@@ -228,6 +230,7 @@ const error = ref(null)
 const submitting = ref(false)
 const consentChecked = ref(false)
 const personalDataConsent = ref(false)
+const invalidFieldIds = ref(new Set())
 
 const surveyId = ref(null)
 const readonly = ref(false)
@@ -300,8 +303,57 @@ async function loadSurvey() {
   }
 }
 
+function validateRequired() {
+  const allSections = [
+    ...(templateData.value?.sections_before_rooms || []),
+    ...(templateData.value?.sections_after_rooms || []),
+  ]
+  const invalid = new Set()
+  const missingLabels = []
+
+  for (const section of allSections) {
+    for (const q of (section.questions || [])) {
+      if (!q.required) continue
+      const val = formAnswers.value.general_answers[q.id]
+      if (q.type === 'contacts') {
+        for (const sf of (q.subfields || [])) {
+          if (!val?.[sf.key]?.trim()) {
+            missingLabels.push(sf.label)
+            invalid.add(q.id)
+          }
+        }
+      } else {
+        if (!val || (typeof val === 'string' && !val.trim())) {
+          missingLabels.push(q.label)
+          invalid.add(q.id)
+        }
+      }
+    }
+  }
+
+  invalidFieldIds.value = invalid
+  return missingLabels
+}
+
 async function submitSurvey() {
   if (submitting.value) return
+
+  const missing = validateRequired()
+  if (missing.length > 0) {
+    $q.notify({
+      type: 'negative',
+      message: `Заполните обязательные поля: ${missing.join(', ')}`,
+      timeout: 5000,
+      position: 'top',
+    })
+    // Прокрутить к первому ошибочному полю
+    setTimeout(() => {
+      const el = document.querySelector('.field-error')
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 100)
+    return
+  }
+
   // Собираем ответы — убираем служебные ключи _key из rooms
   const cleanRooms = formAnswers.value.rooms.map(r => ({
     room_template_id: r.room_template_id,
@@ -398,20 +450,20 @@ onMounted(loadSurvey)
 }
 
 .survey-section-header {
-  background: #EDE8F5;
-  color: #2a1a4e;
+  background: #f0f0f0;
+  color: #2a2a2a;
   font-weight: 700;
   font-size: 16px;
   padding: 12px 16px 10px;
-  border-bottom: 2px solid #6B4FA0;
+  border-bottom: 2px solid #ccc;
   letter-spacing: 0.01em;
   position: relative;
 }
 
 .rooms-header {
-  background: #6B4FA0;
+  background: #555;
   color: white;
-  border-bottom-color: #5a3f8a;
+  border-bottom-color: #444;
 }
 
 .survey-room {
@@ -538,14 +590,14 @@ onMounted(loadSurvey)
 }
 
 :global(.body--dark .survey-section-header) {
-  background: #2d2558;
-  color: #e8e0f8;
-  border-bottom-color: #9b7fd4;
+  background: #2a2a2a;
+  color: #e0e0e0;
+  border-bottom-color: #444;
 }
 
 :global(.body--dark .rooms-header) {
-  background: #4a3580;
-  border-bottom-color: #3d2b6e;
+  background: #3a3a3a;
+  border-bottom-color: #4a4a4a;
 }
 
 :global(.body--dark .survey-room) {

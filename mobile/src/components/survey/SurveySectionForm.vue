@@ -3,7 +3,7 @@
     <div
       v-for="q in section.questions"
       :key="q.id"
-      class="survey-question-row"
+      :class="['survey-question-row', { 'field-error': q.required && invalidFields.has(q.id) }]"
     >
       <!-- Заметка (note) -->
       <template v-if="q.type === 'note'">
@@ -299,6 +299,7 @@
 const props = defineProps({
   section: { type: Object, required: true },
   answers: { type: Object, default: () => ({}) },
+  invalidFields: { type: Object, default: () => new Set() },
 })
 const emit = defineEmits(['update'])
 
@@ -461,11 +462,19 @@ function toggleElectro(questionId, value, checked) {
   border-radius: 4px;
 }
 
+.field-error {
+  border-left: 3px solid #e53935;
+  padding-left: 8px;
+  margin-left: -8px;
+  border-radius: 2px;
+  background: #fff8f8;
+}
+
 .electro-block {
-  border: 1px solid #e0d9f0;
+  border: 1px solid #ddd;
   border-radius: 8px;
   padding: 12px;
-  background: #faf9ff;
+  background: #f7f7f7;
 }
 
 .yes-no-subfield {
@@ -474,7 +483,7 @@ function toggleElectro(questionId, value, checked) {
   gap: 0;
   padding: 6px 8px;
   background: white;
-  border: 1px solid #e0d9f0;
+  border: 1px solid #e0e0e0;
   border-radius: 6px;
 }
 
@@ -543,23 +552,27 @@ function toggleElectro(questionId, value, checked) {
 :global(.body--dark .survey-section-form .opt-label-text) { color: #d0cce8; }
 :global(.body--dark .survey-section-form .sf-label) { color: #d0cce8; }
 :global(.body--dark .survey-section-form .opt-description) { color: #7a7599; }
+:global(.body--dark .survey-section-form .field-error) {
+  background: #2a1a1a !important;
+}
+
 :global(.body--dark .survey-section-form .electro-block) {
-  background: #1e1e3a !important;
-  border-color: #3d3060 !important;
+  background: #252525 !important;
+  border-color: #3a3a3a !important;
 }
 :global(.body--dark .survey-section-form .yes-no-subfield) {
-  background: #22203a !important;
-  border-color: #3d3060 !important;
+  background: #2a2a2a !important;
+  border-color: #3a3a3a !important;
 }
 :global(.body--dark .survey-section-form .survey-note) {
-  background: #252040 !important;
-  color: #c8c0e8;
-  border-left-color: #7c6fa8;
+  background: #242424 !important;
+  color: #c8c8c8;
+  border-left-color: #555;
 }
-:global(.body--dark .survey-section-form .yn-btn) { border-color: #4d3d80; }
-:global(.body--dark .survey-section-form .yn-line) { border-bottom-color: #4d3d80; }
-:global(.body--dark .survey-section-form .children-block) { border-left-color: #4d3d80; }
+:global(.body--dark .survey-section-form .yn-btn) { border-color: #555; }
+:global(.body--dark .survey-section-form .yn-line) { border-bottom-color: #555; }
+:global(.body--dark .survey-section-form .children-block) { border-left-color: #444; }
 :global(.body--dark .survey-section-form .opt-separator::before),
-:global(.body--dark .survey-section-form .opt-separator::after) { background: #4d3d80; }
-:global(.body--dark .survey-section-form .opt-separator-label) { color: #b89ee0; }
+:global(.body--dark .survey-section-form .opt-separator::after) { background: #444; }
+:global(.body--dark .survey-section-form .opt-separator-label) { color: #aaa; }
 </style>
