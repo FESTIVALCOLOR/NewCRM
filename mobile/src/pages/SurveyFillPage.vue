@@ -2,7 +2,7 @@
   <q-page class="survey-fill-page">
     <!-- Загрузка -->
     <div v-if="loading" class="flex flex-center q-pa-xl">
-      <q-spinner-oval color="purple" size="48px" />
+      <q-spinner-oval color="grey-7" size="48px" />
     </div>
 
     <!-- Ошибка -->
@@ -140,7 +140,7 @@
                 v-for="rt in templateData.room_templates"
                 :key="rt.id"
                 outline
-                color="purple"
+                color="grey-7"
                 :label="rt.name"
                 size="sm"
                 class="q-mr-sm q-mb-sm"
@@ -171,7 +171,7 @@
         <div class="survey-consent-block q-mt-lg">
           <q-checkbox
             v-model="consentChecked"
-            color="purple"
+            color="grey-8"
             class="consent-checkbox"
           >
             <span class="consent-label">
@@ -181,7 +181,7 @@
           </q-checkbox>
           <q-checkbox
             v-model="personalDataConsent"
-            color="purple"
+            color="grey-8"
             class="consent-checkbox q-mt-sm"
           >
             <span class="consent-label">
@@ -194,7 +194,7 @@
         <!-- Кнопка отправки -->
         <div class="q-mt-md q-mb-xl text-center">
           <q-btn
-            color="purple"
+            color="dark"
             size="lg"
             label="Отправить анкету"
             :loading="submitting"
@@ -400,7 +400,7 @@ onMounted(loadSurvey)
   align-items: center;
   gap: 20px;
   padding: 20px 20px 12px;
-  border-bottom: 2px solid #6B4FA0;
+  border-bottom: 2px solid #ccc;
   background: white;
   position: sticky;
   top: 0;
@@ -437,7 +437,7 @@ onMounted(loadSurvey)
 
 .survey-contract-ref {
   font-size: 11px;
-  color: #6B4FA0;
+  color: #888;
   margin-top: 2px;
   font-style: italic;
 }
@@ -468,7 +468,7 @@ onMounted(loadSurvey)
 
 .survey-room {
   background: white;
-  border: 1px solid #e0d9f0;
+  border: 1px solid #e8e8e8;
   border-radius: 8px;
   padding: 12px 16px;
   margin-top: 12px;
@@ -490,7 +490,7 @@ onMounted(loadSurvey)
 
 .room-idx {
   font-weight: 700;
-  color: #6B4FA0;
+  color: #555;
   font-size: 15px;
   min-width: 20px;
 }

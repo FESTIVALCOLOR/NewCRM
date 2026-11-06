@@ -77,7 +77,7 @@
                 <div class="ro-checkbox-row">
                   <q-icon
                     :name="isChecked(q.id, opt.value) ? 'check_box' : 'check_box_outline_blank'"
-                    :color="isChecked(q.id, opt.value) ? 'purple' : 'grey-5'"
+                    :color="isChecked(q.id, opt.value) ? 'grey-8' : 'grey-5'"
                     size="16px"
                     class="ro-cb-icon"
                   />
@@ -106,7 +106,7 @@
                 <div v-for="child in opt.children" :key="child.value" class="ro-checkbox-row ro-child">
                   <q-icon
                     :name="isChecked(q.id + '_sub_' + opt.value, child.value) ? 'check_box' : 'check_box_outline_blank'"
-                    :color="isChecked(q.id + '_sub_' + opt.value, child.value) ? 'purple' : 'grey-5'"
+                    :color="isChecked(q.id + '_sub_' + opt.value, child.value) ? 'grey-8' : 'grey-5'"
                     size="14px"
                   />
                   <span :class="child.italic ? 'text-italic text-grey-7' : ''">{{ child.label }}</span>
@@ -152,7 +152,7 @@
               <div class="ro-checkbox-row">
                 <q-icon
                   :name="isElectroChecked(q.id, opt.value) ? 'check_box' : 'check_box_outline_blank'"
-                  :color="isElectroChecked(q.id, opt.value) ? 'purple' : 'grey-5'"
+                  :color="isElectroChecked(q.id, opt.value) ? 'grey-8' : 'grey-5'"
                   size="16px"
                 />
                 <span>{{ opt.label }}</span>
@@ -285,7 +285,7 @@ function isElectroChecked(questionId, value) {
 .ro-extra-data {
   margin-left: 22px;
   margin-top: 2px;
-  border-left: 2px solid #e0d9f0;
+  border-left: 2px solid #ddd;
   padding-left: 6px;
 }
 
@@ -293,7 +293,7 @@ function isElectroChecked(questionId, value) {
   margin-left: 22px;
   margin-top: 2px;
   width: 100%;
-  border-left: 2px solid #e0d9f0;
+  border-left: 2px solid #ddd;
   padding-left: 8px;
 }
 
@@ -302,7 +302,7 @@ function isElectroChecked(questionId, value) {
 }
 
 .ro-inline-text {
-  color: #6B4FA0;
+  color: #555;
   font-weight: 500;
   font-size: 11px;
 }
@@ -312,9 +312,9 @@ function isElectroChecked(questionId, value) {
   align-items: center;
   gap: 2px;
   font-size: 12px;
-  color: #6B4FA0;
+  color: #333;
   font-weight: 500;
-  background: #f0ebff;
+  background: #f0f0f0;
   padding: 1px 7px 1px 4px;
   border-radius: 10px;
   margin-left: 2px;
@@ -465,21 +465,21 @@ function isElectroChecked(questionId, value) {
 
 :global(.body--dark .ro-separator::before),
 :global(.body--dark .ro-separator::after) {
-  background: #4d3d80;
+  background: #444;
 }
 
 /* Числовое значение справа (как да/нет) */
 .ro-num-value {
   font-size: 12px;
   font-weight: 600;
-  color: #6B4FA0;
+  color: #555;
   flex-shrink: 0;
   min-width: 36px;
   text-align: right;
 }
 
 :global(.body--dark .ro-num-value) {
-  color: #c5b0f0;
+  color: #aaa;
 }
 
 /* Разделитель секции */

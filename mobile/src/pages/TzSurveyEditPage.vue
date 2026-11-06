@@ -20,7 +20,7 @@
     </div>
 
     <div v-if="loading" class="flex flex-center q-pa-xl">
-      <q-spinner-oval color="purple" size="48px" />
+      <q-spinner-oval color="grey-7" size="48px" />
     </div>
 
     <div v-else-if="error" class="flex flex-center q-pa-xl">
@@ -99,7 +99,7 @@
                 v-for="rt in templateData.room_templates"
                 :key="rt.id"
                 outline
-                color="purple"
+                color="grey-7"
                 :label="rt.name"
                 size="sm"
                 class="q-mr-sm q-mb-sm"
@@ -127,7 +127,7 @@
 
         <div class="q-mt-xl q-mb-xl text-center">
           <q-btn
-            color="purple"
+            color="dark"
             size="lg"
             label="Сохранить изменения"
             :loading="saving"
@@ -242,7 +242,7 @@ onMounted(loadSurvey)
 .survey-edit-topbar {
   display: flex;
   align-items: center;
-  background: #6B4FA0;
+  background: #444;
   padding: 4px 8px;
   color: white;
   position: sticky;
@@ -282,7 +282,7 @@ onMounted(loadSurvey)
 
 .survey-room {
   background: white;
-  border: 1px solid #e0d9f0;
+  border: 1px solid #e8e8e8;
   border-radius: 8px;
   padding: 12px 16px;
   margin: 12px 16px 0;
@@ -304,7 +304,7 @@ onMounted(loadSurvey)
 
 .room-idx {
   font-weight: 700;
-  color: #6B4FA0;
+  color: #555;
   font-size: 15px;
   min-width: 20px;
 }
@@ -344,7 +344,7 @@ onMounted(loadSurvey)
 }
 
 :global(.body--dark .survey-room) {
-  background: #22203a !important;
-  border-color: #3d3060 !important;
+  background: #252525 !important;
+  border-color: #3a3a3a !important;
 }
 </style>
