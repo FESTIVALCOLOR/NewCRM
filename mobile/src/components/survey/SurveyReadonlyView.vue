@@ -103,7 +103,7 @@ function getRoomTemplate(id) {
 
 /* ─── Тёмная тема ─────────────────────────────────────────────── */
 :global(.body--dark .survey-readonly-view .survey-section) {
-  background: #1e1e3a;
+  background: #1e1e1e;
   box-shadow: 0 1px 4px rgba(0,0,0,0.3);
 }
 
@@ -123,6 +123,6 @@ function getRoomTemplate(id) {
 }
 
 :global(.body--dark .survey-readonly-view .room-title) {
-  color: #d0cce8;
+  color: #d0d0d0;
 }
 </style>

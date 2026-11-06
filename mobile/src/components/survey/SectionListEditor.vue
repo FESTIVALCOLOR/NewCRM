@@ -41,7 +41,7 @@
             round
             icon="expand_more"
             size="xs"
-            color="purple"
+            color="grey-7"
             @click="toggleSection(si)"
           />
           <q-btn
@@ -141,7 +141,7 @@
               dense
               size="xs"
               icon="add"
-              color="purple"
+              color="grey-7"
               label="+ опция"
               class="q-mt-xs"
               @click="addOption(si, qi)"
@@ -171,7 +171,7 @@
     <!-- Добавить секцию -->
     <q-btn
       outline
-      color="purple"
+      color="grey-7"
       icon="add"
       label="Добавить секцию"
       size="sm"
@@ -218,7 +218,7 @@ function typeColor(type) {
   const map = {
     text: 'teal',
     textarea: 'blue',
-    checkbox_group: 'purple',
+    checkbox_group: 'grey-7',
     contacts: 'orange',
     electro_block: 'amber',
   }
@@ -306,7 +306,7 @@ function removeOption(si, qi, oi) {
 }
 
 .section-card {
-  border: 1px solid #d8d0ef;
+  border: 1px solid #ddd;
   border-radius: 8px;
   overflow: hidden;
 }
@@ -316,7 +316,7 @@ function removeOption(si, qi, oi) {
   align-items: center;
   gap: 6px;
   padding: 8px 10px;
-  background: #EDE8F5;
+  background: #f0f0f0;
   cursor: pointer;
 }
 

@@ -550,10 +550,10 @@ function toggleElectro(questionId, value, checked) {
 
 /* ─── Тёмная тема ─────────────────────────────────────────────── */
 /* Используем .survey-section-form для специфичности 0,3,0 > scoped 0,2,0 */
-:global(.body--dark .survey-section-form .q-label) { color: #9d94c0; }
-:global(.body--dark .survey-section-form .opt-label-text) { color: #d0cce8; }
-:global(.body--dark .survey-section-form .sf-label) { color: #d0cce8; }
-:global(.body--dark .survey-section-form .opt-description) { color: #7a7599; }
+:global(.body--dark .survey-section-form .q-label) { color: #999; }
+:global(.body--dark .survey-section-form .opt-label-text) { color: #d0d0d0; }
+:global(.body--dark .survey-section-form .sf-label) { color: #d0d0d0; }
+:global(.body--dark .survey-section-form .opt-description) { color: #888; }
 :global(.body--dark .survey-section-form .field-error) {
   background: #2a1a1a !important;
 }

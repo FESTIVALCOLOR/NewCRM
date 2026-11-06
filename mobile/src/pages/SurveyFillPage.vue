@@ -563,17 +563,17 @@ onMounted(loadSurvey)
 
 /* ─── Тёмная тема ─────────────────────────────────────────────── */
 :global(.body--dark .survey-fill-page) {
-  background: #1a1a2e;
+  background: #1a1a1a;
 }
 
 :global(.body--dark .survey-header) {
-  background: #16213e;
-  border-bottom-color: #9b7fd4;
+  background: #1e1e1e;
+  border-bottom-color: #555;
   box-shadow: 0 2px 8px rgba(0,0,0,0.4);
 }
 
 :global(.body--dark .survey-title) {
-  color: #e8e0f8;
+  color: #e0e0e0;
 }
 
 :global(.body--dark .survey-subtitle) {
@@ -581,11 +581,11 @@ onMounted(loadSurvey)
 }
 
 :global(.body--dark .survey-contract-ref) {
-  color: #b89ee0;
+  color: #999;
 }
 
 :global(.body--dark .survey-section) {
-  background: #1e1e3a;
+  background: #1e1e1e;
   box-shadow: 0 1px 4px rgba(0,0,0,0.3);
 }
 
@@ -601,12 +601,12 @@ onMounted(loadSurvey)
 }
 
 :global(.body--dark .survey-room) {
-  background: #1e1e3a;
-  border-color: #3d3060;
+  background: #252525;
+  border-color: #3a3a3a;
 }
 
 :global(.body--dark .room-idx) {
-  color: #b89ee0;
+  color: #aaa;
 }
 
 :global(.body--dark .survey-consent-block) {
@@ -615,6 +615,6 @@ onMounted(loadSurvey)
 }
 
 :global(.body--dark .consent-label) {
-  color: #d0cce8;
+  color: #d0d0d0;
 }
 </style>

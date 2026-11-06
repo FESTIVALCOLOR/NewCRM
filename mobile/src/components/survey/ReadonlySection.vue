@@ -391,19 +391,19 @@ function isElectroChecked(questionId, value) {
 
 /* ─── Тёмная тема ─────────────────────────────────────────────── */
 :global(.body--dark .readonly-row) {
-  border-bottom-color: #3d3060;
+  border-bottom-color: #333;
 }
 
 :global(.body--dark .ro-label) {
-  color: #9d94c0;
+  color: #999;
 }
 
 :global(.body--dark .ro-value) {
-  color: #d0cce8;
+  color: #d0d0d0;
 }
 
 :global(.body--dark .ro-sub-label) {
-  color: #b8b0d8;
+  color: #aaa;
 }
 
 :global(.body--dark .ro-comment) {
@@ -416,28 +416,28 @@ function isElectroChecked(questionId, value) {
 }
 
 :global(.body--dark .ro-yn-line) {
-  border-bottom-color: #4d3d80;
+  border-bottom-color: #444;
 }
 
 :global(.body--dark .ro-inline-text) {
-  color: #b89ee0;
+  color: #aaa;
 }
 
 :global(.body--dark .ro-select-value) {
-  background: #2d2558;
-  color: #c5b0f0;
+  background: #2a2a2a;
+  color: #ccc;
 }
 
 :global(.body--dark .ro-cb-label) {
-  color: #d0cce8;
+  color: #d0d0d0;
 }
 
 :global(.body--dark .ro-extra-data) {
-  border-left-color: #4d3d80;
+  border-left-color: #444;
 }
 
 :global(.body--dark .ro-yn-label) {
-  color: #d0cce8;
+  color: #d0d0d0;
 }
 
 :global(.body--dark .ro-yn-yes) {
@@ -456,11 +456,11 @@ function isElectroChecked(questionId, value) {
 }
 
 :global(.body--dark .ro-children) {
-  border-left-color: #4d3d80;
+  border-left-color: #444;
 }
 
 :global(.body--dark .ro-separator-label) {
-  color: #b89ee0;
+  color: #aaa;
 }
 
 :global(.body--dark .ro-separator::before),

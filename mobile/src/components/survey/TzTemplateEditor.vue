@@ -73,8 +73,8 @@ function updateSections(key, newSections) {
 }
 
 .tz-editor-tabs {
-  background: #EDE8F5;
-  color: #2a1a4e;
+  background: #f0f0f0;
+  color: #2a2a2a;
 }
 
 .room-tpl-item {

@@ -324,11 +324,11 @@ onMounted(loadSurvey)
 
 /* ─── Тёмная тема ─────────────────────────────────────────────── */
 :global(.body--dark .survey-edit-page) {
-  background: #1a1a2e;
+  background: #1a1a1a;
 }
 
 :global(.body--dark .survey-section) {
-  background: #1e1e3a !important;
+  background: #1e1e1e !important;
   box-shadow: 0 1px 4px rgba(0,0,0,0.3);
 }
 
