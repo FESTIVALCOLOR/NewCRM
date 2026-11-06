@@ -505,8 +505,12 @@
                 <div class="text-caption text-grey-6 q-mb-xs">
                   Анкета ТЗ
                 </div>
+                <!-- Загрузка статуса анкеты -->
+                <div v-if="!tzSurveyLoaded" style="font-size: 10px; color: var(--fc-text-disabled)">
+                  <q-spinner size="12px" color="grey" class="q-mr-xs" />
+                </div>
                 <!-- Если анкета уже создана -->
-                <template v-if="tzSurvey">
+                <template v-else-if="tzSurvey">
                   <div class="row q-gutter-xs q-mb-xs">
                     <q-chip
                       :color="tzSurvey.status === 'completed' || tzSurvey.status === 'edited' ? 'positive' : 'orange'"
@@ -593,8 +597,8 @@
                     </q-btn>
                   </div>
                 </template>
-                <!-- Если анкеты ещё нет -->
-                <template v-else>
+                <!-- Если анкеты ещё нет (и загрузка завершена) -->
+                <template v-else-if="tzSurveyLoaded">
                   <q-btn
                     outline
                     color="purple"
@@ -1509,6 +1513,7 @@ async function loadSurveys() {
 
 // Анкета ТЗ
 const tzSurvey = ref(null)
+const tzSurveyLoaded = ref(false)
 const tzSurveyCreating = ref(false)
 let _tzPollInterval = null
 
@@ -1522,6 +1527,8 @@ async function loadTzSurvey() {
   } catch (e) {
     if (e.response?.status !== 404) console.warn('TZ survey load error', e)
     tzSurvey.value = null
+  } finally {
+    tzSurveyLoaded.value = true
   }
 }
 
@@ -2271,6 +2278,7 @@ async function deleteContract() {
 async function reload() {
   const { data } = await contractsApi.getById(route.params.id)
   contract.value = data
+  loadTzSurvey()
 }
 
 // Синхронизация файлов с ЯД — проверяем существование, удаляем мёртвые записи

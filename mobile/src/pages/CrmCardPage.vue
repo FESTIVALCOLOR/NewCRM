@@ -689,98 +689,104 @@
                 </div>
 
                 <!-- Кнопки если анкета есть — иконки, при широком экране + текст -->
-                <div v-if="tzSurvey" class="row items-center no-wrap q-mt-xs" style="gap: 4px">
-                  <q-btn
-                    outline
-                    dense
-                    size="xs"
-                    icon="visibility"
-                    :label="showSurveyBtnLabels ? 'Просмотр' : ''"
-                    color="grey-7"
-                    style="border-radius: 4px; flex: 1"
-                    @click="openTzSurveyView"
-                  >
-                    <q-tooltip v-if="!showSurveyBtnLabels">
-                      Просмотр анкеты
-                    </q-tooltip>
-                  </q-btn>
-                  <q-btn
-                    v-if="!isArchived"
-                    outline
-                    dense
-                    size="xs"
-                    icon="edit"
-                    :label="showSurveyBtnLabels ? 'Изменить' : ''"
-                    color="purple"
-                    style="border-radius: 4px; flex: 1"
-                    @click="openTzSurveyEdit"
-                  >
-                    <q-tooltip v-if="!showSurveyBtnLabels">
-                      Редактировать анкету
-                    </q-tooltip>
-                  </q-btn>
-                  <q-btn
-                    outline
-                    dense
-                    size="xs"
-                    icon="link"
-                    :label="showSurveyBtnLabels ? 'Ссылка' : ''"
-                    color="grey-7"
-                    style="border-radius: 4px; flex: 1"
-                    @click="copyTzLink"
-                  >
-                    <q-tooltip v-if="!showSurveyBtnLabels">
-                      Скопировать ссылку
-                    </q-tooltip>
-                  </q-btn>
-                  <q-btn
-                    v-if="tzSurvey.status === 'completed' || tzSurvey.status === 'edited'"
-                    outline
-                    dense
-                    size="xs"
-                    icon="picture_as_pdf"
-                    :label="showSurveyBtnLabels ? 'PDF' : ''"
-                    color="grey-7"
-                    style="border-radius: 4px; flex: 1"
-                    @click="downloadTzPdf"
-                  >
-                    <q-tooltip v-if="!showSurveyBtnLabels">
-                      Скачать PDF
-                    </q-tooltip>
-                  </q-btn>
-                  <q-btn
-                    v-if="!isArchived && !isExecutor"
-                    outline
-                    dense
-                    size="xs"
-                    icon="delete_outline"
-                    color="negative"
-                    style="border-radius: 4px; padding: 2px 6px; flex-shrink: 0"
-                    @click="deleteTzSurvey"
-                  >
-                    <q-tooltip>Удалить анкету</q-tooltip>
-                  </q-btn>
+                <!-- Загрузка статуса анкеты -->
+                <div v-if="!tzSurveyLoaded" class="q-mt-xs" style="color: var(--fc-text-disabled); font-size: 10px">
+                  <q-spinner size="12px" color="grey" class="q-mr-xs" />
                 </div>
+                <template v-else>
+                  <div v-if="tzSurvey" class="row items-center no-wrap q-mt-xs" style="gap: 4px">
+                    <q-btn
+                      outline
+                      dense
+                      size="xs"
+                      icon="visibility"
+                      :label="showSurveyBtnLabels ? 'Просмотр' : ''"
+                      color="grey-7"
+                      style="border-radius: 4px; flex: 1"
+                      @click="openTzSurveyView"
+                    >
+                      <q-tooltip v-if="!showSurveyBtnLabels">
+                        Просмотр анкеты
+                      </q-tooltip>
+                    </q-btn>
+                    <q-btn
+                      v-if="!isArchived"
+                      outline
+                      dense
+                      size="xs"
+                      icon="edit"
+                      :label="showSurveyBtnLabels ? 'Изменить' : ''"
+                      color="purple"
+                      style="border-radius: 4px; flex: 1"
+                      @click="openTzSurveyEdit"
+                    >
+                      <q-tooltip v-if="!showSurveyBtnLabels">
+                        Редактировать анкету
+                      </q-tooltip>
+                    </q-btn>
+                    <q-btn
+                      outline
+                      dense
+                      size="xs"
+                      icon="link"
+                      :label="showSurveyBtnLabels ? 'Ссылка' : ''"
+                      color="grey-7"
+                      style="border-radius: 4px; flex: 1"
+                      @click="copyTzLink"
+                    >
+                      <q-tooltip v-if="!showSurveyBtnLabels">
+                        Скопировать ссылку
+                      </q-tooltip>
+                    </q-btn>
+                    <q-btn
+                      v-if="tzSurvey.status === 'completed' || tzSurvey.status === 'edited'"
+                      outline
+                      dense
+                      size="xs"
+                      icon="picture_as_pdf"
+                      :label="showSurveyBtnLabels ? 'PDF' : ''"
+                      color="grey-7"
+                      style="border-radius: 4px; flex: 1"
+                      @click="downloadTzPdf"
+                    >
+                      <q-tooltip v-if="!showSurveyBtnLabels">
+                        Скачать PDF
+                      </q-tooltip>
+                    </q-btn>
+                    <q-btn
+                      v-if="!isArchived && !isExecutor"
+                      outline
+                      dense
+                      size="xs"
+                      icon="delete_outline"
+                      color="negative"
+                      style="border-radius: 4px; padding: 2px 6px; flex-shrink: 0"
+                      @click="deleteTzSurvey"
+                    >
+                      <q-tooltip>Удалить анкету</q-tooltip>
+                    </q-btn>
+                  </div>
 
-                <!-- Кнопка создания если анкеты нет -->
-                <div v-else-if="!isArchived && !isExecutor" class="q-mt-xs">
-                  <q-btn
-                    outline
-                    dense
-                    size="xs"
-                    icon="add"
-                    label="Создать анкету"
-                    no-caps
-                    color="purple"
-                    class="full-width"
-                    style="border-radius: 4px"
-                    :loading="tzSurveyCreating"
-                    @click="createTzSurvey"
-                  />
-                </div>
-                <div v-else-if="!tzSurvey" class="text-caption" style="color: var(--fc-text-disabled); font-size: 10px; margin-top: 4px">
-                  Анкета не создана
-                </div>
+                  <!-- Кнопка создания если анкеты нет -->
+                  <div v-else-if="!isArchived && !isExecutor" class="q-mt-xs">
+                    <q-btn
+                      outline
+                      dense
+                      size="xs"
+                      icon="add"
+                      label="Создать анкету"
+                      no-caps
+                      color="purple"
+                      class="full-width"
+                      style="border-radius: 4px"
+                      :loading="tzSurveyCreating"
+                      @click="createTzSurvey"
+                    />
+                  </div>
+                  <div v-else class="text-caption" style="color: var(--fc-text-disabled); font-size: 10px; margin-top: 4px">
+                    Анкета не создана
+                  </div>
+                </template>
               </q-card-section>
 
               <!-- Примечание о ручной загрузке -->
@@ -2715,6 +2721,7 @@ const showContractEdit = ref(false)
 
 // Анкета ТЗ
 const tzSurvey = ref(null)
+const tzSurveyLoaded = ref(false)
 const tzSurveyCreating = ref(false)
 let _tzPollInterval = null
 
@@ -2741,6 +2748,8 @@ async function loadTzSurvey() {
     tzSurvey.value = data
   } catch {
     tzSurvey.value = null
+  } finally {
+    tzSurveyLoaded.value = true
   }
 }
 
@@ -4773,7 +4782,7 @@ async function handleCrmFileUpload(event) {
 }
 
 // === ЗАГРУЗКА ===
-async function reloadCard() { const id = route.params.id; await crmStore.loadCard(id); await loadAdditionalData(id) }
+async function reloadCard() { const id = route.params.id; await crmStore.loadCard(id); await loadAdditionalData(id); loadTzSurvey() }
 
 async function loadAdditionalData(cardId) {
   // Оплаты — загружаем по contract_id через правильный endpoint

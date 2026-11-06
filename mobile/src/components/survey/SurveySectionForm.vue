@@ -162,6 +162,7 @@
                   dense
                   emit-value
                   map-options
+                  behavior="dialog"
                   class="q-ml-lg q-mt-xs"
                   style="min-width: 200px"
                   @update:model-value="val => setCheckboxText(q.id, opt.value + '_sel', val)"
@@ -259,6 +260,7 @@
                   dense
                   emit-value
                   map-options
+                  behavior="dialog"
                   class="q-ml-lg q-mt-xs"
                   style="min-width: 200px"
                   @update:model-value="val => setElectroValue(q.id, opt.value + '_select', val)"
