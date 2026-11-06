@@ -1413,7 +1413,7 @@
 
     <!-- Диалог просмотра анкеты ТЗ (CRM-режим с учётом прав на персональные данные) -->
     <q-dialog v-model="tzSurveyViewOpen" maximized>
-      <q-card style="display: flex; flex-direction: column; overflow: hidden">
+      <q-card :dark="$q.dark.isActive" style="display: flex; flex-direction: column; overflow: hidden">
         <q-bar style="background: #6B4FA0; color: white; flex-shrink: 0">
           <span style="font-weight:600">Анкета ТЗ</span>
           <q-space />

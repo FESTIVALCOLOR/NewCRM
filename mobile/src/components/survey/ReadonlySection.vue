@@ -212,12 +212,12 @@ function isElectroChecked(questionId, value) {
 
 <style scoped>
 .readonly-section {
-  padding: 10px 12px;
+  padding: 10px 16px;
 }
 
 @media (max-width: 540px) {
   .readonly-section {
-    padding: 6px 2px;
+    padding: 8px 8px;
   }
 }
 
@@ -420,11 +420,16 @@ function isElectroChecked(questionId, value) {
 }
 
 :global(.body--dark .ro-inline-text) {
-  border-left-color: #4d3d80;
+  color: #b89ee0;
 }
 
 :global(.body--dark .ro-select-value) {
-  border-left-color: #4d3d80;
+  background: #2d2558;
+  color: #c5b0f0;
+}
+
+:global(.body--dark .ro-cb-label) {
+  color: #d0cce8;
 }
 
 :global(.body--dark .ro-extra-data) {

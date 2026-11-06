@@ -485,8 +485,8 @@ onMounted(loadSurvey)
   }
 
   .survey-sections-wrap {
-    padding-left: 4px !important;
-    padding-right: 4px !important;
+    padding-left: 10px !important;
+    padding-right: 10px !important;
   }
 
   .survey-header {

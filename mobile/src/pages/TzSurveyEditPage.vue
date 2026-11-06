@@ -321,4 +321,30 @@ onMounted(loadSurvey)
   flex-wrap: wrap;
   gap: 4px;
 }
+
+/* ─── Тёмная тема ─────────────────────────────────────────────── */
+:global(.body--dark .survey-edit-page) {
+  background: #1a1a2e;
+}
+
+:global(.body--dark .survey-section) {
+  background: #1e1e3a !important;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+
+:global(.body--dark .survey-section-header) {
+  background: #2d2558 !important;
+  color: #e8e0f8 !important;
+  border-bottom-color: #3d3060 !important;
+}
+
+:global(.body--dark .rooms-header) {
+  background: #4a3580 !important;
+  border-bottom-color: #3d2b6e !important;
+}
+
+:global(.body--dark .survey-room) {
+  background: #22203a !important;
+  border-color: #3d3060 !important;
+}
 </style>
