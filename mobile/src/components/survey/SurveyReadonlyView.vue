@@ -72,22 +72,22 @@ function getRoomTemplate(id) {
 }
 
 .section-header {
-  background: #EDE8F5;
-  color: #222;
+  background: #f0f0f0;
+  color: #2a2a2a;
   font-weight: 600;
   font-size: 14px;
   padding: 10px 16px;
-  border-bottom: 1px solid #d8d0ef;
+  border-bottom: 1px solid #ccc;
 }
 
 .rooms-header {
-  background: #6B4FA0;
+  background: #555;
   color: white;
-  border-bottom-color: #5a3f8a;
+  border-bottom-color: #444;
 }
 
 .room-block {
-  border-bottom: 1px solid #f0edf8;
+  border-bottom: 1px solid #f0f0f0;
 }
 
 .room-block:last-child {
@@ -96,8 +96,33 @@ function getRoomTemplate(id) {
 
 .room-title {
   font-weight: 600;
-  color: #6B4FA0;
+  color: #333;
   font-size: 14px;
   margin-bottom: 8px;
+}
+
+/* ─── Тёмная тема ─────────────────────────────────────────────── */
+:global(.body--dark .survey-readonly-view .survey-section) {
+  background: #1e1e3a;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+
+:global(.body--dark .survey-readonly-view .section-header) {
+  background: #2a2a2a;
+  color: #e0e0e0;
+  border-bottom-color: #444;
+}
+
+:global(.body--dark .survey-readonly-view .rooms-header) {
+  background: #3a3a3a;
+  border-bottom-color: #4a4a4a;
+}
+
+:global(.body--dark .survey-readonly-view .room-block) {
+  border-bottom-color: #3a3a3a;
+}
+
+:global(.body--dark .survey-readonly-view .room-title) {
+  color: #d0cce8;
 }
 </style>
