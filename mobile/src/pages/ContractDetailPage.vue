@@ -1410,6 +1410,27 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
+
+    <!-- Диалог просмотра анкеты ТЗ (CRM-режим с учётом прав на персональные данные) -->
+    <q-dialog v-model="tzSurveyViewOpen" maximized>
+      <q-card style="display: flex; flex-direction: column; overflow: hidden">
+        <q-bar style="background: #6B4FA0; color: white; flex-shrink: 0">
+          <span style="font-weight:600">Анкета ТЗ</span>
+          <q-space />
+          <q-btn dense flat icon="close" @click="tzSurveyViewOpen = false" />
+        </q-bar>
+        <div v-if="tzSurvey?.template_data && tzSurvey?.answers" style="overflow-y: auto; flex: 1">
+          <SurveyReadonlyView
+            :template-data="tzSurvey.template_data"
+            :answers="tzSurvey.answers"
+            :hide-personal-data="!canSeePersonalData"
+          />
+        </div>
+        <div v-else class="flex flex-center q-pa-xl">
+          <q-spinner-oval color="purple" size="40px" />
+        </div>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
@@ -1424,6 +1445,7 @@ import { useAuthStore } from 'src/stores/auth'
 import { usePermission } from 'src/composables/usePermission'
 import { useYdUpload } from 'src/composables/useYdUpload'
 import ContractFormDialog from 'src/components/ContractFormDialog.vue'
+import SurveyReadonlyView from 'src/components/survey/SurveyReadonlyView.vue'
 
 const { can, isSuperuser } = usePermission()
 const { uploadToYd } = useYdUpload()
@@ -1435,6 +1457,15 @@ const canDeleteFiles = computed(() => {
   const pos = authStore.user?.position || ''
   return ['Руководитель студии', 'Старший менеджер проектов'].includes(pos)
 })
+
+// Персональные данные в анкете видят только: Руководитель, Менеджер, Старший менеджер
+const canSeePersonalData = computed(() => {
+  if (isSuperuser.value) return true
+  const pos = authStore.user?.position || ''
+  return ['Руководитель студии', 'Старший менеджер проектов', 'Менеджер'].includes(pos)
+})
+
+const tzSurveyViewOpen = ref(false)
 
 const route = useRoute()
 const router = useRouter()
@@ -1517,8 +1548,8 @@ function copyTzLink() {
 }
 
 function openTzSurveyView() {
-  if (!tzSurvey.value?.access_token) return
-  window.open(`/survey/${tzSurvey.value.access_token}`, '_blank')
+  if (!tzSurvey.value?.template_data) return
+  tzSurveyViewOpen.value = true
 }
 
 function openTzSurveyEdit() {

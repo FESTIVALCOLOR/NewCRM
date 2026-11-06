@@ -2553,6 +2553,27 @@
         @click="$router.back()"
       />
     </div>
+
+    <!-- Диалог просмотра анкеты ТЗ (CRM-режим с учётом прав на персональные данные) -->
+    <q-dialog v-model="tzSurveyViewOpen" maximized>
+      <q-card style="display: flex; flex-direction: column; overflow: hidden">
+        <q-bar style="background: #6B4FA0; color: white; flex-shrink: 0">
+          <span style="font-weight:600">Анкета ТЗ</span>
+          <q-space />
+          <q-btn dense flat icon="close" @click="tzSurveyViewOpen = false" />
+        </q-bar>
+        <div v-if="tzSurvey?.template_data && tzSurvey?.answers" style="overflow-y: auto; flex: 1">
+          <SurveyReadonlyView
+            :template-data="tzSurvey.template_data"
+            :answers="tzSurvey.answers"
+            :hide-personal-data="!canSeePersonalData"
+          />
+        </div>
+        <div v-else class="flex flex-center q-pa-xl">
+          <q-spinner-oval color="purple" size="40px" />
+        </div>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
@@ -2572,6 +2593,7 @@ import InlineChatRoom from 'src/components/InlineChatRoom.vue'
 import ContractFormDialog from 'src/components/ContractFormDialog.vue'
 import { addToCalendar } from 'src/composables/useCalendar'
 import { useEmployeeAvatars } from 'src/composables/useEmployeeAvatars'
+import SurveyReadonlyView from 'src/components/survey/SurveyReadonlyView.vue'
 
 const { can, isSuperuser } = usePermission()
 const { ensureLoaded: loadAvatars, getAvatarByName } = useEmployeeAvatars()
@@ -2659,6 +2681,15 @@ const canRestore = computed(() => {
   const pos = authStore.user?.position || ''
   return pos === 'Руководитель студии' || pos === 'Старший менеджер проектов' || isSuperuser.value
 })
+
+// Персональные данные в анкете видят только: Руководитель, Менеджер, Старший менеджер
+const canSeePersonalData = computed(() => {
+  if (isSuperuser.value) return true
+  const pos = authStore.user?.position || ''
+  return ['Руководитель студии', 'Старший менеджер проектов', 'Менеджер'].includes(pos)
+})
+
+const tzSurveyViewOpen = ref(false)
 const restoreStageOptions = computed(() => {
   const isTemplate = card.value?.project_type === 'Шаблонный'
   return isTemplate ? [
@@ -2736,9 +2767,8 @@ function copyTzLink() {
 }
 
 function openTzSurveyView() {
-  if (!tzSurvey.value?.access_token) return
-  const url = `/survey/${tzSurvey.value.access_token}`
-  window.open(url, '_blank')
+  if (!tzSurvey.value?.template_data) return
+  tzSurveyViewOpen.value = true
 }
 
 function openTzSurveyEdit() {

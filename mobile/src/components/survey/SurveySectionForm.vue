@@ -15,7 +15,7 @@
       <!-- Текстовое поле -->
       <template v-else-if="q.type === 'text'">
         <div class="q-label">
-          {{ q.label }}
+          {{ q.label }}<span v-if="q.required" class="req-star">*</span>
         </div>
         <q-input
           :model-value="answers[q.id] || ''"
@@ -29,7 +29,7 @@
       <!-- Многострочное поле -->
       <template v-else-if="q.type === 'textarea'">
         <div class="q-label">
-          {{ q.label }}
+          {{ q.label }}<span v-if="q.required" class="req-star">*</span>
         </div>
         <q-input
           :model-value="answers[q.id] || ''"
@@ -45,7 +45,7 @@
       <!-- Контакты (тел + email) -->
       <template v-else-if="q.type === 'contacts'">
         <div class="q-label">
-          {{ q.label }}
+          {{ q.label }}<span v-if="q.required" class="req-star">*</span>
         </div>
         <div class="contacts-row">
           <q-input
@@ -379,6 +379,13 @@ function toggleElectro(questionId, value, checked) {
   font-style: italic;
   margin-bottom: 4px;
   line-height: 1.4;
+}
+
+.req-star {
+  color: #e53935;
+  font-style: normal;
+  font-weight: 700;
+  margin-left: 2px;
 }
 
 .contacts-row {

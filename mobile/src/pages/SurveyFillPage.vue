@@ -71,7 +71,7 @@
         </div>
       </div>
 
-      <div class="q-pa-md">
+      <div class="q-pa-md survey-sections-wrap">
         <!-- Секции до комнат -->
         <div
           v-for="section in templateData.sections_before_rooms"
@@ -177,6 +177,16 @@
               Понимаю, что дизайн-проект будет разрабатываться на основании предоставленной мной информации.
             </span>
           </q-checkbox>
+          <q-checkbox
+            v-model="personalDataConsent"
+            color="purple"
+            class="consent-checkbox q-mt-sm"
+          >
+            <span class="consent-label">
+              Я даю согласие на обработку персональных данных в соответствии с Федеральным законом
+              № 152-ФЗ «О персональных данных».
+            </span>
+          </q-checkbox>
         </div>
 
         <!-- Кнопка отправки -->
@@ -186,7 +196,7 @@
             size="lg"
             label="Отправить анкету"
             :loading="submitting"
-            :disable="submitting || !consentChecked"
+            :disable="submitting || !consentChecked || !personalDataConsent"
             class="survey-submit-btn"
             @click="submitSurvey"
           />
@@ -217,6 +227,7 @@ const loading = ref(true)
 const error = ref(null)
 const submitting = ref(false)
 const consentChecked = ref(false)
+const personalDataConsent = ref(false)
 
 const surveyId = ref(null)
 const readonly = ref(false)
@@ -471,6 +482,11 @@ onMounted(loadSurvey)
 @media (max-width: 540px) {
   .survey-fill-page {
     max-width: 100%;
+  }
+
+  .survey-sections-wrap {
+    padding-left: 4px !important;
+    padding-right: 4px !important;
   }
 
   .survey-header {

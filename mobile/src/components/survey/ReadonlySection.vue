@@ -1,5 +1,5 @@
 <template>
-  <div class="readonly-section q-pa-md">
+  <div class="readonly-section">
     <div
       v-for="q in section.questions"
       :key="q.id"
@@ -19,10 +19,15 @@
       <!-- contacts -->
       <template v-else-if="q.type === 'contacts'">
         <div class="ro-value">
-          <div v-for="sf in q.subfields" :key="sf.key">
-            <span class="ro-sub-label">{{ sf.label }}: </span>
-            {{ (answers[q.id] || {})[sf.key] || '—' }}
-          </div>
+          <template v-if="hidePersonalData">
+            <span class="text-grey-5 text-italic" style="font-size:12px">— скрыто —</span>
+          </template>
+          <template v-else>
+            <div v-for="sf in q.subfields" :key="sf.key">
+              <span class="ro-sub-label">{{ sf.label }}: </span>
+              {{ (answers[q.id] || {})[sf.key] || '—' }}
+            </div>
+          </template>
         </div>
       </template>
 
@@ -130,11 +135,10 @@
                 {{ getElectroValue(q.id, sf.key) || '—' }}
               </span>
             </template>
-            <!-- Текст -->
+            <!-- Числовое/текстовое значение — линия + значение справа -->
             <template v-else>
-              <span :class="getElectroValue(q.id, sf.key) ? 'ro-inline-text' : ''">
-                {{ getElectroValue(q.id, sf.key) || '—' }}
-              </span>
+              <span class="ro-yn-line" />
+              <span class="ro-num-value">{{ getElectroValue(q.id, sf.key) || '—' }}</span>
             </template>
           </div>
 
@@ -180,6 +184,7 @@
 const props = defineProps({
   section: { type: Object, required: true },
   answers: { type: Object, default: () => ({}) },
+  hidePersonalData: { type: Boolean, default: false },
 })
 
 function isChecked(questionId, value) {
@@ -206,7 +211,15 @@ function isElectroChecked(questionId, value) {
 </script>
 
 <style scoped>
-.readonly-section {}
+.readonly-section {
+  padding: 10px 12px;
+}
+
+@media (max-width: 540px) {
+  .readonly-section {
+    padding: 6px 2px;
+  }
+}
 
 .readonly-row {
   display: grid;
@@ -448,6 +461,20 @@ function isElectroChecked(questionId, value) {
 :global(.body--dark .ro-separator::before),
 :global(.body--dark .ro-separator::after) {
   background: #4d3d80;
+}
+
+/* Числовое значение справа (как да/нет) */
+.ro-num-value {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6B4FA0;
+  flex-shrink: 0;
+  min-width: 36px;
+  text-align: right;
+}
+
+:global(.body--dark .ro-num-value) {
+  color: #c5b0f0;
 }
 
 /* Разделитель секции */

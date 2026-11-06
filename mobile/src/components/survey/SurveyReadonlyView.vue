@@ -9,7 +9,7 @@
       <div class="section-header">
         {{ section.title }}
       </div>
-      <ReadonlySection :section="section" :answers="answers.general_answers || {}" />
+      <ReadonlySection :section="section" :answers="answers.general_answers || {}" :hide-personal-data="hidePersonalData" />
     </div>
 
     <!-- Комнаты -->
@@ -42,7 +42,7 @@
       <div class="section-header">
         {{ section.title }}
       </div>
-      <ReadonlySection :section="section" :answers="answers.general_answers || {}" />
+      <ReadonlySection :section="section" :answers="answers.general_answers || {}" :hide-personal-data="hidePersonalData" />
     </div>
   </div>
 </template>
@@ -53,6 +53,7 @@ import ReadonlySection from './ReadonlySection.vue'
 const props = defineProps({
   templateData: { type: Object, required: true },
   answers: { type: Object, required: true },
+  hidePersonalData: { type: Boolean, default: false },
 })
 
 function getRoomTemplate(id) {

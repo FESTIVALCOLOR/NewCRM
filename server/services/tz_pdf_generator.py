@@ -467,9 +467,8 @@ def _render_question_rows(question: dict, answers: dict, styles: dict) -> list:
     if q_type in ("text", "textarea"):
         rows.append((label_para, Paragraph(str(answer) if answer else "", styles["value_bold"])))
     elif q_type == "contacts":
-        answer_dict = answer if isinstance(answer, dict) else {}
-        sub_lines = [f"{sf['label']}: {answer_dict.get(sf['key'], '')}" for sf in question.get("subfields", [])]
-        rows.append((label_para, Paragraph("<br/>".join(sub_lines), styles["value"])))
+        # Персональные данные в PDF всегда скрыты
+        rows.append((label_para, Paragraph("— скрыто —", styles["value"])))
     elif q_type == "checkbox_group":
         value_lines = _render_checkbox_group(q_id, question, answer, answers, styles)
         for i, line in enumerate(value_lines):
