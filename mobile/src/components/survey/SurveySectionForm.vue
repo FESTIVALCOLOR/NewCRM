@@ -21,6 +21,7 @@
           :model-value="answers[q.id] || ''"
           outlined
           dense
+          autogrow
           class="q-mt-xs"
           @update:model-value="val => emit('update', q.id, val)"
         />
@@ -36,7 +37,7 @@
           outlined
           dense
           type="textarea"
-          rows="3"
+          autogrow
           class="q-mt-xs"
           @update:model-value="val => emit('update', q.id, val)"
         />
@@ -87,6 +88,7 @@
                   :model-value="getCheckboxTextValue(q.id, opt.value)"
                   outlined
                   dense
+                  autogrow
                   class="inline-text-input"
                   @update:model-value="val => setCheckboxText(q.id, opt.value, val)"
                 />
@@ -165,6 +167,8 @@
                   behavior="dialog"
                   class="q-ml-lg q-mt-xs"
                   style="min-width: 200px"
+                  @popup-show="saveScroll"
+                  @popup-hide="restoreScroll"
                   @update:model-value="val => setCheckboxText(q.id, opt.value + '_sel', val)"
                 />
               </div>
@@ -176,6 +180,7 @@
                   :model-value="getCheckboxTextValue(q.id, opt.value)"
                   outlined
                   dense
+                  autogrow
                   class="q-ml-lg q-mt-xs"
                   @update:model-value="val => setCheckboxText(q.id, opt.value, val)"
                 />
@@ -231,7 +236,7 @@
                 outlined
                 dense
                 :type="sf.type === 'textarea' ? 'textarea' : 'text'"
-                :rows="sf.type === 'textarea' ? 2 : undefined"
+                autogrow
                 @update:model-value="val => setElectroValue(q.id, sf.key, val)"
               />
             </template>
@@ -263,6 +268,8 @@
                   behavior="dialog"
                   class="q-ml-lg q-mt-xs"
                   style="min-width: 200px"
+                  @popup-show="saveScroll"
+                  @popup-hide="restoreScroll"
                   @update:model-value="val => setElectroValue(q.id, opt.value + '_select', val)"
                 />
               </div>
@@ -273,6 +280,7 @@
                   :model-value="getElectroValue(q.id, opt.value + '_text')"
                   outlined
                   dense
+                  autogrow
                   class="q-ml-lg q-mt-xs"
                   @update:model-value="val => setElectroValue(q.id, opt.value + '_text', val)"
                 />
@@ -287,7 +295,7 @@
             outlined
             dense
             type="textarea"
-            rows="2"
+            autogrow
             class="q-mt-sm"
             @update:model-value="val => setElectroValue(q.id, '_comment', val)"
           />
@@ -298,6 +306,12 @@
 </template>
 
 <script setup>
+import { ref, nextTick } from 'vue'
+
+const scrollPos = ref(0)
+function saveScroll() { scrollPos.value = window.scrollY }
+function restoreScroll() { nextTick(() => window.scrollTo({ top: scrollPos.value, behavior: 'instant' })) }
+
 const props = defineProps({
   section: { type: Object, required: true },
   answers: { type: Object, default: () => ({}) },
