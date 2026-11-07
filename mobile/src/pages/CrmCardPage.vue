@@ -3694,11 +3694,11 @@ function editNormDays(entry) {
 }
 
 async function saveTechTaskDate() {
-  if (!card.value?.contract_id) return
+  if (!card.value?.id) return
   try {
     const dateVal = techTaskDateInput.value || null
-    await contractsApi.update(card.value.contract_id, { tech_task_date: dateVal })
-    if (contractData.value) contractData.value.tech_task_date = dateVal
+    await crmApi.updateCard(card.value.id, { tech_task_date: dateVal })
+    if (card.value) card.value.tech_task_date = dateVal
     techTaskDateDialogVisible.value = false
     $q.notify({ type: 'positive', message: 'Дата анкеты сохранена' })
     await autoSetStartDate()
