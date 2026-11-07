@@ -541,7 +541,7 @@
                       </q-tooltip>
                     </q-btn>
                     <q-btn
-                      v-if="tzSurvey.status === 'completed' || tzSurvey.status === 'edited'"
+                      v-if="(tzSurvey.status === 'completed' || tzSurvey.status === 'edited') && canEditSurvey"
                       outline
                       color="purple"
                       icon="edit"
@@ -571,6 +571,7 @@
                       </q-tooltip>
                     </q-btn>
                     <q-btn
+                      v-if="canEditSurvey"
                       outline
                       color="grey-7"
                       icon="link"
@@ -585,6 +586,7 @@
                       </q-tooltip>
                     </q-btn>
                     <q-btn
+                      v-if="canEditSurvey"
                       outline
                       color="negative"
                       icon="delete_outline"
@@ -598,7 +600,7 @@
                   </div>
                 </template>
                 <!-- Если анкеты ещё нет (и загрузка завершена) -->
-                <template v-else-if="tzSurveyLoaded">
+                <template v-else-if="tzSurveyLoaded && canEditSurvey">
                   <q-btn
                     outline
                     color="purple"
@@ -1467,6 +1469,14 @@ const canSeePersonalData = computed(() => {
   if (isSuperuser.value) return true
   const pos = authStore.user?.position || ''
   return ['Руководитель студии', 'Старший менеджер проектов', 'Менеджер'].includes(pos)
+})
+
+// Создавать/редактировать/удалять анкету и копировать ссылку могут только:
+// Руководитель, Старший менеджер, Менеджер, СДП
+const canEditSurvey = computed(() => {
+  if (isSuperuser.value) return true
+  const pos = authStore.user?.position || ''
+  return ['Руководитель студии', 'Старший менеджер проектов', 'Менеджер', 'СДП'].includes(pos)
 })
 
 const tzSurveyViewOpen = ref(false)

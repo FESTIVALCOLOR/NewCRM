@@ -710,7 +710,7 @@
                       </q-tooltip>
                     </q-btn>
                     <q-btn
-                      v-if="!isArchived"
+                      v-if="!isArchived && canEditSurvey"
                       outline
                       dense
                       size="xs"
@@ -725,6 +725,7 @@
                       </q-tooltip>
                     </q-btn>
                     <q-btn
+                      v-if="canEditSurvey"
                       outline
                       dense
                       size="xs"
@@ -754,7 +755,7 @@
                       </q-tooltip>
                     </q-btn>
                     <q-btn
-                      v-if="!isArchived && !isExecutor"
+                      v-if="!isArchived && canEditSurvey"
                       outline
                       dense
                       size="xs"
@@ -768,7 +769,7 @@
                   </div>
 
                   <!-- Кнопка создания если анкеты нет -->
-                  <div v-else-if="!isArchived && !isExecutor" class="q-mt-xs">
+                  <div v-else-if="!isArchived && canEditSurvey" class="q-mt-xs">
                     <q-btn
                       outline
                       dense
@@ -2693,6 +2694,14 @@ const canSeePersonalData = computed(() => {
   if (isSuperuser.value) return true
   const pos = authStore.user?.position || ''
   return ['Руководитель студии', 'Старший менеджер проектов', 'Менеджер'].includes(pos)
+})
+
+// Создавать/редактировать/удалять анкету и копировать ссылку могут только:
+// Руководитель, Старший менеджер, Менеджер, СДП
+const canEditSurvey = computed(() => {
+  if (isSuperuser.value) return true
+  const pos = authStore.user?.position || ''
+  return ['Руководитель студии', 'Старший менеджер проектов', 'Менеджер', 'СДП'].includes(pos)
 })
 
 const tzSurveyViewOpen = ref(false)

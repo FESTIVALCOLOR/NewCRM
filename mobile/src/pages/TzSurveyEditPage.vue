@@ -145,10 +145,22 @@ import { useRoute, useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { tzApi } from 'src/services/api'
 import SurveySectionForm from 'src/components/survey/SurveySectionForm.vue'
+import { useAuthStore } from 'src/stores/auth'
+import { usePermission } from 'src/composables/usePermission'
 
 const route = useRoute()
 const router = useRouter()
 const $q = useQuasar()
+const authStore = useAuthStore()
+const { isSuperuser } = usePermission()
+
+const SURVEY_EDIT_POSITIONS = ['Руководитель студии', 'Старший менеджер проектов', 'Менеджер', 'СДП']
+
+function checkAccess() {
+  if (isSuperuser.value) return true
+  const pos = authStore.user?.position || ''
+  return SURVEY_EDIT_POSITIONS.includes(pos)
+}
 
 const loading = ref(true)
 const saving = ref(false)
@@ -230,7 +242,14 @@ async function saveSurvey() {
   }
 }
 
-onMounted(loadSurvey)
+onMounted(() => {
+  if (!checkAccess()) {
+    $q.notify({ type: 'negative', message: 'Недостаточно прав для редактирования анкеты' })
+    router.back()
+    return
+  }
+  loadSurvey()
+})
 </script>
 
 <style scoped>
