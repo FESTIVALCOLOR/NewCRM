@@ -28,7 +28,7 @@ const chartData = computed(() => ({
     data: ds.data,
     borderColor: ds.color || '#ffd93c',
     backgroundColor: (ds.color || '#ffd93c') + '20',
-    fill: true,
+    fill: props.datasets.length === 1,
     tension: 0.3,
     pointRadius: 3,
     pointBackgroundColor: ds.color || '#ffd93c',

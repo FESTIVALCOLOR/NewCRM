@@ -171,7 +171,7 @@
               <div class="text-caption text-weight-bold text-center q-mb-xs">
                 Типы проектов
               </div>
-              <pie-chart :labels="projectTypePie.labels" :values="projectTypePie.values" />
+              <pie-chart :labels="projectTypePie.labels" :values="projectTypePie.values" :colors="projectTypePie.colors" />
             </div>
             <div v-if="topCitiesChart" class="col-12 col-md-6">
               <div class="text-caption text-weight-bold q-mb-xs">
@@ -185,13 +185,13 @@
               <div class="text-caption text-weight-bold q-mb-xs">
                 Договоры по агентам
               </div>
-              <bar-chart :labels="contractsByAgentChart.labels" :datasets="contractsByAgentChart.datasets" />
+              <bar-chart :labels="contractsByAgentChart.labels" :datasets="contractsByAgentChart.datasets" :stacked="contractsByAgentChart.stacked" />
             </div>
             <div v-if="amountByAgentChart" class="col-12 col-md-6">
               <div class="text-caption text-weight-bold q-mb-xs">
                 Стоимость по агентам
               </div>
-              <bar-chart :labels="amountByAgentChart.labels" :datasets="amountByAgentChart.datasets" horizontal />
+              <bar-chart :labels="amountByAgentChart.labels" :datasets="amountByAgentChart.datasets" :stacked="amountByAgentChart.stacked" horizontal />
             </div>
           </div>
           <!-- Подтипы договоров (Bug 7) -->
@@ -534,7 +534,41 @@ const contractMini = computed(() => {
   ]
 })
 
+const agentTypeSummary = computed(() => {
+  const d = contractsByPeriodRaw.value
+  if (!d) return []
+  const totals = {}
+  Object.values(d).forEach(m => {
+    if (!m.by_agent) return
+    Object.entries(m.by_agent).forEach(([agent, data]) => {
+      if (!totals[agent]) totals[agent] = { individual_count: 0, individual_amount: 0, template_count: 0, template_amount: 0 }
+      totals[agent].individual_count += data.individual_count || 0
+      totals[agent].individual_amount += data.individual_amount || 0
+      totals[agent].template_count += data.template_count || 0
+      totals[agent].template_amount += data.template_amount || 0
+    })
+  })
+  const agentColorMap = {}
+  const ba = summary.value?.by_agent || []
+  ba.forEach(a => { if (a.agent_name) agentColorMap[a.agent_name] = a.agent_color })
+  const fallbackColors = ['#F39C12', '#2980B9', '#27AE60', '#9B59B6', '#8E44AD', '#16A085', '#D35400']
+  return Object.entries(totals).map(([agent, data], idx) => ({
+    agent,
+    color: agentColorMap[agent] || fallbackColors[idx % fallbackColors.length],
+    ...data,
+  }))
+})
+
 const projectTypePie = computed(() => {
+  const ats = agentTypeSummary.value
+  if (ats.length > 0) {
+    const labels = [], values = [], colors = []
+    ats.forEach(a => {
+      if (a.individual_count > 0) { labels.push(`Инд. ${a.agent}`); values.push(a.individual_count); colors.push(a.color) }
+      if (a.template_count > 0) { labels.push(`Шабл. ${a.agent}`); values.push(a.template_count); colors.push(a.color + '99') }
+    })
+    if (values.length > 0) return { labels, values, colors }
+  }
   const d = contractsDashboard.value
   if (!d || (!d.individual_orders && !d.template_orders)) return null
   return { labels: ['Индивидуальные', 'Шаблонные'], values: [d.individual_orders || 0, d.template_orders || 0] }
@@ -605,6 +639,17 @@ const topCitiesChart = computed(() => {
 })
 
 const contractsByAgentChart = computed(() => {
+  const ats = agentTypeSummary.value
+  if (ats.length > 0) {
+    return {
+      labels: ats.map(a => a.agent),
+      datasets: [
+        { label: 'Инд.', data: ats.map(a => a.individual_count), color: ats.map(a => a.color) },
+        { label: 'Шабл.', data: ats.map(a => a.template_count), color: ats.map(a => a.color + '99') },
+      ],
+      stacked: true,
+    }
+  }
   const ba = summary.value?.by_agent || []
   if (ba.length === 0) return null
   return {
@@ -614,6 +659,17 @@ const contractsByAgentChart = computed(() => {
 })
 
 const amountByAgentChart = computed(() => {
+  const ats = agentTypeSummary.value
+  if (ats.length > 0) {
+    return {
+      labels: ats.map(a => a.agent),
+      datasets: [
+        { label: 'Инд.', data: ats.map(a => a.individual_amount), color: ats.map(a => a.color) },
+        { label: 'Шабл.', data: ats.map(a => a.template_amount), color: ats.map(a => a.color + '99') },
+      ],
+      stacked: true,
+    }
+  }
   const ba = summary.value?.by_agent || []
   if (ba.length === 0) return null
   return {
@@ -973,6 +1029,27 @@ async function exportPDF() {
       `<table><thead><tr>${cols.map(c => `<th${c.r ? ' class="num"' : ''}>${c.label}</th>`).join('')}</tr></thead><tbody>
       ${rows.map(r => `<tr>${cols.map(c => `<td${c.r ? ' class="num"' : ''}>${r[c.key] ?? ''}</td>`).join('')}</tr>`).join('')}</tbody></table>`
 
+    const _agentTablePdf = (cbA, abA) => {
+      if (!cbA) return ''
+      const hasTypes = cbA.datasets.length > 1
+      if (hasTypes) {
+        const cols = [{ key: 'label', label: 'Агент' }, { key: 'ind', label: 'Инд.', r: true }, { key: 'tmpl', label: 'Шабл.', r: true }, { key: 'total', label: 'Всего', r: true }]
+        if (abA && abA.datasets.length > 1) { cols.push({ key: 'indAmt', label: 'Инд., ₽', r: true }); cols.push({ key: 'tmplAmt', label: 'Шабл., ₽', r: true }) }
+        const rows = cbA.labels.map((l, i) => ({
+          label: l,
+          ind: cbA.datasets[0].data[i] || 0,
+          tmpl: cbA.datasets[1].data[i] || 0,
+          total: (cbA.datasets[0].data[i] || 0) + (cbA.datasets[1].data[i] || 0),
+          indAmt: abA && abA.datasets.length > 1 ? fmtMoney(abA.datasets[0].data[i] || 0) : '',
+          tmplAmt: abA && abA.datasets.length > 1 ? fmtMoney(abA.datasets[1].data[i] || 0) : '',
+        }))
+        return listTable(cols, rows)
+      }
+      const cols = [{ key: 'label', label: 'Агент' }, { key: 'cnt', label: 'Договоров', r: true }]
+      if (abA) cols.push({ key: 'amt', label: 'Стоимость', r: true })
+      return listTable(cols, cbA.labels.map((l, i) => ({ label: l, cnt: cbA.datasets[0].data[i], amt: abA ? fmtMoney(abA.datasets[0].data[i] || 0) : '' })))
+    }
+
     const computeStatCards = (stat, det) => {
       const p = stat || {}
       const d = det || {}
@@ -1091,17 +1168,11 @@ async function exportPDF() {
     if (tc && cbA) {
       body += '<div class="cr">'
       body += `<div><h3>ТОП городов</h3>${listTable([{ key: 'label', label: 'Город' }, { key: 'val', label: 'Договоров', r: true }], tc.labels.map((l, i) => ({ label: l, val: tc.datasets[0].data[i] })))}</div>`
-      const cols = [{ key: 'label', label: 'Агент' }, { key: 'cnt', label: 'Договоров', r: true }]
-      if (abA) cols.push({ key: 'amt', label: 'Стоимость', r: true })
-      body += `<div><h3>По агентам</h3>${listTable(cols, cbA.labels.map((l, i) => ({ label: l, cnt: cbA.datasets[0].data[i], amt: abA ? fmtMoney(abA.datasets[0].data[i] || 0) : '' })))}</div>`
+      body += `<div><h3>По агентам</h3>${_agentTablePdf(cbA, abA)}</div>`
       body += '</div>'
     } else {
       if (tc) body += `<h3>ТОП городов</h3>${listTable([{ key: 'label', label: 'Город' }, { key: 'val', label: 'Договоров', r: true }], tc.labels.map((l, i) => ({ label: l, val: tc.datasets[0].data[i] })))}`
-      if (cbA) {
-        const cols = [{ key: 'label', label: 'Агент' }, { key: 'cnt', label: 'Договоров', r: true }]
-        if (abA) cols.push({ key: 'amt', label: 'Стоимость', r: true })
-        body += `<h3>Договоры по агентам</h3>${listTable(cols, cbA.labels.map((l, i) => ({ label: l, cnt: cbA.datasets[0].data[i], amt: abA ? fmtMoney(abA.datasets[0].data[i] || 0) : '' })))}`
-      }
+      if (cbA) body += `<h3>Договоры по агентам</h3>${_agentTablePdf(cbA, abA)}`
     }
 
     // ---- CRM Индивидуальные (новая страница) ----
