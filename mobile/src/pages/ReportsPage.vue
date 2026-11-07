@@ -540,10 +540,34 @@ const projectTypePie = computed(() => {
   return { labels: ['Индивидуальные', 'Шаблонные'], values: [d.individual_orders || 0, d.template_orders || 0] }
 })
 
+const _contractsAgentDatasets = (d, field) => {
+  const agentSet = new Set()
+  Object.values(d).forEach(m => { if (m.by_agent) Object.keys(m.by_agent).forEach(a => agentSet.add(a)) })
+  const agents = [...agentSet]
+  if (agents.length === 0) return null
+  const agentColorMap = {}
+  const ba = summary.value?.by_agent || []
+  ba.forEach(a => { if (a.agent_name) agentColorMap[a.agent_name] = a.agent_color })
+  const fallbackColors = ['#F39C12', '#2980B9', '#27AE60', '#9B59B6', '#8E44AD', '#16A085', '#D35400']
+  const datasets = []
+  agents.forEach((agent, agIdx) => {
+    const baseColor = agentColorMap[agent] || fallbackColors[agIdx % fallbackColors.length]
+    const indKey = field === 'count' ? 'individual_count' : 'individual_amount'
+    const tmplKey = field === 'count' ? 'template_count' : 'template_amount'
+    datasets.push({ label: `Инд. ${agent}`, data: Object.keys(d).sort((a, b) => Number(a) - Number(b)).map(k => d[k]?.by_agent?.[agent]?.[indKey] || 0), color: baseColor })
+    datasets.push({ label: `Шабл. ${agent}`, data: Object.keys(d).sort((a, b) => Number(a) - Number(b)).map(k => d[k]?.by_agent?.[agent]?.[tmplKey] || 0), color: baseColor + '99' })
+  })
+  return datasets
+}
+
 const contractsDynamics = computed(() => {
   const d = contractsByPeriodRaw.value
   if (!d) return null
   const months = ['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек']
+  const agentDatasets = _contractsAgentDatasets(d, 'count')
+  if (agentDatasets) {
+    return { labels: months, datasets: agentDatasets }
+  }
   return {
     labels: months,
     datasets: [
@@ -557,6 +581,10 @@ const contractsAmountDynamics = computed(() => {
   const d = contractsByPeriodRaw.value
   if (!d) return null
   const months = ['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек']
+  const agentDatasets = _contractsAgentDatasets(d, 'amount')
+  if (agentDatasets) {
+    return { labels: months, datasets: agentDatasets }
+  }
   return {
     labels: months,
     datasets: [{ label: 'Стоимость', data: months.map((_, i) => d[String(i + 1)]?.amount || 0), color: '#F39C12' }],
@@ -980,7 +1008,7 @@ async function exportPDF() {
     if (contractsDashboard.value) chartData.clientTypePie = { labels: ['Индивидуальные', 'Шаблонные'], values: [contractsDashboard.value.individual_orders || 0, contractsDashboard.value.template_orders || 0] }
 
     const conDyn = contractsDynamics.value
-    if (conDyn) chartData.conDyn = { labels: conDyn.labels, ind: conDyn.datasets[0].data, tmpl: conDyn.datasets[1].data }
+    if (conDyn) chartData.conDyn = { labels: conDyn.labels, datasets: conDyn.datasets }
 
     const fc = funnelChart.value
     if (fc) chartData.funnel = { labels: fc.labels, data: fc.datasets[0].data }
@@ -1055,7 +1083,7 @@ async function exportPDF() {
     }
     const amtDyn = contractsAmountDynamics.value
     if (amtDyn) {
-      body += `<h3>Стоимость по месяцам</h3><table><thead><tr><th>Месяц</th><th class="num">Стоимость</th></tr></thead><tbody>${amtDyn.labels.map((l, i) => `<tr><td>${l}</td><td class="num">${fmtMoney(amtDyn.datasets[0].data[i] || 0)}</td></tr>`).join('')}</tbody></table>`
+      body += `<h3>Стоимость по месяцам</h3><table><thead><tr><th>Месяц</th><th class="num">Стоимость</th></tr></thead><tbody>${amtDyn.labels.map((l, i) => `<tr><td>${l}</td><td class="num">${fmtMoney(amtDyn.datasets.reduce((s, ds) => s + (ds.data[i] || 0), 0))}</td></tr>`).join('')}</tbody></table>`
     }
     const tc = topCitiesChart.value
     const cbA = contractsByAgentChart.value
@@ -1246,7 +1274,7 @@ async function exportPDF() {
     var cd = __cd;
     try { if (cd.clientDyn) lineChart('clientDyn', cd.clientDyn.labels, [{ label: 'Новые', data: cd.clientDyn.new, color: '#27AE60' }, { label: 'Повторные', data: cd.clientDyn.ret, color: '#9B59B6' }]); } catch(e) {}
     try { if (cd.clientTypePie) pieChart('clientTypePie', cd.clientTypePie.labels, cd.clientTypePie.values); } catch(e) {}
-    try { if (cd.conDyn) vBar('conDyn', cd.conDyn.labels, [{ label: 'Индивид.', data: cd.conDyn.ind, color: '#F39C12' }, { label: 'Шаблон.', data: cd.conDyn.tmpl, color: '#C62828' }]); } catch(e) {}
+    try { if (cd.conDyn) vBar('conDyn', cd.conDyn.labels, cd.conDyn.datasets); } catch(e) {}
     try { if (cd.funnel) hBar('funnel', cd.funnel.labels, cd.funnel.data, 'Проектов', '#F39C12'); } catch(e) {}
     try { if (cd.indStages) hBar2('indStages', cd.indStages.labels, [{ label: 'Норматив', data: cd.indStages.norm, color: '#4CAF50' }, { label: 'Факт', data: cd.indStages.fact, color: '#F39C12' }]); } catch(e) {}
     try { if (cd.indCities) hBar('indCities', cd.indCities.labels, cd.indCities.data, 'Проектов', '#85C1E9'); } catch(e) {}

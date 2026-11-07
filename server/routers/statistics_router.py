@@ -763,6 +763,36 @@ async def get_employee_projects(
         raise HTTPException(status_code=500, detail="Внутренняя ошибка сервера")
 
 
+def _empty_period_bucket() -> dict:
+    return {"count": 0, "amount": 0, "template_count": 0, "template_amount": 0, "individual_count": 0, "individual_amount": 0, "by_agent": {}}
+
+
+def _add_to_period(bucket: dict, c) -> None:
+    """Добавляет договор в period-bucket, накапливая разбивку по типу и агенту."""
+    bucket["count"] += 1
+    amount = c.total_amount or 0
+    bucket["amount"] += amount
+    ptype = c.project_type or ""
+    if ptype == "Шаблонный":
+        bucket["template_count"] += 1
+        bucket["template_amount"] += amount
+    else:
+        bucket["individual_count"] += 1
+        bucket["individual_amount"] += amount
+    agent = c.agent_type or ""
+    if not agent:
+        return
+    if agent not in bucket["by_agent"]:
+        bucket["by_agent"][agent] = {"individual_count": 0, "individual_amount": 0.0, "template_count": 0, "template_amount": 0.0}
+    ag = bucket["by_agent"][agent]
+    if ptype == "Шаблонный":
+        ag["template_count"] += 1
+        ag["template_amount"] += amount
+    else:
+        ag["individual_count"] += 1
+        ag["individual_amount"] += amount
+
+
 @router.get("/contracts-by-period")
 async def get_contracts_by_period(
     year: int,
@@ -781,32 +811,16 @@ async def get_contracts_by_period(
         contracts = query.all()
 
         if group_by == "month":
-            result = {i: {"count": 0, "amount": 0, "template_count": 0, "template_amount": 0, "individual_count": 0, "individual_amount": 0} for i in range(1, 13)}
+            result = {i: _empty_period_bucket() for i in range(1, 13)}
             for c in contracts:
                 if c.created_at:
-                    m = c.created_at.month
-                    result[m]["count"] += 1
-                    result[m]["amount"] += c.total_amount or 0
-                    if c.project_type == "Шаблонный":
-                        result[m]["template_count"] += 1
-                        result[m]["template_amount"] += c.total_amount or 0
-                    else:
-                        result[m]["individual_count"] += 1
-                        result[m]["individual_amount"] += c.total_amount or 0
+                    _add_to_period(result[c.created_at.month], c)
 
         elif group_by == "quarter":
-            result = {i: {"count": 0, "amount": 0, "template_count": 0, "template_amount": 0, "individual_count": 0, "individual_amount": 0} for i in range(1, 5)}
+            result = {i: _empty_period_bucket() for i in range(1, 5)}
             for c in contracts:
                 if c.created_at:
-                    q = (c.created_at.month - 1) // 3 + 1
-                    result[q]["count"] += 1
-                    result[q]["amount"] += c.total_amount or 0
-                    if c.project_type == "Шаблонный":
-                        result[q]["template_count"] += 1
-                        result[q]["template_amount"] += c.total_amount or 0
-                    else:
-                        result[q]["individual_count"] += 1
-                        result[q]["individual_amount"] += c.total_amount or 0
+                    _add_to_period(result[(c.created_at.month - 1) // 3 + 1], c)
 
         elif group_by == "status":
             result = {}
