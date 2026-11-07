@@ -1,5 +1,24 @@
 <template>
   <div class="survey-readonly-view">
+    <!-- Шапка (показывается когда передан contractNumber) -->
+    <div v-if="contractNumber" class="survey-ro-header">
+      <div class="survey-ro-logo-wrap">
+        <img v-if="agentLogoUrl" :src="agentLogoUrl" class="survey-ro-logo" alt="logo">
+      </div>
+      <div class="survey-ro-title-block">
+        <div class="survey-ro-title">
+          АНКЕТА
+        </div>
+        <div class="survey-ro-subtitle">
+          технического задания на разработку
+          {{ projectType === 'Шаблонный' ? 'шаблонного ' : '' }}дизайн-проекта интерьера
+        </div>
+        <div class="survey-ro-contract-ref">
+          Приложение к Договору № {{ contractNumber }}
+        </div>
+      </div>
+    </div>
+
     <!-- Секции до комнат -->
     <div
       v-for="section in templateData.sections_before_rooms"
@@ -54,6 +73,9 @@ const props = defineProps({
   templateData: { type: Object, required: true },
   answers: { type: Object, required: true },
   hidePersonalData: { type: Boolean, default: false },
+  contractNumber: { type: String, default: '' },
+  projectType: { type: String, default: 'Индивидуальный' },
+  agentLogoUrl: { type: String, default: '' },
 })
 
 function getRoomTemplate(id) {
@@ -63,6 +85,56 @@ function getRoomTemplate(id) {
 
 <style scoped>
 .survey-readonly-view {}
+
+/* ─── Шапка ─────────────────────────────────────────────────────── */
+.survey-ro-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 20px 20px 16px;
+  background: white;
+  border-bottom: 2px solid #ccc;
+  margin-bottom: 16px;
+}
+
+.survey-ro-logo-wrap {
+  flex-shrink: 0;
+  width: 72px;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+}
+
+.survey-ro-logo {
+  max-width: 72px;
+  max-height: 56px;
+  object-fit: contain;
+}
+
+.survey-ro-title-block {
+  flex: 1;
+}
+
+.survey-ro-title {
+  font-size: 20px;
+  font-weight: 800;
+  color: #222;
+  letter-spacing: 1px;
+}
+
+.survey-ro-subtitle {
+  font-size: 12px;
+  color: #555;
+  margin-top: 2px;
+  line-height: 1.4;
+}
+
+.survey-ro-contract-ref {
+  font-size: 11px;
+  color: #888;
+  margin-top: 4px;
+  font-style: italic;
+}
 
 .survey-section {
   background: white;
@@ -102,6 +174,15 @@ function getRoomTemplate(id) {
 }
 
 /* ─── Тёмная тема ─────────────────────────────────────────────── */
+:global(.body--dark .survey-readonly-view .survey-ro-header) {
+  background: #1e1e1e;
+  border-bottom-color: #444;
+}
+
+:global(.body--dark .survey-readonly-view .survey-ro-title) { color: #e0e0e0; }
+:global(.body--dark .survey-readonly-view .survey-ro-subtitle) { color: #aaa; }
+:global(.body--dark .survey-readonly-view .survey-ro-contract-ref) { color: #888; }
+
 :global(.body--dark .survey-readonly-view .survey-section) {
   background: #1e1e1e;
   box-shadow: 0 1px 4px rgba(0,0,0,0.3);

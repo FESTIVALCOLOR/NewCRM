@@ -1420,7 +1420,7 @@
     <!-- Диалог просмотра анкеты ТЗ (CRM-режим с учётом прав на персональные данные) -->
     <q-dialog v-model="tzSurveyViewOpen" maximized>
       <q-card :dark="$q.dark.isActive" style="display: flex; flex-direction: column; overflow: hidden">
-        <q-bar style="background: #6B4FA0; color: white; flex-shrink: 0">
+        <q-bar style="background: #444; color: white; flex-shrink: 0">
           <span style="font-weight:600">Анкета ТЗ</span>
           <q-space />
           <q-btn dense flat icon="close" @click="tzSurveyViewOpen = false" />
@@ -1430,10 +1430,13 @@
             :template-data="tzSurvey.template_data"
             :answers="tzSurvey.answers"
             :hide-personal-data="!canSeePersonalData"
+            :contract-number="tzSurvey.contract_number || ''"
+            :project-type="tzSurvey.project_type || 'Индивидуальный'"
+            :agent-logo-url="tzSurvey.agent_logo_url || ''"
           />
         </div>
         <div v-else class="flex flex-center q-pa-xl">
-          <q-spinner-oval color="purple" size="40px" />
+          <q-spinner-oval color="grey-7" size="40px" />
         </div>
       </q-card>
     </q-dialog>

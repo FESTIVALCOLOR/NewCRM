@@ -145,6 +145,19 @@ def _survey_to_dict(survey: TechnicalSurvey, include_answers: bool = True) -> di
     return result
 
 
+def _get_agent_logo_url(db: Session, agent_type: str | None) -> str | None:
+    """Возвращает URL логотипа агента если есть."""
+    if not agent_type:
+        return None
+    from database import CompanyRequisite
+
+    slug = agent_type.strip().lower()
+    req = db.query(CompanyRequisite).filter(CompanyRequisite.requisite_type == f"logo_{slug}").first()
+    if req and req.file_path:
+        return f"/api/v1/surveys/agent-logo/{slug}"
+    return None
+
+
 # ── Шаблоны (только admin/director) ─────────────────────────────────────────
 
 
@@ -266,6 +279,8 @@ def get_survey_by_contract(
     result = _survey_to_dict(survey)
     result["template_data"] = template_data
     result["project_type"] = project_type
+    result["contract_number"] = contract.contract_number if contract else ""
+    result["agent_logo_url"] = _get_agent_logo_url(db, getattr(contract, "agent_type", None))
     return result
 
 
@@ -287,6 +302,8 @@ def get_survey(
     result = _survey_to_dict(survey)
     result["template_data"] = template_data
     result["project_type"] = project_type
+    result["contract_number"] = contract.contract_number if contract else ""
+    result["agent_logo_url"] = _get_agent_logo_url(db, getattr(contract, "agent_type", None))
     return result
 
 
