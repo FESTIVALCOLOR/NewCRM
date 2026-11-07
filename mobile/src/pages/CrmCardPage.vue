@@ -323,14 +323,15 @@
               />
 
               <!-- Проверяющий: Клиенту + На исправление -->
-              <div v-if="can('crm_cards.complete_approval') && card.workflow_status === 'pending_review'" class="row q-gutter-sm q-mb-sm">
+              <div v-if="can('crm_cards.complete_approval') && card.workflow_status === 'pending_review'" class="column q-gutter-sm q-mb-sm">
                 <q-btn
                   unelevated
                   dense
                   no-caps
                   icon="forward_to_inbox"
                   label="Отправить клиенту"
-                  style="background: #58D68D; color: white; font-size: 11px; font-weight: bold; height: 36px; border-radius: 4px; flex: 1"
+                  class="full-width"
+                  style="background: #58D68D; color: white; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px"
                   :loading="actionLoading"
                   @click="doAction('client-send')"
                 />
@@ -340,7 +341,8 @@
                   no-caps
                   icon="replay"
                   label="На исправление"
-                  style="background: #F1948A; color: white; font-size: 11px; font-weight: bold; height: 36px; border-radius: 4px; flex: 1"
+                  class="full-width"
+                  style="background: #F1948A; color: white; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px"
                   @click="openRejectDialog()"
                 />
               </div>
@@ -364,14 +366,15 @@
                 <div class="text-caption q-mb-xs" style="color: var(--fc-text-light); text-align: center">
                   Клиент согласовал. Выберите действие:
                 </div>
-                <div class="row q-gutter-sm q-mb-xs">
+                <div class="column q-gutter-sm q-mb-xs">
                   <q-btn
                     unelevated
                     dense
                     no-caps
                     icon="skip_next"
                     label="Следующий подэтап"
-                    style="background: #5DADE2; color: white; font-size: 11px; font-weight: bold; height: 36px; border-radius: 4px; flex: 1"
+                    class="full-width"
+                    style="background: #5DADE2; color: white; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px"
                     :loading="actionLoading"
                     @click="doAdvanceRound"
                   />
@@ -381,7 +384,8 @@
                     no-caps
                     icon="done_all"
                     label="Закрыть этап"
-                    style="background: #27AE60; color: white; font-size: 11px; font-weight: bold; height: 36px; border-radius: 4px; flex: 1"
+                    class="full-width"
+                    style="background: #27AE60; color: white; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px"
                     :loading="actionLoading"
                     @click="doCloseStage"
                   />
@@ -403,13 +407,15 @@
               />
 
               <!-- Акт -->
-              <div v-if="can('crm_cards.complete_approval') && card.workflow_status === 'act_signing'" class="row q-gutter-sm q-mb-sm">
+              <div v-if="can('crm_cards.complete_approval') && card.workflow_status === 'act_signing'" class="column q-gutter-sm q-mb-sm">
                 <q-btn
                   unelevated
                   dense
                   no-caps
+                  icon="forward_to_inbox"
                   label="Отправить акт"
-                  style="background: #58D68D; color: white; font-size: 11px; font-weight: bold; height: 36px; border-radius: 4px; flex: 1"
+                  class="full-width"
+                  style="background: #58D68D; color: white; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px"
                   :loading="actionLoading"
                   @click="doAction('client-send')"
                 />
@@ -419,7 +425,8 @@
                   no-caps
                   icon="draw"
                   label="Акт подписан"
-                  style="background: #85C1E9; color: white; font-size: 11px; font-weight: bold; height: 36px; border-radius: 4px; flex: 1"
+                  class="full-width"
+                  style="background: #85C1E9; color: white; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px"
                   :loading="actionLoading"
                   @click="doAction('sign-act')"
                 />
