@@ -423,7 +423,6 @@ const kpiCards = computed(() => {
     { label: 'Средняя площадь', value: s.avg_area ? `${Math.round(s.avg_area)} м²` : '—', color: '#E67E22' },
     { label: 'В архиве инд.', value: cd.individual_archived ?? '—', color: '#78909C' },
     { label: 'В архиве шабл.', value: cd.template_archived ?? '—', color: '#90A4AE' },
-    { label: 'Надзоров в архиве', value: sd.archived_total ?? '—', color: '#B0BEC5' },
   ]
 })
 

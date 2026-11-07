@@ -162,8 +162,16 @@ async def get_contracts_dashboard(
             elif c.project_type == "Шаблонный":
                 by_subtypes_tmpl[sub] += 1
 
-        # Договоров надзора (без привязки к периоду — общее количество)
-        supervision_orders = db.query(Contract).filter(Contract.status == STATUS_SUPERVISION).count()
+        # Договоров надзора — только те, что НЕ являются инд./шабл. проектами
+        # (проекты, перешедшие в надзор, уже учтены в individual_orders/template_orders)
+        supervision_orders = (
+            db.query(Contract)
+            .filter(
+                Contract.status == STATUS_SUPERVISION,
+                Contract.project_type.notin_(["Индивидуальный", "Шаблонный"]),
+            )
+            .count()
+        )
 
         # Архивные CRM-карточки по типу (без привязки к периоду)
         _archived_col = {"Выполненный проект", STATUS_COMPLETED, STATUS_TERMINATED}
