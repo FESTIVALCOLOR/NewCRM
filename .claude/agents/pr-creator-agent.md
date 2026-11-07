@@ -52,8 +52,6 @@ git add <файл1> <файл2> ...
 # Коммит с HEREDOC
 git commit -m "$(cat <<'EOF'
 {описание изменений}
-
-Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -88,10 +86,6 @@ gh pr create --title "{краткий заголовок до 70 символо�
 - Reviewer: {результат или "ожидается"}
 - Compatibility: {OK / N/A}
 - Security: {PASS / N/A}
-
-Сгенерировано Claude Code
-
-Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 EOF
 )"
 ```

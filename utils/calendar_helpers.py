@@ -2,14 +2,25 @@
 """
 Вспомогательные функции и классы для работы с календарем
 """
+
 from datetime import datetime, timedelta
-from PyQt5.QtWidgets import QDateEdit, QPushButton, QVBoxLayout, QWidget, QCalendarWidget
-from PyQt5.QtCore import QDate, Qt, QRectF
-from PyQt5.QtGui import QPalette, QColor, QPainter, QFont
+
+try:
+    from PyQt5.QtCore import QDate, QRectF, Qt
+    from PyQt5.QtGui import QColor, QFont, QPainter, QPalette
+    from PyQt5.QtWidgets import QCalendarWidget, QDateEdit, QPushButton, QVBoxLayout, QWidget
+
+    _HAS_QT = True
+except ImportError:
+    _HAS_QT = False
+    # Stub base classes for environments without PyQt5 (e.g., CI servers)
+    QWidget = object
+    QCalendarWidget = object
+
 from utils.resource_path import resource_path
 
 # ========== ОПРЕДЕЛЯЕМ ПУТЬ К ИКОНКАМ ==========
-ICONS_PATH = resource_path('resources/icons').replace('\\', '/')
+ICONS_PATH = resource_path("resources/icons").replace("\\", "/")
 
 # ========== CALENDAR_STYLE (для обратной совместимости) ==========
 # Все стили календаря теперь в unified_styles.py
@@ -29,8 +40,8 @@ class CustomCalendarWidget(QCalendarWidget):
         # Принудительно белый фон для popup календаря
         self.setAutoFillBackground(True)
         pal = self.palette()
-        pal.setColor(QPalette.Window, QColor('#ffffff'))
-        pal.setColor(QPalette.Base, QColor('#ffffff'))
+        pal.setColor(QPalette.Window, QColor("#ffffff"))
+        pal.setColor(QPalette.Base, QColor("#ffffff"))
         self.setPalette(pal)
 
     def showEvent(self, event):
@@ -69,7 +80,7 @@ class CustomCalendarWidget(QCalendarWidget):
         button_layout.setSpacing(0)
 
         # Создаем кнопку "Сегодня"
-        self.today_button = QPushButton('Сегодня', self.button_container)
+        self.today_button = QPushButton("Сегодня", self.button_container)
         self.today_button.setStyleSheet("""
             QPushButton {
                 background-color: #ffd93c;
@@ -116,13 +127,12 @@ class CustomCalendarWidget(QCalendarWidget):
         painter.save()
         painter.setRenderHint(QPainter.Antialiasing, True)
 
-        is_selected = (date == self.selectedDate())
-        is_current_month = (date.month() == self.monthShown()
-                            and date.year() == self.yearShown())
+        is_selected = date == self.selectedDate()
+        is_current_month = date.month() == self.monthShown() and date.year() == self.yearShown()
         is_weekend = date.dayOfWeek() in (6, 7)
 
         # Белый фон ячейки
-        painter.fillRect(rect, QColor('#ffffff'))
+        painter.fillRect(rect, QColor("#ffffff"))
 
         if is_selected:
             # Красный круг
@@ -131,10 +141,10 @@ class CustomCalendarWidget(QCalendarWidget):
             cy = rect.center().y()
             circle = QRectF(cx - size / 2, cy - size / 2, size, size)
             painter.setPen(Qt.NoPen)
-            painter.setBrush(QColor('#E74C3C'))
+            painter.setBrush(QColor("#E74C3C"))
             painter.drawEllipse(circle)
             # Белый жирный текст
-            painter.setPen(QColor('#FFFFFF'))
+            painter.setPen(QColor("#FFFFFF"))
             font = painter.font()
             font.setBold(True)
             painter.setFont(font)
@@ -144,11 +154,11 @@ class CustomCalendarWidget(QCalendarWidget):
             painter.setFont(font)
             if is_current_month:
                 if is_weekend:
-                    painter.setPen(QColor('#E74C3C'))
+                    painter.setPen(QColor("#E74C3C"))
                 else:
-                    painter.setPen(QColor('#333333'))
+                    painter.setPen(QColor("#333333"))
             else:
-                painter.setPen(QColor('#c0c0c0'))
+                painter.setPen(QColor("#c0c0c0"))
 
         painter.drawText(rect, Qt.AlignCenter, str(date.day()))
         painter.restore()
@@ -167,18 +177,19 @@ def add_working_days(start_date_str, working_days):
     Возвращает: 'YYYY-MM-DD'
     """
     if not start_date_str or working_days <= 0:
-        return start_date_str or ''
+        return start_date_str or ""
     try:
-        current = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        current = datetime.strptime(start_date_str, "%Y-%m-%d").date()
     except (ValueError, TypeError):
-        return start_date_str or ''
+        return start_date_str or ""
     from utils.date_utils import is_working_day
+
     added = 0
     while added < working_days:
         current += timedelta(days=1)
         if is_working_day(current):
             added += 1
-    return current.strftime('%Y-%m-%d')
+    return current.strftime("%Y-%m-%d")
 
 
 def working_days_between(start_date_str, end_date_str):
@@ -189,17 +200,19 @@ def working_days_between(start_date_str, end_date_str):
     if not start_date_str or not end_date_str:
         return 0
     try:
-        start = datetime.strptime(start_date_str, '%Y-%m-%d').date()
-        end = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+        start = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+        end = datetime.strptime(end_date_str, "%Y-%m-%d").date()
     except (ValueError, TypeError):
         return 0
     if end <= start:
         return 0
+    from utils.date_utils import is_working_day
+
     count = 0
     current = start
     while current < end:
         current += timedelta(days=1)
-        if current.weekday() < 5:
+        if is_working_day(current):
             count += 1
     return count
 

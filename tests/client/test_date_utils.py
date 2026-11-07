@@ -2,25 +2,22 @@
 """
 Тесты date_utils — форматирование дат, рабочие дни, дедлайны
 """
-import sys
-from pathlib import Path
+
 from datetime import datetime
+from pathlib import Path
+import sys
 
 import pytest
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from utils.date_utils import (
-    format_date, format_datetime, format_month_year,
-    is_working_day, add_working_days, calculate_deadline,
-    MONTHS_RU, RUSSIAN_HOLIDAYS
-)
-
+from utils.date_utils import MONTHS_RU, RUSSIAN_HOLIDAYS, add_working_days, calculate_deadline, format_date, format_datetime, format_month_year, is_working_day
 
 # ============================================================================
 # format_date
 # ============================================================================
+
 
 class TestFormatDate:
     def test_iso_format(self):
@@ -49,12 +46,16 @@ class TestFormatDate:
         assert format_date(dt) == "20.03.2025"
 
     def test_qdate_object(self):
+        pytest.importorskip("PyQt5")
         from PyQt5.QtCore import QDate
+
         qd = QDate(2025, 6, 15)
         assert format_date(qd) == "15.06.2025"
 
     def test_qdatetime_object(self):
-        from PyQt5.QtCore import QDateTime, QDate, QTime
+        pytest.importorskip("PyQt5")
+        from PyQt5.QtCore import QDate, QDateTime, QTime
+
         qdt = QDateTime(QDate(2025, 12, 31), QTime(23, 59))
         assert format_date(qdt) == "31.12.2025"
 
@@ -62,6 +63,7 @@ class TestFormatDate:
 # ============================================================================
 # format_datetime
 # ============================================================================
+
 
 class TestFormatDatetime:
     def test_iso_with_time(self):
@@ -81,6 +83,7 @@ class TestFormatDatetime:
 # ============================================================================
 # format_month_year
 # ============================================================================
+
 
 class TestFormatMonthYear:
     def test_january(self):
@@ -112,6 +115,7 @@ class TestFormatMonthYear:
 # ============================================================================
 # is_working_day
 # ============================================================================
+
 
 class TestIsWorkingDay:
     def test_monday_is_working(self):
@@ -151,8 +155,7 @@ class TestIsWorkingDay:
 
     def test_all_holidays_defined(self):
         """Все государственные праздники РФ в списке"""
-        expected_holidays = [(1, 1), (1, 2), (1, 3), (1, 4), (1, 5), (1, 6), (1, 7), (1, 8),
-                             (2, 23), (3, 8), (5, 1), (5, 9), (6, 12), (11, 4)]
+        expected_holidays = [(1, 1), (1, 2), (1, 3), (1, 4), (1, 5), (1, 6), (1, 7), (1, 8), (2, 23), (3, 8), (5, 1), (5, 9), (6, 12), (11, 4)]
         for h in expected_holidays:
             assert h in RUSSIAN_HOLIDAYS, f"Праздник {h} отсутствует в RUSSIAN_HOLIDAYS"
 
@@ -160,6 +163,7 @@ class TestIsWorkingDay:
 # ============================================================================
 # add_working_days
 # ============================================================================
+
 
 class TestAddWorkingDays:
     def test_add_5_working_days(self):
@@ -179,7 +183,9 @@ class TestAddWorkingDays:
         assert result == datetime(2025, 1, 20)
 
     def test_qdate_input(self):
+        pytest.importorskip("PyQt5")
         from PyQt5.QtCore import QDate
+
         qd = QDate(2025, 1, 13)
         result = add_working_days(qd, 5)
         assert result == datetime(2025, 1, 20)
@@ -200,6 +206,7 @@ class TestAddWorkingDays:
 # ============================================================================
 # calculate_deadline
 # ============================================================================
+
 
 class TestCalculateDeadline:
     def test_only_contract_date(self):

@@ -1,0 +1,133 @@
+# Pre-commit хуки Interior Studio CRM
+# Установка: pre-commit install
+# Запуск вручную: pre-commit run --all-files
+#
+# Все хуки — локальные (uv run / system), без remote repo загрузок.
+# Установка инструментов: pip install -r requirements-dev.txt
+
+repos:
+  - repo: local
+    hooks:
+
+      # -----------------------------------------------------------------------
+      # PYTHON — ruff (линтер + авто-фикс импортов)
+      # -----------------------------------------------------------------------
+      - id: ruff-check
+        name: "[Python] ruff lint + autofix"
+        entry: uv run ruff check --fix
+        language: system
+        types_or: [python, pyi]
+        exclude: |
+          (?x)^(
+            .venv/|
+            server/alembic/|
+            testsprite_tests/|
+            mobile/
+          )
+
+      # -----------------------------------------------------------------------
+      # PYTHON — ruff format (форматер)
+      # -----------------------------------------------------------------------
+      - id: ruff-format
+        name: "[Python] ruff format"
+        entry: uv run ruff format
+        language: system
+        types_or: [python, pyi]
+        exclude: |
+          (?x)^(
+            .venv/|
+            server/alembic/|
+            testsprite_tests/|
+            mobile/
+          )
+
+      # -----------------------------------------------------------------------
+      # PYTHON — mypy (статические типы, только server/)
+      # Информационный: показывает ошибки, но НЕ блокирует коммит.
+      # Причина: import namespace collision (server/database.py vs database/ package).
+      # Когда добавите type annotations — снимите "|| exit 0"
+      # -----------------------------------------------------------------------
+      - id: mypy
+        name: "[Python] mypy type check (server/) [informational]"
+        entry: bash -c 'uv run mypy server/ --config-file pyproject.toml || exit 0'
+        language: system
+        pass_filenames: false
+        files: ^server/.*\.py$
+        exclude: ^server/alembic/
+
+      # -----------------------------------------------------------------------
+      # PYTHON — bandit (безопасность: SQL injection, хардкод секретов)
+      # -----------------------------------------------------------------------
+      - id: bandit
+        name: "[Python] bandit security scan"
+        entry: uv run bandit -r server/ utils/ database/ --severity-level high --confidence-level high
+        language: system
+        pass_filenames: false
+        files: ^(server|utils|database)/.*\.py$
+        # только HIGH+HIGH: критические уязвимости (SQL injection, хардкод секретов)
+
+      # -----------------------------------------------------------------------
+      # PYTHON — lizard (цикломатическая сложность)
+      # -----------------------------------------------------------------------
+      - id: lizard-python
+        name: "[Python] lizard complexity"
+        entry: uv run lizard
+        language: system
+        types: [python]
+        args:
+          - --CCN       # цикломатическая сложность
+          - "30"        # порог: > 30 (PyQt5 event handlers могут быть 20-25)
+          - --length    # длина функции
+          - "250"       # порог: > 250 строк (db_manager некоторые функции до 226)
+          - --arguments # количество аргументов
+          - "12"        # порог: > 12 (DataAccess методы с 10 фильтрами)
+          - -w          # -w = показывать warning, выходить с 1 если есть
+          - --whitelist  # игнорировать давно существующие сложные функции
+          - .lizard_whitelist.txt
+        exclude: |
+          (?x)^(
+            .venv/|
+            server/alembic/|
+            testsprite_tests/|
+            ui/crm_dialogs\.py|
+            ui/contract_dialogs\.py
+          )
+
+      # -----------------------------------------------------------------------
+      # JS/VUE — eslint (линтер + авто-фикс)
+      # -----------------------------------------------------------------------
+      - id: eslint-vue
+        name: "[Vue3] eslint lint + autofix"
+        entry: bash -c 'cd mobile && node_modules/.bin/eslint --fix src/'
+        language: system
+        pass_filenames: false
+        files: ^mobile/src/.*\.(js|vue)$
+
+      # -----------------------------------------------------------------------
+      # JS/VUE — lizard (сложность)
+      # -----------------------------------------------------------------------
+      - id: lizard-js
+        name: "[Vue3/JS] lizard complexity"
+        entry: uv run lizard
+        language: system
+        files: ^mobile/src/.*\.(js|vue)$
+        exclude: ^mobile/src/pages/DashboardPage\.vue$  # pre-existing CCN=67 (<script setup> агрегирует много функций)
+        args:
+          - --CCN
+          - "30"        # порог: > 30 (Vue composables сложнее Python утилит)
+          - --length
+          - "200"       # порог: > 200 (Vue компоненты с template logic длиннее)
+          - -w
+
+      # -----------------------------------------------------------------------
+      # ОБЩИЕ — защита от случайных коммитов
+      # -----------------------------------------------------------------------
+      - id: no-secrets
+        name: "[All] запрет секретов в коде"
+        entry: uv run bandit -r server/ utils/ ui/ --tests B106,B107 --severity-level medium
+        language: system
+        pass_filenames: false
+        files: ^(server|utils|ui)/.*\.py$
+        # B106 = hardcoded password as function argument (MEDIUM+)
+        # B107 = hardcoded password as function default value (MEDIUM+)
+        # B105 убран — слишком много false positives (token_type="bearer", "access" и т.д.)

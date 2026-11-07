@@ -4,11 +4,13 @@ FROM python:3.11-slim
 # Рабочая директория
 WORKDIR /app
 
-# Установка зависимостей системы + шрифты с кириллицей
-RUN apt-get update && apt-get install -y \
+# Установка зависимостей системы + шрифты с кириллицей + LibreOffice для генерации PDF
+RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     postgresql-client \
     fonts-dejavu-core \
+    fonts-liberation \
+    libreoffice-writer \
     && rm -rf /var/lib/apt/lists/*
 
 # Копирование зависимостей
@@ -24,7 +26,7 @@ COPY . .
 RUN useradd -m -u 1000 appuser
 
 # Создание директорий для файлов с правами appuser
-RUN mkdir -p uploads previews && chown -R appuser:appuser uploads previews /app
+RUN mkdir -p uploads previews uploads/requisites uploads/contract_templates && chown -R appuser:appuser uploads previews /app
 
 # Переключение на непривилегированного пользователя
 USER appuser
@@ -33,4 +35,4 @@ USER appuser
 EXPOSE 8000
 
 # Команда запуска
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2", "--limit-concurrency", "100", "--backlog", "2048"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2", "--limit-concurrency", "100", "--backlog", "2048", "--limit-max-requests", "1000"]

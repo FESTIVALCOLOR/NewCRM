@@ -1,46 +1,68 @@
 # -*- coding: utf-8 -*-
-from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-
-                             QLabel, QScrollArea, QFrame, QDialog, QFormLayout,
-                             QLineEdit, QComboBox, QMessageBox, QDateEdit,
-                             QListWidget, QListWidgetItem, QTabWidget, QTextEdit,
-                             QGroupBox, QSpinBox, QTableWidget, QHeaderView,
-                             QTableWidgetItem, QDoubleSpinBox)
-from ui.custom_dateedit import CustomDateEdit
-from PyQt5.QtCore import Qt, QMimeData, QDate, pyqtSignal, QSize, QUrl, QTimer, QEvent
-from PyQt5.QtGui import QDrag, QPixmap, QColor, QCursor
-from PyQt5.QtPrintSupport import QPrinter
-from PyQt5.QtGui import (QTextDocument, QTextCursor, QTextTableFormat,
-                         QTextCharFormat, QFont, QBrush,
-                         QTextBlockFormat, QTextLength, QTextImageFormat)
-from database.db_manager import DatabaseManager
-from utils.data_access import DataAccess
-from utils.icon_loader import IconLoader
-from ui.custom_title_bar import CustomTitleBar
-from ui.custom_combobox import CustomComboBox
-from ui.custom_message_box import CustomMessageBox, CustomQuestionBox
-from utils.calendar_helpers import CALENDAR_STYLE, add_today_button_to_dateedit, ICONS_PATH
-from utils.tab_helpers import disable_wheel_on_tabwidget
-from utils.table_settings import ProportionalResizeTable, apply_no_focus_delegate, TableSettings
-from utils.date_utils import format_date, format_month_year
-from utils.yandex_disk import YandexDiskManager
-from config import YANDEX_DISK_TOKEN
-from utils.resource_path import resource_path
-from utils.dialog_helpers import create_progress_dialog
-from ui.base_kanban_tab import BaseDraggableList, BaseKanbanColumn
 from functools import partial
-from utils.button_debounce import debounce_click
 import json
 import os
 import threading
 
+from PyQt5.QtCore import QDate, QEvent, QMimeData, QSize, Qt, QTimer, QUrl, pyqtSignal
+from PyQt5.QtGui import QBrush, QColor, QCursor, QDrag, QFont, QPixmap, QTextBlockFormat, QTextCharFormat, QTextCursor, QTextDocument, QTextImageFormat, QTextLength, QTextTableFormat
+from PyQt5.QtPrintSupport import QPrinter
+from PyQt5.QtWidgets import (
+    QComboBox,
+    QDateEdit,
+    QDialog,
+    QDoubleSpinBox,
+    QFormLayout,
+    QFrame,
+    QGroupBox,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QMessageBox,
+    QPushButton,
+    QScrollArea,
+    QSpinBox,
+    QTabBar,
+    QTableWidget,
+    QTableWidgetItem,
+    QTabWidget,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
+
+from config import YANDEX_DISK_TOKEN
+from database.db_manager import DatabaseManager
+from ui.base_kanban_tab import BaseDraggableList, BaseKanbanColumn
+from ui.custom_combobox import CustomComboBox
+from ui.custom_dateedit import CustomDateEdit
+from ui.custom_message_box import CustomMessageBox, CustomQuestionBox
+from ui.custom_title_bar import CustomTitleBar
+from utils.button_debounce import debounce_click
+from utils.calendar_helpers import CALENDAR_STYLE, ICONS_PATH, add_today_button_to_dateedit
+from utils.data_access import DataAccess
+from utils.date_utils import format_date, format_month_year
+from utils.dialog_helpers import create_progress_dialog
+from utils.icon_loader import IconLoader
 
 # ========== Реэкспорт из utils/permissions (обратная совместимость) ==========
 from utils.permissions import (  # noqa: F401
-    _emp_has_pos, _emp_only_pos,
-    _user_permissions_cache, _load_user_permissions, _has_perm,
-    has_any_perm, invalidate_cache,
+    _emp_has_pos,
+    _emp_only_pos,
+    _has_perm,
+    _load_user_permissions,
+    _user_permissions_cache,
+    has_any_perm,
+    invalidate_cache,
 )
+from utils.resource_path import resource_path
+from utils.tab_helpers import disable_wheel_on_tabwidget
+from utils.table_settings import ProportionalResizeTable, TableSettings, apply_no_focus_delegate
+from utils.yandex_disk import YandexDiskManager
+
 # =============================================================================
 
 
@@ -56,17 +78,17 @@ class DraggableListWidget(BaseDraggableList):
 
         # S2.1: Проверка права crm_cards.move перед перемещением карточки
         column = self.parent_column
-        if hasattr(column, 'employee') and hasattr(column, 'api_client'):
-            if not _has_perm(column.employee, column.api_client, 'crm_cards.move'):
+        if hasattr(column, "employee") and hasattr(column, "api_client"):
+            if not _has_perm(column.employee, column.api_client, "crm_cards.move"):
                 print("[DROP EVENT] Отказано: нет права crm.update")
                 event.ignore()
                 return
 
         source = event.source()
-        
+
         print(f"\n[DROP EVENT] На QListWidget колонки '{self.parent_column.column_name}'")
         print(f"             Источник: {type(source).__name__}")
-        
+
         if not isinstance(source, DraggableListWidget):
             event.ignore()
             return
@@ -94,13 +116,24 @@ class DraggableListWidget(BaseDraggableList):
 
         # Отложенный emit: dropEvent + DnD cleanup должны полностью завершиться
         # ПЕРЕД вызовом on_card_moved() → load_cards_for_type() → QListWidget.clear()
-        QTimer.singleShot(50, lambda: source_column.card_moved.emit(
-            card_id,
-            source_column.column_name,
-            target_column.column_name,
-            source_column.project_type
-        ))
-            
+        QTimer.singleShot(50, lambda: source_column.card_moved.emit(card_id, source_column.column_name, target_column.column_name, source_column.project_type))
+
+
+class SyncedTabBar(QTabBar):
+    """TabBar, синхронизирующий ширину вкладок с референсным QTabWidget"""
+
+    def __init__(self, ref_tab_widget, parent=None):
+        super().__init__(parent)
+        self._ref = ref_tab_widget
+
+    def tabSizeHint(self, index):
+        hint = super().tabSizeHint(index)
+        ref_bar = self._ref.tabBar()
+        if index < ref_bar.count():
+            hint.setWidth(ref_bar.tabSizeHint(index).width())
+        return hint
+
+
 class CRMTab(QWidget):
     def __init__(self, employee, can_edit=True, api_client=None, parent=None):
         super().__init__(parent)
@@ -113,39 +146,38 @@ class CRMTab(QWidget):
         self._data_loaded = False
         self._loading_guard = False
         self.init_ui()
-   
+
     def init_ui(self):
         main_layout = QVBoxLayout()
         main_layout.setSpacing(5)
         main_layout.setContentsMargins(0, 5, 0, 5)
-        
+
         # Заголовок и кнопка статистики
         header_layout = QHBoxLayout()
         header_layout.setSpacing(10)
-        
-        header = QLabel('CRM - Управление проектами')
-        header.setStyleSheet('font-size: 13px; font-weight: bold; color: #333333;')
+
+        header = QLabel("CRM - Управление проектами")
+        header.setStyleSheet("font-size: 13px; font-weight: bold; color: #333333;")
         header_layout.addWidget(header)
-        
+
         header_layout.addStretch(1)
 
-        refresh_btn = IconLoader.create_action_button('refresh', 'Обновить данные с сервера')
+        refresh_btn = IconLoader.create_action_button("refresh", "Обновить данные с сервера")
         refresh_btn.clicked.connect(self.refresh_current_tab)
         header_layout.addWidget(refresh_btn)
 
-        if _has_perm(self.employee, self.api_client, 'crm_cards.move'):
-            stats_btn = IconLoader.create_action_button('stats', 'Показать статистику проектов')
+        if _has_perm(self.employee, self.api_client, "crm_cards.move"):
+            stats_btn = IconLoader.create_action_button("stats", "Показать статистику проектов")
             stats_btn.clicked.connect(self.show_statistics_current_tab)
             header_layout.addWidget(stats_btn)
-        
+
         main_layout.addLayout(header_layout)
-        
+
         # Вкладки для типов проектов
         self.project_tabs = QTabWidget()
         self.project_tabs.setStyleSheet("""
             QTabWidget::pane {
                 border: none;
-                border-radius: 4px;
             }
             QTabBar::tab {
                 padding: 6px 16px;
@@ -160,170 +192,200 @@ class CRMTab(QWidget):
             }
             QTabBar::tab:selected {
                 background-color: white;
-                border-bottom: 1px solid #d9d9d9;
+                border-bottom: 2px solid #ffd93c;
             }
-            QTabBar::tab:hover {
+            QTabBar::tab:hover:!selected {
                 background-color: #F0F0F0;
             }
         """)
-        
+
         # === ИНДИВИДУАЛЬНЫЕ ПРОЕКТЫ ===
-        individual_main_widget = QWidget()
-        individual_main_layout = QVBoxLayout()
-        individual_main_layout.setContentsMargins(0, 0, 0, 0)
-        
-        self.individual_subtabs = QTabWidget()
-        self.individual_subtabs.setStyleSheet("""
-            QTabBar::tab {
-                padding: 4px 16px;
-                font-size: 11px;
-            }
-        """)
-        
-        self.individual_widget = self.create_crm_board('Индивидуальный')
-        self.individual_subtabs.addTab(self.individual_widget, 'Активные проекты')
+        self.individual_widget = self.create_crm_board("Индивидуальный")
 
-        if _has_perm(self.employee, self.api_client, 'crm_cards.move'):
-            self.individual_archive_widget = self.create_archive_board('Индивидуальный')
-            self.individual_subtabs.addTab(self.individual_archive_widget, 'Архив (0)')
+        if _has_perm(self.employee, self.api_client, "crm_cards.view_archive"):
+            # Есть архив — показываем подвкладки
+            individual_main_widget = QWidget()
+            individual_main_layout = QVBoxLayout()
+            individual_main_layout.setContentsMargins(0, 0, 0, 0)
 
-        individual_main_layout.addWidget(self.individual_subtabs)
-        individual_main_widget.setLayout(individual_main_layout)
-
-        self.project_tabs.addTab(individual_main_widget, 'Индивидуальные проекты')
-
-        # === ШАБЛОННЫЕ ПРОЕКТЫ (скрыто от чистого СДП) ===
-        if _has_perm(self.employee, self.api_client, 'crm_cards.move'):
-            template_main_widget = QWidget()
-            template_main_layout = QVBoxLayout()
-            template_main_layout.setContentsMargins(0, 0, 0, 0)
-            
-            self.template_subtabs = QTabWidget()
-            self.template_subtabs.setStyleSheet("""
+            self.individual_subtabs = QTabWidget()
+            self.individual_subtabs.setTabBar(SyncedTabBar(self.project_tabs))
+            self.individual_subtabs.setStyleSheet("""
+                QTabWidget::pane {
+                    border: none;
+                }
                 QTabBar::tab {
-                    padding: 4px 16px;
-                    font-size: 11px;
+                    padding: 6px 16px;
+                    font-size: 12px;
+                    font-weight: bold;
+                    border: 1px solid #d9d9d9;
+                    border-bottom: none;
+                    border-radius: 0px;
+                    background-color: #E8E8E8;
+                }
+                QTabBar::tab:first {
+                    border-bottom-left-radius: 4px;
+                }
+                QTabBar::tab:selected {
+                    background-color: white;
+                    border-bottom: 2px solid #F57C00;
+                }
+                QTabBar::tab:hover:!selected {
+                    background-color: #F0F0F0;
                 }
             """)
-            
-            self.template_widget = self.create_crm_board('Шаблонный')
-            self.template_subtabs.addTab(self.template_widget, 'Активные проекты')
 
-            if _has_perm(self.employee, self.api_client, 'crm_cards.move'):
-                self.template_archive_widget = self.create_archive_board('Шаблонный')
-                self.template_subtabs.addTab(self.template_archive_widget, 'Архив (0)')
-            
-            template_main_layout.addWidget(self.template_subtabs)
-            template_main_widget.setLayout(template_main_layout)
-            
-            self.project_tabs.addTab(template_main_widget, 'Шаблонные проекты')
-            
+            self.individual_subtabs.addTab(self.individual_widget, "Активные проекты")
+            self.individual_archive_widget = self.create_archive_board("Индивидуальный")
+            self.individual_subtabs.addTab(self.individual_archive_widget, "Архив (0)")
+
+            individual_main_layout.addWidget(self.individual_subtabs)
+            individual_main_widget.setLayout(individual_main_layout)
+
+            self.project_tabs.addTab(individual_main_widget, "Индивидуальные проекты")
+        else:
+            # Нет архива — показываем доску напрямую без подвкладок
+            self.project_tabs.addTab(self.individual_widget, "Индивидуальные проекты")
+
+        # === ШАБЛОННЫЕ ПРОЕКТЫ (видны всем с access.crm) ===
+        if True:  # Шаблонные проекты видны всем, кто видит CRM
+            self.template_widget = self.create_crm_board("Шаблонный")
+
+            if _has_perm(self.employee, self.api_client, "crm_cards.view_archive"):
+                # Есть архив — показываем подвкладки
+                template_main_widget = QWidget()
+                template_main_layout = QVBoxLayout()
+                template_main_layout.setContentsMargins(0, 0, 0, 0)
+
+                self.template_subtabs = QTabWidget()
+                self.template_subtabs.setTabBar(SyncedTabBar(self.project_tabs))
+                self.template_subtabs.setStyleSheet("""
+                    QTabWidget::pane {
+                        border: none;
+                    }
+                    QTabBar::tab {
+                        padding: 6px 16px;
+                        font-size: 12px;
+                        font-weight: bold;
+                        border: 1px solid #d9d9d9;
+                        border-bottom: none;
+                        border-radius: 0px;
+                        background-color: #E8E8E8;
+                    }
+                    QTabBar::tab:first {
+                        border-bottom-left-radius: 4px;
+                    }
+                    QTabBar::tab:selected {
+                        background-color: white;
+                        border-bottom: 2px solid #F57C00;
+                    }
+                    QTabBar::tab:hover:!selected {
+                        background-color: #F0F0F0;
+                    }
+                """)
+
+                self.template_subtabs.addTab(self.template_widget, "Активные проекты")
+                self.template_archive_widget = self.create_archive_board("Шаблонный")
+                self.template_subtabs.addTab(self.template_archive_widget, "Архив (0)")
+
+                template_main_layout.addWidget(self.template_subtabs)
+                template_main_widget.setLayout(template_main_layout)
+
+                self.project_tabs.addTab(template_main_widget, "Шаблонные проекты")
+            else:
+                # Нет архива — показываем доску напрямую без подвкладок
+                self.project_tabs.addTab(self.template_widget, "Шаблонные проекты")
+
         self.project_tabs.currentChanged.connect(self.on_tab_changed)
-        
+
         main_layout.addWidget(self.project_tabs, 1)
-        
+
         self.setLayout(main_layout)
-        
+
     def update_project_tab_counters(self):
         """Обновление счетчиков в названиях вкладок проектов"""
         try:
             individual_count = 0
-            if hasattr(self, 'individual_widget') and hasattr(self.individual_widget, 'columns'):
+            if hasattr(self, "individual_widget") and hasattr(self.individual_widget, "columns"):
                 for column in self.individual_widget.columns.values():
                     individual_count += column.cards_list.count()
-            
+
             template_count = 0
-            if hasattr(self, 'template_widget') and hasattr(self.template_widget, 'columns'):
+            if hasattr(self, "template_widget") and hasattr(self.template_widget, "columns"):
                 for column in self.template_widget.columns.values():
                     template_count += column.cards_list.count()
-            
+
             individual_archive_count = 0
-            if hasattr(self, 'individual_archive_widget') and hasattr(self.individual_archive_widget, 'archive_layout'):
+            if hasattr(self, "individual_archive_widget") and hasattr(self.individual_archive_widget, "archive_layout"):
                 layout = self.individual_archive_widget.archive_layout
                 for i in range(layout.count()):
                     item = layout.itemAt(i)
                     if item.widget() and isinstance(item.widget(), ArchiveCard):
                         individual_archive_count += 1
-            
+
             template_archive_count = 0
-            if hasattr(self, 'template_archive_widget') and hasattr(self.template_archive_widget, 'archive_layout'):
+            if hasattr(self, "template_archive_widget") and hasattr(self.template_archive_widget, "archive_layout"):
                 layout = self.template_archive_widget.archive_layout
                 for i in range(layout.count()):
                     item = layout.itemAt(i)
                     if item.widget() and isinstance(item.widget(), ArchiveCard):
                         template_archive_count += 1
-            
-            self.project_tabs.setTabText(0, f'Индивидуальные проекты ({individual_count})')
-            
-            if _has_perm(self.employee, self.api_client, 'crm_cards.move'):
-                self.project_tabs.setTabText(1, f'Шаблонные проекты ({template_count})')
-            
-            if hasattr(self, 'individual_subtabs'):
-                self.individual_subtabs.setTabText(0, f'Активные проекты ({individual_count})')
-                
-                if _has_perm(self.employee, self.api_client, 'crm_cards.move'):
-                    self.individual_subtabs.setTabText(1, f'Архив ({individual_archive_count})')
-            
-            if hasattr(self, 'template_subtabs') and _has_perm(self.employee, self.api_client, 'crm_cards.move'):
-                self.template_subtabs.setTabText(0, f'Активные проекты ({template_count})')
-                
-                if _has_perm(self.employee, self.api_client, 'crm_cards.move'):
-                    self.template_subtabs.setTabText(1, f'Архив ({template_archive_count})')
-            
-            
+
+            self.project_tabs.setTabText(0, f"Индивидуальные проекты ({individual_count})")
+            self.project_tabs.setTabText(1, f"Шаблонные проекты ({template_count})")
+
+            if hasattr(self, "individual_subtabs"):
+                self.individual_subtabs.setTabText(0, f"Активные проекты ({individual_count})")
+
+                if _has_perm(self.employee, self.api_client, "crm_cards.view_archive"):
+                    self.individual_subtabs.setTabText(1, f"Архив ({individual_archive_count})")
+
+            if hasattr(self, "template_subtabs"):
+                self.template_subtabs.setTabText(0, f"Активные проекты ({template_count})")
+
+                if _has_perm(self.employee, self.api_client, "crm_cards.view_archive"):
+                    self.template_subtabs.setTabText(1, f"Архив ({template_archive_count})")
+
         except Exception as e:
             print(f"[WARN] Ошибка обновления счетчиков: {e}")
             import traceback
+
             traceback.print_exc()
-         
+
     def show_statistics_current_tab(self):
         """Показ статистики для текущей вкладки"""
         current_index = self.project_tabs.currentIndex()
         if current_index == 0:
-            self.show_crm_statistics('Индивидуальный')
+            self.show_crm_statistics("Индивидуальный")
         elif current_index == 1:
-            self.show_crm_statistics('Шаблонный')
-    
+            self.show_crm_statistics("Шаблонный")
+
     def create_crm_board(self, project_type):
         """Создание доски CRM для типа проекта"""
         widget = QWidget()
         main_board_layout = QVBoxLayout()
         main_board_layout.setContentsMargins(0, 0, 0, 0)
         main_board_layout.setSpacing(0)
-        
+
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         scroll.setStyleSheet("QScrollArea { border: none; }")
-        
+
         columns_widget = QWidget()
         columns_layout = QHBoxLayout()
         columns_layout.setSpacing(10)
         columns_layout.setContentsMargins(0, 5, 0, 0)
-        
-        if project_type == 'Индивидуальный':
-            columns = [
-                'Новый заказ',
-                'В ожидании',
-                'Стадия 1: планировочные решения',
-                'Стадия 2: концепция дизайна',
-                'Стадия 3: рабочие чертежи',
-                'Выполненный проект'
-            ]
+
+        if project_type == "Индивидуальный":
+            columns = ["Новый заказ", "В ожидании", "Стадия 1: планировочные решения", "Стадия 2: концепция дизайна", "Стадия 3: рабочие чертежи", "Выполненный проект"]
         else:
             # ИСПРАВЛЕНИЕ 06.02.2026: Добавлена дополнительная стадия 3д визуализации (#18)
-            columns = [
-                'Новый заказ',
-                'В ожидании',
-                'Стадия 1: планировочные решения',
-                'Стадия 2: рабочие чертежи',
-                'Стадия 3: 3д визуализация (Дополнительная)',
-                'Выполненный проект'
-            ]
-        
+            columns = ["Новый заказ", "В ожидании", "Стадия 1: планировочные решения", "Стадия 2: рабочие чертежи", "Стадия 3: 3д визуализация (Дополнительная)", "Выполненный проект"]
+
         columns_dict = {}
-        
+
         for column_name in columns:
             column = CRMColumn(column_name, project_type, self.employee, self.can_edit, self.db, api_client=self.api_client)
             column.card_moved.connect(self.on_card_moved)
@@ -338,16 +400,17 @@ class CRMTab(QWidget):
 
         columns_widget.setLayout(columns_layout)
         scroll.setWidget(columns_widget)
-        
+
         main_board_layout.addWidget(scroll, 1)
         widget.setLayout(main_board_layout)
-        
+
         return widget
-    
+
     def ensure_data_loaded(self):
         """Ленивая загрузка: данные загружаются при первом показе таба.
         При повторном переключении — пропускаем если кэш свежий (<30с)."""
         import time as _time
+
         now = _time.monotonic()
         first_time = not self._data_loaded
 
@@ -356,81 +419,78 @@ class CRMTab(QWidget):
             self._data_loaded = True
             self._last_load_time = now
             self._loading_guard = True
-            self.data.prefer_local = True
             try:
                 # Загружаем ТОЛЬКО текущую подвкладку (Индивидуальный или Шаблонный)
+                # НЕ используем prefer_local — карточки могут быть только в API
+                # (созданные при добавлении договора, ещё не синхронизированы в SQLite)
                 current_index = self.project_tabs.currentIndex()
-                current_type = 'Индивидуальный' if current_index == 0 else 'Шаблонный'
+                current_type = "Индивидуальный" if current_index == 0 else "Шаблонный"
                 self.load_cards_for_type(current_type)
             finally:
-                self.data.prefer_local = False
                 self._loading_guard = False
-            print(f"[PERF] ensure_data_loaded БЛОКИРОВКА: {(_time.perf_counter()-_t0)*1000:.0f}ms")
+            print(f"[PERF] ensure_data_loaded БЛОКИРОВКА: {(_time.perf_counter() - _t0) * 1000:.0f}ms")
             # Вторую подвкладку и архив загружаем отложенно, не блокируя UI
-            other_type = 'Шаблонный' if current_index == 0 else 'Индивидуальный'
-            if other_type == 'Шаблонный' and not hasattr(self, 'template_widget'):
+            other_type = "Шаблонный" if current_index == 0 else "Индивидуальный"
+            if other_type == "Шаблонный" and not hasattr(self, "template_widget"):
                 # СДП — шаблонных нет, сразу грузим архив
-                if _has_perm(self.employee, self.api_client, 'crm_cards.move'):
+                if _has_perm(self.employee, self.api_client, "crm_cards.move"):
                     QTimer.singleShot(200, self._deferred_load_archive)
             else:
                 QTimer.singleShot(200, lambda t=other_type: self._deferred_load_other(t))
-        elif now - getattr(self, '_last_load_time', 0) < 30:
+        elif now - getattr(self, "_last_load_time", 0) < 30:
             return
         else:
             self._last_load_time = now
             current_index = self.project_tabs.currentIndex()
-            current_type = 'Индивидуальный' if current_index == 0 else 'Шаблонный'
+            current_type = "Индивидуальный" if current_index == 0 else "Шаблонный"
             self.load_cards_for_type(current_type)
 
     def _deferred_load_other(self, project_type):
         """Отложенная загрузка второй подвкладки и архива"""
-        self.data.prefer_local = True
-        try:
-            self.load_cards_for_type(project_type)
-        finally:
-            self.data.prefer_local = False
+        self.load_cards_for_type(project_type)
         # Архив — ещё позже
-        if _has_perm(self.employee, self.api_client, 'crm_cards.move'):
+        if _has_perm(self.employee, self.api_client, "crm_cards.move"):
             QTimer.singleShot(300, self._deferred_load_archive)
 
     def _deferred_load_archive(self):
         """Отложенная загрузка архивных карточек (через API, не prefer_local)"""
         # Архив загружаем через API — локальная БД не содержит crm_cards
-        self.load_archive_cards('Индивидуальный')
-        if hasattr(self, 'template_archive_widget'):
-            self.load_archive_cards('Шаблонный')
+        self.load_archive_cards("Индивидуальный")
+        if hasattr(self, "template_archive_widget"):
+            self.load_archive_cards("Шаблонный")
 
     def load_cards_for_current_tab(self):
         """Загрузка карточек для текущей активной вкладки"""
         current_index = self.project_tabs.currentIndex()
         if current_index == 0:
-            self.load_cards_for_type('Индивидуальный')
-            if _has_perm(self.employee, self.api_client, 'crm_cards.move'):
-                self.load_archive_cards('Индивидуальный')
+            self.load_cards_for_type("Индивидуальный")
+            if _has_perm(self.employee, self.api_client, "crm_cards.move"):
+                self.load_archive_cards("Индивидуальный")
         elif current_index == 1:
-            self.load_cards_for_type('Шаблонный')
-            if _has_perm(self.employee, self.api_client, 'crm_cards.move'):
-                self.load_archive_cards('Шаблонный')
-                
+            self.load_cards_for_type("Шаблонный")
+            if _has_perm(self.employee, self.api_client, "crm_cards.move"):
+                self.load_archive_cards("Шаблонный")
+
     def load_cards_for_type(self, project_type):
         """Загрузка карточек для конкретного типа проекта с fallback на локальную БД"""
         import time as _time
+
         _t0 = _time.perf_counter()
         cards = None
 
         try:
             cards = self.data.get_crm_cards(project_type)
             _t1 = _time.perf_counter()
-            print(f"[PERF] get_crm_cards({project_type}): {(_t1-_t0)*1000:.0f}ms, {len(cards) if cards else 0} шт")
+            print(f"[PERF] get_crm_cards({project_type}): {(_t1 - _t0) * 1000:.0f}ms, {len(cards) if cards else 0} шт")
 
-            if project_type == 'Индивидуальный':
+            if project_type == "Индивидуальный":
                 board_widget = self.individual_widget
             else:
-                if not hasattr(self, 'template_widget'):
+                if not hasattr(self, "template_widget"):
                     return
                 board_widget = self.template_widget
 
-            if not hasattr(board_widget, 'columns'):
+            if not hasattr(board_widget, "columns"):
                 return
 
             columns_dict = board_widget.columns
@@ -446,7 +506,7 @@ class CRMTab(QWidget):
                         if not self.should_show_card_for_employee(card_data):
                             continue
 
-                        column_name = card_data.get('column_name')
+                        column_name = card_data.get("column_name")
                         if column_name and column_name in columns_dict:
                             columns_dict[column_name].add_card(card_data, bulk=True)
 
@@ -458,7 +518,7 @@ class CRMTab(QWidget):
                         continue
 
             _t2 = _time.perf_counter()
-            print(f"[PERF] Виджеты карточек ({project_type}): {(_t2-_t1)*1000:.0f}ms")
+            print(f"[PERF] Виджеты карточек ({project_type}): {(_t2 - _t1) * 1000:.0f}ms")
 
             # Пакетное обновление после загрузки всех карточек
             for column in columns_dict.values():
@@ -468,24 +528,25 @@ class CRMTab(QWidget):
 
             self.update_project_tab_counters()
             _t3 = _time.perf_counter()
-            print(f"[PERF] ИТОГО load_cards_for_type({project_type}): {(_t3-_t0)*1000:.0f}ms")
+            print(f"[PERF] ИТОГО load_cards_for_type({project_type}): {(_t3 - _t0) * 1000:.0f}ms")
 
         except Exception as e:
             # S3.2: Обработка ошибок без краша UI — traceback в лог, пустой список карточек
             try:
                 print(f"[load_cards_for_type] КРИТИЧЕСКАЯ ОШИБКА ({project_type}): {e}")
                 import traceback
+
                 traceback.print_exc()
             except (UnicodeEncodeError, OSError):
                 pass
 
             # Восстанавливаем отрисовку колонок (могли быть заблокированы выше)
             try:
-                if project_type == 'Индивидуальный':
-                    bw = getattr(self, 'individual_widget', None)
+                if project_type == "Индивидуальный":
+                    bw = getattr(self, "individual_widget", None)
                 else:
-                    bw = getattr(self, 'template_widget', None)
-                if bw and hasattr(bw, 'columns'):
+                    bw = getattr(self, "template_widget", None)
+                if bw and hasattr(bw, "columns"):
                     for col in bw.columns.values():
                         col.cards_list.setUpdatesEnabled(True)
                         col.update_header_count()
@@ -496,50 +557,46 @@ class CRMTab(QWidget):
     def _show_offline_notification(self, error=None):
         """Показать уведомление об offline режиме"""
         try:
-            msg = 'Сервер недоступен. Данные загружены из локальной базы.\n'
-            msg += 'Изменения будут синхронизированы при восстановлении связи.'
+            msg = "Сервер недоступен. Данные загружены из локальной базы.\n"
+            msg += "Изменения будут синхронизированы при восстановлении связи."
             if error:
-                msg += f'\n\nОшибка: {str(error)[:100]}'
-            CustomMessageBox(self, 'Offline режим', msg, 'warning').exec_()
+                msg += f"\n\nОшибка: {str(error)[:100]}"
+            CustomMessageBox(self, "Offline режим", msg, "warning").exec_()
         except Exception:
             pass
 
     def _api_update_card_with_fallback(self, card_id: int, updates: dict):
         """Обновить CRM карточку с fallback на локальную БД и очередью offline"""
         self.data.update_crm_card(card_id, updates)
-            
+
     def on_tab_changed(self, index):
         """Обработка переключения вкладок"""
         # Пропускаем если ensure_data_loaded уже загружает данные
-        if getattr(self, '_loading_guard', False):
+        if getattr(self, "_loading_guard", False):
             return
-        # Активные карточки — из локальной БД (мгновенно)
-        self.data.prefer_local = True
-        try:
-            if index == 0:
-                self.load_cards_for_type('Индивидуальный')
-            elif index == 1:
-                self.load_cards_for_type('Шаблонный')
-        finally:
-            self.data.prefer_local = False
+        # Активные карточки — через API (кеш _global_cache обеспечивает быстродействие)
+        if index == 0:
+            self.load_cards_for_type("Индивидуальный")
+        elif index == 1:
+            self.load_cards_for_type("Шаблонный")
 
         # Архив — через API (локальная БД не содержит crm_cards)
-        if _has_perm(self.employee, self.api_client, 'crm_cards.move'):
+        if _has_perm(self.employee, self.api_client, "crm_cards.move"):
             if index == 0:
-                self.load_archive_cards('Индивидуальный')
+                self.load_archive_cards("Индивидуальный")
             elif index == 1:
-                self.load_archive_cards('Шаблонный')
+                self.load_archive_cards("Шаблонный")
 
         # Переключаем дашборд в соответствии с выбранной вкладкой
         mw = self.window()
-        if hasattr(mw, 'switch_dashboard'):
-            dashboard_key = 'СРМ (Индивидуальные)' if index == 0 else 'СРМ (Шаблонные)'
+        if hasattr(mw, "switch_dashboard"):
+            dashboard_key = "СРМ (Индивидуальные)" if index == 0 else "СРМ (Шаблонные)"
             mw.switch_dashboard(dashboard_key)
-    
+
     def _get_sync_manager(self):
         """Получить SyncManager из главного окна"""
         mw = self.window()
-        return getattr(mw, 'sync_manager', None)
+        return getattr(mw, "sync_manager", None)
 
     def on_card_moved(self, card_id, from_column, to_column, project_type):
         """Обработка перемещения карточки"""
@@ -557,66 +614,45 @@ class CRMTab(QWidget):
     def _do_card_move(self, card_id, from_column, to_column, project_type, sync):
         """Внутренняя логика перемещения карточки (выделена для try/finally)"""
         # === ПРАВИЛО: Нельзя вернуться в "Новый заказ" ===
-        if to_column == 'Новый заказ' and from_column != 'Новый заказ':
-            CustomMessageBox(
-                self, 'Перемещение запрещено',
-                'Нельзя вернуть карточку в "Новый заказ".\n'
-                'Используйте столбец "В ожидании" для приостановки.',
-                'warning'
-            ).exec_()
+        if to_column == "Новый заказ" and from_column != "Новый заказ":
+            CustomMessageBox(self, "Перемещение запрещено", 'Нельзя вернуть карточку в "Новый заказ".\nИспользуйте столбец "В ожидании" для приостановки.', "warning").exec_()
             return
 
         # === ПРАВИЛО: Из "В ожидании" — только в прежний столбец или "Выполненный проект" ===
-        if from_column == 'В ожидании' and to_column not in ['В ожидании', 'Выполненный проект']:
+        if from_column == "В ожидании" and to_column not in ["В ожидании", "Выполненный проект"]:
             card_info = self.data.get_crm_card(card_id)
-            prev_col = card_info.get('previous_column') if card_info else None
-            if prev_col and prev_col != 'Новый заказ' and to_column != prev_col:
-                CustomMessageBox(
-                    self, 'Перемещение запрещено',
-                    f'Из "В ожидании" можно вернуть только в "{prev_col}" или "Выполненный проект".',
-                    'warning'
-                ).exec_()
+            prev_col = card_info.get("previous_column") if card_info else None
+            if prev_col and prev_col != "Новый заказ" and to_column != prev_col:
+                CustomMessageBox(self, "Перемещение запрещено", f'Из "В ожидании" можно вернуть только в "{prev_col}" или "Выполненный проект".', "warning").exec_()
                 return
 
         # === ПРАВИЛО: Запрет перемещения назад (кроме руководителей) ===
-        if from_column not in ['Новый заказ', 'В ожидании'] and to_column not in ['В ожидании', 'Выполненный проект']:
-            if not _has_perm(self.employee, self.api_client, 'crm_cards.complete_approval'):
+        if from_column not in ["Новый заказ", "В ожидании"] and to_column not in ["В ожидании", "Выполненный проект"]:
+            if not _has_perm(self.employee, self.api_client, "crm_cards.complete_approval"):
                 # Определяем порядок колонок
-                if project_type == 'Шаблонный':
-                    column_order = [
-                        'Новый заказ',
-                        'Стадия 1: планировочные решения', 'Стадия 2: рабочие чертежи',
-                        'Стадия 3: 3д визуализация (Дополнительная)',
-                        'Выполненный проект'
-                    ]
+                if project_type == "Шаблонный":
+                    column_order = ["Новый заказ", "Стадия 1: планировочные решения", "Стадия 2: рабочие чертежи", "Стадия 3: 3д визуализация (Дополнительная)", "Выполненный проект"]
                 else:
-                    column_order = [
-                        'Новый заказ',
-                        'Стадия 1: планировочные решения', 'Стадия 2: концепция дизайна',
-                        'Стадия 3: рабочие чертежи',
-                        'Выполненный проект'
-                    ]
+                    column_order = ["Новый заказ", "Стадия 1: планировочные решения", "Стадия 2: концепция дизайна", "Стадия 3: рабочие чертежи", "Выполненный проект"]
                 from_idx = column_order.index(from_column) if from_column in column_order else -1
                 to_idx = column_order.index(to_column) if to_column in column_order else -1
                 if from_idx >= 0 and to_idx >= 0 and to_idx < from_idx:
                     CustomMessageBox(
-                        self, 'Перемещение запрещено',
-                        f'Нельзя переместить карточку назад: "{from_column}" → "{to_column}".\n'
-                        'Используйте столбец "В ожидании" для приостановки проекта.',
-                        'warning'
+                        self, "Перемещение запрещено", f'Нельзя переместить карточку назад: "{from_column}" → "{to_column}".\nИспользуйте столбец "В ожидании" для приостановки проекта.', "warning"
                     ).exec_()
                     return
 
         # === ПРОВЕРКА ОПЛАТЫ АВАНСА (Индивидуальные проекты) ===
         # Без оплаты аванса нельзя перемещать карточку на рабочие стадии
-        if project_type == 'Индивидуальный' and to_column.startswith('Стадия'):
+        if project_type == "Индивидуальный" and to_column.startswith("Стадия"):
             if not self._check_advance_payment(card_id, project_type):
                 CustomMessageBox(
-                    self, 'Оплата не подтверждена',
-                    '<b>Перемещение на стадию невозможно!</b><br><br>'
-                    'Для начала работы необходимо подтвердить оплату аванса (1-й платёж).<br><br>'
-                    '<i>Откройте карточку договора и отметьте аванс как оплаченный.</i>',
-                    'warning'
+                    self,
+                    "Оплата не подтверждена",
+                    "<b>Перемещение на стадию невозможно!</b><br><br>"
+                    "Для начала работы необходимо подтвердить оплату аванса (1-й платёж).<br><br>"
+                    "<i>Откройте карточку договора и отметьте аванс как оплаченный.</i>",
+                    "warning",
                 ).exec_()
                 return
 
@@ -624,7 +660,7 @@ class CRMTab(QWidget):
         if self.requires_executor_selection(to_column):
             # Получаем contract_id для передачи в диалог (для norm_days)
             _card_info = self.data.get_crm_card(card_id)
-            _contract_id = _card_info.get('contract_id') if _card_info else None
+            _contract_id = _card_info.get("contract_id") if _card_info else None
             dialog = ExecutorSelectionDialog(self, card_id, to_column, project_type, self.api_client, contract_id=_contract_id)
             if dialog.exec_() != QDialog.Accepted:
                 return
@@ -633,110 +669,122 @@ class CRMTab(QWidget):
             card_data = self.data.get_crm_card(card_id)
 
             if card_data:
-                if 'концепция' in from_column and card_data.get('designer_completed') == 1:
+                if "концепция" in from_column and card_data.get("designer_completed") == 1:
                     CustomMessageBox(
                         self,
-                        'Работа не принята',
-                        'Дизайнер сдал работу, но вы еще не приняли её!\n\n'
-                        'Сначала нажмите кнопку "Принять работу" на карточке,\n'
-                        'затем переместите её на следующую стадию.',
-                        'warning'
+                        "Работа не принята",
+                        'Дизайнер сдал работу, но вы еще не приняли её!\n\nСначала нажмите кнопку "Принять работу" на карточке,\nзатем переместите её на следующую стадию.',
+                        "warning",
                     ).exec_()
                     return
 
-                if ('планировочные' in from_column or 'чертежи' in from_column) and card_data.get('draftsman_completed') == 1:
+                if ("планировочные" in from_column or "чертежи" in from_column) and card_data.get("draftsman_completed") == 1:
                     CustomMessageBox(
                         self,
-                        'Работа не принята',
-                        'Чертёжник сдал работу, но вы еще не приняли её!\n\n'
-                        'Сначала нажмите кнопку "Принять работу" на карточке,\n'
-                        'затем переместите её на следующую стадию.',
-                        'warning'
+                        "Работа не принята",
+                        'Чертёжник сдал работу, но вы еще не приняли её!\n\nСначала нажмите кнопку "Принять работу" на карточке,\nзатем переместите её на следующую стадию.',
+                        "warning",
                     ).exec_()
                     return
 
                 # ИСПРАВЛЕНИЕ: Проверка сдачи и принятия работы перед перемещением
                 # Руководители могут перемещать свободно, автоматически принимая стадии
-                if _has_perm(self.employee, self.api_client, 'crm_cards.complete_approval'):
+                if _has_perm(self.employee, self.api_client, "crm_cards.complete_approval"):
                     # Для руководителей: автоматически принимаем пропущенные стадии
-                    if from_column not in ['Новый заказ', 'В ожидании', 'Выполненный проект']:
+                    if from_column not in ["Новый заказ", "В ожидании", "Выполненный проект"]:
                         # S-05: Используем DataAccess вместо прямого SQL
                         executors = self.data.get_incomplete_stage_executors(card_id, from_column)
 
                         if executors:
                             print(f"\n[AUTO ACCEPT] Автоматическое принятие стадии '{from_column}'")
                             print(f"             Найдено исполнителей: {len(executors)}")
-                            count = self.data.auto_accept_stage(
-                                card_id, from_column, self.employee['id'], project_type
-                            )
+                            count = self.data.auto_accept_stage(card_id, from_column, self.employee["id"], project_type)
                             print(f"Стадия '{from_column}' автоматически принята для {count} исполнителей")
                 # Остальные с правом перемещения: проверяют сдачу и принятие
-                elif _has_perm(self.employee, self.api_client, 'crm_cards.move'):
-                    if from_column not in ['Новый заказ', 'В ожидании', 'Выполненный проект']:
+                elif _has_perm(self.employee, self.api_client, "crm_cards.move"):
+                    if from_column not in ["Новый заказ", "В ожидании", "Выполненный проект"]:
+                        # W3: Проверяем workflow status — должен быть stage_completed
+                        try:
+                            wf_states = self.data.get_workflow_states(card_id) or []
+                            wf_status = None
+                            for s in wf_states:
+                                if s.get("stage_name") == from_column:
+                                    wf_status = s.get("status")
+                                    break
+                            if wf_status and wf_status != "stage_completed":
+                                CustomMessageBox(
+                                    self,
+                                    "Перемещение запрещено",
+                                    f"<b>Невозможно переместить карточку!</b><br><br>"
+                                    f'Текущая стадия: <b>"{from_column}"</b><br><br>'
+                                    f"Необходимо подписать акт перед перемещением.<br>"
+                                    f"Текущий статус: {wf_status}",
+                                    "warning",
+                                ).exec_()
+                                return
+                        except Exception:
+                            pass
+
                         # S-05: Используем DataAccess вместо прямого SQL
                         info = self.data.get_stage_completion_info(card_id, from_column)
                         if not info:
                             info = {}
-                        stage_info = info.get('stage')
-                        approval_info = info.get('approval')
+                        stage_info = info.get("stage")
+                        approval_info = info.get("approval")
 
                         # Определяем статусы
-                        submitted = stage_info and stage_info['submitted_date'] is not None
-                        completed = stage_info and stage_info['completed'] == 1
-                        approved = approval_info and approval_info['is_approved'] == 1
+                        submitted = stage_info and stage_info["submitted_date"] is not None
+                        completed = stage_info and stage_info["completed"] == 1
+                        approved = approval_info and approval_info["is_approved"] == 1
 
                         # Проверяем все три условия
                         if not (submitted and completed and approved):
                             CustomMessageBox(
                                 self,
-                                'Перемещение запрещено',
-                                f'<b>Невозможно переместить карточку!</b><br><br>'
+                                "Перемещение запрещено",
+                                f"<b>Невозможно переместить карточку!</b><br><br>"
                                 f'Текущая стадия: <b>"{from_column}"</b><br><br>'
-                                f'Для перемещения необходимо:<br>'
-                                f'{"" if submitted else ""} Работа должна быть сдана исполнителем<br>'
-                                f'{"" if completed else ""} Работа должна быть принята менеджером<br>'
-                                f'{"" if approved else ""} Стадия должна быть отмечена как выполненная<br><br>'
-                                f'<i>Сначала выполните все требования, затем переместите карточку.</i>',
-                                'warning'
+                                f"Для перемещения необходимо:<br>"
+                                f"{'' if submitted else ''} Работа должна быть сдана исполнителем<br>"
+                                f"{'' if completed else ''} Работа должна быть принята менеджером<br>"
+                                f"{'' if approved else ''} Стадия должна быть отмечена как выполненная<br><br>"
+                                f"<i>Сначала выполните все требования, затем переместите карточку.</i>",
+                                "warning",
                             ).exec_()
                             return
                 else:
                     # Для всех остальных пользователей: строгая проверка
-                    if from_column not in ['Новый заказ', 'В ожидании', 'Выполненный проект']:
+                    if from_column not in ["Новый заказ", "В ожидании", "Выполненный проект"]:
                         # S-05: Используем DataAccess вместо прямого SQL
                         info = self.data.get_stage_completion_info(card_id, from_column)
                         if not info:
                             info = {}
-                        stage_info = info.get('stage')
+                        stage_info = info.get("stage")
 
                         if stage_info:
-                            submitted = stage_info['submitted_date'] is not None
-                            completed = stage_info['completed'] == 1
+                            submitted = stage_info["submitted_date"] is not None
+                            completed = stage_info["completed"] == 1
 
                             if not submitted or not completed:
                                 CustomMessageBox(
                                     self,
-                                    'Перемещение запрещено',
-                                    f'<b>Невозможно переместить карточку!</b><br><br>'
+                                    "Перемещение запрещено",
+                                    f"<b>Невозможно переместить карточку!</b><br><br>"
                                     f'Текущая стадия: <b>"{from_column}"</b><br><br>'
-                                    f'Для перемещения необходимо:<br>'
-                                    f'{"" if submitted else ""} Работа должна быть сдана исполнителем<br>'
-                                    f'{"" if completed else ""} Работа должна быть принята менеджером<br><br>'
-                                    f'<i>Сначала выполните все требования, затем переместите карточку.</i>',
-                                    'warning'
+                                    f"Для перемещения необходимо:<br>"
+                                    f"{'' if submitted else ''} Работа должна быть сдана исполнителем<br>"
+                                    f"{'' if completed else ''} Работа должна быть принята менеджером<br><br>"
+                                    f"<i>Сначала выполните все требования, затем переместите карточку.</i>",
+                                    "warning",
                                 ).exec_()
                                 return
         except Exception as e:
             print(f"! Ошибка проверки принятия работы: {e}")
-            CustomMessageBox(
-                self, 'Ошибка',
-                f'Ошибка проверки готовности стадии: {e}\n\nПеремещение отменено.',
-                'error'
-            ).exec_()
+            CustomMessageBox(self, "Ошибка", f"Ошибка проверки готовности стадии: {e}\n\nПеремещение отменено.", "error").exec_()
             return
 
         # Диалог завершения проекта ПЕРЕД перемещением, чтобы отмена не перемещала карточку
-        if to_column == 'Выполненный проект':
+        if to_column == "Выполненный проект":
             print(f"Показываем диалог завершения ПЕРЕД перемещением")
             completion_dialog = ProjectCompletionDialog(self, card_id, self.api_client, project_type=project_type)
             if completion_dialog.exec_() != QDialog.Accepted:
@@ -744,10 +792,11 @@ class CRMTab(QWidget):
                 return
             # Диалог принят — продолжаем перемещение
             self._completion_accepted = True
-            self._payment_pending = getattr(completion_dialog, 'payment_pending', False)
+            self._payment_pending = getattr(completion_dialog, "payment_pending", False)
 
         try:
             from utils.api_client.exceptions import APIResponseError
+
             # Перемещение карточки: API-first с fallback на локальную БД
             api_success = False
             if self.data.is_online:
@@ -757,8 +806,7 @@ class CRMTab(QWidget):
                 except APIResponseError as api_error:
                     # Бизнес-ошибка — сервер отклонил перемещение, НЕ делаем fallback
                     print(f"! [API BUSINESS ERROR] {api_error}")
-                    CustomMessageBox(self, 'Перемещение отклонено',
-                                     f'Сервер отклонил перемещение: {api_error}', 'warning').exec_()
+                    CustomMessageBox(self, "Перемещение отклонено", f"Сервер отклонил перемещение: {api_error}", "warning").exec_()
                     return
                 except Exception as api_error:
                     print(f"! [API ERROR] {api_error}")
@@ -769,7 +817,7 @@ class CRMTab(QWidget):
 
         except Exception as e:
             print(f" Ошибка обновления БД: {e}")
-            CustomMessageBox(self, 'Ошибка', f'Не удалось переместить карточку: {e}', 'error').exec_()
+            CustomMessageBox(self, "Ошибка", f"Не удалось переместить карточку: {e}", "error").exec_()
             return
 
         # S9.3: Уведомление об успешном перемещении карточки
@@ -777,12 +825,12 @@ class CRMTab(QWidget):
 
         # ========== ИСПРАВЛЕННЫЙ БЛОК СБРОСА ==========
         # Полный сброс ТОЛЬКО при возврате из архива
-        if from_column == 'Выполненный проект':
+        if from_column == "Выполненный проект":
             try:
                 print(f"[RESET] Возврат из архива: полный сброс данных")
                 self.data.reset_stage_completion(card_id)
                 self.data.reset_approval_stages(card_id)
-                updates = {'deadline': None, 'is_approved': 0}
+                updates = {"deadline": None, "is_approved": 0}
                 self._api_update_card_with_fallback(card_id, updates)
                 print(f"+ Карточка очищена для повторного прохождения")
             except Exception as e:
@@ -798,10 +846,10 @@ class CRMTab(QWidget):
         # ==============================================
 
         # Сброс дедлайна (ОСТАЕТСЯ БЕЗ ИЗМЕНЕНИЙ)
-        reset_deadline_columns = ['Новый заказ', 'Выполненный проект']
+        reset_deadline_columns = ["Новый заказ", "Выполненный проект"]
         if to_column in reset_deadline_columns:
             try:
-                updates = {'deadline': None}
+                updates = {"deadline": None}
                 self._api_update_card_with_fallback(card_id, updates)
                 print(f"+ Дедлайн сброшен для колонки '{to_column}'")
             except Exception as e:
@@ -810,25 +858,25 @@ class CRMTab(QWidget):
         # FIX: Синхронизация статуса договора с колонкой CRM-карточки
         try:
             card_data = self.data.get_crm_card(card_id)
-            contract_id = card_data.get('contract_id') if card_data else None
+            contract_id = card_data.get("contract_id") if card_data else None
             if contract_id:
-                if to_column == 'Выполненный проект':
+                if to_column == "Выполненный проект":
                     # НЕ перезаписываем статус если CompletionDialog уже установил его
                     # (СДАН, АВТОРСКИЙ НАДЗОР, РАСТОРГНУТ или "Выполненный проект" с ожиданием оплаты)
-                    if not getattr(self, '_completion_accepted', False):
-                        self.data.update_contract(contract_id, {'status': 'Выполненный проект'})
+                    if not getattr(self, "_completion_accepted", False):
+                        self.data.update_contract(contract_id, {"status": "Выполненный проект"})
                         print(f"+ Статус изменен на 'Выполненный проект'")
                     else:
                         # Дополнительно: если оплата ожидается, ставим status_changed_date как дату готовности
-                        if getattr(self, '_payment_pending', False):
+                        if getattr(self, "_payment_pending", False):
                             print(f"+ Статус уже установлен диалогом завершения (ожидание оплаты)")
                         else:
                             print(f"+ Статус уже установлен диалогом завершения (не перезаписываем)")
-                elif to_column == 'В ожидании':
-                    self.data.update_contract(contract_id, {'status': 'В ожидании'})
+                elif to_column == "В ожидании":
+                    self.data.update_contract(contract_id, {"status": "В ожидании"})
                     print(f"+ Статус изменен на 'В ожидании'")
-                elif from_column in ('Новый заказ', 'В ожидании'):
-                    self.data.update_contract(contract_id, {'status': 'В работе'})
+                elif from_column in ("Новый заказ", "В ожидании"):
+                    self.data.update_contract(contract_id, {"status": "В работе"})
                     print(f"+ Статус изменен на 'В работе'")
         except Exception as e:
             print(f"! Ошибка установки статуса: {e}")
@@ -840,17 +888,17 @@ class CRMTab(QWidget):
         # ИСПРАВЛЕНИЕ 07.02.2026: Выбор исполнителя теперь происходит ДО перемещения (в начале функции)
         # Старый код удален, см. блок в начале on_card_moved()
 
-        if to_column == 'Выполненный проект':
+        if to_column == "Выполненный проект":
             # Диалог завершения уже был показан ПЕРЕД перемещением
             self.load_cards_for_type(project_type)
-            if _has_perm(self.employee, self.api_client, 'crm_cards.move'):
+            if _has_perm(self.employee, self.api_client, "crm_cards.move"):
                 self.load_archive_cards(project_type)
         else:
             print(f"\n[RELOAD] Перезагрузка карточек...")
             self.load_cards_for_type(project_type)
 
-        print(f"{'='*60}\n")
-        
+        print(f"{'=' * 60}\n")
+
     def _get_contract_for_card(self, card_id):
         """Получить данные договора по ID CRM карточки"""
         try:
@@ -864,22 +912,22 @@ class CRMTab(QWidget):
     def _check_advance_payment(self, card_id, project_type):
         """Проверка оплаты аванса (1-й платёж) для индивидуальных проектов.
         Возвращает True если аванс оплачен или проверка не требуется."""
-        if project_type != 'Индивидуальный':
+        if project_type != "Индивидуальный":
             return True
         contract = self._get_contract_for_card(card_id)
         if not contract:
             return True  # Нет договора — пропускаем проверку
-        return bool(contract.get('advance_payment_paid_date'))
+        return bool(contract.get("advance_payment_paid_date"))
 
     def _check_second_payment(self, card_id, project_type):
         """Проверка 2-го платежа (доплата) для индивидуальных проектов.
         Возвращает True если 2-й платёж оплачен или проверка не требуется."""
-        if project_type != 'Индивидуальный':
+        if project_type != "Индивидуальный":
             return True
         contract = self._get_contract_for_card(card_id)
         if not contract:
             return True
-        return bool(contract.get('additional_payment_paid_date'))
+        return bool(contract.get("additional_payment_paid_date"))
 
     def _check_final_payment(self, card_id, project_type):
         """Проверка финального платежа перед архивацией.
@@ -889,31 +937,25 @@ class CRMTab(QWidget):
         contract = self._get_contract_for_card(card_id)
         if not contract:
             return True
-        if project_type == 'Индивидуальный':
-            return bool(contract.get('third_payment_paid_date'))
+        if project_type == "Индивидуальный":
+            return bool(contract.get("third_payment_paid_date"))
         else:  # Шаблонный
-            return bool(contract.get('advance_payment_paid_date'))
+            return bool(contract.get("advance_payment_paid_date"))
 
     def requires_executor_selection(self, column_name):
         """Проверка, требуется ли выбор исполнителя"""
         # ИСПРАВЛЕНИЕ 06.02.2026: Добавлена стадия 3д визуализации (#18)
-        stage_columns = [
-            'Стадия 1: планировочные решения',
-            'Стадия 2: концепция дизайна',
-            'Стадия 2: рабочие чертежи',
-            'Стадия 3: рабочие чертежи',
-            'Стадия 3: 3д визуализация (Дополнительная)'
-        ]
+        stage_columns = ["Стадия 1: планировочные решения", "Стадия 2: концепция дизайна", "Стадия 2: рабочие чертежи", "Стадия 3: рабочие чертежи", "Стадия 3: 3д визуализация (Дополнительная)"]
         return column_name in stage_columns
-    
+
     def select_executor(self, card_id, stage_name, project_type):
         """Диалог выбора исполнителя"""
         _card_info = self.data.get_crm_card(card_id)
-        _contract_id = _card_info.get('contract_id') if _card_info else None
+        _contract_id = _card_info.get("contract_id") if _card_info else None
         dialog = ExecutorSelectionDialog(self, card_id, stage_name, project_type, self.api_client, contract_id=_contract_id)
         if dialog.exec_() != QDialog.Accepted:
-            CustomMessageBox(self, 'Внимание', 'Выберите исполнителя для стадии', 'warning').exec_()
-    
+            CustomMessageBox(self, "Внимание", "Выберите исполнителя для стадии", "warning").exec_()
+
     def complete_project(self, card_id):
         """Завершение проекта"""
         dialog = ProjectCompletionDialog(self, card_id, self.api_client)
@@ -924,35 +966,36 @@ class CRMTab(QWidget):
         """Показ статистики CRM"""
         dialog = CRMStatisticsDialog(self, project_type, self.employee)
         dialog.exec_()
-       
+
     def refresh_current_tab(self):
         """Обновление текущей активной вкладки"""
         # Принудительно сбрасываем кеш — пользователь нажал refresh или завершил workflow
         from utils.data_access import _global_cache
+
         _global_cache.invalidate("crm_cards")
         current_index = self.project_tabs.currentIndex()
         # ИСПРАВЛЕНИЕ: НЕ используем prefer_local — карточки могут быть только в API
         # (например, созданные другим пользователем или тестом).
         # Кэш DataAccess (TTL=30с) обеспечит быстродействие при частых обновлениях.
         if current_index == 0:
-            self.load_cards_for_type('Индивидуальный')
+            self.load_cards_for_type("Индивидуальный")
         elif current_index == 1:
-            self.load_cards_for_type('Шаблонный')
+            self.load_cards_for_type("Шаблонный")
 
         # Архив — через API (локальная БД не содержит архивные crm_cards)
-        if _has_perm(self.employee, self.api_client, 'crm_cards.move'):
+        if _has_perm(self.employee, self.api_client, "crm_cards.move"):
             if current_index == 0:
-                self.load_archive_cards('Индивидуальный')
+                self.load_archive_cards("Индивидуальный")
             elif current_index == 1:
-                self.load_archive_cards('Шаблонный')
+                self.load_archive_cards("Шаблонный")
 
         self.update_project_tab_counters()
 
         # Обновляем дашборд
         mw = self.window()
-        if hasattr(mw, 'refresh_current_dashboard'):
+        if hasattr(mw, "refresh_current_dashboard"):
             mw.refresh_current_dashboard()
-                
+
     def create_archive_board(self, project_type):
         """Создание архивной доски для типа проекта"""
         widget = QWidget()
@@ -960,7 +1003,7 @@ class CRMTab(QWidget):
         layout.setContentsMargins(0, 5, 0, 10)
         layout.setSpacing(10)
 
-        archive_header = QLabel(f'Архив {project_type.lower()}ных проектов')
+        archive_header = QLabel(f"Архив {project_type.lower()}ных проектов")
         archive_header.setStyleSheet("""
             font-size: 13px;
             font-weight: bold;
@@ -971,7 +1014,7 @@ class CRMTab(QWidget):
         layout.addWidget(archive_header)
 
         # ========== ФИЛЬТРЫ (СТИЛЬ КАК В ЗАРПЛАТАХ) ==========
-        filters_group = QGroupBox('Фильтры')
+        filters_group = QGroupBox("Фильтры")
         filters_group.setStyleSheet("""
             QGroupBox {
                 font-weight: bold;
@@ -995,7 +1038,7 @@ class CRMTab(QWidget):
         header_row = QHBoxLayout()
         header_row.setContentsMargins(0, 0, 0, 5)
 
-        toggle_btn = IconLoader.create_icon_button('arrow-down-circle', '', 'Развернуть фильтры', icon_size=14)
+        toggle_btn = IconLoader.create_icon_button("arrow-down-circle", "", "Развернуть фильтры", icon_size=14)
         toggle_btn.setFixedSize(24, 24)
         toggle_btn.setStyleSheet("""
             QPushButton {
@@ -1024,16 +1067,16 @@ class CRMTab(QWidget):
         main_row.setSpacing(8)
 
         # Период
-        main_row.addWidget(QLabel('Период:'))
+        main_row.addWidget(QLabel("Период:"))
         period_combo = CustomComboBox()
-        period_combo.addItems(['Все время', 'Год', 'Квартал', 'Месяц'])
+        period_combo.addItems(["Все время", "Год", "Квартал", "Месяц"])
         period_combo.setMinimumWidth(100)
         main_row.addWidget(period_combo)
 
         year_spin = QSpinBox()
         year_spin.setRange(2020, 2100)
         year_spin.setValue(QDate.currentDate().year())
-        year_spin.setPrefix('Год: ')
+        year_spin.setPrefix("Год: ")
         year_spin.setMinimumWidth(80)
         year_spin.setFixedHeight(42)  # Фиксированная высота как у QComboBox
         year_spin.setStyleSheet(f"""
@@ -1044,15 +1087,14 @@ class CRMTab(QWidget):
         year_spin.hide()
 
         quarter_combo = CustomComboBox()
-        quarter_combo.addItems(['Q1', 'Q2', 'Q3', 'Q4'])
+        quarter_combo.addItems(["Q1", "Q2", "Q3", "Q4"])
         quarter_combo.setCurrentIndex((QDate.currentDate().month() - 1) // 3)
         quarter_combo.setMinimumWidth(60)
         main_row.addWidget(quarter_combo)
         quarter_combo.hide()
 
         month_combo = CustomComboBox()
-        months = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
-                  'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
+        months = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"]
         month_combo.addItems(months)
         month_combo.setCurrentIndex(QDate.currentDate().month() - 1)
         month_combo.setMinimumWidth(100)
@@ -1060,31 +1102,31 @@ class CRMTab(QWidget):
         month_combo.hide()
 
         # Критерий даты
-        main_row.addWidget(QLabel('Критерий:'))
+        main_row.addWidget(QLabel("Критерий:"))
         date_criterion_combo = CustomComboBox()
-        date_criterion_combo.addItems(['Дата создания', 'Дата закрытия'])
+        date_criterion_combo.addItems(["Дата создания", "Дата закрытия"])
         date_criterion_combo.setMinimumWidth(120)
         date_criterion_combo.setVisible(False)  # Показываем только когда выбран период
         main_row.addWidget(date_criterion_combo)
 
         # Адрес
-        main_row.addWidget(QLabel('Адрес:'))
+        main_row.addWidget(QLabel("Адрес:"))
         address_input = QLineEdit()
-        address_input.setPlaceholderText('Адрес...')
+        address_input.setPlaceholderText("Адрес...")
         address_input.setMinimumWidth(150)
         main_row.addWidget(address_input)
 
         # Город
-        main_row.addWidget(QLabel('Город:'))
+        main_row.addWidget(QLabel("Город:"))
         city_combo = CustomComboBox()
-        city_combo.addItem('Все', None)
+        city_combo.addItem("Все", None)
         city_combo.setMinimumWidth(100)
         main_row.addWidget(city_combo)
 
         # Агент
-        main_row.addWidget(QLabel('Агент:'))
+        main_row.addWidget(QLabel("Агент:"))
         agent_combo = CustomComboBox()
-        agent_combo.addItem('Все', None)
+        agent_combo.addItem("Все", None)
         agent_combo.setMinimumWidth(120)
         main_row.addWidget(agent_combo)
 
@@ -1095,7 +1137,7 @@ class CRMTab(QWidget):
         buttons_layout = QHBoxLayout()
         buttons_layout.addStretch()
 
-        apply_btn = IconLoader.create_icon_button('check-square', 'Применить фильтры', icon_size=12)
+        apply_btn = IconLoader.create_icon_button("check-square", "Применить фильтры", icon_size=12)
         # ИСПРАВЛЕНИЕ 06.02.2026: Уменьшен padding для стандартной высоты 28px (#12)
         apply_btn.setStyleSheet("""
             QPushButton {
@@ -1111,7 +1153,7 @@ class CRMTab(QWidget):
         """)
         buttons_layout.addWidget(apply_btn)
 
-        reset_btn = IconLoader.create_icon_button('refresh', 'Сбросить фильтры', icon_size=12)
+        reset_btn = IconLoader.create_icon_button("refresh", "Сбросить фильтры", icon_size=12)
         # ИСПРАВЛЕНИЕ 06.02.2026: Уменьшен padding для стандартной высоты 28px (#12)
         reset_btn.setStyleSheet("""
             QPushButton {
@@ -1139,10 +1181,10 @@ class CRMTab(QWidget):
 
         # Обработчик изменения периода
         def on_period_changed(period):
-            year_spin.setVisible(period in ['Год', 'Квартал', 'Месяц'])
-            quarter_combo.setVisible(period == 'Квартал')
-            month_combo.setVisible(period == 'Месяц')
-            date_criterion_combo.setVisible(period != 'Все время')
+            year_spin.setVisible(period in ["Год", "Квартал", "Месяц"])
+            quarter_combo.setVisible(period == "Квартал")
+            month_combo.setVisible(period == "Месяц")
+            date_criterion_combo.setVisible(period != "Все время")
 
         period_combo.currentTextChanged.connect(on_period_changed)
 
@@ -1165,7 +1207,7 @@ class CRMTab(QWidget):
 
         # Обработчик сброса фильтров
         def reset_filters():
-            period_combo.setCurrentText('Все время')
+            period_combo.setCurrentText("Все время")
             address_input.clear()
             city_combo.setCurrentIndex(0)
             agent_combo.setCurrentIndex(0)
@@ -1178,11 +1220,11 @@ class CRMTab(QWidget):
             is_visible = filters_content.isVisible()
             filters_content.setVisible(not is_visible)
             if is_visible:
-                toggle_btn.setIcon(IconLoader.load('arrow-down-circle'))
-                toggle_btn.setToolTip('Развернуть фильтры')
+                toggle_btn.setIcon(IconLoader.load("arrow-down-circle"))
+                toggle_btn.setToolTip("Развернуть фильтры")
             else:
-                toggle_btn.setIcon(IconLoader.load('arrow-up-circle'))
-                toggle_btn.setToolTip('Свернуть фильтры')
+                toggle_btn.setIcon(IconLoader.load("arrow-up-circle"))
+                toggle_btn.setToolTip("Свернуть фильтры")
 
         toggle_btn.clicked.connect(toggle_filters)
 
@@ -1205,6 +1247,7 @@ class CRMTab(QWidget):
 
         cards_container = QWidget()
         from ui.flow_layout import FlowLayout
+
         self.archive_layout = FlowLayout()
         self.archive_layout.setSpacing(10)
         self.archive_layout.setContentsMargins(10, 10, 10, 10)
@@ -1219,16 +1262,16 @@ class CRMTab(QWidget):
         widget.archive_layout = self.archive_layout
 
         return widget
-    
+
     def load_archive_cards(self, project_type):
         """Загрузка архивных карточек"""
         try:
-            if project_type == 'Индивидуальный':
-                if not hasattr(self, 'individual_archive_widget'):
+            if project_type == "Индивидуальный":
+                if not hasattr(self, "individual_archive_widget"):
                     return
                 archive_widget = self.individual_archive_widget
             else:
-                if not hasattr(self, 'template_archive_widget'):
+                if not hasattr(self, "template_archive_widget"):
                     return
                 archive_widget = self.template_archive_widget
 
@@ -1246,8 +1289,8 @@ class CRMTab(QWidget):
                     archive_card = ArchiveCard(card_data, self.db, employee=self.employee, api_client=self.api_client)
                     archive_layout.addWidget(archive_card)
             else:
-                empty_label = QLabel('Архив пуст')
-                empty_label.setStyleSheet('color: #999; font-size: 14px; padding: 20px;')
+                empty_label = QLabel("Архив пуст")
+                empty_label.setStyleSheet("color: #999; font-size: 14px; padding: 20px;")
                 empty_label.setAlignment(Qt.AlignCenter)
                 archive_layout.addWidget(empty_label)
 
@@ -1256,6 +1299,7 @@ class CRMTab(QWidget):
         except Exception as e:
             print(f"ОШИБКА загрузки архива: {e}")
             import traceback
+
             traceback.print_exc()
 
     def load_archive_filter_data(self, project_type, city_combo, agent_combo):
@@ -1267,7 +1311,7 @@ class CRMTab(QWidget):
             # Собираем уникальные города
             cities = set()
             for card in cards:
-                city = card.get('city')
+                city = card.get("city")
                 if city:
                     cities.add(city)
 
@@ -1278,7 +1322,7 @@ class CRMTab(QWidget):
             # Получаем всех агентов из базы данных
             agents = self.data.get_all_agents() or []
             for agent in agents:
-                agent_name = agent['name']
+                agent_name = agent["name"]
                 agent_combo.addItem(agent_name, agent_name)
 
         except Exception as e:
@@ -1290,12 +1334,12 @@ class CRMTab(QWidget):
 
         try:
             # Получаем виджет архива
-            if project_type == 'Индивидуальный':
-                if not hasattr(self, 'individual_archive_widget'):
+            if project_type == "Индивидуальный":
+                if not hasattr(self, "individual_archive_widget"):
                     return
                 archive_widget = self.individual_archive_widget
             else:
-                if not hasattr(self, 'template_archive_widget'):
+                if not hasattr(self, "template_archive_widget"):
                     return
                 archive_widget = self.template_archive_widget
 
@@ -1317,47 +1361,47 @@ class CRMTab(QWidget):
             for card in cards:
                 # Фильтр по адресу
                 if address_filter:
-                    card_address = card.get('address', '').lower()
+                    card_address = card.get("address", "").lower()
                     if address_filter not in card_address:
                         continue
 
                 # Фильтр по городу
                 if city_filter:
-                    if card.get('city') != city_filter:
+                    if card.get("city") != city_filter:
                         continue
 
                 # Фильтр по агенту
                 if agent_filter:
-                    if card.get('agent_type') != agent_filter:
+                    if card.get("agent_type") != agent_filter:
                         continue
 
                 # Фильтр по периоду (используем выбранный критерий даты)
-                if period != 'Все время':
+                if period != "Все время":
                     # Выбираем поле даты в зависимости от критерия
-                    if date_criterion == 'Дата создания':
-                        date_field = card.get('contract_date')  # Дата заключения договора
+                    if date_criterion == "Дата создания":
+                        date_field = card.get("contract_date")  # Дата заключения договора
                     else:  # Дата закрытия
-                        date_field = card.get('status_changed_date')  # Дата установки статуса Сдан/Расторгнут/Авторский надзор
+                        date_field = card.get("status_changed_date")  # Дата установки статуса Сдан/Расторгнут/Авторский надзор
 
                     if date_field:
                         try:
                             # Пытаемся разобрать дату в разных форматах
-                            if ' ' in date_field:  # Формат с временем: '2024-11-25 10:30:00'
+                            if " " in date_field:  # Формат с временем: '2024-11-25 10:30:00'
                                 date_part = date_field.split()[0]
-                                card_date = QDate.fromString(date_part, 'yyyy-MM-dd')
+                                card_date = QDate.fromString(date_part, "yyyy-MM-dd")
                             else:  # Формат без времени: '2024-11-25'
-                                card_date = QDate.fromString(date_field, 'yyyy-MM-dd')
+                                card_date = QDate.fromString(date_field, "yyyy-MM-dd")
 
                             if card_date.isValid():
                                 card_year = card_date.year()
                                 card_month = card_date.month()
                                 card_quarter = (card_month - 1) // 3 + 1
 
-                                if period == 'Год' and card_year != year:
+                                if period == "Год" and card_year != year:
                                     continue
-                                elif period == 'Квартал' and (card_year != year or card_quarter != quarter):
+                                elif period == "Квартал" and (card_year != year or card_quarter != quarter):
                                     continue
-                                elif period == 'Месяц' and (card_year != year or card_month != month):
+                                elif period == "Месяц" and (card_year != year or card_month != month):
                                     continue
                             else:
                                 # Если дата невалидна, пропускаем
@@ -1385,8 +1429,8 @@ class CRMTab(QWidget):
                     archive_card = ArchiveCard(card_data, self.db, employee=self.employee, api_client=self.api_client)
                     archive_layout.addWidget(archive_card)
             else:
-                empty_label = QLabel('Нет карточек, соответствующих фильтрам')
-                empty_label.setStyleSheet('color: #999; font-size: 14px; padding: 20px;')
+                empty_label = QLabel("Нет карточек, соответствующих фильтрам")
+                empty_label.setStyleSheet("color: #999; font-size: 14px; padding: 20px;")
                 empty_label.setAlignment(Qt.AlignCenter)
                 archive_layout.addWidget(empty_label)
 
@@ -1397,59 +1441,59 @@ class CRMTab(QWidget):
         except Exception as e:
             print(f" ОШИБКА применения фильтров: {e}")
             import traceback
+
             traceback.print_exc()
 
     def should_show_card_for_employee(self, card_data):
         """Проверка, должен ли сотрудник видеть карточку"""
-        position = self.employee.get('position', '')
-        secondary_position = self.employee.get('secondary_position', '')
-        employee_name = self.employee.get('full_name', '')
-        employee_id = self.employee.get('id')
-        column_name = card_data.get('column_name', '')
-        project_type = card_data.get('project_type', '')
+        position = self.employee.get("position", "")
+        secondary_position = self.employee.get("secondary_position", "")
+        employee_name = self.employee.get("full_name", "")
+        employee_id = self.employee.get("id")
+        column_name = card_data.get("column_name", "")
+        project_type = card_data.get("project_type", "")
 
         # Руководитель и старший менеджер видят всё
-        if _emp_has_pos(self.employee, 'Руководитель студии', 'Старший менеджер проектов'):
+        if _emp_has_pos(self.employee, "Руководитель студии", "Старший менеджер проектов"):
             return True
 
         # Назначенный менеджер
-        if _emp_has_pos(self.employee, 'Менеджер'):
-            if card_data.get('manager_id') == employee_id:
+        if _emp_has_pos(self.employee, "Менеджер"):
+            if card_data.get("manager_id") == employee_id:
                 return True
 
         # Назначенный ГАП
-        if _emp_has_pos(self.employee, 'ГАП'):
-            if card_data.get('gap_id') == employee_id:
+        if _emp_has_pos(self.employee, "ГАП"):
+            if card_data.get("gap_id") == employee_id:
                 return True
 
         # Назначенный СДП
-        if _emp_has_pos(self.employee, 'СДП'):
-            if card_data.get('sdp_id') == employee_id:
+        if _emp_has_pos(self.employee, "СДП"):
+            if card_data.get("sdp_id") == employee_id:
                 return True
 
-        # Дизайнер
-        if _emp_has_pos(self.employee, 'Дизайнер'):
-            if column_name == 'Стадия 2: концепция дизайна':
-                designer_name = card_data.get('designer_name')
-                designer_completed = card_data.get('designer_completed', 0)
-                return (designer_name == employee_name) and (designer_completed != 1)
+        # Дизайнер — видит карточку даже после сдачи работы (статус "Ожидайте проверку")
+        if _emp_has_pos(self.employee, "Дизайнер"):
+            if column_name == "Стадия 2: концепция дизайна":
+                designer_name = card_data.get("designer_name")
+                return designer_name == employee_name
 
         # Чертёжник
-        if _emp_has_pos(self.employee, 'Чертёжник'):
-            if project_type == 'Индивидуальный':
-                allowed_columns = ['Стадия 1: планировочные решения', 'Стадия 3: рабочие чертежи']
+        if _emp_has_pos(self.employee, "Чертёжник"):
+            if project_type == "Индивидуальный":
+                allowed_columns = ["Стадия 1: планировочные решения", "Стадия 3: рабочие чертежи"]
             else:
-                allowed_columns = ['Стадия 1: планировочные решения', 'Стадия 2: рабочие чертежи']
+                allowed_columns = ["Стадия 1: планировочные решения", "Стадия 2: рабочие чертежи"]
 
+            # Чертёжник видит карточку даже после сдачи работы (статус "Ожидайте проверку")
             if column_name in allowed_columns:
-                draftsman_name = card_data.get('draftsman_name')
-                draftsman_completed = card_data.get('draftsman_completed', 0)
-                return (draftsman_name == employee_name) and (draftsman_completed != 1)
+                draftsman_name = card_data.get("draftsman_name")
+                return draftsman_name == employee_name
 
         # Замерщик
-        if _emp_has_pos(self.employee, 'Замерщик'):
-            if card_data.get('surveyor_id') == employee_id:
-                has_measurement = card_data.get('measurement_image_link') or card_data.get('survey_date')
+        if _emp_has_pos(self.employee, "Замерщик"):
+            if card_data.get("surveyor_id") == employee_id:
+                has_measurement = card_data.get("measurement_image_link") or card_data.get("survey_date")
                 return not has_measurement
 
         return False
@@ -1464,6 +1508,7 @@ class CRMTab(QWidget):
             print(f"[SYNC] Получено обновление CRM карточек: {len(updated_cards)} записей")
             # Сбрасываем кеш CRM карточек — данные могли измениться
             from utils.data_access import _global_cache
+
             _global_cache.invalidate("crm_cards")
             # Обновляем из локальной БД (данные уже синхронизированы), не блокируя UI
             self.data.prefer_local = True
@@ -1474,6 +1519,7 @@ class CRMTab(QWidget):
         except Exception as e:
             print(f"[ERROR] Ошибка синхронизации CRM карточек: {e}")
             import traceback
+
             traceback.print_exc()
 
 
@@ -1495,19 +1541,20 @@ class VerticalLabel(QWidget):
         return self._text
 
     def paintEvent(self, event):
-        from PyQt5.QtGui import QPainter, QFont, QFontMetrics
+        from PyQt5.QtGui import QFont, QFontMetrics, QPainter
+
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
 
         # Фон
-        painter.fillRect(self.rect(), QColor('#ffffff'))
+        painter.fillRect(self.rect(), QColor("#ffffff"))
 
         # Настройка шрифта
         font = QFont()
         font.setBold(True)
         font.setPointSize(10)
         painter.setFont(font)
-        painter.setPen(QColor('#333333'))
+        painter.setPen(QColor("#333333"))
 
         # Поворот на 90 градусов (текст снизу вверх)
         painter.translate(self.width() / 2 + 5, self.height() - 10)
@@ -1537,7 +1584,7 @@ class CRMColumn(BaseKanbanColumn):
         self._board_name = f"crm_{project_type.lower().replace(' ', '_')}"
         self.init_ui()
         self._apply_initial_collapse_state()
-        
+
     def init_ui(self):
         self.setFrameShape(QFrame.StyledPanel)
         self.setMinimumWidth(self._original_min_width)
@@ -1573,7 +1620,7 @@ class CRMColumn(BaseKanbanColumn):
         header_layout.addWidget(self.header_label, 1)
 
         # Кнопка сворачивания - используем иконку стрелки как у фильтров
-        self.collapse_btn = IconLoader.create_icon_button('arrow-left-circle', '', 'Свернуть колонку', icon_size=14)
+        self.collapse_btn = IconLoader.create_icon_button("arrow-left-circle", "", "Свернуть колонку", icon_size=14)
         self.collapse_btn.setFixedSize(20, 20)
         self.collapse_btn.setStyleSheet("""
             QPushButton {
@@ -1588,7 +1635,7 @@ class CRMColumn(BaseKanbanColumn):
 
         header_container.setLayout(header_layout)
         layout.addWidget(header_container)
-        
+
         can_drag = self.can_edit
         self.cards_list = DraggableListWidget(self, can_drag)
         self.cards_list.setStyleSheet("""
@@ -1607,7 +1654,7 @@ class CRMColumn(BaseKanbanColumn):
                 border: none;
             }
         """)
-        
+
         self.cards_list.setFocusPolicy(Qt.ClickFocus)
         self.cards_list.setSpacing(5)
         self.cards_list.setVerticalScrollMode(QListWidget.ScrollPerPixel)
@@ -1620,9 +1667,7 @@ class CRMColumn(BaseKanbanColumn):
     def _apply_initial_collapse_state(self):
         """Применить начальное состояние сворачивания (из настроек или по умолчанию)"""
         # Проверяем, есть ли сохранённое состояние
-        saved_state = self._settings.get_column_collapsed_state(
-            self._board_name, self.column_name, default=None
-        )
+        saved_state = self._settings.get_column_collapsed_state(self._board_name, self.column_name, default=None)
 
         # Если есть сохранённое состояние - используем его
         if saved_state is not None:
@@ -1631,8 +1676,8 @@ class CRMColumn(BaseKanbanColumn):
         else:
             # Нет сохранённого состояния - применяем умолчание
             # Столбец "3д визуализация (Дополнительная)" свёрнут по умолчанию (только для шаблонных)
-            is_3d_viz = '3д визуализация' in self.column_name.lower() or '3d визуализация' in self.column_name.lower()
-            is_template = self.project_type == 'Шаблонный'
+            is_3d_viz = "3д визуализация" in self.column_name.lower() or "3d визуализация" in self.column_name.lower()
+            is_template = self.project_type == "Шаблонный"
             if is_3d_viz and is_template:
                 print(f"[CRM] Сворачиваю колонку по умолчанию: {self.column_name}")
                 self._collapse_column()
@@ -1640,7 +1685,7 @@ class CRMColumn(BaseKanbanColumn):
     def _on_card_double_clicked(self, item):
         """Двойной клик по карточке канбана → редактирование."""
         card_widget = self.cards_list.itemWidget(item)
-        if card_widget and hasattr(card_widget, 'edit_card'):
+        if card_widget and hasattr(card_widget, "edit_card"):
             card_widget.edit_card()
 
     # _collapse_column, _expand_column, toggle_collapse, update_header_count
@@ -1656,7 +1701,7 @@ class CRMColumn(BaseKanbanColumn):
 
     def add_card(self, card_data, bulk=False):
         """Добавление карточки в колонку. bulk=True пропускает updateGeometry/update_header_count."""
-        card_id = card_data.get('id')
+        card_id = card_data.get("id")
 
         try:
             card_widget = CRMCard(card_data, self.can_edit, self.db, self.employee, api_client=self.api_client)
@@ -1664,7 +1709,7 @@ class CRMColumn(BaseKanbanColumn):
             recommended_size = card_widget.sizeHint()
             exact_height = recommended_size.height()
 
-            card_widget.setMinimumHeight(exact_height)
+            card_widget.setFixedHeight(exact_height)
 
             item = QListWidgetItem()
             item.setData(Qt.UserRole, card_id)
@@ -1681,20 +1726,21 @@ class CRMColumn(BaseKanbanColumn):
             try:
                 print(f"ОШИБКА создания карточки ID={card_id}: {e}")
                 import traceback
+
                 traceback.print_exc()
             except (UnicodeEncodeError, OSError):
                 pass
 
             try:
                 error_widget = QLabel(f" Ошибка загрузки\nкарточки ID={card_id}")
-                error_widget.setStyleSheet('''
+                error_widget.setStyleSheet("""
                     background-color: #FADBD8;
                     border: 2px solid #E74C3C;
                     border-radius: 4px;
                     padding: 10px;
                     font-size: 10px;
                     color: #C0392B;
-                ''')
+                """)
                 error_widget.setFixedHeight(80)
 
                 item = QListWidgetItem()
@@ -1705,8 +1751,114 @@ class CRMColumn(BaseKanbanColumn):
                 self.cards_list.setItemWidget(item, error_widget)
             except Exception:
                 pass
-            
+
     # clear_cards наследуется из BaseKanbanColumn
+
+
+class _WorkflowChoiceDialog(QDialog):
+    """Диалог выбора действия workflow с цветными кнопками."""
+
+    def __init__(self, parent, title, message, buttons):
+        """buttons: list of (text, bg_color, hover_color, value)"""
+        super().__init__(parent)
+        self._choice = None
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(0, 0, 0, 0)
+
+        border_frame = QFrame()
+        border_frame.setObjectName("borderFrame")
+        border_frame.setStyleSheet("""
+            QFrame#borderFrame {
+                background-color: #FFFFFF;
+                border: 1px solid #E0E0E0;
+                border-radius: 10px;
+            }
+        """)
+
+        border_layout = QVBoxLayout()
+        border_layout.setContentsMargins(0, 0, 0, 0)
+        border_layout.setSpacing(0)
+
+        from ui.custom_title_bar import CustomTitleBar
+
+        title_bar = CustomTitleBar(self, title, simple_mode=True)
+        title_bar.setStyleSheet("""
+            CustomTitleBar {
+                background-color: #FFFFFF;
+                border-bottom: 1px solid #E0E0E0;
+                border-top-left-radius: 10px;
+                border-top-right-radius: 10px;
+            }
+        """)
+        # Скрыть кнопку закрытия — диалог можно закрыть только кнопками выбора
+        if hasattr(title_bar, "close_btn"):
+            title_bar.close_btn.hide()
+        border_layout.addWidget(title_bar)
+
+        content = QWidget()
+        content.setStyleSheet("background-color: #FFFFFF; border-bottom-left-radius: 10px; border-bottom-right-radius: 10px;")
+        content_layout = QVBoxLayout()
+        content_layout.setSpacing(12)
+        content_layout.setContentsMargins(28, 20, 28, 28)
+
+        msg_label = QLabel(message)
+        msg_label.setWordWrap(True)
+        msg_label.setAlignment(Qt.AlignCenter)
+        msg_label.setStyleSheet("font-size: 11px; color: #333; padding: 10px; background-color: #ffffff;")
+        content_layout.addWidget(msg_label)
+
+        btn_layout = QVBoxLayout()
+        btn_layout.setSpacing(8)
+        for text, bg, hover, value in buttons:
+            btn = QPushButton(text)
+            btn.setFixedHeight(36)
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {bg}; color: white;
+                    padding: 0px 20px; font-weight: bold;
+                    border-radius: 4px; border: none;
+                    font-size: 11px;
+                    min-height: 36px; max-height: 36px;
+                }}
+                QPushButton:hover {{ background-color: {hover}; }}
+            """)
+            btn.clicked.connect(lambda checked, v=value: self._select(v))
+            btn_layout.addWidget(btn)
+        content_layout.addLayout(btn_layout)
+
+        content.setLayout(content_layout)
+        border_layout.addWidget(content)
+        border_frame.setLayout(border_layout)
+        main_layout.addWidget(border_frame)
+        self.setLayout(main_layout)
+        self.setFixedWidth(360)
+
+    def _select(self, value):
+        self._choice = value
+        self.accept()
+
+    def closeEvent(self, event):
+        """Запрет закрытия без выбора — предотвращает зависание карточки в pending_decision"""
+        if self._choice is None:
+            event.ignore()
+        else:
+            super().closeEvent(event)
+
+    def keyPressEvent(self, event):
+        """Блокировка Escape — диалог можно закрыть только кнопками"""
+        if event.key() == Qt.Key_Escape:
+            event.ignore()
+        else:
+            super().keyPressEvent(event)
+
+    def exec_choice(self):
+        self.exec_()
+        return self._choice
+
 
 class CRMCard(QFrame):
     def __init__(self, card_data, can_edit, db, employee=None, api_client=None):
@@ -1725,10 +1877,11 @@ class CRMCard(QFrame):
             try:
                 print(f" ОШИБКА init_ui() для карточки ID={card_data.get('id')}: {e}")
                 import traceback
+
                 traceback.print_exc()
             except (UnicodeEncodeError, OSError):
                 pass
-            
+
             # Создаем минимальный интерфейс
             self.setStyleSheet("background-color: #FADBD8; border: 2px solid #E74C3C;")
             layout = QVBoxLayout()
@@ -1737,7 +1890,7 @@ class CRMCard(QFrame):
             layout.addWidget(error_label)
             self.setLayout(layout)
         # ============================
-        
+
     def calculate_working_days(self, start_date, end_date):
         """Подсчет оставшихся рабочих дней от start_date до end_date.
 
@@ -1749,8 +1902,20 @@ class CRMCard(QFrame):
 
         # Праздники РФ (месяц, день) — работает для любого года
         russian_holidays = [
-            (1, 1), (1, 2), (1, 3), (1, 4), (1, 5), (1, 6), (1, 7), (1, 8),
-            (2, 23), (3, 8), (5, 1), (5, 9), (6, 12), (11, 4),
+            (1, 1),
+            (1, 2),
+            (1, 3),
+            (1, 4),
+            (1, 5),
+            (1, 6),
+            (1, 7),
+            (1, 8),
+            (2, 23),
+            (3, 8),
+            (5, 1),
+            (5, 9),
+            (6, 12),
+            (11, 4),
         ]
 
         working_days = 0
@@ -1780,111 +1945,30 @@ class CRMCard(QFrame):
             if self.data.is_multi_user:
                 # Многопользовательский режим - получаем через API
                 contract = self.data.get_contract(contract_id)
-                return contract.get('yandex_folder_path') if contract else None
+                return contract.get("yandex_folder_path") if contract else None
             else:
                 # Локальный режим - получаем из локальной БД
                 conn = self.data.db.connect()
                 cursor = conn.cursor()
-                cursor.execute('SELECT yandex_folder_path FROM contracts WHERE id = ?', (contract_id,))
+                cursor.execute("SELECT yandex_folder_path FROM contracts WHERE id = ?", (contract_id,))
                 result = cursor.fetchone()
                 conn.close()
-                return result['yandex_folder_path'] if result else None
+                return result["yandex_folder_path"] if result else None
         except Exception as e:
             print(f"[ERROR] Ошибка получения пути к папке договора: {e}")
             return None
 
     def sizeHint(self):
-        """Рекомендуемый размер карточки"""
-        current_column = self.card_data.get('column_name', '')
-        project_type = self.card_data.get('project_type', '')
-
-        # Проверяем, является ли пользователь замерщиком
-        is_surveyor = _emp_has_pos(self.employee, 'Замерщик')
-
-        # Для замерщика - компактная карточка
-        if is_surveyor:
-            height = 120  # Базовая высота: номер договора + адрес + площадь/город
-            # Добавляем высоту для кнопки "Добавить замер"
-            has_measurement = self.card_data.get('measurement_image_link') or self.card_data.get('survey_date')
-            if not has_measurement:  # Убрали проверку can_edit, т.к. замерщик может добавлять замер всегда
-                height += 45  # Высота кнопки
-            return QSize(200, height)
-
-        # Для остальных ролей - обычная логика
-        height = 150
-
-        employees_visible = True
-        if hasattr(self, 'employees_container'):
-            employees_visible = self.employees_container.isVisible()
-
-        if employees_visible:
-            employees_count = 0
-            if self.card_data.get('senior_manager_name'):
-                employees_count += 1
-            if self.card_data.get('sdp_name'):
-                employees_count += 1
-            if self.card_data.get('gap_name'):
-                employees_count += 1
-            if self.card_data.get('manager_name'):
-                employees_count += 1
-            if self.card_data.get('surveyor_name'):
-                employees_count += 1
-            if self.card_data.get('designer_name'):
-                employees_count += 1
-            if self.card_data.get('draftsman_name'):
-                employees_count += 1
-            
-            if employees_count > 0:
-                height += 35 + (employees_count * 24)
-        else:
-            height += 35
-        
-        if self.card_data.get('tags'):
-            height += 28
-        
-        if self.card_data.get('designer_deadline') or self.card_data.get('draftsman_deadline') or self.card_data.get('deadline'):
-            height += 28
-
-        # Индикатор ожидания оплаты в колонке "Выполненный проект"
-        if current_column == 'Выполненный проект':
-            height += 40
-
-        # Кнопки приёмки/исправления — только для тех, кто реально видит их
-        is_template_project = project_type == 'Шаблонный'
-        is_only_manager = _emp_only_pos(self.employee, 'Менеджер')
-        can_review_hint = self.employee and _has_perm(self.employee, self.api_client, 'crm_cards.complete_approval')
-        if is_only_manager and not is_template_project:
-            can_review_hint = False
-        if can_review_hint:
-            if ('концепция дизайна' in current_column and self.card_data.get('designer_completed') == 1) or \
-               (('планировочные' in current_column or 'чертежи' in current_column) and self.card_data.get('draftsman_completed') == 1):
-                height += 100  # work_done_label (wordWrap, до 4 строк)
-                height += 114  # 3 кнопки: Принять(28+6) + На исправление(28+6) + Клиенту(28+6)
-
-        buttons_count = 0
-        if self.employee:
-            # Кнопка "Сдать работу" / "Ожидайте проверку" для дизайнеров/чертёжников
-            if _emp_has_pos(self.employee, 'Дизайнер', 'Чертёжник'):
-                buttons_count += 1
-            # Кнопка "Редактирование карточки" для всех с правами редактирования
-            if self.can_edit:
-                buttons_count += 1
-
-        if self.card_data.get('project_data_link'):
-            buttons_count += 1
-
-        # Кнопка "Дата замера" (только если дата НЕ установлена и есть права)
-        if self.can_edit and not self.card_data.get('survey_date'):
-            buttons_count += 1
-
-        # Кнопка ТЗ (только если файл НЕ установлен и есть права)
-        if self.can_edit and not self.card_data.get('tech_task_file'):
-            buttons_count += 1
-
-        if buttons_count > 0:
-            height += 38 * buttons_count
-
-        return QSize(200, min(height, 800))
+        """Рекомендуемый размер карточки — через реальный расчёт layout"""
+        if self.layout():
+            # Даём layout обработать pending events
+            self.layout().activate()
+            h = self.layout().sizeHint().height()
+            # Добавляем margins
+            m = self.contentsMargins()
+            h += m.top() + m.bottom()
+            return QSize(200, min(max(h, 80), 800))
+        return QSize(200, 150)
 
     def get_work_status(self):
         """Определение статуса работы над карточкой.
@@ -1892,31 +1976,46 @@ class CRMCard(QFrame):
         - Индивидуальные: Стадия 1,2 → СДП; Стадия 3 → ГАП
         - Шаблонные: Стадия 1 → Менеджер; Стадия 2 → ГАП; Стадия 3 → Менеджер
         """
-        current_column = self.card_data.get('column_name', '')
-        project_type = self.card_data.get('project_type', '')
+        current_column = self.card_data.get("column_name", "")
+        project_type = self.card_data.get("project_type", "")
 
         # Определяем проверяющего по стадии и типу проекта
         def get_reviewer_name(col, proj_type):
-            if proj_type == 'Индивидуальный':
-                if 'Стадия 1' in col or 'Стадия 2' in col:
-                    return 'СДП'
-                if 'Стадия 3' in col:
-                    return 'ГАП'
+            if proj_type == "Индивидуальный":
+                if "Стадия 1" in col or "Стадия 2" in col:
+                    return "СДП"
+                if "Стадия 3" in col:
+                    return "ГАП"
             else:  # Шаблонный
-                if 'Стадия 1' in col:
-                    return 'Менеджер'
-                if 'Стадия 2' in col:
-                    return 'ГАП'
-                if 'Стадия 3' in col:
-                    return 'Менеджер'
-            return 'Менеджер'
+                if "Стадия 1" in col:
+                    return "Менеджер"
+                if "Стадия 2" in col:
+                    return "ГАП"
+                if "Стадия 3" in col:
+                    return "Менеджер"
+            return "Менеджер"
 
         reviewer = get_reviewer_name(current_column, project_type)
 
+        # Проверяем workflow_status из StageWorkflowState (приоритет)
+        workflow_status = self.card_data.get("workflow_status")
+        if workflow_status == "pending_review":
+            return f"Проверка {reviewer}"
+        if workflow_status == "revision":
+            return "На исправлении"
+        if workflow_status == "client_approval":
+            return "Согласование клиента"
+        if workflow_status == "pending_decision":
+            return f"Решение {reviewer}"
+        if workflow_status == "act_signing":
+            return "Подписание акта"
+        if workflow_status == "stage_completed":
+            return "Этап завершён"
+
         # Проверяем статус работы дизайнера (Стадия 2: концепция дизайна — только индивидуальные)
-        if 'Стадия 2' in current_column and 'концепция' in current_column:
-            designer_name = self.card_data.get('designer_name')
-            designer_completed = self.card_data.get('designer_completed', 0)
+        if "Стадия 2" in current_column and "концепция" in current_column:
+            designer_name = self.card_data.get("designer_name")
+            designer_completed = self.card_data.get("designer_completed", 0)
 
             if designer_name and designer_completed == 0:
                 return "В работе у исполнителя"
@@ -1926,16 +2025,14 @@ class CRMCard(QFrame):
 
         # Проверяем статус работы чертежника
         is_draftsman_column = False
-        if project_type == 'Индивидуальный':
-            is_draftsman_column = ('Стадия 1' in current_column and 'планировочные' in current_column) or \
-                                  ('Стадия 3' in current_column and 'чертежи' in current_column)
+        if project_type == "Индивидуальный":
+            is_draftsman_column = ("Стадия 1" in current_column and "планировочные" in current_column) or ("Стадия 3" in current_column and "чертежи" in current_column)
         else:  # Шаблонный
-            is_draftsman_column = ('Стадия 1' in current_column and 'планировочные' in current_column) or \
-                                  ('Стадия 2' in current_column and 'чертежи' in current_column)
+            is_draftsman_column = ("Стадия 1" in current_column and "планировочные" in current_column) or ("Стадия 2" in current_column and "чертежи" in current_column)
 
         if is_draftsman_column:
-            draftsman_name = self.card_data.get('draftsman_name')
-            draftsman_completed = self.card_data.get('draftsman_completed', 0)
+            draftsman_name = self.card_data.get("draftsman_name")
+            draftsman_completed = self.card_data.get("draftsman_completed", 0)
 
             if draftsman_name and draftsman_completed == 0:
                 return "В работе у исполнителя"
@@ -1959,16 +2056,16 @@ class CRMCard(QFrame):
                 background-color: #f5f5f5;
             }
         """)
-        
+
         self.setMinimumWidth(200)
         self.setMaximumWidth(600)
-        
+
         layout = QVBoxLayout()
         layout.setSpacing(8)
         layout.setContentsMargins(12, 12, 12, 12)
-        
-        current_column = self.card_data.get('column_name', '')
-        project_type = self.card_data.get('project_type', '')
+
+        current_column = self.card_data.get("column_name", "")
+        project_type = self.card_data.get("project_type", "")
 
         # ========== НОВОЕ: ВЕРХНЯЯ СТРОКА С НОМЕРОМ ДОГОВОРА И СТАТУСОМ ==========
         top_row = QHBoxLayout()
@@ -1977,7 +2074,7 @@ class CRMCard(QFrame):
 
         # 1. Номер договора (слева)
         contract_number = QLabel(f"Договор: {self.card_data.get('contract_number', 'N/A')}")
-        contract_number.setStyleSheet('font-size: 10px; color: #888; background-color: transparent;')
+        contract_number.setStyleSheet("font-size: 10px; color: #888; background-color: transparent;")
         contract_number.setFixedHeight(16)
         top_row.addWidget(contract_number, 1)  # stretch factor 1 - растягивается
 
@@ -1985,51 +2082,79 @@ class CRMCard(QFrame):
         work_status = self.get_work_status()
         if work_status:
             status_label = QLabel(work_status)
-            status_label.setStyleSheet('''
+            status_label.setStyleSheet("""
                 background-color: transparent;
                 color: #27AE60;
-                font-size: 9px;
+                font-size: 8px;
                 font-weight: bold;
-                padding: 2px 6px;
-                border: 2px solid #27AE60;
-                border-radius: 4px;
-            ''')
+                padding: 1px 4px;
+                border: 1px solid #27AE60;
+                border-radius: 3px;
+            """)
             status_label.setFixedHeight(20)
             status_label.setAlignment(Qt.AlignCenter)
             top_row.addWidget(status_label, 0)  # stretch factor 0 - не растягивается
 
         layout.addLayout(top_row)
-        
+
         # 2. Адрес
-        address = self.card_data.get('address', 'Адрес не указан')
+        address = self.card_data.get("address", "Адрес не указан")
         address_label = QLabel(f"<b>{address}</b>")
         address_label.setWordWrap(True)
-        address_label.setStyleSheet('font-size: 14px; color: #222; font-weight: bold; background-color: transparent;')
-        address_label.setMaximumHeight(50)
+        address_label.setStyleSheet("font-size: 14px; color: #222; font-weight: bold; background-color: transparent;")
         layout.addWidget(address_label, 0)
-        
+
         # Разделитель
         separator = QFrame()
         separator.setFrameShape(QFrame.HLine)
-        separator.setStyleSheet('background-color: #DDDDDD;')
+        separator.setStyleSheet("background-color: #DDDDDD;")
         separator.setFixedHeight(1)
         layout.addWidget(separator, 0)
 
         # Текущий подэтап (из StageWorkflowState)
-        current_substep = self.card_data.get('current_substep_name')
-        workflow_status = self.card_data.get('workflow_status')
+        current_substep = self.card_data.get("current_substep_name")
+        workflow_status = self.card_data.get("workflow_status")
         if current_substep:
             substep_text = current_substep
-            if workflow_status == 'revision':
+            substep_color = "#E67E22"
+            if workflow_status == "pending_review":
+                substep_text = f"Ожидает проверки: {current_substep}"
+                substep_color = "#8E44AD"
+            elif workflow_status == "revision":
                 substep_text = f"На исправлении: {current_substep}"
-            elif workflow_status == 'client_approval':
+                substep_color = "#E74C3C"
+            elif workflow_status == "client_approval":
                 substep_text = f"Согласование: {current_substep}"
+                substep_color = "#3498DB"
+            elif workflow_status == "pending_decision":
+                substep_text = f"Ожидает решения: {current_substep}"
+                substep_color = "#8E44AD"
+            elif workflow_status == "act_signing":
+                substep_text = "Подписание акта"
+                substep_color = "#9B59B6"
+            elif workflow_status == "stage_completed":
+                # Показываем "Стадия X завершена" вместо имени подэтапа
+                stage_name = self.card_data.get("column_name", "")
+                substep_text = f"Стадия завершена"
+                if stage_name:
+                    # Извлекаем номер стадии из названия колонки
+                    import re
+
+                    stage_match = re.search(r"[Сс]тадия\s*(\d+)", stage_name)
+                    if stage_match:
+                        substep_text = f"Стадия {stage_match.group(1)} завершена"
+                substep_color = "#27AE60"
             substep_label = QLabel(substep_text)
-            substep_label.setStyleSheet(
-                'font-size: 9px; color: #E67E22; font-weight: bold; padding: 2px 0;'
-            )
+            substep_label.setStyleSheet(f"font-size: 9px; color: {substep_color}; font-weight: bold; padding: 2px 0;")
             substep_label.setWordWrap(True)
             layout.addWidget(substep_label, 0)
+
+        # Счётчик правок
+        revision_count = self.card_data.get("revision_count", 0)
+        if revision_count > 0:
+            rev_label = QLabel(f"Правки: {revision_count}")
+            rev_label.setStyleSheet("color: #E74C3C; font-size: 9px; font-weight: bold; padding: 1px 6px; background-color: transparent;")
+            layout.addWidget(rev_label, 0)
 
         # 3. Площадь, город и тип агента на одной строке
         info_row = QHBoxLayout()
@@ -2043,44 +2168,44 @@ class CRMCard(QFrame):
         info_layout.setContentsMargins(0, 0, 0, 0)
         info_layout.setAlignment(Qt.AlignVCenter)
 
-        if self.card_data.get('area'):
+        if self.card_data.get("area"):
             # Иконка площади
-            area_icon = IconLoader.create_icon_button('box', '', '', icon_size=12)
+            area_icon = IconLoader.create_icon_button("box", "", "", icon_size=12)
             area_icon.setFixedSize(12, 12)
-            area_icon.setStyleSheet('border: none; background: transparent; padding: 0; margin: 0;')
+            area_icon.setStyleSheet("border: none; background: transparent; padding: 0; margin: 0;")
             area_icon.setEnabled(False)
             info_layout.addWidget(area_icon, 0, Qt.AlignVCenter)
 
             # Текст площади (+ этажи для шаблонных если > 1)
-            area_val = self.card_data['area']
-            floors = self.card_data.get('floors') or 1
+            area_val = self.card_data["area"]
+            floors = self.card_data.get("floors") or 1
             if floors > 1:
                 area_text = f"{area_val}м² ({floors}эт)"
             else:
                 area_text = f"{area_val} м²"
             area_label = QLabel(area_text)
-            area_label.setStyleSheet('color: #666; font-size: 11px; background-color: transparent;')
+            area_label.setStyleSheet("color: #666; font-size: 11px; background-color: transparent;")
             area_label.setAlignment(Qt.AlignVCenter)
             info_layout.addWidget(area_label, 0, Qt.AlignVCenter)
 
-            if self.card_data.get('city'):
+            if self.card_data.get("city"):
                 # Разделитель
                 sep_label = QLabel("|")
-                sep_label.setStyleSheet('color: #666; font-size: 11px; background-color: transparent;')
+                sep_label.setStyleSheet("color: #666; font-size: 11px; background-color: transparent;")
                 sep_label.setAlignment(Qt.AlignVCenter)
                 info_layout.addWidget(sep_label, 0, Qt.AlignVCenter)
 
-        if self.card_data.get('city'):
+        if self.card_data.get("city"):
             # Иконка города
-            city_icon = IconLoader.create_icon_button('map-pin', '', '', icon_size=12)
+            city_icon = IconLoader.create_icon_button("map-pin", "", "", icon_size=12)
             city_icon.setFixedSize(12, 12)
-            city_icon.setStyleSheet('border: none; background: transparent; padding: 0; margin: 0;')
+            city_icon.setStyleSheet("border: none; background: transparent; padding: 0; margin: 0;")
             city_icon.setEnabled(False)
             info_layout.addWidget(city_icon, 0, Qt.AlignVCenter)
 
             # Текст города
-            city_label = QLabel(self.card_data['city'])
-            city_label.setStyleSheet('color: #666; font-size: 11px; background-color: transparent;')
+            city_label = QLabel(self.card_data["city"])
+            city_label.setStyleSheet("color: #666; font-size: 11px; background-color: transparent;")
             city_label.setAlignment(Qt.AlignVCenter)
             info_layout.addWidget(city_label, 0, Qt.AlignVCenter)
 
@@ -2089,14 +2214,14 @@ class CRMCard(QFrame):
         info_row.addWidget(info_container, 1)
 
         # Тип агента с цветом
-        if self.card_data.get('agent_type'):
-            agent_type = self.card_data['agent_type']
+        if self.card_data.get("agent_type"):
+            agent_type = self.card_data["agent_type"]
             agent_color = self.data.get_agent_color(agent_type)
 
             agent_label = QLabel(agent_type)
             agent_label.setFixedHeight(24)  # Фиксированная высота
             if agent_color:
-                agent_label.setStyleSheet(f'''
+                agent_label.setStyleSheet(f"""
                     background-color: {agent_color};
                     color: white;
                     font-size: 10px;
@@ -2104,9 +2229,9 @@ class CRMCard(QFrame):
                     padding: 3px 8px;
                     border-radius: 4px;
                     border: 2px solid {agent_color};
-                ''')
+                """)
             else:
-                agent_label.setStyleSheet('''
+                agent_label.setStyleSheet("""
                     background-color: #95A5A6;
                     color: white;
                     font-size: 10px;
@@ -2114,14 +2239,14 @@ class CRMCard(QFrame):
                     padding: 3px 8px;
                     border-radius: 4px;
                     border: 2px solid #95A5A6;
-                ''')
+                """)
             agent_label.setAlignment(Qt.AlignCenter)
             info_row.addWidget(agent_label, 0)
 
         layout.addLayout(info_row)
 
         # Проверяем, является ли пользователь замерщиком
-        is_surveyor = _emp_has_pos(self.employee, 'Замерщик')
+        is_surveyor = _emp_has_pos(self.employee, "Замерщик")
 
         # 4. СОТРУДНИКИ (СВОРАЧИВАЕМЫЕ) - скрываем для замерщика
         if not is_surveyor:
@@ -2130,7 +2255,7 @@ class CRMCard(QFrame):
                 layout.addWidget(employees_widget, 0)
 
         # 5. Теги - скрываем для замерщика
-        if not is_surveyor and self.card_data.get('tags'):
+        if not is_surveyor and self.card_data.get("tags"):
             tags_container = QWidget()
             tags_layout = QHBoxLayout()
             tags_layout.setSpacing(4)
@@ -2138,67 +2263,105 @@ class CRMCard(QFrame):
             tags_layout.setAlignment(Qt.AlignVCenter)
 
             # Иконка тега
-            tag_icon = IconLoader.create_icon_button('tag', '', '', icon_size=10)
+            tag_icon = IconLoader.create_icon_button("tag", "", "", icon_size=10)
             tag_icon.setFixedSize(10, 10)
-            tag_icon.setStyleSheet('border: none; background: transparent; padding: 0;')
+            tag_icon.setStyleSheet("border: none; background: transparent; padding: 0;")
             tag_icon.setEnabled(False)
             tags_layout.addWidget(tag_icon, 0, Qt.AlignVCenter)
 
             # Текст тега
-            tags_text = QLabel(self.card_data['tags'])
-            tags_text.setStyleSheet('color: white; font-size: 10px; font-weight: bold; background-color: transparent;')
+            tags_text = QLabel(self.card_data["tags"])
+            tags_text.setStyleSheet("color: white; font-size: 10px; font-weight: bold; background-color: transparent;")
             tags_text.setAlignment(Qt.AlignVCenter)
             tags_layout.addWidget(tags_text, 0, Qt.AlignVCenter)
 
             tags_layout.addStretch()
             tags_container.setLayout(tags_layout)
-            tags_container.setStyleSheet('''
+            tags_container.setStyleSheet("""
                 background-color: #FF6B6B;
                 border-radius: 4px;
-            ''')
+            """)
             tags_container.setFixedHeight(28)
             layout.addWidget(tags_container, 0)
+
+        # 6а. ПАУЗА-тег — показывается когда карточка в столбце «В ожидании»
+        if not is_surveyor and current_column.lower() == "в ожидании":
+            pause_container = QWidget()
+            pause_layout = QHBoxLayout()
+            pause_layout.setSpacing(4)
+            pause_layout.setContentsMargins(8, 3, 8, 3)
+            pause_layout.setAlignment(Qt.AlignVCenter)
+
+            pause_label = QLabel("⏸  ПАУЗА")
+            pause_label.setStyleSheet("color: white; font-size: 10px; font-weight: bold; background-color: transparent;")
+            pause_label.setAlignment(Qt.AlignVCenter)
+            pause_layout.addWidget(pause_label, 0, Qt.AlignVCenter)
+            pause_layout.addStretch()
+            pause_container.setLayout(pause_layout)
+            pause_container.setStyleSheet("background-color: #B8860B; border-radius: 4px;")
+            pause_container.setFixedHeight(26)
+            layout.addWidget(pause_container, 0)
 
         # 6. Дедлайн - скрываем для замерщика
         if not is_surveyor:
             deadline_to_show = None
 
-            if 'концепция дизайна' in current_column and self.card_data.get('designer_deadline'):
-                deadline_to_show = self.card_data['designer_deadline']
-            elif ('планировочные' in current_column or 'чертежи' in current_column) and self.card_data.get('draftsman_deadline'):
-                deadline_to_show = self.card_data['draftsman_deadline']
-            elif self.card_data.get('deadline'):
-                deadline_to_show = self.card_data['deadline']
+            # Используем effective_deadline (с учётом паузы) вместо raw deadline
+            # Приоритет: исполнитель текущей стадии → по типу стадии → проектный дедлайн
+            if self.card_data.get("current_stage_deadline"):
+                deadline_to_show = self.card_data["current_stage_deadline"]
+            elif "концепция дизайна" in current_column and self.card_data.get("designer_deadline"):
+                deadline_to_show = self.card_data["designer_deadline"]
+            elif ("планировочные" in current_column or "чертежи" in current_column) and self.card_data.get("draftsman_deadline"):
+                deadline_to_show = self.card_data["draftsman_deadline"]
+            elif self.card_data.get("effective_deadline"):
+                deadline_to_show = self.card_data["effective_deadline"]
+            elif self.card_data.get("deadline"):
+                deadline_to_show = self.card_data["deadline"]
+
+            # Флаг клиентского/паузного этапа: не показываем красный цвет при просрочке
+            is_client_stage = bool(self.card_data.get("is_client_stage", False))
+            is_waiting = current_column.lower() == "в ожидании"
 
             if deadline_to_show:
                 try:
-                    deadline_date = QDate.fromString(deadline_to_show, 'yyyy-MM-dd')
+                    deadline_date = QDate.fromString(deadline_to_show, "yyyy-MM-dd")
                     current_date = QDate.currentDate()
 
                     # Форматируем дату для отображения в формате dd.MM.yyyy
-                    deadline_display = deadline_date.toString('dd.MM.yyyy')
+                    deadline_display = deadline_date.toString("dd.MM.yyyy")
 
                     working_days = self.calculate_working_days(current_date, deadline_date)
 
-                    if working_days < 0:
-                        bg_color = '#8B0000'
-                        text_color = 'white'
+                    if is_waiting:
+                        # Карточка на паузе — жёлтый «ожидание», не красный
+                        bg_color = "#B8860B"
+                        text_color = "white"
+                        text = f"{deadline_display}  ПАУЗА"
+                    elif is_client_stage and working_days < 0:
+                        # Клиентский/согласовательный этап просрочен — серый, не красный
+                        bg_color = "#9E9E9E"
+                        text_color = "white"
+                        text = f"{deadline_display}  согл. ({abs(working_days)} раб.дн.)"
+                    elif working_days < 0:
+                        bg_color = "#8B0000"
+                        text_color = "white"
                         text = f"{deadline_display}  ПРОСРОЧЕН ({abs(working_days)} раб.дн.)"
                     elif working_days == 0:
-                        bg_color = '#DC143C'
-                        text_color = 'white'
+                        bg_color = "#DC143C"
+                        text_color = "white"
                         text = f"{deadline_display}  СЕГОДНЯ!"
                     elif working_days <= 1:
-                        bg_color = '#E74C3C'
-                        text_color = 'white'
+                        bg_color = "#E74C3C"
+                        text_color = "white"
                         text = f"{deadline_display}  ({working_days} раб.дн.)"
                     elif working_days <= 2:
-                        bg_color = '#F39C12'
-                        text_color = 'white'
+                        bg_color = "#F39C12"
+                        text_color = "white"
                         text = f"{deadline_display} ({working_days} раб.дн.)"
                     else:
-                        bg_color = '#E0E0E0'
-                        text_color = '#333333'
+                        bg_color = "#E0E0E0"
+                        text_color = "#333333"
                         text = f"{deadline_display} ({working_days} раб.дн.)"
 
                     # Создаем контейнер для иконки и текста
@@ -2208,33 +2371,36 @@ class CRMCard(QFrame):
                     deadline_layout.setContentsMargins(8, 3, 8, 3)
                     deadline_layout.setAlignment(Qt.AlignVCenter)
 
-                    # Иконка дедлайна
-                    deadline_icon = IconLoader.create_icon_button('deadline', '', '', icon_size=10)
-                    deadline_icon.setFixedSize(10, 10)
-                    deadline_icon.setStyleSheet('border: none; background: transparent; padding: 0;')
-                    deadline_icon.setEnabled(False)
-                    deadline_layout.addWidget(deadline_icon, 0, Qt.AlignVCenter)
+                    # Иконка дедлайна (белая на цветном фоне, тёмная на сером)
+                    icon_color = "#FFFFFF" if text_color == "white" else "#333333"
+                    deadline_icon_widget = QLabel()
+                    dl_icon = IconLoader.load_colored("deadline", icon_color, 10)
+                    if dl_icon and not dl_icon.isNull():
+                        deadline_icon_widget.setPixmap(dl_icon.pixmap(QSize(10, 10)))
+                    deadline_icon_widget.setFixedSize(10, 10)
+                    deadline_icon_widget.setStyleSheet("border: none; background: transparent; padding: 0;")
+                    deadline_layout.addWidget(deadline_icon_widget, 0, Qt.AlignVCenter)
 
                     # Текст дедлайна
                     deadline_text = QLabel(text)
-                    deadline_text.setStyleSheet(f'color: {text_color}; font-size: 10px; font-weight: bold; background-color: transparent;')
+                    deadline_text.setStyleSheet(f"color: {text_color}; font-size: 10px; font-weight: bold; background-color: transparent;")
                     deadline_text.setAlignment(Qt.AlignVCenter)
                     deadline_layout.addWidget(deadline_text, 0, Qt.AlignVCenter)
 
                     deadline_layout.addStretch()
                     deadline_container.setLayout(deadline_layout)
-                    deadline_container.setStyleSheet(f'''
+                    deadline_container.setStyleSheet(f"""
                         background-color: {bg_color};
                         border-radius: 4px;
-                    ''')
+                    """)
                     deadline_container.setFixedHeight(28)
                     layout.addWidget(deadline_container, 0)
 
                 except Exception as e:
                     # В случае ошибки пытаемся преобразовать в нормальный формат
                     try:
-                        deadline_date = QDate.fromString(deadline_to_show, 'yyyy-MM-dd')
-                        deadline_display = deadline_date.toString('dd.MM.yyyy')
+                        deadline_date = QDate.fromString(deadline_to_show, "yyyy-MM-dd")
+                        deadline_display = deadline_date.toString("dd.MM.yyyy")
                     except Exception:
                         deadline_display = deadline_to_show
 
@@ -2246,47 +2412,48 @@ class CRMCard(QFrame):
                     deadline_layout.setAlignment(Qt.AlignVCenter)
 
                     # Иконка дедлайна
-                    deadline_icon = IconLoader.create_icon_button('deadline', '', '', icon_size=10)
-                    deadline_icon.setFixedSize(10, 10)
-                    deadline_icon.setStyleSheet('border: none; background: transparent; padding: 0;')
-                    deadline_icon.setEnabled(False)
-                    deadline_layout.addWidget(deadline_icon, 0, Qt.AlignVCenter)
+                    deadline_icon_widget = QLabel()
+                    dl_icon = IconLoader.load_colored("deadline", "#333333", 10)
+                    if dl_icon and not dl_icon.isNull():
+                        deadline_icon_widget.setPixmap(dl_icon.pixmap(QSize(10, 10)))
+                    deadline_icon_widget.setFixedSize(10, 10)
+                    deadline_icon_widget.setStyleSheet("border: none; background: transparent; padding: 0;")
+                    deadline_layout.addWidget(deadline_icon_widget, 0, Qt.AlignVCenter)
 
                     # Текст дедлайна
                     deadline_text = QLabel(f"Дедлайн: {deadline_display}")
-                    deadline_text.setStyleSheet('color: #333333; font-size: 10px; font-weight: bold; background-color: transparent;')
+                    deadline_text.setStyleSheet("color: #333333; font-size: 10px; font-weight: bold; background-color: transparent;")
                     deadline_text.setAlignment(Qt.AlignVCenter)
                     deadline_layout.addWidget(deadline_text, 0, Qt.AlignVCenter)
 
                     deadline_layout.addStretch()
                     deadline_container.setLayout(deadline_layout)
-                    deadline_container.setStyleSheet('''
+                    deadline_container.setStyleSheet("""
                         background-color: #E0E0E0;
                         border-radius: 4px;
-                    ''')
+                    """)
                     deadline_container.setFixedHeight(28)
                     layout.addWidget(deadline_container, 0)
-                
-        
+
         # 6.4. ИНДИКАТОР "ОЖИДАЕТСЯ ПОДТВЕРЖДЕНИЕ ОПЛАТЫ" в колонке Выполненный проект
-        if current_column == 'Выполненный проект':
+        if current_column == "Выполненный проект":
             # Проверяем статус финального платежа
             try:
-                contract_id = self.card_data.get('contract_id')
+                contract_id = self.card_data.get("contract_id")
                 if contract_id:
                     contract = self.data.get_contract(contract_id)
                     if contract:
                         payment_ok = True
-                        if project_type == 'Индивидуальный':
-                            payment_ok = bool(contract.get('third_payment_paid_date'))
+                        if project_type == "Индивидуальный":
+                            payment_ok = bool(contract.get("third_payment_paid_date"))
                         else:  # Шаблонный
-                            payment_ok = bool(contract.get('advance_payment_paid_date'))
+                            payment_ok = bool(contract.get("advance_payment_paid_date"))
 
                         if not payment_ok:
-                            payment_label = QLabel('Ожидается подтверждение оплаты')
+                            payment_label = QLabel("Ожидается подтверждение оплаты")
                             payment_label.setWordWrap(True)
                             payment_label.setAlignment(Qt.AlignCenter)
-                            payment_label.setStyleSheet('''
+                            payment_label.setStyleSheet("""
                                 color: #E67E22;
                                 background-color: #FFF3E0;
                                 padding: 8px 12px;
@@ -2294,33 +2461,36 @@ class CRMCard(QFrame):
                                 font-size: 10px;
                                 font-weight: bold;
                                 border: 2px solid #F39C12;
-                            ''')
+                            """)
                             layout.addWidget(payment_label, 0)
             except Exception as e:
                 print(f"[PAYMENT INDICATOR] Ошибка проверки оплаты: {e}")
 
         # 6.5. ИНДИКАТОР "РАБОТА СДАНА" + КНОПКА "ПРИНЯТЬ РАБОТУ"
         # Менеджер может принимать/отклонять работу только в шаблонных проектах
-        is_template_project = self.card_data.get('project_type', '') == 'Шаблонный'
-        is_only_manager = _emp_only_pos(self.employee, 'Менеджер')
-        can_review_work = _has_perm(self.employee, self.api_client, 'crm_cards.complete_approval')
+        is_template_project = self.card_data.get("project_type", "") == "Шаблонный"
+        is_only_manager = _emp_only_pos(self.employee, "Менеджер")
+        can_review_work = _has_perm(self.employee, self.api_client, "crm_cards.complete_approval")
         if is_only_manager and not is_template_project:
             can_review_work = False
+        current_wf_status = None
         if self.employee and can_review_work:
             completed_info = []
-            
-            if 'концепция дизайна' in current_column and self.card_data.get('designer_completed') == 1:
-                designer_name = self.card_data.get('designer_name', 'N/A')
+
+            if "концепция дизайна" in current_column and self.card_data.get("designer_completed") == 1:
+                designer_name = self.card_data.get("designer_name", "N/A")
                 completed_info.append(f"Дизайнер {designer_name}")
-            
-            if ('планировочные' in current_column or 'чертежи' in current_column) and self.card_data.get('draftsman_completed') == 1:
-                draftsman_name = self.card_data.get('draftsman_name', 'N/A')
+
+            if ("планировочные" in current_column or "чертежи" in current_column) and self.card_data.get("draftsman_completed") == 1:
+                draftsman_name = self.card_data.get("draftsman_name", "N/A")
                 completed_info.append(f"Чертёжник {draftsman_name}")
-            
-            if completed_info:
+
+            # Не показываем зелёную карточку "работа сдана" при подписании акта или завершении стадии
+            wf_status_card = self.card_data.get("workflow_status")
+            if completed_info and wf_status_card not in ("act_signing", "stage_completed"):
                 work_done_label = QLabel(f"Работа сдана: {', '.join(completed_info)}\nТребуется проверка и перемещение на следующую стадию")
                 work_done_label.setWordWrap(True)
-                work_done_label.setStyleSheet('''
+                work_done_label.setStyleSheet("""
                     color: white;
                     background-color: #27AE60;
                     padding: 10px 12px;
@@ -2328,151 +2498,221 @@ class CRMCard(QFrame):
                     font-size: 10px;
                     font-weight: bold;
                     border: 2px solid #1E8449;
-                ''')
+                """)
                 layout.addWidget(work_done_label, 0)
-                
-                # ========== КНОПКА "ПРИНЯТЬ РАБОТУ" (SVG) ==========
-                accept_btn = IconLoader.create_icon_button('accept', 'Принять работу', 'Принять выполненную работу', icon_size=12)
-                accept_btn.setStyleSheet("""
-                    QPushButton {
-                        background-color: #1E8449;
-                        color: white;
-                        padding: 4px 12px;
-                        border-radius: 4px;
-                        font-size: 10px;
-                        font-weight: bold;
-                        min-height: 20px;
-                        max-height: 20px;
-                    }
-                    QPushButton:hover { background-color: #17703C; }
-                """)
-                accept_btn.setFixedHeight(28)
-                accept_btn.clicked.connect(self.accept_work)
-                layout.addWidget(accept_btn, 0)
 
-                # Кнопка "Отправить на исправление"
-                reject_btn = QPushButton('На исправление')
-                reject_btn.setStyleSheet("""
-                    QPushButton {
-                        background-color: #E74C3C;
-                        color: white;
-                        padding: 4px 12px;
-                        border-radius: 4px;
-                        font-size: 10px;
-                        font-weight: bold;
-                        min-height: 20px;
-                        max-height: 20px;
-                    }
-                    QPushButton:hover { background-color: #C0392B; }
-                """)
-                reject_btn.setFixedHeight(28)
-                reject_btn.clicked.connect(self.reject_work)
-                layout.addWidget(reject_btn, 0)
-
-                # Кнопка "Отправить на согласование"
-                client_send_btn = QPushButton('Клиенту на согласование')
-                client_send_btn.setStyleSheet("""
-                    QPushButton {
-                        background-color: #3498DB;
-                        color: white;
-                        padding: 4px 12px;
-                        border-radius: 4px;
-                        font-size: 10px;
-                        font-weight: bold;
-                        min-height: 20px;
-                        max-height: 20px;
-                    }
-                    QPushButton:hover { background-color: #2980B9; }
-                """)
-                client_send_btn.setFixedHeight(28)
-                client_send_btn.clicked.connect(self.send_to_client)
-                layout.addWidget(client_send_btn, 0)
-
-                # Кнопка "Клиент согласовал" — показывается когда статус workflow = client_approval
+                # Определяем текущий workflow_status
                 try:
-                    wf_states = self.data.get_workflow_state(self.card_data['id']) or []
-                    is_client_approval = any(
-                        s.get('status') == 'client_approval'
-                        and s.get('stage_name') == current_column
-                        for s in wf_states
-                    )
+                    wf_states = self.data.get_workflow_state(self.card_data["id"]) or []
+                    current_wf_status = None
+                    for s in wf_states:
+                        if s.get("stage_name") == current_column:
+                            current_wf_status = s.get("status")
+                            break
                 except Exception:
-                    is_client_approval = False
+                    current_wf_status = None
 
-                if is_client_approval:
-                    client_ok_btn = QPushButton('Клиент согласовал')
-                    client_ok_btn.setStyleSheet("""
+                # Кнопка "Отправить клиенту" (объединяет accept + client-send)
+                # W1: Показывается ТОЛЬКО когда исполнитель сдал работу (pending_review)
+                if current_wf_status == "pending_review":
+                    send_client_btn = QPushButton("Отправить клиенту")
+                    send_client_btn.setStyleSheet("""
                         QPushButton {
-                            background-color: #27AE60;
+                            background-color: #58D68D;
                             color: white;
                             padding: 4px 12px;
                             border-radius: 4px;
                             font-size: 10px;
                             font-weight: bold;
-                            min-height: 20px;
-                            max-height: 20px;
+                            min-height: 22px;
+                            max-height: 22px;
                         }
-                        QPushButton:hover { background-color: #1E8449; }
+                        QPushButton:hover { background-color: #48C77D; }
                     """)
-                    client_ok_btn.setFixedHeight(28)
-                    client_ok_btn.clicked.connect(self.client_approved)
-                    layout.addWidget(client_ok_btn, 0)
+                    send_client_btn.clicked.connect(self.send_to_client_combined)
+                    layout.addWidget(send_client_btn, 0)
 
-        # 7. КНОПКИ
-        buttons_added = False
+                # Кнопка "На исправление"
+                # W1: Показывается ТОЛЬКО когда исполнитель сдал работу (pending_review)
+                if current_wf_status == "pending_review":
+                    reject_btn = QPushButton("На исправление")
+                    reject_btn.setStyleSheet("""
+                        QPushButton {
+                            background-color: #F1948A;
+                            color: white;
+                            padding: 4px 12px;
+                            border-radius: 4px;
+                            font-size: 10px;
+                            font-weight: bold;
+                            min-height: 22px;
+                            max-height: 22px;
+                        }
+                        QPushButton:hover { background-color: #E57373; }
+                    """)
+                    reject_btn.clicked.connect(self.reject_work)
+                    layout.addWidget(reject_btn, 0)
 
-        # Кнопка "Сдать работу" / "Ожидайте проверку" для дизайнеров/чертежников
-        emp_pos = self.employee.get('position', '') if self.employee else ''
-        emp_sec = self.employee.get('secondary_position', '') if self.employee else ''
-        is_executor_role = emp_pos in ['Дизайнер', 'Чертёжник'] or emp_sec in ['Дизайнер', 'Чертёжник']
-        if self.employee and is_executor_role:
-            # Проверяем, сдана ли уже работа
-            work_already_submitted = False
-            if 'концепция дизайна' in current_column:
-                emp_name = self.employee.get('full_name', '')
-                if self.card_data.get('designer_name') == emp_name and self.card_data.get('designer_completed', 0) == 1:
-                    work_already_submitted = True
-            elif 'планировочные' in current_column or 'чертежи' in current_column:
-                emp_name = self.employee.get('full_name', '')
-                if self.card_data.get('draftsman_name') == emp_name and self.card_data.get('draftsman_completed', 0) == 1:
-                    work_already_submitted = True
-
-            if work_already_submitted:
-                # Работа уже сдана — показываем неактивную кнопку "Ожидайте проверку"
-                waiting_btn = QPushButton('Ожидайте проверку')
-                waiting_btn.setEnabled(False)
-                waiting_btn.setStyleSheet("""
-                    QPushButton {
-                        background-color: #95A5A6;
-                        color: white;
-                        border: none;
-                        padding: 4px 12px;
-                        border-radius: 4px;
-                        font-size: 11px;
-                        font-weight: bold;
-                        max-height: 19px;
-                        min-height: 19px;
-                    }
-                """)
-                layout.addWidget(waiting_btn, 0)
-                buttons_added = True
-            elif self.is_assigned_to_current_user(self.employee):
-                # ========== КНОПКА "СДАТЬ РАБОТУ" (SVG) ==========
-                submit_btn = IconLoader.create_icon_button('submit', 'Сдать работу', 'Отметить работу как выполненную', icon_size=12)
-                submit_btn.setStyleSheet("""
+        # Кнопка "Клиент согласовал" — при статусе client_approval
+        # ВЫНЕСЕНА из блока completed_info, т.к. после client-send completed сбрасывается
+        if self.employee and can_review_work:
+            try:
+                if not current_wf_status:
+                    wf_states = self.data.get_workflow_state(self.card_data["id"]) or []
+                    for s in wf_states:
+                        if s.get("stage_name") == current_column:
+                            current_wf_status = s.get("status")
+                            break
+            except Exception:
+                pass
+            if current_wf_status == "client_approval":
+                client_ok_btn = QPushButton("Клиент согласовал")
+                client_ok_btn.setStyleSheet("""
                     QPushButton {
                         background-color: #27AE60;
                         color: white;
                         border: none;
                         padding: 4px 12px;
                         border-radius: 4px;
-                        font-size: 11px;
+                        font-size: 10px;
                         font-weight: bold;
-                        max-height: 19px;
-                        min-height: 19px;
+                        min-height: 22px;
+                        max-height: 22px;
                     }
                     QPushButton:hover { background-color: #229954; }
                     QPushButton:pressed { background-color: #1E8449; }
+                """)
+                client_ok_btn.clicked.connect(self.client_approved)
+                layout.addWidget(client_ok_btn, 0)
+
+            # Кнопки при act_signing: "Отправить акт" + "Акт подписан"
+            if current_wf_status == "act_signing":
+                send_act_btn = QPushButton("Отправить акт")
+                send_act_btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #58D68D; color: white;
+                        border: none; border-radius: 4px;
+                        padding: 4px 12px; font-size: 10px;
+                        font-weight: bold;
+                        min-height: 22px; max-height: 22px;
+                    }
+                    QPushButton:hover { background-color: #48C77D; }
+                """)
+                send_act_btn.clicked.connect(self._open_act_send_dialog)
+                layout.addWidget(send_act_btn, 0)
+
+                sign_act_btn = QPushButton("Акт подписан")
+                sign_act_btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #85C1E9; color: white;
+                        border: none; border-radius: 4px;
+                        padding: 4px 12px; font-size: 10px;
+                        font-weight: bold;
+                        min-height: 22px; max-height: 22px;
+                    }
+                    QPushButton:hover { background-color: #6CB2D9; }
+                """)
+                sign_act_btn.clicked.connect(lambda checked, cid=self.card_data["id"]: self.sign_act(cid))
+                layout.addWidget(sign_act_btn, 0)
+
+        # 7. КНОПКИ
+        buttons_added = False
+
+        # Кнопка "Сдать работу" / "Ожидайте проверку" для дизайнеров/чертежников
+        emp_pos = self.employee.get("position", "") if self.employee else ""
+        emp_sec = self.employee.get("secondary_position", "") if self.employee else ""
+        is_executor_role = emp_pos in ["Дизайнер", "Чертёжник"] or emp_sec in ["Дизайнер", "Чертёжник"]
+        if self.employee and is_executor_role:
+            # Проверяем, сдана ли уже работа
+            work_already_submitted = False
+            if "концепция дизайна" in current_column:
+                emp_name = self.employee.get("full_name", "")
+                if self.card_data.get("designer_name") == emp_name and self.card_data.get("designer_completed", 0) == 1:
+                    work_already_submitted = True
+            elif "планировочные" in current_column or "чертежи" in current_column:
+                emp_name = self.employee.get("full_name", "")
+                if self.card_data.get("draftsman_name") == emp_name and self.card_data.get("draftsman_completed", 0) == 1:
+                    work_already_submitted = True
+
+            if work_already_submitted:
+                # Работа уже сдана — показываем статус
+                wf_status = self.card_data.get("workflow_status")
+                if wf_status == "pending_review":
+                    # Метка в стиле кнопки (визуально как кнопка, но не кликабельная)
+                    wait_label = QLabel("Ожидайте проверку")
+                    wait_label.setAlignment(Qt.AlignCenter)
+                    wait_label.setStyleSheet("""
+                        QLabel {
+                            background-color: #ffffff;
+                            color: #E67E22;
+                            border: 1px solid #E67E22;
+                            padding: 4px 12px;
+                            border-radius: 4px;
+                            font-size: 10px;
+                            font-weight: bold;
+                            min-height: 22px;
+                            max-height: 22px;
+                        }
+                    """)
+                    layout.addWidget(wait_label, 0)
+                elif wf_status == "client_approval":
+                    # Клиент согласовывает — работа исполнителя принята
+                    client_label = QLabel("Клиент согласовывает")
+                    client_label.setAlignment(Qt.AlignCenter)
+                    client_label.setStyleSheet("""
+                        QLabel {
+                            background-color: #ffffff;
+                            color: #1976D2;
+                            border: 1px solid #1976D2;
+                            padding: 4px 12px;
+                            border-radius: 4px;
+                            font-size: 10px;
+                            font-weight: bold;
+                            min-height: 22px;
+                            max-height: 22px;
+                        }
+                    """)
+                    layout.addWidget(client_label, 0)
+                else:
+                    waiting_btn = QPushButton("Работа сдана")
+                    waiting_btn.setEnabled(False)
+                    waiting_btn.setStyleSheet("""
+                        QPushButton {
+                            background-color: #95A5A6;
+                            color: white;
+                            border: none;
+                            padding: 4px 12px;
+                            border-radius: 4px;
+                            font-size: 10px;
+                            font-weight: bold;
+                            min-height: 22px;
+                            max-height: 22px;
+                        }
+                    """)
+                    layout.addWidget(waiting_btn, 0)
+                buttons_added = True
+            elif self.is_assigned_to_current_user(self.employee):
+                # ========== КНОПКА "СДАТЬ РАБОТУ" (SVG) ==========
+                submit_btn = QPushButton("Сдать работу")
+                submit_icon = IconLoader.load_colored("submit", "#FFFFFF", 12)
+                if submit_icon and not submit_icon.isNull():
+                    submit_btn.setIcon(submit_icon)
+                    submit_btn.setIconSize(QSize(12, 12))
+                submit_btn.setToolTip("Отметить работу как выполненную")
+                submit_btn.setAccessibleName("Сдать работу")
+                submit_btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #58D68D;
+                        color: white;
+                        border: none;
+                        padding: 4px 12px;
+                        border-radius: 4px;
+                        font-size: 10px;
+                        font-weight: bold;
+                        min-height: 22px;
+                        max-height: 22px;
+                    }
+                    QPushButton:hover { background-color: #48C77D; }
+                    QPushButton:pressed { background-color: #3AB86E; }
                 """)
                 submit_btn.clicked.connect(self.submit_work)
                 layout.addWidget(submit_btn, 0)
@@ -2481,9 +2721,9 @@ class CRMCard(QFrame):
         # Кнопка "Редактирование карточки" для всех с правами редактирования (кроме замерщика)
         if self.can_edit and not is_surveyor:
             # S2.2: Проверка права crm.update для кнопки редактирования
-            has_update_perm = _has_perm(self.employee, self.api_client, 'crm_cards.update')
+            has_update_perm = _has_perm(self.employee, self.api_client, "crm_cards.update")
             # ========== КНОПКА РЕДАКТИРОВАНИЯ (SVG) ==========
-            edit_btn = IconLoader.create_icon_button('edit', 'Редактирование карточки', 'Редактировать данные карточки', icon_size=12)
+            edit_btn = IconLoader.create_icon_button("edit", "Данные карточки", "Открыть данные карточки", icon_size=12)
             edit_btn.setStyleSheet("""
                 QPushButton {
                     background-color: #E0E0E0;
@@ -2502,14 +2742,14 @@ class CRMCard(QFrame):
             edit_btn.setEnabled(has_update_perm)
             if not has_update_perm:
                 edit_btn.setStyleSheet(edit_btn.styleSheet() + "QPushButton:disabled { opacity: 0.5; background-color: #e0e0e0; }")
-            edit_btn.setAccessibleName("Редактирование карточки")
+            edit_btn.setAccessibleName("Данные карточки")
             edit_btn.clicked.connect(self.edit_card)
             layout.addWidget(edit_btn, 0)
             buttons_added = True
 
         # ========== КНОПКА "ДАННЫЕ ПРОЕКТА" (SVG) ==========
-        if self.card_data.get('project_data_link'):
-            data_btn = IconLoader.create_icon_button('folder', 'Данные проекта', 'Открыть папку проекта', icon_size=12)
+        if self.card_data.get("project_data_link"):
+            data_btn = IconLoader.create_icon_button("folder", "Данные проекта", "Открыть папку проекта", icon_size=12)
             data_btn.setStyleSheet("""
                 QPushButton {
                     background-color: #ffd93c;
@@ -2532,14 +2772,14 @@ class CRMCard(QFrame):
         # ========== КНОПКА "ДАТА ЗАМЕРА" ==========
         # Показываем кнопку только если замер НЕ загружен и есть права (для Руководителя, Старшего менеджера, Менеджера и Замерщика)
         # Проверяем как новое поле (measurement_image_link из contracts), так и старое (survey_date из crm_cards)
-        has_measurement = self.card_data.get('measurement_image_link') or self.card_data.get('survey_date')
-        is_surveyor = _emp_has_pos(self.employee, 'Замерщик')
-        can_add_measurement = _has_perm(self.employee, self.api_client, 'crm_cards.update') or is_surveyor
+        has_measurement = self.card_data.get("measurement_image_link") or self.card_data.get("survey_date")
+        is_surveyor = _emp_has_pos(self.employee, "Замерщик")
+        can_add_measurement = _has_perm(self.employee, self.api_client, "crm_cards.update") or is_surveyor
         # Для замерщика разрешаем добавлять замер без can_edit, для остальных требуется can_edit
         if not has_measurement and can_add_measurement and (self.can_edit or is_surveyor):
-            survey_btn = IconLoader.create_icon_button('calendar-plus', 'Добавить замер', 'Установить дату замера', icon_size=12)
+            survey_btn = IconLoader.create_icon_button("calendar-plus", "Добавить замер", "Установить дату замера", icon_size=12)
             # Белая иконка на оранжевом фоне
-            white_icon = IconLoader.load_colored('calendar-plus', '#FFFFFF', 12)
+            white_icon = IconLoader.load_colored("calendar-plus", "#FFFFFF", 12)
             if white_icon and not white_icon.isNull():
                 survey_btn.setIcon(white_icon)
             survey_btn.setStyleSheet("""
@@ -2558,8 +2798,8 @@ class CRMCard(QFrame):
                 QPushButton:pressed { background-color: #D35400; }
             """)
             # S2.2: Замерщик может добавлять замер без crm_cards.update
-            is_surveyor = _emp_has_pos(self.employee, 'Замерщик')
-            has_update_perm_survey = is_surveyor or _has_perm(self.employee, self.api_client, 'crm_cards.update')
+            is_surveyor = _emp_has_pos(self.employee, "Замерщик")
+            has_update_perm_survey = is_surveyor or _has_perm(self.employee, self.api_client, "crm_cards.update")
             survey_btn.setEnabled(has_update_perm_survey)
             if not has_update_perm_survey:
                 survey_btn.setStyleSheet(survey_btn.styleSheet() + "QPushButton:disabled { opacity: 0.5; background-color: #e0e0e0; }")
@@ -2571,12 +2811,12 @@ class CRMCard(QFrame):
         # Показываем кнопку только если ТЗ НЕ добавлено и есть права (только для Руководителя, Старшего менеджера и Менеджера)
         # Проверяем как новое поле (tech_task_link из contracts), так и старое (tech_task_file из crm_cards)
         # Кнопка "Добавить ТЗ" (не показываем замерщику)
-        has_tech_task = self.card_data.get('tech_task_link') or self.card_data.get('tech_task_file')
-        can_add_tech_task = _has_perm(self.employee, self.api_client, 'crm_cards.update')
+        has_tech_task = self.card_data.get("tech_task_link") or self.card_data.get("tech_task_file")
+        can_add_tech_task = _has_perm(self.employee, self.api_client, "crm_cards.update")
         if self.can_edit and not has_tech_task and can_add_tech_task and not is_surveyor:
-            tz_btn = IconLoader.create_icon_button('plus-circle', 'Добавить ТЗ', 'Добавить техническое задание', icon_size=12)
+            tz_btn = IconLoader.create_icon_button("plus-circle", "Добавить ТЗ", "Добавить техническое задание", icon_size=12)
             # Белая иконка на фиолетовом фоне
-            white_icon_tz = IconLoader.load_colored('plus-circle', '#FFFFFF', 12)
+            white_icon_tz = IconLoader.load_colored("plus-circle", "#FFFFFF", 12)
             if white_icon_tz and not white_icon_tz.isNull():
                 tz_btn.setIcon(white_icon_tz)
             tz_btn.setStyleSheet("""
@@ -2595,7 +2835,7 @@ class CRMCard(QFrame):
                 QPushButton:pressed { background-color: #7D3C98; }
             """)
             # S2.2: Визуальный индикатор если нет права crm.update
-            has_update_perm_tz = _has_perm(self.employee, self.api_client, 'crm_cards.update')
+            has_update_perm_tz = _has_perm(self.employee, self.api_client, "crm_cards.update")
             tz_btn.setEnabled(has_update_perm_tz)
             if not has_update_perm_tz:
                 tz_btn.setStyleSheet(tz_btn.styleSheet() + "QPushButton:disabled { opacity: 0.5; background-color: #e0e0e0; }")
@@ -2604,46 +2844,46 @@ class CRMCard(QFrame):
             buttons_added = True
 
         self.setLayout(layout)
-                
+
     def create_collapsible_employees_section(self):
         """Создание СВОРАЧИВАЕМОЙ секции с сотрудниками"""
         employees = []
-        
-        current_column = self.card_data.get('column_name', '')
-        project_type = self.card_data.get('project_type', '')
-        
+
+        current_column = self.card_data.get("column_name", "")
+        project_type = self.card_data.get("project_type", "")
+
         highlight_role = self.get_highlight_role(current_column, project_type)
-        
-        if self.card_data.get('senior_manager_name'):
-            employees.append(('Ст.менеджер', self.card_data['senior_manager_name'], 'senior_manager', False))
+
+        if self.card_data.get("senior_manager_name"):
+            employees.append(("Ст.менеджер", self.card_data["senior_manager_name"], "senior_manager", False))
         # ИСПРАВЛЕНИЕ 06.02.2026: СДП только для индивидуальных проектов (#20)
-        if project_type == 'Индивидуальный' and self.card_data.get('sdp_name'):
-            employees.append(('СДП', self.card_data['sdp_name'], 'sdp', False))
-        if self.card_data.get('gap_name'):
-            employees.append(('ГАП', self.card_data['gap_name'], 'gap', False))
-        if self.card_data.get('manager_name'):
-            employees.append(('Менеджер', self.card_data['manager_name'], 'manager', False))
-        if self.card_data.get('surveyor_name'):
-            employees.append(('Замерщик', self.card_data['surveyor_name'], 'surveyor', False))
+        if project_type == "Индивидуальный" and self.card_data.get("sdp_name"):
+            employees.append(("СДП", self.card_data["sdp_name"], "sdp", False))
+        if self.card_data.get("gap_name"):
+            employees.append(("ГАП", self.card_data["gap_name"], "gap", False))
+        if self.card_data.get("manager_name"):
+            employees.append(("Менеджер", self.card_data["manager_name"], "manager", False))
+        if self.card_data.get("surveyor_name"):
+            employees.append(("Замерщик", self.card_data["surveyor_name"], "surveyor", False))
 
-        if self.card_data.get('designer_name'):
-            is_completed = self.card_data.get('designer_completed', 0) == 1
-            employees.append(('Дизайнер', self.card_data['designer_name'], 'designer', is_completed))
+        if self.card_data.get("designer_name"):
+            is_completed = self.card_data.get("designer_completed", 0) == 1
+            employees.append(("Дизайнер", self.card_data["designer_name"], "designer", is_completed))
 
-        if self.card_data.get('draftsman_name'):
-            is_completed = self.card_data.get('draftsman_completed', 0) == 1
-            employees.append(('Чертёжник', self.card_data['draftsman_name'], 'draftsman', is_completed))
-        
+        if self.card_data.get("draftsman_name"):
+            is_completed = self.card_data.get("draftsman_completed", 0) == 1
+            employees.append(("Чертёжник", self.card_data["draftsman_name"], "draftsman", is_completed))
+
         if not employees:
             return None
-        
+
         main_widget = QWidget()
         main_layout = QVBoxLayout()
         main_layout.setSpacing(0)
         main_layout.setContentsMargins(0, 0, 0, 0)
-        
-        self.team_toggle_btn = IconLoader.create_icon_button('team', f"Команда ({len(employees)})", '', icon_size=10)
-        self.team_toggle_btn.setIcon(IconLoader.load('chevron-right'))
+
+        self.team_toggle_btn = IconLoader.create_icon_button("team", f"Команда ({len(employees)})", "", icon_size=10)
+        self.team_toggle_btn.setIcon(IconLoader.load("chevron-right"))
         self.team_toggle_btn.setIconSize(QSize(10, 10))
         self.team_toggle_btn.setStyleSheet("""
             QPushButton {
@@ -2665,7 +2905,7 @@ class CRMCard(QFrame):
         self.team_toggle_btn.clicked.connect(self.toggle_team_section)
 
         main_layout.addWidget(self.team_toggle_btn)
-        
+
         self.employees_container = QFrame()
         self.employees_container.setStyleSheet("""
             QFrame {
@@ -2677,72 +2917,66 @@ class CRMCard(QFrame):
                 padding: 4px;
             }
         """)
-        
+
         employees_layout = QVBoxLayout()
         employees_layout.setSpacing(2)
         employees_layout.setContentsMargins(3, 3, 3, 3)
-        
+
         # ========== ЦИКЛ С КНОПКАМИ ==========
         for role, name, role_key, is_completed in employees:
             # Создаем горизонтальный layout для строки
             employee_row_widget = QWidget()
+            employee_row_widget.setFixedHeight(24)
             employee_row_layout = QHBoxLayout()
             employee_row_layout.setContentsMargins(0, 0, 0, 0)
-            employee_row_layout.setSpacing(5)
-            
+            employee_row_layout.setSpacing(4)
+
             # Метка с именем сотрудника
             if is_completed:
                 display_text = f"{role}: {name} "
             else:
                 display_text = f"{role}: {name}"
-            
+
             employee_label = QLabel(display_text)
-            employee_label.setWordWrap(True)
-            
+
             if is_completed:
-                employee_label.setStyleSheet('''
-                    font-size: 12px; 
-                    color: #1B5E20; 
+                employee_label.setStyleSheet("""
+                    font-size: 11px;
+                    color: #1B5E20;
                     font-weight: bold;
                     background-color: #C8E6C9;
-                    padding: 3px 5px;
-                    border-radius: 4px;
+                    padding: 2px 5px;
+                    border-radius: 3px;
                     border: 1px solid #81C784;
-                ''')
+                """)
             elif role_key == highlight_role:
-                employee_label.setStyleSheet('''
-                    font-size: 12px; 
-                    color: #F57C00; 
+                employee_label.setStyleSheet("""
+                    font-size: 11px;
+                    color: #F57C00;
                     font-weight: bold;
                     background-color: #FFE082;
-                    padding: 3px 5px;
-                    border-radius: 4px;
+                    padding: 2px 5px;
+                    border-radius: 3px;
                     border: 1px solid #FFB74D;
-                ''')
+                """)
             else:
-                employee_label.setStyleSheet('font-size: 10px; color: #444; background-color: transparent;')
-            
+                employee_label.setStyleSheet("font-size: 10px; color: #444; background-color: transparent;")
+
             employee_row_layout.addWidget(employee_label, 1)
-            
+
             # ========== КНОПКА "ПЕРЕНАЗНАЧИТЬ" ==========
             # Кнопка доступна только для управленческих ролей и только для дизайнеров/чертежников
-            can_show_reassign = (
-                _has_perm(self.employee, self.api_client, 'crm_cards.assign_executor') and
-                role_key in ['designer', 'draftsman'] and
-                not is_completed
-            )
+            can_show_reassign = _has_perm(self.employee, self.api_client, "crm_cards.assign_executor") and role_key in ["designer", "draftsman"] and not is_completed
 
             if can_show_reassign:
-
-                reassign_btn = IconLoader.create_icon_button('refresh', '', 'Переназначить исполнителя', icon_size=12)
-                reassign_btn.setFixedSize(22, 22)
+                reassign_btn = IconLoader.create_icon_button("refresh", "", "Переназначить исполнителя", icon_size=10)
+                reassign_btn.setFixedSize(18, 18)
                 reassign_btn.setStyleSheet("""
                     QPushButton {
                         background-color: #FF9800;
                         color: white;
                         border: none;
-                        border-radius: 4px;
-                        font-size: 12px;
+                        border-radius: 3px;
                         padding: 0px;
                     }
                     QPushButton:hover {
@@ -2751,8 +2985,6 @@ class CRMCard(QFrame):
                     QPushButton:pressed {
                         background-color: #E65100;
                     }
-
-                    /* ========== СВЕТЛАЯ ВСПЛЫВАЮЩАЯ ПОДСКАЗКА ========== */
                     QToolTip {
                         background-color: #FFFFFF;
                         color: #333333;
@@ -2762,38 +2994,38 @@ class CRMCard(QFrame):
                         font-size: 11px;
                     }
                 """)
-                
+
                 # Используем partial для передачи параметра
                 reassign_btn.clicked.connect(partial(self.reassign_executor, role_key))
-                
+
                 employee_row_layout.addWidget(reassign_btn)
-            
+
             employee_row_widget.setLayout(employee_row_layout)
             employees_layout.addWidget(employee_row_widget)
         # =====================================
-        
+
         # ========== ВОТ ЭТА СТРОКА БЫЛА ПРОПУЩЕНА! ==========
         self.employees_container.setLayout(employees_layout)
         # ====================================================
-        
+
         main_layout.addWidget(self.employees_container)
-        
+
         self.employees_container.hide()
-        
+
         main_widget.setLayout(main_layout)
         return main_widget
-        
+
     def toggle_team_section(self):
         """Раскрытие/сворачивание секции команды"""
         is_visible = self.employees_container.isVisible()
 
         if is_visible:
             self.employees_container.hide()
-            self.team_toggle_btn.setIcon(IconLoader.load('chevron-right'))
+            self.team_toggle_btn.setIcon(IconLoader.load("chevron-right"))
             self.team_toggle_btn.setIconSize(QSize(10, 10))
         else:
             self.employees_container.show()
-            self.team_toggle_btn.setIcon(IconLoader.load('chevron-down'))
+            self.team_toggle_btn.setIcon(IconLoader.load("chevron-down"))
             self.team_toggle_btn.setIconSize(QSize(10, 10))
 
         self.update_card_height_immediately()
@@ -2801,7 +3033,14 @@ class CRMCard(QFrame):
     def update_card_height_immediately(self):
         """Немедленное обновление высоты карточки БЕЗ прыганий"""
         from PyQt5.QtWidgets import QApplication
-        # Используем sizeHint() — ручной расчет высоты, корректно учитывающий wordWrap и видимость секций
+
+        # Снимаем фиксированную высоту, чтобы layout пересчитал реальный sizeHint
+        self.setMinimumHeight(0)
+        self.setMaximumHeight(16777215)
+        # Инвалидируем кеш layout — заставляем пересчитать после hide/show
+        if self.layout():
+            self.layout().invalidate()
+        QApplication.processEvents()
         new_height = self.sizeHint().height()
         self.setFixedHeight(new_height)
 
@@ -2816,44 +3055,44 @@ class CRMCard(QFrame):
                         return
                 break
             parent_widget = parent_widget.parent()
-            
+
     def is_assigned_to_current_user(self, current_employee):
         """Проверка, назначен ли текущий пользователь исполнителем"""
-        current_column = self.card_data.get('column_name', '')
-        employee_name = current_employee.get('full_name', '')
-        position = current_employee.get('position', '')
-        secondary_position = current_employee.get('secondary_position', '')  # ← НОВОЕ
-        
+        current_column = self.card_data.get("column_name", "")
+        employee_name = current_employee.get("full_name", "")
+        position = current_employee.get("position", "")
+        secondary_position = current_employee.get("secondary_position", "")  # ← НОВОЕ
+
         print(f"  Проверка назначения:")
         print(f"    Колонка: {current_column}")
         print(f"    Основная должность: {position}")
         if secondary_position:
             print(f"    Дополнительная должность: {secondary_position}")
         print(f"    Имя сотрудника: {employee_name}")
-        
+
         # ========== ДИЗАЙНЕР (ОСНОВНАЯ ИЛИ ДОПОЛНИТЕЛЬНАЯ) ==========
-        if position == 'Дизайнер' or secondary_position == 'Дизайнер':
-            designer_name = self.card_data.get('designer_name', '')
+        if position == "Дизайнер" or secondary_position == "Дизайнер":
+            designer_name = self.card_data.get("designer_name", "")
             print(f"    Назначенный дизайнер: {designer_name}")
-            if 'концепция дизайна' in current_column:
+            if "концепция дизайна" in current_column:
                 result = designer_name == employee_name
                 print(f"    Результат: {result}")
                 return result
         # =============================================================
-        
+
         # ========== ЧЕРТЁЖНИК (ОСНОВНАЯ ИЛИ ДОПОЛНИТЕЛЬНАЯ) ==========
-        if position == 'Чертёжник' or secondary_position == 'Чертёжник':
-            draftsman_name = self.card_data.get('draftsman_name', '')
+        if position == "Чертёжник" or secondary_position == "Чертёжник":
+            draftsman_name = self.card_data.get("draftsman_name", "")
             print(f"    Назначенный чертёжник: {draftsman_name}")
-            if 'планировочные' in current_column or 'чертежи' in current_column:
+            if "планировочные" in current_column or "чертежи" in current_column:
                 result = draftsman_name == employee_name
                 print(f"    Результат: {result}")
                 return result
         # ==============================================================
-        
+
         print(f"    Результат: False (условия не выполнены)")
         return False
-    
+
     @debounce_click(delay_ms=2000)
     def submit_work(self):
         """Отметка о сдаче работы"""
@@ -2861,115 +3100,97 @@ class CRMCard(QFrame):
         if not current_employee:
             return
 
-        current_column = self.card_data.get('column_name', '')
-        
-        # ========== ЗАМЕНИЛИ стандартный QDialog ==========
-        reply = CustomQuestionBox(
-            self,
-            'Подтверждение',
-            f'Подтвердить сдачу работы?\n\n'
-            f'Стадия "{current_column}" будет отмечена как выполненная\n'
-            f'и передана на проверку менеджеру.'
-        ).exec_()
-        
+        current_column = self.card_data.get("column_name", "")
+        project_type = self.card_data.get("project_type", "")
+
+        # Определяем роль проверяющего для корректного текста
+        reviewer = "менеджеру"
+        if project_type == "Индивидуальный":
+            if "Стадия 1" in current_column or "Стадия 2" in current_column:
+                reviewer = "СДП"
+            elif "Стадия 3" in current_column:
+                reviewer = "ГАП"
+        else:
+            if "Стадия 2" in current_column:
+                reviewer = "ГАП"
+
+        reply = CustomQuestionBox(self, "Подтверждение", f'Подтвердить сдачу работы?\n\nСтадия "{current_column}" будет отмечена как выполненная\nи передана на проверку {reviewer}.').exec_()
+
         if reply == QDialog.Accepted:
             try:
                 # Обновляем stage_executors.completed на сервере (API)
                 api_ok = False
                 if self.data.is_multi_user:
                     try:
-                        api_ok = self.data.complete_stage_for_executor(
-                            self.card_data['id'],
-                            current_column,
-                            current_employee['id']
-                        )
+                        api_ok = self.data.complete_stage_for_executor(self.card_data["id"], current_column, current_employee["id"])
                     except Exception as e:
                         print(f"[API] Ошибка complete_stage_for_executor: {e}")
 
                 # Fallback: обновляем локальную БД
                 if not api_ok:
-                    self.data.complete_stage_for_executor(
-                        self.card_data['id'],
-                        current_column,
-                        current_employee['id']
-                    )
+                    self.data.complete_stage_for_executor(self.card_data["id"], current_column, current_employee["id"])
 
                 # Записываем дату в timeline через workflow
                 try:
                     if self.data.is_multi_user:
-                        self.data.workflow_submit(self.card_data['id'])
+                        self.data.workflow_submit(self.card_data["id"])
                 except Exception:
                     pass
 
-                CustomMessageBox(
-                    self,
-                    'Успех',
-                    'Работа сдана!\n\nОжидайте проверки менеджера для\nперемещения на следующую стадию.',
-                    'success'
-                ).exec_()
-                
+                CustomMessageBox(self, "Успех", f"Работа сдана!\n\nОжидайте проверки {reviewer}.", "success").exec_()
+
                 parent = self.parent()
                 while parent:
                     if isinstance(parent, CRMTab):
                         parent.refresh_current_tab()
                         break
                     parent = parent.parent()
-                
+
             except Exception as e:
                 print(f" Ошибка сдачи работы: {e}")
                 import traceback
+
                 traceback.print_exc()
-                CustomMessageBox(self, 'Ошибка', f'Не удалось отметить работу: {e}', 'error').exec_()
-    
+                CustomMessageBox(self, "Ошибка", f"Не удалось отметить работу: {e}", "error").exec_()
+
     @debounce_click(delay_ms=2000)
     def accept_work(self):
         """Принятие работы менеджером"""
-        if not _has_perm(self.employee, self.api_client, 'crm_cards.complete_approval'):
-            CustomMessageBox(self, 'Ошибка', 'У вас нет прав на принятие работы', 'error').exec_()
+        if not _has_perm(self.employee, self.api_client, "crm_cards.complete_approval"):
+            CustomMessageBox(self, "Ошибка", "У вас нет прав на принятие работы", "error").exec_()
             return
-        current_column = self.card_data.get('column_name', '')
-        
-        if 'концепция дизайна' in current_column:
-            executor_name = self.card_data.get('designer_name', 'Дизайнер')
-            executor_role = 'дизайнер'
+        current_column = self.card_data.get("column_name", "")
+
+        if "концепция дизайна" in current_column:
+            executor_name = self.card_data.get("designer_name", "Дизайнер")
+            executor_role = "дизайнер"
         else:
-            executor_name = self.card_data.get('draftsman_name', 'Чертёжник')
-            executor_role = 'чертёжник'
-        
+            executor_name = self.card_data.get("draftsman_name", "Чертёжник")
+            executor_role = "чертёжник"
+
         # ========== ЗАМЕНИЛИ стандартный dialog ==========
-        reply = CustomQuestionBox(
-            self,
-            'Подтверждение',
-            f'Принять работу по стадии:\n\n'
-            f'"{current_column}"\n\n'
-            f'Исполнитель: {executor_name}'
-        ).exec_()
-        
+        reply = CustomQuestionBox(self, "Подтверждение", f'Принять работу по стадии:\n\n"{current_column}"\n\nИсполнитель: {executor_name}').exec_()
+
         if reply == QDialog.Accepted:
             try:
                 # Сохраняем принятие работы
-                self.data.save_manager_acceptance(
-                    self.card_data['id'],
-                    current_column,
-                    executor_name,
-                    self.employee['id']
-                )
+                self.data.save_manager_acceptance(self.card_data["id"], current_column, executor_name, self.employee["id"])
 
                 # Записываем дату приемки в timeline через workflow
                 try:
                     if self.data.is_multi_user:
-                        self.data.workflow_accept(self.card_data['id'])
+                        self.data.workflow_accept(self.card_data["id"])
                 except Exception:
                     pass
 
                 # ========== ОБНОВЛЕНИЕ ОТЧЕТНОГО МЕСЯЦА ДОПЛАТЫ (через DataAccess) ==========
                 try:
-                    contract_id = self.card_data['contract_id']
+                    contract_id = self.card_data["contract_id"]
                     contract = self.data.get_contract(contract_id)
                     if not contract:
                         print(f"[WARN] Договор {contract_id} не найден, пропускаем обновление report_month")
                         raise Exception(f"Договор {contract_id} не найден")
-                    current_month = QDate.currentDate().toString('yyyy-MM')
+                    current_month = QDate.currentDate().toString("yyyy-MM")
 
                     print(f"\n[ACCEPT WORK] Принятие работы:")
                     print(f"   Стадия: {current_column}")
@@ -2980,8 +3201,8 @@ class CRMCard(QFrame):
                     executor_id = None
                     employees = self.data.get_all_employees() or []
                     for emp in employees:
-                        if emp.get('full_name') == executor_name:
-                            executor_id = emp.get('id')
+                        if emp.get("full_name") == executor_name:
+                            executor_id = emp.get("id")
                             break
 
                     if not executor_id:
@@ -2993,13 +3214,11 @@ class CRMCard(QFrame):
                     payments = self.data.get_payments_for_contract(contract_id)
 
                     # ТОЛЬКО для индивидуальных проектов - обновляем отчетный месяц ДОПЛАТЫ
-                    if contract['project_type'] == 'Индивидуальный':
+                    if contract["project_type"] == "Индивидуальный":
                         updated = False
                         for p in payments:
-                            if (p.get('employee_id') == executor_id and
-                                p.get('stage_name') == current_column and
-                                p.get('payment_type') == 'Доплата'):
-                                self.data.update_payment(p['id'], {'report_month': current_month})
+                            if p.get("employee_id") == executor_id and p.get("stage_name") == current_column and p.get("payment_type") == "Доплата":
+                                self.data.update_payment(p["id"], {"report_month": current_month})
                                 updated = True
                         if updated:
                             print(f"   Отчетный месяц ДОПЛАТЫ установлен: {current_month}")
@@ -3007,16 +3226,13 @@ class CRMCard(QFrame):
                             print(f"    Не найдена доплата для обновления (contract_id={contract_id}, executor_id={executor_id}, stage={current_column})")
 
                     # Для шаблонных - устанавливаем отчетный месяц ПОЛНОЙ ОПЛАТЫ
-                    elif contract['project_type'] == 'Шаблонный':
+                    elif contract["project_type"] == "Шаблонный":
                         can_set_month = True
 
-                        if executor_role == 'чертёжник':
+                        if executor_role == "чертёжник":
                             # Проверяем количество принятых стадий через DataAccess
-                            accepted = self.data.get_accepted_stages(self.card_data['id'])
-                            accepted_count = sum(
-                                1 for a in (accepted or [])
-                                if a.get('executor_name') == executor_name
-                            )
+                            accepted = self.data.get_accepted_stages(self.card_data["id"])
+                            accepted_count = sum(1 for a in (accepted or []) if a.get("executor_name") == executor_name)
                             print(f"   Количество принятых стадий чертежника: {accepted_count}")
 
                             if accepted_count < 2:
@@ -3028,10 +3244,8 @@ class CRMCard(QFrame):
                         if can_set_month:
                             updated = False
                             for p in payments:
-                                if (p.get('employee_id') == executor_id and
-                                    p.get('stage_name') == current_column and
-                                    p.get('payment_type') == 'Полная оплата'):
-                                    self.data.update_payment(p['id'], {'report_month': current_month})
+                                if p.get("employee_id") == executor_id and p.get("stage_name") == current_column and p.get("payment_type") == "Полная оплата":
+                                    self.data.update_payment(p["id"], {"report_month": current_month})
                                     updated = True
                             if updated:
                                 print(f"   Отчетный месяц ПОЛНОЙ ОПЛАТЫ установлен: {current_month}")
@@ -3041,57 +3255,47 @@ class CRMCard(QFrame):
                 except Exception as e:
                     print(f" Ошибка обновления отчетного месяца: {e}")
                     import traceback
+
                     traceback.print_exc()
                 # ================================================================
-                
+
                 # Сброс completed
-                if executor_role == 'дизайнер':
-                    self.data.reset_designer_completion(self.card_data['id'])
+                if executor_role == "дизайнер":
+                    self.data.reset_designer_completion(self.card_data["id"])
                 else:
-                    self.data.reset_draftsman_completion(self.card_data['id'])
-                
+                    self.data.reset_draftsman_completion(self.card_data["id"])
+
                 # ========== ЗАМЕНИЛИ стандартный success_dialog ==========
-                CustomMessageBox(
-                    self, 
-                    'Успех', 
-                    f'Работа по стадии "{current_column}" принята!\n\n'
-                    f'Теперь переместите карточку на следующую стадию.', 
-                    'success'
-                ).exec_()
-                
+                CustomMessageBox(self, "Успех", f'Работа по стадии "{current_column}" принята!\n\nТеперь переместите карточку на следующую стадию.', "success").exec_()
+
                 parent = self.parent()
                 while parent:
                     if isinstance(parent, CRMTab):
                         parent.refresh_current_tab()
                         break
                     parent = parent.parent()
-                
+
             except Exception as e:
                 print(f" Ошибка принятия работы: {e}")
-                CustomMessageBox(self, 'Ошибка', f'Не удалось принять работу: {e}', 'error').exec_()
-
+                CustomMessageBox(self, "Ошибка", f"Не удалось принять работу: {e}", "error").exec_()
 
     @debounce_click(delay_ms=2000)
     def reject_work(self):
         """Отправить работу на исправление с загрузкой файла правок на ЯД"""
-        if not _has_perm(self.employee, self.api_client, 'crm_cards.complete_approval'):
-            CustomMessageBox(self, 'Ошибка', 'У вас нет прав на отправку на исправление', 'error').exec_()
+        if not _has_perm(self.employee, self.api_client, "crm_cards.complete_approval"):
+            CustomMessageBox(self, "Ошибка", "У вас нет прав на отправку на исправление", "error").exec_()
             return
-        current_column = self.card_data.get('column_name', '')
-        contract_id = self.card_data.get('contract_id')
+        current_column = self.card_data.get("column_name", "")
+        contract_id = self.card_data.get("contract_id")
 
         # Открываем диалог загрузки файла правок
         dialog = RejectWithCorrectionsDialog(self, current_column, contract_id, self.data.api_client, self.data.db)
         if dialog.exec_() == QDialog.Accepted:
             try:
-                corrections_path = dialog.corrections_folder_path or ''
+                corrections_path = dialog.corrections_folder_path or ""
                 if self.data.is_multi_user:
-                    self.data.workflow_reject(self.card_data['id'], corrections_path=corrections_path)
-                CustomMessageBox(
-                    self, 'Отправлено',
-                    f'Работа по стадии "{current_column}" отправлена на исправление.',
-                    'success'
-                ).exec_()
+                    self.data.workflow_reject(self.card_data["id"], corrections_path=corrections_path)
+                CustomMessageBox(self, "Отправлено", f'Работа по стадии "{current_column}" отправлена на исправление.', "success").exec_()
                 parent = self.parent()
                 while parent:
                     if isinstance(parent, CRMTab):
@@ -3099,51 +3303,53 @@ class CRMCard(QFrame):
                         break
                     parent = parent.parent()
             except Exception as e:
-                CustomMessageBox(self, 'Ошибка', f'Не удалось отправить на исправление: {e}', 'error').exec_()
+                CustomMessageBox(self, "Ошибка", f"Не удалось отправить на исправление: {e}", "error").exec_()
 
-    def send_to_client(self):
-        """Отправить на согласование клиенту"""
-        if not _has_perm(self.employee, self.api_client, 'crm_cards.complete_approval'):
-            CustomMessageBox(self, 'Ошибка', 'У вас нет прав на отправку клиенту', 'error').exec_()
+    def send_to_client_combined(self):
+        """Отправить клиенту (объединяет принятие + отправку на согласование).
+        Вся бизнес-логика (дата reviewer, report_month, reset completion) на сервере в client-send."""
+        if not _has_perm(self.employee, self.api_client, "crm_cards.complete_approval"):
+            CustomMessageBox(self, "Ошибка", "У вас нет прав на отправку клиенту", "error").exec_()
             return
-        current_column = self.card_data.get('column_name', '')
-        project_type = self.card_data.get('project_type', '')
+        current_column = self.card_data.get("column_name", "")
+        project_type = self.card_data.get("project_type", "")
 
         # === ПРОВЕРКА 2-го ПЛАТЕЖА (Индивидуальные, Стадия 3: рабочие чертежи) ===
-        if project_type == 'Индивидуальный' and 'Стадия 3' in current_column and 'рабочие чертежи' in current_column:
-            contract_id = self.card_data.get('contract_id')
+        if project_type == "Индивидуальный" and "Стадия 3" in current_column and "рабочие чертежи" in current_column:
+            contract_id = self.card_data.get("contract_id")
             contract = None
             if contract_id:
                 try:
                     contract = self.data.get_contract(contract_id)
                 except Exception:
                     pass
-            if contract and not contract.get('additional_payment_paid_date'):
+            if contract and not contract.get("additional_payment_paid_date"):
                 CustomMessageBox(
-                    self, 'Оплата не подтверждена',
-                    '<b>Отправка клиенту невозможна!</b><br><br>'
-                    'Для отправки готового проекта клиенту необходимо подтвердить '
-                    'оплату 2-го платежа (доплата).<br><br>'
-                    '<i>Откройте карточку договора и отметьте 2-й платёж как оплаченный.</i>',
-                    'warning'
+                    self,
+                    "Оплата не подтверждена",
+                    "<b>Отправка клиенту невозможна!</b><br><br>"
+                    "Для отправки готового проекта клиенту необходимо подтвердить "
+                    "оплату 2-го платежа (доплата).<br><br>"
+                    "<i>Откройте карточку договора и отметьте 2-й платёж как оплаченный.</i>",
+                    "warning",
                 ).exec_()
                 return
 
-        reply = CustomQuestionBox(
-            self,
-            'Согласование с клиентом',
-            f'Отправить работу по стадии "{current_column}" на согласование клиенту?\n\n'
-            f'Дедлайн будет приостановлен до получения ответа.'
-        ).exec_()
-        if reply == QDialog.Accepted:
+        # Открываем диалог предпросмотра скрипта перед отправкой
+        from ui.crm_dialogs import ScriptPreviewDialog
+
+        dlg = ScriptPreviewDialog(self, self.card_data, self.data, self.api_client)
+        result = dlg.exec_()
+
+        if result == QDialog.Accepted:
+            # Скрипт отправлен в чат — теперь выполняем серверный workflow
             try:
+                wf_ok = True
                 if self.data.is_multi_user:
-                    self.data.workflow_client_send(self.card_data['id'])
-                CustomMessageBox(
-                    self, 'Отправлено',
-                    f'Работа отправлена клиенту на согласование.\nДедлайн приостановлен.',
-                    'success'
-                ).exec_()
+                    wf_result = self._workflow_action_with_retry("Отправка клиенту", self.data.workflow_client_send, self.card_data["id"])
+                    wf_ok = wf_result is not None
+                if wf_ok:
+                    CustomMessageBox(self, "Отправлено", f"Работа принята и отправлена клиенту на согласование.\nДедлайн приостановлен.", "success").exec_()
                 parent = self.parent()
                 while parent:
                     if isinstance(parent, CRMTab):
@@ -3151,22 +3357,69 @@ class CRMCard(QFrame):
                         break
                     parent = parent.parent()
             except Exception as e:
-                CustomMessageBox(self, 'Ошибка', f'Не удалось отправить клиенту: {e}', 'error').exec_()
+                CustomMessageBox(self, "Ошибка", f"Не удалось обновить статус: {e}", "error").exec_()
 
-    def client_approved(self):
-        """Клиент согласовал работу"""
-        if not _has_perm(self.employee, self.api_client, 'crm_cards.complete_approval'):
-            CustomMessageBox(self, 'Ошибка', 'У вас нет прав на согласование работы.', 'error').exec_()
-            return
-        current_column = self.card_data.get('column_name', '')
+    def send_to_client(self):
+        """Оставлен для обратной совместимости — вызывает send_to_client_combined"""
+        self.send_to_client_combined()
+
+    def _open_act_send_dialog(self):
+        """Открыть диалог отправки акта клиенту."""
+        from ui.crm_dialogs import ActSendDialog
+
+        dlg = ActSendDialog(self, self.card_data, self.data, self.api_client)
+        result = dlg.exec_()
+
+        if result == ActSendDialog.SKIP_RESULT:
+            # Пропустить — вызываем sign_act логику (продолжить без акта)
+            self.sign_act(self.card_data["id"], skip_check=True)
+        elif result == QDialog.Accepted:
+            # Акт отправлен в чат — ничего дополнительного не делаем,
+            # ждём когда клиент подпишет и пользователь нажмёт "Акт подписан"
+            pass
+
+    def sign_act(self, card_id, skip_check=False):
+        """Подписание акта — финальный шаг стадии."""
         try:
-            if self.data.is_multi_user:
-                self.data.workflow_client_ok(self.card_data['id'])
-            CustomMessageBox(
-                self, 'Согласовано',
-                f'Клиент согласовал работу по стадии "{current_column}".\nДедлайн возобновлен.',
-                'success'
-            ).exec_()
+            if not skip_check:
+                # Проверка: загружен ли файл акта с подписью в договоре
+                stage_name = self.card_data.get("column_name", "").lower()
+                contract_id = self.card_data.get("contract_id")
+                if contract_id:
+                    contract_data = self.data.get_contract(contract_id)
+                    if contract_data:
+                        # Определяем какой акт нужен для текущей стадии
+                        act_field = None
+                        act_label = ""
+                        if "планировочн" in stage_name:
+                            act_field = "act_planning_signed"
+                            act_label = "Акт ПР"
+                        elif "концепция" in stage_name or "дизайн" in stage_name:
+                            act_field = "act_concept_signed"
+                            act_label = "Акт КД"
+                        elif "рабочие чертежи" in stage_name or "рабочая документация" in stage_name or "чертежн" in stage_name:
+                            act_field = "act_final_signed"
+                            act_label = "Акт финальный"
+
+                        if act_field:
+                            link = contract_data.get(f"{act_field}_link") or ""
+                            yandex = contract_data.get(f"{act_field}_yandex_path") or ""
+                            if not link and not yandex:
+                                from ui.custom_message_box import CustomQuestionBox
+
+                                reply = CustomQuestionBox(
+                                    self,
+                                    "Акт не загружен",
+                                    f'В договоре не загружен файл "{act_label} с подписью".\nЗагрузите акт в раздел "Акты с подписью" в договоре.\n\nПродолжить подписание без акта?',
+                                ).exec_()
+                                if reply != QDialog.Accepted:
+                                    return
+
+            result = self.data.workflow_sign_act(card_id)
+            if result:
+                CustomMessageBox(self, "Акт подписан", "Акт подписан. Этап завершён.", "success").exec_()
+            else:
+                CustomMessageBox(self, "Ошибка", "Не удалось подписать акт.", "error").exec_()
             parent = self.parent()
             while parent:
                 if isinstance(parent, CRMTab):
@@ -3174,7 +3427,113 @@ class CRMCard(QFrame):
                     break
                 parent = parent.parent()
         except Exception as e:
-            CustomMessageBox(self, 'Ошибка', f'Ошибка: {e}', 'error').exec_()
+            CustomMessageBox(self, "Ошибка", f"Ошибка подписания акта: {e}", "error").exec_()
+
+    def _workflow_action_with_retry(self, action_name, action_func, *args, max_retries=2):
+        """Выполнить workflow-действие с retry при ошибке.
+        Предотвращает зависание карточки в pending_decision при сбое сети."""
+        for attempt in range(max_retries):
+            result = action_func(*args)
+            if result is not None:
+                return result
+            if attempt < max_retries - 1:
+                from ui.custom_message_box import CustomQuestionBox
+
+                retry = CustomQuestionBox(self, "Ошибка связи", f'Не удалось выполнить действие "{action_name}".\nПовторить попытку?').exec_()
+                if retry != QDialog.Accepted:
+                    return None
+        CustomMessageBox(self, "Ошибка", f'Действие "{action_name}" не выполнено после {max_retries} попыток.\nПопробуйте ещё раз позже.', "error").exec_()
+        return None
+
+    def client_approved(self):
+        """Клиент согласовал работу — три варианта: следующий круг, платный круг, закрыть этап.
+        Защита от рассинхрона: non-closeable диалог + retry + идемпотентный server endpoint."""
+        if not _has_perm(self.employee, self.api_client, "crm_cards.complete_approval"):
+            CustomMessageBox(self, "Ошибка", "У вас нет прав на согласование работы.", "error").exec_()
+            return
+        current_column = self.card_data.get("column_name", "")
+        try:
+            result = None
+            if self.data.is_multi_user:
+                result = self.data.workflow_client_ok(self.card_data["id"])
+
+            if result:
+                has_next = result.get("has_next_round", False)
+                next_name = result.get("next_round_name", "")
+                is_last = result.get("is_last_round", False)
+                has_remaining = result.get("has_remaining_client", False)
+                project_type = result.get("project_type", "")
+                is_individual = "Индивидуальный" in project_type
+
+                if has_remaining and not has_next:
+                    dlg = _WorkflowChoiceDialog(
+                        self,
+                        "Клиент согласовал",
+                        f'Клиент согласовал работу по стадии\n"{current_column}".\n\nПродолжить правки по замечаниям клиента или\nперейти к следующему подэтапу?',
+                        buttons=[
+                            ("Продолжить правки", "#85C1E9", "#6CB2D9", "continue"),
+                            ("Перейти к следующему подэтапу", "#58D68D", "#48C77D", "close"),
+                        ],
+                    )
+                    choice = dlg.exec_choice()
+                    if choice == "close":
+                        self._workflow_action_with_retry("Переход к следующему подэтапу", self.data.workflow_advance_round, self.card_data["id"])
+                        CustomMessageBox(self, "Следующий подэтап", f"Переход к следующему подэтапу.", "success").exec_()
+                    # При 'continue' — ничего не делаем, сервер уже продвинул substep
+                elif has_next:
+                    dlg = _WorkflowChoiceDialog(
+                        self,
+                        "Клиент согласовал",
+                        f'Клиент согласовал работу по стадии\n"{current_column}".',
+                        buttons=[
+                            (f'Перейти к "{next_name}"', "#85C1E9", "#6CB2D9", "advance"),
+                            ("Закрыть этап", "#58D68D", "#48C77D", "close"),
+                        ],
+                    )
+                    choice = dlg.exec_choice()
+                    if choice == "advance":
+                        self._workflow_action_with_retry(f'Переход к "{next_name}"', self.data.workflow_advance_round, self.card_data["id"])
+                        CustomMessageBox(self, "Следующий подэтап", f'Переход к "{next_name}". Дедлайн возобновлен.', "success").exec_()
+                    elif choice == "close":
+                        self._workflow_action_with_retry("Закрытие этапа", self.data.workflow_close_stage, self.card_data["id"])
+                        CustomMessageBox(self, "Этап закрыт", f"Оставшиеся круги пропущены. Дедлайн возобновлен.", "success").exec_()
+                elif is_last:
+                    if is_individual:
+                        dlg = _WorkflowChoiceDialog(
+                            self,
+                            "Клиент согласовал",
+                            f'Клиент согласовал работу по стадии\n"{current_column}".',
+                            buttons=[
+                                ("Закрыть этап", "#58D68D", "#48C77D", "close"),
+                                ("Платный круг правок", "#F0B27A", "#E5A06A", "paid"),
+                            ],
+                        )
+                        choice = dlg.exec_choice()
+                        if choice == "close":
+                            self._workflow_action_with_retry("Закрытие этапа", self.data.workflow_close_stage, self.card_data["id"])
+                            CustomMessageBox(self, "Этап закрыт", f"Этап закрыт. Дедлайн возобновлен.", "success").exec_()
+                        elif choice == "paid":
+                            self._workflow_action_with_retry("Добавление платного круга", self.data.workflow_add_extra_round, self.card_data["id"], current_column)
+                            CustomMessageBox(self, "Платный круг", "Добавлен платный круг правок.", "success").exec_()
+                    else:
+                        # Последний круг (шаблонный) — просто закрыть этап, нет платных кругов
+                        self._workflow_action_with_retry("Закрытие этапа", self.data.workflow_close_stage, self.card_data["id"])
+                        CustomMessageBox(self, "Этап закрыт", f"Клиент согласовал. Этап закрыт.", "success").exec_()
+                else:
+                    # Нет следующего круга и не последний — закрыть этап
+                    self._workflow_action_with_retry("Закрытие этапа", self.data.workflow_close_stage, self.card_data["id"])
+                    CustomMessageBox(self, "Этап закрыт", f'Клиент согласовал работу по стадии "{current_column}".\nЭтап закрыт.', "success").exec_()
+            else:
+                CustomMessageBox(self, "Согласовано", f'Клиент согласовал работу по стадии "{current_column}".\nДедлайн возобновлен.', "success").exec_()
+
+            parent = self.parent()
+            while parent:
+                if isinstance(parent, CRMTab):
+                    parent.refresh_current_tab()
+                    break
+                parent = parent.parent()
+        except Exception as e:
+            CustomMessageBox(self, "Ошибка", f"Ошибка: {e}", "error").exec_()
 
     def mouseDoubleClickEvent(self, event):
         """Двойной клик по карточке → редактирование."""
@@ -3186,6 +3545,7 @@ class CRMCard(QFrame):
     def edit_card(self):
         """Редактирование карточки"""
         from ui.crm_card_edit_dialog import CardEditDialog
+
         dialog = CardEditDialog(self, self.card_data, False, self.employee, api_client=self.api_client)
         if dialog.exec_() == QDialog.Accepted:
             parent = self.parent()
@@ -3194,19 +3554,19 @@ class CRMCard(QFrame):
                     parent.refresh_current_tab()
                     break
                 parent = parent.parent()
-            
+
     def show_project_data(self):
         """Показать данные проекта"""
-        project_data_link = self.card_data.get('project_data_link', '')
+        project_data_link = self.card_data.get("project_data_link", "")
         if project_data_link:
             dialog = ProjectDataDialog(self, project_data_link)
             dialog.exec_()
         else:
-            CustomMessageBox(self, 'Информация', 'Ссылка на данные проекта не установлена').exec_()
+            CustomMessageBox(self, "Информация", "Ссылка на данные проекта не установлена").exec_()
 
     def add_tech_task(self):
         """Добавить техническое задание"""
-        dialog = TechTaskDialog(self, self.card_data.get('id'), api_client=self.api_client)
+        dialog = TechTaskDialog(self, self.card_data.get("id"), api_client=self.api_client)
         if dialog.exec_() == QDialog.Accepted:
             # Перезагружаем карточки
             parent = self.parent()
@@ -3218,18 +3578,20 @@ class CRMCard(QFrame):
 
     def view_tech_task(self):
         """Просмотр технического задания"""
-        tech_task_file = self.card_data.get('tech_task_file', '')
-        tech_task_date = self.card_data.get('tech_task_date', '')
+        tech_task_file = self.card_data.get("tech_task_file", "")
+        tech_task_date = self.card_data.get("tech_task_date", "")
         if tech_task_file:
             import webbrowser
+
             webbrowser.open(tech_task_file)
         else:
             from ui.custom_message_box import CustomMessageBox
-            CustomMessageBox(self, 'Информация', 'Файл ТЗ не найден', 'warning').exec_()
+
+            CustomMessageBox(self, "Информация", "Файл ТЗ не найден", "warning").exec_()
 
     def add_survey_date(self):
         """Добавить замер с загрузкой изображения"""
-        dialog = MeasurementDialog(self, self.card_data.get('id'), self.employee, api_client=self.api_client)
+        dialog = MeasurementDialog(self, self.card_data.get("id"), self.employee, api_client=self.api_client)
         if dialog.exec_() == QDialog.Accepted:
             # Перезагружаем карточки
             parent = self.parent()
@@ -3241,7 +3603,7 @@ class CRMCard(QFrame):
 
     def view_survey_date(self):
         """Просмотр даты замера"""
-        dialog = SurveyDateDialog(self, self.card_data.get('id'), self.api_client)
+        dialog = SurveyDateDialog(self, self.card_data.get("id"), self.api_client)
         if dialog.exec_() == QDialog.Accepted:
             # Перезагружаем карточки
             parent = self.parent()
@@ -3252,54 +3614,69 @@ class CRMCard(QFrame):
                 parent = parent.parent()
 
     def get_highlight_role(self, column_name, project_type):
-        """Определение, какую роль подсвечивать"""
-        if project_type == 'Индивидуальный':
-            if column_name == 'Стадия 1: планировочные решения':
-                return 'draftsman'
-            elif column_name == 'Стадия 2: концепция дизайна':
-                return 'designer'
-            elif column_name == 'Стадия 3: рабочие чертежи':
-                return 'draftsman'
-        elif project_type == 'Шаблонный':
-            if column_name == 'Стадия 1: планировочные решения':
-                return 'draftsman'
-            elif column_name == 'Стадия 2: рабочие чертежи':
-                return 'draftsman'
-        
+        """Определение, какую роль подсвечивать (учитывает workflow_status и executor_role текущего подэтапа)"""
+        wf_status = self.card_data.get("workflow_status")
+
+        # При ожидании проверки — подсвечиваем проверяющего (СДП/ГАП)
+        if wf_status == "pending_review":
+            return "sdp" if project_type == "Индивидуальный" else "gap"
+
+        # При revision — смотрим executor_role текущего подэтапа.
+        # Если подэтап у СДП/ГАП — подсвечиваем их.
+        # Если у дизайнера/чертёжника — подсвечиваем исполнителя.
+        # Если роль не определена (нет данных подэтапа) — подсвечиваем проверяющего.
+        if wf_status == "revision":
+            substep_role = (self.card_data.get("current_substep_executor_role") or "").lower()
+            if "sdp" in substep_role or "сдп" in substep_role:
+                return "sdp"
+            if "gap" in substep_role or "гап" in substep_role:
+                return "gap"
+            if "дизайнер" in substep_role or "designer" in substep_role:
+                return "designer"
+            if "чертёжник" in substep_role or "чертежник" in substep_role or "draftsman" in substep_role:
+                return "draftsman"
+            # Роль подэтапа не определена — revision всегда у проверяющего
+            return "sdp" if project_type == "Индивидуальный" else "gap"
+
+        # in_progress и др. — исполнителя по типу колонки
+        if project_type == "Индивидуальный":
+            if column_name == "Стадия 1: планировочные решения":
+                return "draftsman"
+            elif column_name == "Стадия 2: концепция дизайна":
+                return "designer"
+            elif column_name == "Стадия 3: рабочие чертежи":
+                return "draftsman"
+        elif project_type == "Шаблонный":
+            if column_name == "Стадия 1: планировочные решения":
+                return "draftsman"
+            elif column_name == "Стадия 2: рабочие чертежи":
+                return "draftsman"
+
         return None
-    
+
     def reassign_executor(self, executor_type):
         """Переназначение исполнителя без перемещения карточки"""
-        current_column = self.card_data.get('column_name', '')
-        project_type = self.card_data.get('project_type', '')
+        current_column = self.card_data.get("column_name", "")
+        project_type = self.card_data.get("project_type", "")
 
         # Определяем параметры (только для дизайнера и чертежника)
-        if executor_type == 'designer':
-            position = 'Дизайнер'
-            stage_keyword = 'концепция'
-            current_name = self.card_data.get('designer_name', 'Не назначен')
-        elif executor_type == 'draftsman':
-            position = 'Чертёжник'
-            current_name = self.card_data.get('draftsman_name', 'Не назначен')
-            if 'планировочные' in current_column.lower():
-                stage_keyword = 'планировочные'
+        if executor_type == "designer":
+            position = "Дизайнер"
+            stage_keyword = "концепция"
+            current_name = self.card_data.get("designer_name", "Не назначен")
+        elif executor_type == "draftsman":
+            position = "Чертёжник"
+            current_name = self.card_data.get("draftsman_name", "Не назначен")
+            if "планировочные" in current_column.lower():
+                stage_keyword = "планировочные"
             else:
-                stage_keyword = 'чертежи'
+                stage_keyword = "чертежи"
         else:
             return
-        
+
         # Открываем диалог переназначения
-        dialog = ReassignExecutorDialog(
-            self,
-            self.card_data['id'],
-            position,
-            stage_keyword,
-            executor_type,
-            current_name,
-            current_column,
-            api_client=self.api_client
-        )
-        
+        dialog = ReassignExecutorDialog(self, self.card_data["id"], position, stage_keyword, executor_type, current_name, current_column, api_client=self.api_client)
+
         if dialog.exec_() == QDialog.Accepted:
             # Перезагружаем текущую вкладку
             parent = self.parent()
@@ -3308,6 +3685,7 @@ class CRMCard(QFrame):
                     parent.refresh_current_tab()
                     break
                 parent = parent.parent()
+
 
 class PreviewLoaderThread(threading.Thread):
     """Фоновый поток для загрузки превью изображений с Яндекс.Диска.
@@ -3332,18 +3710,23 @@ class PreviewLoaderThread(threading.Thread):
         self._stopped = True
         self._stop_event.set()
 
-    def _safe_callback(self, file_id, pixmap):
+    def _safe_callback(self, file_id, image_or_pixmap):
         """Безопасный вызов callback через QTimer в главном потоке.
 
         ИСПРАВЛЕНИЕ R-04: Проверяем _stopped перед вызовом, чтобы не обращаться
         к удалённому Qt-объекту. QTimer.singleShot гарантирует вызов в main thread.
+
+        Принимает QImage (из фонового потока) или QPixmap — конвертирует в QPixmap
+        в главном потоке (QPixmap можно создавать только в main thread).
         """
         if self._stopped:
             return
         from PyQt5.QtCore import QTimer
+        from PyQt5.QtGui import QImage, QPixmap
+
         # Захватываем значения в замыкание
         _fid = file_id
-        _pix = pixmap
+        _img = image_or_pixmap
         _cb = self.callback
         _self = self
 
@@ -3351,7 +3734,12 @@ class PreviewLoaderThread(threading.Thread):
             if _self._stopped:
                 return
             try:
-                _cb(_fid, _pix)
+                # Конвертируем QImage → QPixmap в главном потоке
+                if isinstance(_img, QImage):
+                    pix = QPixmap.fromImage(_img)
+                else:
+                    pix = _img
+                _cb(_fid, pix)
             except RuntimeError:
                 pass  # Qt-объект уже удалён
 
@@ -3359,74 +3747,109 @@ class PreviewLoaderThread(threading.Thread):
 
     def run(self):
         """Загрузка превью в фоновом потоке"""
+        import logging
+        import tempfile
+        import time
+
         from utils.preview_generator import PreviewGenerator
         from utils.yandex_disk import YandexDiskManager
-        import tempfile
-        import urllib.request
-        import urllib.parse
 
-        for item in self.files_to_load:
+        logger = logging.getLogger("crm")
+
+        yd = None
+        if self.yandex_token:
+            try:
+                yd = YandexDiskManager(self.yandex_token)
+            except Exception:
+                pass
+
+        for idx, item in enumerate(self.files_to_load):
             if self._stop_event.is_set():
                 break
+
+            # Пауза между запросами для защиты от rate-limit Яндекс API
+            if idx > 0:
+                time.sleep(0.5)
+
             # Поддержка обоих форматов: с yandex_path и без
             if len(item) >= 6:
                 file_id, public_link, contract_id, stage, file_name, yandex_path = item
             else:
                 file_id, public_link, contract_id, stage, file_name = item
-                yandex_path = ''
+                yandex_path = ""
 
             try:
                 # Проверяем кэш ещё раз (мог появиться)
                 cache_path = PreviewGenerator.get_cache_path(contract_id, stage, file_name)
                 if os.path.exists(cache_path):
-                    pixmap = PreviewGenerator.load_preview_from_cache(cache_path)
-                    if pixmap:
-                        # ИСПРАВЛЕНИЕ R-04: безопасный callback через main thread
-                        self._safe_callback(file_id, pixmap)
+                    # Загружаем через QImage (потокобезопасно) — конвертация в QPixmap
+                    # произойдёт в главном потоке внутри _safe_callback
+                    from PyQt5.QtGui import QImage
+
+                    cached_image = QImage(cache_path)
+                    if not cached_image.isNull():
+                        self._safe_callback(file_id, cached_image)
                         continue
-
-                # Если нет public_link, пробуем скачать через Яндекс API по yandex_path
-                if not public_link and yandex_path and self.yandex_token:
-                    try:
-                        yd = YandexDiskManager(self.yandex_token)
-                        public_link = yd.get_public_link(yandex_path)
-                    except Exception:
-                        pass
-
-                if not public_link:
-                    continue
-
-                # Формируем прямую ссылку для скачивания
-                # Яндекс.Диск: добавляем ?dl=1 для прямого скачивания
-                download_url = public_link
-                if '?' in download_url:
-                    download_url += '&dl=1'
-                else:
-                    download_url += '?dl=1'
 
                 # Скачиваем во временный файл
                 with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file_name)[1]) as tmp_file:
                     tmp_path = tmp_file.name
 
+                downloaded = False
                 try:
-                    # Используем urllib для скачивания
-                    req = urllib.request.Request(download_url, headers={
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                    })
-                    with urllib.request.urlopen(req, timeout=30) as response:
-                        with open(tmp_path, 'wb') as f:
-                            f.write(response.read())
+                    # Способ 1 (приоритетный): через Яндекс API по yandex_path
+                    if yd and yandex_path:
+                        try:
+                            yd.download_file(yandex_path, tmp_path)
+                            downloaded = True
+                            logger.info(f"[PreviewLoader] Скачано через API: {file_name}")
+                        except Exception as e:
+                            logger.warning(f"[PreviewLoader] API download failed for {file_name}: {e}")
 
-                    # Генерируем превью
-                    pixmap = PreviewGenerator.generate_image_preview(tmp_path)
-                    if pixmap:
-                        # Сохраняем в кэш
-                        PreviewGenerator.save_preview_to_cache(pixmap, cache_path)
-                        # ИСПРАВЛЕНИЕ R-04: безопасный callback через main thread
-                        self._safe_callback(file_id, pixmap)
+                    # Способ 2: через public_link → Яндекс API download
+                    if not downloaded and public_link:
+                        try:
+                            import json
+                            import urllib.parse
+                            import urllib.request
+
+                            # Получаем прямую ссылку через Яндекс API
+                            api_url = f"https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key={urllib.parse.quote(public_link, safe='')}"
+                            req = urllib.request.Request(api_url, headers={"User-Agent": "Mozilla/5.0"})
+                            with urllib.request.urlopen(req, timeout=15) as resp:
+                                data = json.loads(resp.read())
+                                direct_url = data.get("href")
+
+                            if direct_url:
+                                req2 = urllib.request.Request(direct_url, headers={"User-Agent": "Mozilla/5.0"})
+                                with urllib.request.urlopen(req2, timeout=30) as resp2:
+                                    with open(tmp_path, "wb") as f:
+                                        f.write(resp2.read())
+                                downloaded = True
+                                logger.info(f"[PreviewLoader] Скачано через public link: {file_name}")
+                        except Exception as e:
+                            logger.warning(f"[PreviewLoader] Public link download failed for {file_name}: {e}")
+
+                    if not downloaded:
+                        logger.warning(f"[PreviewLoader] Не удалось скачать {file_name} (yandex_path={bool(yandex_path)}, public_link={bool(public_link)}, token={bool(self.yandex_token)})")
+                        continue
+
+                    # Проверяем что скачанный файл — изображение, а не HTML
+                    file_size = os.path.getsize(tmp_path)
+                    if file_size < 100:
+                        logger.warning(f"[PreviewLoader] Файл слишком мал ({file_size} байт), пропуск: {file_name}")
+                        continue
+
+                    # Генерируем превью через QImage (потокобезопасно)
+                    image = PreviewGenerator.generate_image_preview_threadsafe(tmp_path)
+                    if image:
+                        PreviewGenerator.save_image_to_cache(image, cache_path)
+                        self._safe_callback(file_id, image)
+                        logger.info(f"[PreviewLoader] Превью создано: {file_name}")
+                    else:
+                        logger.warning(f"[PreviewLoader] QImage null для {file_name} ({file_size} байт)")
 
                 finally:
-                    # Удаляем временный файл
                     try:
                         os.unlink(tmp_path)
                     except Exception:
@@ -3438,10 +3861,18 @@ class PreviewLoaderThread(threading.Thread):
 
 
 # ========== ИМПОРТ ВЫДЕЛЕННЫХ КЛАССОВ (в конце файла для избежания циклических импортов) ==========
-from ui.crm_dialogs import (RejectWithCorrectionsDialog, ProjectDataDialog,  # noqa: E402
-    ExecutorSelectionDialog, ProjectCompletionDialog, CRMStatisticsDialog,
-    ExportPDFDialog, PDFExportSuccessDialog, ReassignExecutorDialog,
-    SurveyDateDialog, TechTaskDialog, MeasurementDialog)
 from ui.crm_archive import ArchiveCard, ArchiveCardDetailsDialog  # noqa: E402
+from ui.crm_dialogs import (  # noqa: E402
+    CRMStatisticsDialog,
+    ExecutorSelectionDialog,
+    ExportPDFDialog,
+    MeasurementDialog,
+    PDFExportSuccessDialog,
+    ProjectCompletionDialog,
+    ProjectDataDialog,
+    ReassignExecutorDialog,
+    RejectWithCorrectionsDialog,
+    SurveyDateDialog,
+    TechTaskDialog,
+)
 # ================================================
-

@@ -6,7 +6,7 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                              QGroupBox, QSpinBox, QTableWidget, QHeaderView,
                              QTableWidgetItem, QTabWidget, QTextEdit, QSizePolicy)
 from PyQt5.QtCore import Qt, QDate, pyqtSignal, QUrl, QTimer
-from PyQt5.QtGui import QColor
+from PyQt5.QtGui import QColor, QCursor
 from database.db_manager import DatabaseManager
 from utils.data_access import DataAccess
 from utils.icon_loader import IconLoader
@@ -168,7 +168,10 @@ class ArchiveCard(QFrame):
         layout.addStretch(1)
 
         # ========== КНОПКА "ПЕРЕВЕСТИ В АВТОРСКИЙ НАДЗОР" ==========
-        if 'АВТОРСКИЙ НАДЗОР' not in status and 'НАДЗОР' not in status:
+        # Только для руководителя студии и старшего менеджера
+        user_pos = (self.employee or {}).get('position', '')
+        can_transfer_supervision = user_pos in ('Руководитель студии', 'Старший менеджер проектов')
+        if can_transfer_supervision and 'АВТОРСКИЙ НАДЗОР' not in status and 'НАДЗОР' not in status:
             supervision_btn = IconLoader.create_icon_button(
                 'shield-white', 'В авторский надзор', 'Перевести в авторский надзор', icon_size=12)
             supervision_btn.setStyleSheet("""
@@ -289,12 +292,17 @@ class ArchiveCardDetailsDialog(QDialog):
         self.resize_margin = 8
 
         # ========== УБИРАЕМ СТАНДАРТНУЮ РАМКУ ==========
-        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        # Qt.Window вместо Qt.Dialog — на Windows Dialog кратковременно показывает нативную рамку
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Window)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.setMouseTracking(True)
 
         # Исправление черного фона всплывающих подсказок
         from utils.tooltip_fix import apply_tooltip_palette
         apply_tooltip_palette(self)
+
+        # Антифлэш: позиционируем за экраном до центрирования в showEvent
+        self.move(-10000, -10000)
 
         self.init_ui()
 
@@ -317,8 +325,7 @@ class ArchiveCardDetailsDialog(QDialog):
                 QFrame#borderFrame {
                     background-color: #FFFFFF;
                     border: 1px solid #E0E0E0;
-                    border-top-left-radius: 10px;
-                    border-top-right-radius: 10px;
+                    border-radius: 10px;
                 }
             """)
             
@@ -340,9 +347,12 @@ class ArchiveCardDetailsDialog(QDialog):
             
             # ========== КОНТЕНТ ==========
             content_widget = QWidget()
+            content_widget.setObjectName("archiveContent")
             content_widget.setStyleSheet("""
-                QWidget {
+                QWidget#archiveContent {
                     background-color: #FFFFFF;
+                    border-bottom-left-radius: 10px;
+                    border-bottom-right-radius: 10px;
                 }
             """)
             
@@ -355,7 +365,14 @@ class ArchiveCardDetailsDialog(QDialog):
             layout.addWidget(header)
             
             tabs = QTabWidget()
-            
+            tabs.setStyleSheet("""
+                QTabWidget::pane {
+                    border-top: 1px solid #E0E0E0;
+                    margin-left: 20px;
+                    margin-right: 20px;
+                }
+            """)
+
             # === ВКЛАДКА 1: Основная информация ===
             info_widget = QWidget()
             info_main_layout = QVBoxLayout()
@@ -384,7 +401,10 @@ class ArchiveCardDetailsDialog(QDialog):
                 reason_label.setStyleSheet('color: #E74C3C; padding: 5px; background-color: #FADBD8; border-radius: 4px;')
                 info_layout.addRow('<b>Причина расторжения:</b>', reason_label)
             
-            separator = QLabel('<hr>')
+            separator = QFrame()
+            separator.setFrameShape(QFrame.HLine)
+            separator.setFrameShadow(QFrame.Plain)
+            separator.setStyleSheet('color: #E0E0E0; background-color: #E0E0E0; max-height: 1px; margin: 5px 0;')
             info_layout.addRow(separator)
 
             # Теги и общий дедлайн
@@ -539,7 +559,8 @@ class ArchiveCardDetailsDialog(QDialog):
                 'Назначение исполнителей', 'Сдача / приёмка работы',
                 'Стадии и согласование', 'Оплаты',
                 'Изменение дедлайна', 'Загрузка файлов',
-                'Удаление файлов', 'Замер', 'Прочее',
+                'Удаление файлов', 'Замер', 'Дата ТЗ',
+                'Таблица сроков', 'Прочее',
             ])
             self._archive_history_filter.setStyleSheet('font-size: 10px; padding: 2px 5px;')
             self._archive_history_filter.setFixedWidth(200)
@@ -998,10 +1019,15 @@ class ArchiveCardDetailsDialog(QDialog):
 
                     # Файл ТЗ
                     if contract_data['tech_task_link']:
-                        file_name = contract_data['tech_task_file_name'] or 'ТехЗадание.pdf'
-                        tz_file_label = QLabel(f'<a href="{contract_data["tech_task_link"]}">{file_name}</a>')
+                        tz_file_label = QLabel(f'<a href="{contract_data["tech_task_link"]}">Открыть папку с ТЗ</a>')
                         tz_file_label.setOpenExternalLinks(True)
-                        tz_file_label.setStyleSheet('color: #ffd93c; font-size: 10px; padding: 5px; background-color: #F8F9FA; border: 1px solid #E0E0E0; border-radius: 4px;')
+                        tz_file_label.setTextFormat(Qt.RichText)
+                        tz_file_label.setStyleSheet('''
+                            QLabel { background-color: #F8F9FA; padding: 6px 10px; border: 1px solid #E0E0E0; border-radius: 4px; font-size: 10px; }
+                            QLabel a { color: #ffd93c; text-decoration: none; }
+                            QLabel a:hover { color: #2980B9; text-decoration: underline; }
+                        ''')
+                        tz_file_label.setCursor(QCursor(Qt.PointingHandCursor))
                         tz_layout.addWidget(QLabel('Файл ТЗ:'))
                         tz_layout.addWidget(tz_file_label)
                     else:
@@ -1031,10 +1057,15 @@ class ArchiveCardDetailsDialog(QDialog):
                     survey_layout.setSpacing(8)
 
                     if contract_data['measurement_image_link']:
-                        file_name = contract_data['measurement_file_name'] or 'Замер'
-                        survey_file_label = QLabel(f'<a href="{contract_data["measurement_image_link"]}">{file_name}</a>')
+                        survey_file_label = QLabel(f'<a href="{contract_data["measurement_image_link"]}">Открыть папку с замером</a>')
                         survey_file_label.setOpenExternalLinks(True)
-                        survey_file_label.setStyleSheet('color: #ffd93c; font-size: 10px; padding: 5px; background-color: #F8F9FA; border: 1px solid #E0E0E0; border-radius: 4px;')
+                        survey_file_label.setTextFormat(Qt.RichText)
+                        survey_file_label.setStyleSheet('''
+                            QLabel { background-color: #F8F9FA; padding: 6px 10px; border: 1px solid #E0E0E0; border-radius: 4px; font-size: 10px; }
+                            QLabel a { color: #ffd93c; text-decoration: none; }
+                            QLabel a:hover { color: #2980B9; text-decoration: underline; }
+                        ''')
+                        survey_file_label.setCursor(QCursor(Qt.PointingHandCursor))
                         survey_layout.addWidget(QLabel('Файл замера:'))
                         survey_layout.addWidget(survey_file_label)
                     else:
@@ -1221,11 +1252,20 @@ class ArchiveCardDetailsDialog(QDialog):
             tabs.addTab(project_data_widget, 'Данные по проекту')
 
             layout.addWidget(tabs, 1)
-            
+
+            # Разделитель перед кнопками
+            bottom_separator = QFrame()
+            bottom_separator.setFrameShape(QFrame.HLine)
+            bottom_separator.setFrameShadow(QFrame.Plain)
+            bottom_separator.setStyleSheet("color: #E0E0E0; background-color: #E0E0E0;")
+            bottom_separator.setFixedHeight(1)
+            layout.addWidget(bottom_separator)
+
             buttons_layout = QHBoxLayout()
 
-            restore_perm = 'supervision.move' if self.card_type == 'supervision' else 'crm_cards.move'
-            can_restore = _has_perm(self.employee, self.api_client, restore_perm)
+            # Кнопка доступна только руководителю студии и старшему менеджеру
+            user_pos = (self.employee or {}).get('position', '')
+            can_restore = user_pos in ('Руководитель студии', 'Старший менеджер проектов')
             restore_btn = IconLoader.create_icon_button('refresh-black', 'Вернуть в активные проекты', icon_size=12)
             restore_btn.setStyleSheet("""
                 QPushButton {
@@ -1319,13 +1359,15 @@ class ArchiveCardDetailsDialog(QDialog):
             'Перемещение карточки': ['card_moved'],
             'Пауза / возобновление': ['card_paused', 'card_resumed', 'pause', 'resume'],
             'Назначение исполнителей': ['executor_assigned', 'executor_deleted', 'executor_completed', 'assignment_change'],
-            'Сдача / приёмка работы': ['work_submitted', 'work_accepted', 'work_rejected', 'acceptance', 'accepted'],
-            'Стадии и согласование': ['stage_completed', 'stages_reset', 'approval_completed', 'approval_reset', 'designer_reset', 'draftsman_reset'],
+            'Сдача / приёмка работы': ['work_submitted', 'work_accepted', 'work_rejected', 'acceptance', 'accepted', 'client_send', 'client_approved'],
+            'Стадии и согласование': ['stage_completed', 'stages_reset', 'approval_completed', 'approval_reset', 'designer_reset', 'draftsman_reset', 'close_stage', 'sign_act', 'advance_round', 'add_extra_round'],
             'Оплаты': ['payment_created', 'payment_updated'],
             'Изменение дедлайна': ['deadline_changed', 'executor_deadline_changed'],
             'Загрузка файлов': ['file_upload'],
             'Удаление файлов': ['file_delete'],
             'Замер': ['survey_complete', 'survey_date_changed'],
+            'Дата ТЗ': ['tech_task_date_changed'],
+            'Таблица сроков': ['timeline_date_changed'],
         }
 
         show_stages = filter_text in ('Все действия', 'Стадии исполнителей')

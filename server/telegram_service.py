@@ -4,11 +4,14 @@ Telegram сервис для CRM мессенджер-чатов.
 1. MTProto (Pyrogram) — автоматическое создание групп
 2. Bot API — управление, сообщения, файлы, уведомления
 """
-import os
-import json
+
 import asyncio
+import json
 import logging
-from typing import Optional, List, Dict, Any
+import os
+import sqlite3 as _sqlite3
+import time
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -16,11 +19,10 @@ logger = logging.getLogger(__name__)
 PYROGRAM_AVAILABLE = False
 try:
     from pyrogram import Client as PyrogramClient
+    from pyrogram import raw
+    from pyrogram.errors import ChatAdminRequired, FloodWait, PeerIdInvalid, PhoneNumberInvalid, SessionPasswordNeeded, UserNotParticipant
     from pyrogram.types import ChatPhoto
-    from pyrogram.errors import (
-        FloodWait, UserNotParticipant, ChatAdminRequired,
-        PeerIdInvalid, PhoneNumberInvalid, SessionPasswordNeeded
-    )
+
     PYROGRAM_AVAILABLE = True
 except ImportError:
     logger.info("Pyrogram не установлен — автосоздание групп недоступно")
@@ -29,11 +31,9 @@ except ImportError:
 AIOGRAM_AVAILABLE = False
 try:
     from aiogram import Bot
-    from aiogram.types import (
-        InputMediaPhoto, InputMediaDocument,
-        FSInputFile, BufferedInputFile
-    )
     from aiogram.enums import ParseMode
+    from aiogram.types import BufferedInputFile, FSInputFile, InputMediaDocument, InputMediaPhoto
+
     AIOGRAM_AVAILABLE = True
 except ImportError:
     logger.warning("aiogram не установлен — Telegram Bot API недоступен")
@@ -50,8 +50,11 @@ class TelegramService:
         self._api_hash: Optional[str] = None
         self._phone: Optional[str] = None
         self._initialized = False
+        self._mtproto_lock = asyncio.Lock()
+        # Backoff: после неудачного подключения к DC — пауза 30 мин
+        self._mtproto_disabled_until: Optional[float] = None
 
-    def configure(self, settings: Dict[str, str]):
+    def configure(self, settings: dict[str, str]):
         """Конфигурация из настроек БД"""
         self._bot_token = settings.get("telegram_bot_token", "")
         api_id = settings.get("telegram_api_id", "")
@@ -61,8 +64,17 @@ class TelegramService:
 
         # Инициализация Bot API
         if self._bot_token and AIOGRAM_AVAILABLE:
-            self._bot = Bot(token=self._bot_token)
-            logger.info("Telegram Bot API инициализирован")
+            proxy_url = os.getenv("TELEGRAM_PROXY", "http://172.18.0.1:3128")
+            try:
+                from aiogram.client.session.aiohttp import AiohttpSession
+
+                session = AiohttpSession(proxy=proxy_url) if proxy_url else None
+                self._bot = Bot(token=self._bot_token, session=session) if session else Bot(token=self._bot_token)
+                logger.info(f"Telegram Bot API инициализирован (proxy={proxy_url or 'нет'})")
+            except Exception as e:
+                logger.warning(f"Не удалось настроить прокси для Bot: {e}, запуск без прокси")
+                self._bot = Bot(token=self._bot_token)
+                logger.info("Telegram Bot API инициализирован (без прокси)")
 
         self._initialized = True
 
@@ -74,12 +86,7 @@ class TelegramService:
     @property
     def mtproto_available(self) -> bool:
         """MTProto (Pyrogram) доступен"""
-        return (
-            PYROGRAM_AVAILABLE
-            and self._api_id is not None
-            and bool(self._api_hash)
-            and bool(self._phone)
-        )
+        return PYROGRAM_AVAILABLE and self._api_id is not None and bool(self._api_hash) and bool(self._phone)
 
     # ========================================
     # MTProto — авторизация (Pyrogram)
@@ -97,7 +104,7 @@ class TelegramService:
             raise RuntimeError("API ID, API Hash и телефон должны быть заполнены")
 
         # Закрыть предыдущий auth-клиент если был
-        if hasattr(self, '_auth_client') and self._auth_client:
+        if hasattr(self, "_auth_client") and self._auth_client:
             try:
                 if self._auth_client.is_connected:
                     await self._auth_client.disconnect()
@@ -138,7 +145,7 @@ class TelegramService:
 
     async def _get_or_restore_auth_client(self, phone_code_hash: str):
         """Получить живой auth-клиент или восстановить из файла сессии."""
-        client = getattr(self, '_auth_client', None)
+        client = getattr(self, "_auth_client", None)
         if client and client.is_connected:
             return client
 
@@ -169,7 +176,7 @@ class TelegramService:
             raise RuntimeError("API ID, API Hash и телефон должны быть заполнены")
 
         # Закрыть предыдущий auth-клиент
-        if hasattr(self, '_auth_client') and self._auth_client:
+        if hasattr(self, "_auth_client") and self._auth_client:
             try:
                 if self._auth_client.is_connected:
                     await self._auth_client.disconnect()
@@ -215,7 +222,7 @@ class TelegramService:
         self._auth_phone_code_hash = final_hash
         return final_hash
 
-    async def verify_auth_code(self, phone_code_hash: str, code: str) -> Dict[str, Any]:
+    async def verify_auth_code(self, phone_code_hash: str, code: str) -> dict[str, Any]:
         """Подтвердить код и завершить авторизацию MTProto.
         Использует живой клиент или восстанавливает из файла сессии.
         """
@@ -244,69 +251,178 @@ class TelegramService:
             except Exception:
                 pass
             self._auth_client = None
-            raise RuntimeError("Аккаунт защищён двухфакторной аутентификацией (2FA). "
-                               "Отключите облачный пароль в Telegram и повторите.")
+            raise RuntimeError("Аккаунт защищён двухфакторной аутентификацией (2FA). Отключите облачный пароль в Telegram и повторите.")
         except Exception:
             # Не закрываем клиент — пусть пользователь попробует другой код
             raise
 
-    async def check_session_valid(self) -> Dict[str, Any]:
+    async def check_session_valid(self) -> dict[str, Any]:
         """Проверить, есть ли валидная Pyrogram-сессия.
-        Возвращает info о пользователе или None.
+        Использует основной клиент (под _mtproto_lock), не создавая отдельного.
         """
         if not PYROGRAM_AVAILABLE or not self._api_id or not self._api_hash:
             return {"valid": False}
 
-        session_path = os.path.join(os.path.dirname(__file__), "telegram_session")
-        session_file = session_path + ".session"
+        session_file = self._get_session_path() + ".session"
         if not os.path.exists(session_file):
             return {"valid": False}
 
-        client = PyrogramClient(
-            session_path,
-            api_id=self._api_id,
-            api_hash=self._api_hash,
-        )
-        try:
-            await client.connect()
-            me = await client.get_me()
-            await client.disconnect()
-            return {
-                "valid": True,
-                "first_name": me.first_name or "",
-                "last_name": me.last_name or "",
-                "username": me.username or "",
-            }
-        except Exception as e:
-            logger.warning(f"Сессия невалидна: {e}")
+        async with self._mtproto_lock:
             try:
-                await client.disconnect()
-            except Exception:
-                pass
-            return {"valid": False}
+                client = await self._ensure_pyrogram_client()
+                me = await client.get_me()
+                return {
+                    "valid": True,
+                    "first_name": me.first_name or "",
+                    "last_name": me.last_name or "",
+                    "username": me.username or "",
+                }
+            except Exception as e:
+                logger.warning(f"Сессия невалидна: {e}")
+                # Принудительно очистить клиент, чтобы не оставлять stale connection
+                self._force_close_client()
+                return {"valid": False}
 
     # ========================================
     # MTProto — создание групп (Pyrogram)
     # ========================================
 
-    async def _get_pyrogram_client(self) -> Any:
-        """Получить или создать Pyrogram клиент"""
+    def _get_session_path(self) -> str:
+        """Путь к файлу сессии Pyrogram (без расширения .session)."""
+        return os.path.join(os.path.dirname(__file__), "telegram_session")
+
+    def _prepare_session_db(self) -> None:
+        """Подготовить SQLite session DB: снять stale locks, переключить на WAL.
+        Вызывать ПЕРЕД созданием PyrogramClient.
+        """
+        db_path = self._get_session_path() + ".session"
+        if not os.path.exists(db_path):
+            return
+
+        try:
+            conn = _sqlite3.connect(db_path, timeout=30)
+            conn.execute("PRAGMA busy_timeout = 30000")
+            # WAL mode — намного устойчивее к блокировкам
+            conn.execute("PRAGMA journal_mode = WAL")
+            try:
+                conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            except Exception:
+                pass
+            conn.close()
+            logger.debug("Session DB подготовлена: WAL mode, checkpoint OK")
+        except Exception as e:
+            logger.warning(f"Не удалось подготовить session DB: {e}")
+            # Крайняя мера — удаляем stale journal/wal/shm файлы
+            self._cleanup_session_locks()
+
+    def _cleanup_session_locks(self) -> None:
+        """Удалить stale lock-файлы SQLite сессии."""
+        db_path = self._get_session_path() + ".session"
+        for ext in ("-wal", "-shm", "-journal"):
+            lock_file = db_path + ext
+            if os.path.exists(lock_file):
+                try:
+                    os.remove(lock_file)
+                    logger.info(f"Удалён stale lock: {lock_file}")
+                except Exception as rm_err:
+                    logger.warning(f"Не удалось удалить {lock_file}: {rm_err}")
+
+    def _force_close_client(self) -> None:
+        """Принудительно закрыть Pyrogram клиент и его SQLite-соединение."""
+        client = self._pyrogram_client
+        if client is None:
+            return
+        # Закрыть SQLite storage напрямую (синхронный метод)
+        try:
+            if hasattr(client, "storage") and client.storage:
+                if hasattr(client.storage, "conn") and client.storage.conn:
+                    client.storage.conn.close()
+                    logger.debug("SQLite storage connection закрыта принудительно")
+        except Exception:
+            pass
+        self._pyrogram_client = None
+
+    async def _ensure_pyrogram_client(self) -> Any:
+        """Получить или создать Pyrogram клиент.
+        ВАЖНО: вызывать только под self._mtproto_lock!
+        При ошибке 'database is locked' — подготавливает DB и пересоздаёт клиент.
+        При недоступности DC — backoff 30 мин (через wait_for timeout на start()).
+        Вызывающий код должен вызвать stop_pyrogram() после завершения работы,
+        иначе Pyrogram уйдёт в бесконечный reconnect-loop при нестабильном DC.
+        """
         if not self.mtproto_available:
             raise RuntimeError("MTProto не настроен")
 
-        if self._pyrogram_client is None:
-            session_path = os.path.join(
-                os.path.dirname(__file__), "telegram_session"
-            )
-            self._pyrogram_client = PyrogramClient(
-                session_path,
-                api_id=self._api_id,
-                api_hash=self._api_hash,
-                phone_number=self._phone,
-            )
+        # Backoff-проверка: если DC недоступен — не пытаться до окончания паузы
+        if self._mtproto_disabled_until is not None:
+            remaining = self._mtproto_disabled_until - time.monotonic()
+            if remaining > 0:
+                raise RuntimeError(f"MTProto временно недоступен (DC заблокирован хостингом). Повтор через ~{int(remaining / 60)} мин.")
+            # Пауза истекла — сбросить клиент для чистой попытки
+            self._mtproto_disabled_until = None
+            self._force_close_client()
+            self._cleanup_session_locks()
 
-        if not self._pyrogram_client.is_connected:
-            await self._pyrogram_client.start()
+        max_attempts = 3
+        for attempt in range(max_attempts):
+            if self._pyrogram_client is None:
+                # Подготовка session DB перед созданием клиента
+                self._prepare_session_db()
+                session_path = self._get_session_path()
+                # Прокси для MTProto — Timeweb блокирует прямые соединения с Telegram DC
+                proxy_url = os.getenv("TELEGRAM_PROXY", "http://172.18.0.1:3128")
+                proxy_dict: dict | None = None
+                if proxy_url:
+                    from urllib.parse import urlparse
+
+                    p = urlparse(proxy_url)
+                    proxy_dict = {"scheme": p.scheme, "hostname": p.hostname, "port": p.port}
+                self._pyrogram_client = PyrogramClient(
+                    session_path,
+                    api_id=self._api_id,
+                    api_hash=self._api_hash,
+                    phone_number=self._phone,
+                    proxy=proxy_dict,
+                )
+
+            if not self._pyrogram_client.is_connected:
+                try:
+                    # Timeout 90с: Pyrogram ретриит DC внутри (~15с per attempt × ~5 попыток).
+                    # Если за 90с не подключился — DC недоступен, ставим backoff 30 мин.
+                    await asyncio.wait_for(self._pyrogram_client.start(), timeout=90.0)
+                except asyncio.TimeoutError:
+                    logger.warning("Pyrogram start() timeout 90с — DC недостижим через прокси. Останавливаю клиент (cancel background tasks) + backoff 30 мин.")
+                    # ВАЖНО: stop() отменяет все asyncio.Task внутри Pyrogram
+                    # (NetworkTask, PingTask, etc.) — простой _force_close_client() этого не делает
+                    client_to_stop = self._pyrogram_client
+                    self._pyrogram_client = None
+                    if client_to_stop is not None:
+                        try:
+                            await client_to_stop.stop()
+                        except Exception:
+                            pass
+                    self._cleanup_session_locks()
+                    self._mtproto_disabled_until = time.monotonic() + 21600  # 6 часов
+                    raise RuntimeError("MTProto DC недоступен (timeout 90с): Telegram DC заблокирован хостингом. Повтор через 6 ч.")
+                except Exception as e:
+                    err_msg = str(e)
+                    logger.error(f"Pyrogram start() failed (попытка {attempt + 1}/{max_attempts}): {err_msg}")
+                    if "database is locked" in err_msg and attempt < max_attempts - 1:
+                        delay = 2.0 + attempt * 2.0  # 2с, 4с
+                        logger.warning(f"SQLite locked — cleanup + retry через {delay}с")
+                        # Агрессивный cleanup: закрыть storage напрямую
+                        try:
+                            if self._pyrogram_client.is_connected:
+                                await self._pyrogram_client.disconnect()
+                        except Exception:
+                            pass
+                        self._force_close_client()
+                        # Подчистить lock-файлы
+                        self._cleanup_session_locks()
+                        await asyncio.sleep(delay)
+                        continue
+                    raise
+            break
 
         return self._pyrogram_client
 
@@ -315,83 +431,175 @@ class TelegramService:
         title: str,
         photo_path: Optional[str] = None,
         bot_username: Optional[str] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Создать группу через MTProto.
+        Порядок: создать basic group → мигрировать в supergroup → настроить.
         Возвращает: {chat_id, title, invite_link}
         """
-        client = await self._get_pyrogram_client()
+        async with self._mtproto_lock:
+            client = await self._ensure_pyrogram_client()
 
-        try:
-            # Создаём группу (нужен хотя бы один участник — бот)
-            users = []
-            if bot_username:
-                users.append(bot_username)
-
-            group = await client.create_group(title, users or ["me"])
-            chat_id = group.id
-
-            # Устанавливаем фото
-            if photo_path and os.path.exists(photo_path):
-                try:
-                    await client.set_chat_photo(
-                        chat_id=chat_id, photo=photo_path
-                    )
-                except Exception as e:
-                    logger.warning(f"Не удалось установить фото группы: {e}")
-
-            # Генерируем invite-ссылку
-            invite_link = await client.export_chat_invite_link(chat_id)
-
-            logger.info(f"Группа создана: {title} (chat_id={chat_id})")
-            return {
-                "chat_id": chat_id,
-                "title": title,
-                "invite_link": invite_link,
-            }
-
-        except FloodWait as e:
-            logger.error(f"Telegram FloodWait: ожидание {e.value} сек")
-            raise RuntimeError(
-                f"Telegram ограничил запросы. Повторите через {e.value} сек."
-            )
-        except Exception as e:
-            logger.error(f"Ошибка создания группы: {e}")
-            raise
-
-    async def delete_group(self, chat_id: int) -> bool:
-        """Удалить группу через MTProto: сначала кикнуть всех, потом удалить"""
-        try:
-            client = await self._get_pyrogram_client()
-
-            # Кикаем всех участников перед удалением
             try:
-                me = await client.get_me()
-                my_id = me.id
-                async for member in client.get_chat_members(chat_id):
-                    if member.user.id == my_id:
-                        continue
-                    try:
-                        await client.ban_chat_member(chat_id, member.user.id)
-                        logger.debug(f"Кикнут участник {member.user.id} из {chat_id}")
-                    except Exception as kick_err:
-                        logger.warning(f"Не удалось кикнуть {member.user.id}: {kick_err}")
-            except Exception as members_err:
-                logger.warning(f"Не удалось получить участников {chat_id}: {members_err}")
+                # 1. Создаём базовую группу (нужен хотя бы один участник — бот)
+                users = [bot_username] if bot_username else ["me"]
+                group = await client.create_group(title, users)
+                chat_id = group.id
+                logger.info(f"Базовая группа создана: {title} (chat_id={chat_id})")
 
-            await client.delete_supergroup(chat_id)
-            logger.info(f"Группа {chat_id} удалена (участники исключены)")
-            return True
-        except Exception as e:
-            logger.warning(f"Не удалось удалить группу {chat_id}: {e}")
-            # Пробуем через бота покинуть чат
-            if self.bot_available:
+                # 2. Принудительная миграция в supergroup СРАЗУ
+                #    (чтобы все последующие операции работали с единым chat_id)
                 try:
-                    await self._bot.leave_chat(chat_id)
-                    return True
-                except Exception:
-                    pass
-            return False
+                    updates = await client.invoke(raw.functions.messages.MigrateChat(chat_id=-chat_id))
+                    for ch in getattr(updates, "chats", []):
+                        if getattr(ch, "megagroup", False):
+                            old_id = chat_id
+                            chat_id = -int(f"100{ch.id}")
+                            logger.info(f"Мигрирована в supergroup: {old_id} → {chat_id}")
+                            break
+                except Exception as mig_err:
+                    logger.warning(f"Миграция в supergroup: {mig_err}")
+
+                # 3. Повышаем бота до админа (уже на supergroup)
+                if bot_username:
+                    try:
+                        from pyrogram.types import ChatPrivileges
+
+                        await client.promote_chat_member(
+                            chat_id,
+                            bot_username,
+                            privileges=ChatPrivileges(
+                                can_manage_chat=True,
+                                can_delete_messages=True,
+                                can_restrict_members=True,
+                                can_invite_users=True,
+                                can_pin_messages=True,
+                            ),
+                        )
+                        logger.info(f"Бот {bot_username} повышен до админа в {chat_id}")
+                    except Exception as e:
+                        logger.warning(f"Не удалось повысить бота до админа: {e}")
+
+                # 4. Устанавливаем фото
+                if photo_path and os.path.exists(photo_path):
+                    try:
+                        await client.set_chat_photo(chat_id=chat_id, photo=photo_path)
+                    except Exception as e:
+                        logger.warning(f"Не удалось установить фото группы: {e}")
+
+                # 5. Генерируем invite-ссылку
+                try:
+                    invite_link = await client.export_chat_invite_link(chat_id)
+                except Exception as e:
+                    logger.warning(f"export_chat_invite_link({chat_id}) ошибка: {e}")
+                    invite_link = None
+
+                # 6. Включаем видимость истории для новых участников
+                try:
+                    peer = await client.resolve_peer(chat_id)
+                    if hasattr(peer, "channel_id"):
+                        channel = raw.types.InputChannel(channel_id=peer.channel_id, access_hash=peer.access_hash)
+                        await client.invoke(
+                            raw.functions.channels.TogglePreHistoryHidden(
+                                channel=channel,
+                                enabled=False,  # False = история ВИДНА новым участникам
+                            )
+                        )
+                        logger.info(f"История чата {chat_id} открыта для новых участников")
+                except Exception as e:
+                    logger.warning(f"Не удалось открыть историю чата {chat_id}: {e}")
+
+                logger.info(f"Группа создана: {title} (chat_id={chat_id})")
+                return {
+                    "chat_id": chat_id,
+                    "title": title,
+                    "invite_link": invite_link,
+                }
+
+            except FloodWait as e:
+                logger.error(f"Telegram FloodWait: ожидание {e.value} сек")
+                raise RuntimeError(f"Telegram ограничил запросы. Повторите через {e.value} сек.")
+            except Exception as e:
+                logger.error(f"Ошибка создания группы: {e}")
+                raise
+
+    async def delete_group(self, chat_id: int, member_tg_ids: list = None) -> bool:
+        """Удалить группу через MTProto: кикнуть всех участников, потом удалить группу.
+        Если MTProto недоступен — fallback на бота (кик по member_tg_ids + leave).
+        member_tg_ids — telegram_user_id участников из БД (для fallback через бота).
+        """
+        mtproto_success = False
+
+        # Сначала пробуем через MTProto (полное удаление)
+        if self.mtproto_available:
+            try:
+                async with self._mtproto_lock:
+                    client = await self._ensure_pyrogram_client()
+
+                    # Кикаем всех участников перед удалением
+                    try:
+                        me = await client.get_me()
+                        my_id = me.id
+                        kicked_count = 0
+                        async for member in client.get_chat_members(chat_id):
+                            if member.user.id == my_id:
+                                continue
+                            try:
+                                await client.ban_chat_member(chat_id, member.user.id)
+                                kicked_count += 1
+                            except Exception as kick_err:
+                                logger.warning(f"Не удалось кикнуть {member.user.id}: {kick_err}")
+                        logger.info(f"Исключено {kicked_count} участников из {chat_id}")
+                        mtproto_success = True
+                    except Exception as members_err:
+                        logger.warning(f"Не удалось получить участников {chat_id}: {members_err}")
+
+                    # Пробуем удалить группу целиком
+                    try:
+                        await client.delete_supergroup(chat_id)
+                        logger.info(f"Группа {chat_id} удалена через MTProto")
+                        return True
+                    except Exception as del_err:
+                        logger.warning(f"delete_supergroup({chat_id}): {del_err}")
+                        try:
+                            await client.leave_chat(chat_id)
+                            mtproto_success = True
+                        except Exception:
+                            pass
+            except Exception as e:
+                logger.warning(f"MTProto ошибка удаления группы {chat_id}: {e}")
+
+        # Если MTProto полностью справился — не нужен fallback
+        if mtproto_success:
+            return True
+
+        # Fallback: бот кикает участников по списку из БД и покидает чат
+        if self.bot_available:
+            kicked_any = False
+            try:
+                if member_tg_ids:
+                    bot_me = await self._bot.get_me()
+                    for tg_id in member_tg_ids:
+                        if tg_id == bot_me.id:
+                            continue
+                        try:
+                            await self._bot.ban_chat_member(chat_id, tg_id)
+                            kicked_any = True
+                            logger.debug(f"Бот кикнул {tg_id} из {chat_id}")
+                        except Exception as kick_err:
+                            logger.warning(f"Бот не смог кикнуть {tg_id}: {kick_err}")
+            except Exception as e:
+                logger.warning(f"Бот: ошибка кика участников {chat_id}: {e}")
+
+            try:
+                await self._bot.leave_chat(chat_id)
+                logger.info(f"Бот покинул чат {chat_id} (fallback)")
+                return True
+            except Exception as bot_err:
+                logger.warning(f"Бот не смог покинуть чат {chat_id}: {bot_err}")
+                return kicked_any
+
+        return False
 
     # ========================================
     # Bot API — привязка и управление
@@ -407,7 +615,7 @@ class TelegramService:
         except Exception:
             return False
 
-    async def get_chat_info(self, chat_id: int) -> Optional[Dict]:
+    async def get_chat_info(self, chat_id: int) -> Optional[dict]:
         """Получить информацию о чате"""
         if not self.bot_available:
             return None
@@ -476,9 +684,7 @@ class TelegramService:
             return None
         try:
             pm = ParseMode.HTML if parse_mode == "HTML" else ParseMode.MARKDOWN
-            msg = await self._bot.send_message(
-                chat_id=chat_id, text=text, parse_mode=pm
-            )
+            msg = await self._bot.send_message(chat_id=chat_id, text=text, parse_mode=pm)
             return msg.message_id
         except Exception as e:
             logger.error(f"Ошибка отправки сообщения в {chat_id}: {e}")
@@ -495,9 +701,7 @@ class TelegramService:
             return None
         try:
             document = FSInputFile(file_path)
-            msg = await self._bot.send_document(
-                chat_id=chat_id, document=document, caption=caption
-            )
+            msg = await self._bot.send_document(chat_id=chat_id, document=document, caption=caption)
             return msg.message_id
         except Exception as e:
             logger.error(f"Ошибка отправки документа: {e}")
@@ -515,9 +719,7 @@ class TelegramService:
             return None
         try:
             document = BufferedInputFile(file_bytes, filename=filename)
-            msg = await self._bot.send_document(
-                chat_id=chat_id, document=document, caption=caption
-            )
+            msg = await self._bot.send_document(chat_id=chat_id, document=document, caption=caption)
             return msg.message_id
         except Exception as e:
             logger.error(f"Ошибка отправки документа из байтов: {e}")
@@ -526,9 +728,9 @@ class TelegramService:
     async def send_media_group(
         self,
         chat_id: int,
-        photos: List[str],
+        photos: list[str],
         caption: Optional[str] = None,
-    ) -> Optional[List[int]]:
+    ) -> Optional[list[int]]:
         """
         Отправить галерею фото (до 10 штук).
         photos — список путей к файлам.
@@ -550,9 +752,7 @@ class TelegramService:
                     )
                 )
 
-            messages = await self._bot.send_media_group(
-                chat_id=chat_id, media=media
-            )
+            messages = await self._bot.send_media_group(chat_id=chat_id, media=media)
             return [m.message_id for m in messages]
         except Exception as e:
             logger.error(f"Ошибка отправки галереи: {e}")
@@ -561,9 +761,9 @@ class TelegramService:
     async def send_media_group_from_bytes(
         self,
         chat_id: int,
-        photos: List[Dict[str, Any]],
+        photos: list[dict[str, Any]],
         caption: Optional[str] = None,
-    ) -> Optional[List[int]]:
+    ) -> Optional[list[int]]:
         """
         Отправить галерею из байтов.
         photos — список {'bytes': bytes, 'filename': str}
@@ -576,9 +776,7 @@ class TelegramService:
         try:
             media = []
             for i, photo_data in enumerate(photos[:10]):
-                file = BufferedInputFile(
-                    photo_data["bytes"], filename=photo_data["filename"]
-                )
+                file = BufferedInputFile(photo_data["bytes"], filename=photo_data["filename"])
                 media.append(
                     InputMediaPhoto(
                         media=file,
@@ -587,9 +785,7 @@ class TelegramService:
                     )
                 )
 
-            messages = await self._bot.send_media_group(
-                chat_id=chat_id, media=media
-            )
+            messages = await self._bot.send_media_group(chat_id=chat_id, media=media)
             return [m.message_id for m in messages]
         except Exception as e:
             logger.error(f"Ошибка отправки галереи из байтов: {e}")
@@ -599,21 +795,26 @@ class TelegramService:
     # Скрипт-сообщения
     # ========================================
 
-    def render_template(
-        self, template: str, context: Dict[str, str]
-    ) -> str:
+    def render_template(self, template: str, context: dict[str, str]) -> str:
         """Подставить переменные в шаблон скрипта"""
+        import re
+
         result = template
         for key, value in context.items():
             placeholder = "{" + key + "}"
             result = result.replace(placeholder, str(value) if value else "")
+        # Убираем пустые (@), ( @) и подобные артефакты когда username не задан
+        result = re.sub(r"\s*\(@?\s*\)", "", result)
+        # Убираем строки команды с пустыми ролями (когда сотрудник не назначен)
+        # Формат: " — Роль: \n" → убрать всю строку
+        result = re.sub(r" — [^:]+:\s*\n", "", result)
         return result
 
     async def send_script_message(
         self,
         chat_id: int,
         template: str,
-        context: Dict[str, str],
+        context: dict[str, str],
     ) -> Optional[int]:
         """Отправить сообщение по скрипту с подстановкой переменных"""
         text = self.render_template(template, context)
@@ -623,28 +824,164 @@ class TelegramService:
     # Привязка чата по invite-ссылке
     # ========================================
 
-    async def resolve_invite_link(self, invite_link: str) -> Optional[int]:
+    async def join_chat_by_link(self, invite_link: str) -> Optional[dict[str, Any]]:
         """
-        Извлечь chat_id из invite-ссылки.
-        Бот должен быть уже добавлен в чат.
+        Вступить в чат по invite-ссылке через MTProto и добавить бота.
+        Возвращает {chat_id, title, invite_link} или None.
         """
-        if not self.bot_available:
-            return None
-
-        # Если это числовой ID
+        # Если это числовой ID — бот просто пробует получить чат
         try:
-            return int(invite_link)
+            numeric_id = int(invite_link)
+            if self.bot_available:
+                try:
+                    chat = await self._bot.get_chat(numeric_id)
+                    return {
+                        "chat_id": chat.id,
+                        "title": chat.title or "",
+                        "invite_link": invite_link,
+                    }
+                except Exception:
+                    pass
+            return {"chat_id": numeric_id, "title": "", "invite_link": invite_link}
         except ValueError:
             pass
 
-        # Пробуем получить чат напрямую
-        # (работает только если бот уже в чате)
-        # Для t.me/+hash ссылок бот не может resolve без вступления
-        logger.info(
-            f"Для привязки чата бот должен быть добавлен вручную. "
-            f"Ссылка: {invite_link}"
-        )
-        return None
+        # Вступаем через MTProto (user-аккаунт может join по invite-ссылке)
+        if not self.mtproto_available:
+            logger.warning("MTProto недоступен — не могу вступить в чат по ссылке")
+            return None
+
+        try:
+            async with self._mtproto_lock:
+                client = await self._ensure_pyrogram_client()
+
+                # Пробуем вступить; если уже участник — получаем чат по ссылке
+                try:
+                    chat = await client.join_chat(invite_link)
+                    chat_id = chat.id
+                    title = chat.title or ""
+                    logger.info(f"MTProto вступил в чат: {title} (chat_id={chat_id})")
+                except Exception as join_err:
+                    err_msg = str(join_err)
+                    if "USER_ALREADY_PARTICIPANT" in err_msg or "INVITE_REQUEST_SENT" in err_msg:
+                        # Уже в чате — получаем info через get_chat по ссылке
+                        logger.info(f"Уже участник чата, получаем данные: {invite_link}")
+                        try:
+                            chat = await client.get_chat(invite_link)
+                            chat_id = chat.id
+                            title = chat.title or ""
+                        except Exception:
+                            # Пробуем извлечь hash из ссылки и получить info через API
+                            import re
+
+                            hash_match = re.search(r"t\.me/\+([A-Za-z0-9_-]+)", invite_link)
+                            if hash_match:
+                                try:
+                                    from pyrogram import raw
+
+                                    invite_info = await client.invoke(raw.functions.messages.CheckChatInvite(hash=hash_match.group(1)))
+                                    # ChatInviteAlready — мы уже в чате
+                                    ch = getattr(invite_info, "chat", None)
+                                    if ch:
+                                        chat_id = -int(f"100{ch.id}") if getattr(ch, "megagroup", False) or getattr(ch, "broadcast", False) else -ch.id
+                                        title = getattr(ch, "title", "") or ""
+                                        logger.info(f"CheckChatInvite → chat_id={chat_id}, title={title}")
+                                    else:
+                                        raise RuntimeError("CheckChatInvite не вернул chat")
+                                except Exception as check_err:
+                                    logger.error(f"CheckChatInvite ошибка: {check_err}")
+                                    raise join_err
+                            else:
+                                raise join_err
+                    else:
+                        raise
+
+                # Добавляем бота в чат и повышаем до админа
+                if self.bot_available:
+                    try:
+                        bot_me = await self._bot.get_me()
+                        bot_username = bot_me.username
+                        if bot_username:
+                            # Проверяем, не в чате ли уже бот
+                            bot_already_in = False
+                            try:
+                                member = await client.get_chat_member(chat_id, bot_username)
+                                if member and member.status.value in ("member", "administrator", "owner"):
+                                    bot_already_in = True
+                                    logger.info(f"Бот @{bot_username} уже в чате {chat_id}")
+                            except Exception:
+                                pass
+
+                            if not bot_already_in:
+                                await client.add_chat_members(chat_id, bot_username)
+                                logger.info(f"Бот @{bot_username} добавлен в чат {chat_id}")
+
+                            # Повышаем бота до админа (даже если уже в чате — возможно без прав)
+                            try:
+                                from pyrogram.types import ChatPrivileges as _CP
+
+                                await client.promote_chat_member(
+                                    chat_id,
+                                    bot_username,
+                                    privileges=_CP(
+                                        can_manage_chat=True,
+                                        can_post_messages=True,
+                                        can_edit_messages=True,
+                                        can_delete_messages=True,
+                                        can_invite_users=True,
+                                        can_restrict_members=True,
+                                        can_pin_messages=True,
+                                        can_manage_video_chats=True,
+                                    ),
+                                )
+                                logger.info(f"Бот повышен до админа в чате {chat_id}")
+                            except Exception as promo_err:
+                                logger.warning(f"Не удалось повысить бота: {promo_err}")
+                    except Exception as bot_err:
+                        logger.warning(f"Не удалось добавить бота в чат: {bot_err}")
+
+                # Экспортируем invite-ссылку (если есть права)
+                final_link = invite_link
+                try:
+                    exported = await client.export_chat_invite_link(chat_id)
+                    if exported:
+                        final_link = exported
+                except Exception:
+                    pass
+
+                return {
+                    "chat_id": chat_id,
+                    "title": title,
+                    "invite_link": final_link,
+                }
+        except Exception as e:
+            logger.error(f"Ошибка вступления в чат по ссылке {invite_link}: {e}")
+            return None
+
+    async def resolve_invite_link(self, invite_link: str) -> Optional[int]:
+        """
+        Извлечь chat_id из invite-ссылки (legacy, вызывает join_chat_by_link).
+        """
+        result = await self.join_chat_by_link(invite_link)
+        return result["chat_id"] if result else None
+
+    async def stop_pyrogram(self):
+        """Явно остановить Pyrogram клиент после использования.
+        Предотвращает бесконечный reconnect-loop фоновых задач Pyrogram (NetworkTask/PingTask).
+        Следующий вызов _ensure_pyrogram_client() создаст свежее подключение.
+        """
+        async with self._mtproto_lock:
+            if self._pyrogram_client is not None:
+                try:
+                    if self._pyrogram_client.is_connected:
+                        await self._pyrogram_client.stop()
+                    else:
+                        self._force_close_client()
+                except Exception as e:
+                    logger.debug(f"stop_pyrogram: {e}")
+                    self._force_close_client()
+                self._pyrogram_client = None
+                logger.info("Pyrogram клиент остановлен (on-demand stop)")
 
     # ========================================
     # Очистка
