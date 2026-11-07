@@ -162,6 +162,14 @@ async def get_contracts_dashboard(
             elif c.project_type == "Шаблонный":
                 by_subtypes_tmpl[sub] += 1
 
+        # Договоров надзора (без привязки к периоду — общее количество)
+        supervision_orders = db.query(Contract).filter(Contract.status == STATUS_SUPERVISION).count()
+
+        # Архивные CRM-карточки по типу (без привязки к периоду)
+        _archived_col = {"Выполненный проект", STATUS_COMPLETED, STATUS_TERMINATED}
+        individual_archived = db.query(CRMCard).join(Contract, CRMCard.contract_id == Contract.id).filter(Contract.project_type == "Индивидуальный", CRMCard.column_name.in_(_archived_col)).count()
+        template_archived = db.query(CRMCard).join(Contract, CRMCard.contract_id == Contract.id).filter(Contract.project_type == "Шаблонный", CRMCard.column_name.in_(_archived_col)).count()
+
         return {
             "individual_orders": individual_orders,
             "individual_area": float(individual_area),
@@ -169,6 +177,9 @@ async def get_contracts_dashboard(
             "template_orders": template_orders,
             "template_area": float(template_area),
             "template_amount": float(template_amount),
+            "supervision_orders": supervision_orders,
+            "individual_archived": individual_archived,
+            "template_archived": template_archived,
             "by_subtypes_individual": dict(by_subtypes_ind),
             "by_subtypes_template": dict(by_subtypes_tmpl),
         }
@@ -1783,6 +1794,22 @@ async def get_supervision_analytics(
             elif ptype == "Шаблонный":
                 template_count += 1
 
+        # --- Архивные надзоры (без привязки к периоду) ---
+        _sup_archived_stages = {"Выполненный проект", STATUS_COMPLETED, STATUS_TERMINATED}
+        all_archived_sc = [sc for sc in supervision_cards if sc.column_name in _sup_archived_stages]
+        archived_total = len(all_archived_sc)
+        archived_individual = 0
+        archived_template = 0
+        for sc in all_archived_sc:
+            cont = contracts_map.get(sc.contract_id)
+            if cont is None:
+                continue
+            ptype = cont.project_type or ""
+            if ptype == "Индивидуальный":
+                archived_individual += 1
+            elif ptype == "Шаблонный":
+                archived_template += 1
+
         # --- По агентам (из справочника Agent + договоры) ---
         agents_list = db.query(Agent).filter(Agent.status == "активный").order_by(Agent.name).all()
         agent_counter: dict = defaultdict(int)
@@ -2053,6 +2080,9 @@ async def get_supervision_analytics(
         return {
             "total": total,
             "active": active,
+            "archived_total": archived_total,
+            "archived_individual": archived_individual,
+            "archived_template": archived_template,
             "by_project_type": {
                 "individual": individual_count,
                 "template": template_count,

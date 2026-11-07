@@ -290,9 +290,9 @@
           </div>
         </q-card-section>
         <q-card-section>
-          <!-- Строка 1: общие показатели надзора (KPI-стиль) -->
+          <!-- Строка 1: счётчики надзоров (всего/активных/архиве/по типу) -->
           <div class="row q-col-gutter-xs q-mb-sm">
-            <div v-for="s in supervisionMini.slice(0, 4)" :key="s.label" class="col-6 col-sm-3">
+            <div v-for="s in supervisionMini.counters" :key="s.label" class="col-6 col-sm-4 col-md-2">
               <div class="q-pa-xs" :style="{ borderLeft: `3px solid ${s.color || '#95A5A6'}`, borderRadius: '6px', background: 'var(--fc-bg-hover)' }">
                 <div class="text-subtitle1 text-weight-bold">
                   {{ s.value }}
@@ -305,7 +305,7 @@
           </div>
           <!-- Строка 2: выезды (KPI-стиль) -->
           <div class="row q-col-gutter-xs q-mb-sm">
-            <div v-for="s in supervisionMini.slice(4)" :key="s.label" class="col-6 col-sm-4 col-md-2">
+            <div v-for="s in supervisionMini.visits" :key="s.label" class="col-6 col-sm-4 col-md-2">
               <div class="q-pa-xs" :style="{ borderLeft: `3px solid ${s.color || '#95A5A6'}`, borderRadius: '6px', background: 'var(--fc-bg-hover)' }">
                 <div class="text-subtitle1 text-weight-bold">
                   {{ s.value }}
@@ -410,6 +410,8 @@ function fmtMoney(v) {
 // ========== KPI ==========
 const kpiCards = computed(() => {
   const s = summary.value || {}
+  const cd = contractsDashboard.value || {}
+  const sd = supervisionDetailed.value || {}
   return [
     { label: 'Всего клиентов', value: s.total_clients ?? '—', color: 'var(--fc-accent)' },
     { label: 'Новых клиентов', value: s.new_clients ?? '—', color: '#27AE60' },
@@ -419,6 +421,9 @@ const kpiCards = computed(() => {
     { label: 'Средний чек', value: fmtMoney(s.avg_amount), color: '#9B59B6' },
     { label: 'Общая площадь', value: s.total_area ? `${Math.round(s.total_area)} м²` : '—', color: '#1ABC9C' },
     { label: 'Средняя площадь', value: s.avg_area ? `${Math.round(s.avg_area)} м²` : '—', color: '#E67E22' },
+    { label: 'В архиве инд.', value: cd.individual_archived ?? '—', color: '#78909C' },
+    { label: 'В архиве шабл.', value: cd.template_archived ?? '—', color: '#90A4AE' },
+    { label: 'Надзоров в архиве', value: sd.archived_total ?? '—', color: '#B0BEC5' },
   ]
 })
 
@@ -523,6 +528,7 @@ const contractMini = computed(() => {
     { label: 'Всего', value: s.total_contracts ?? '—', color: '#F39C12' },
     { label: 'Индивидуальных', value: cd.individual_orders ?? '—', color: '#F57C00' },
     { label: 'Шаблонных', value: cd.template_orders ?? '—', color: '#C62828' },
+    { label: 'Надзор', value: cd.supervision_orders ?? '—', color: '#27AE60' },
     { label: 'Стоимость всего', value: fmtMoney(s.total_amount), color: '#F57C00' },
     { label: 'Сумма инд.', value: fmtMoney(cd.individual_amount), color: '#F57C00' },
     { label: 'Сумма шабл.', value: fmtMoney(cd.template_amount), color: '#C62828' },
@@ -693,17 +699,26 @@ const supervisionMini = computed(() => {
   const sd = supervisionDetailed.value || {}
   const v = sd.visits || {}
   const avgVisits = v.avg_per_card ?? (sd.total && sd.site_visits ? (sd.site_visits / sd.total).toFixed(1) : '—')
-  return [
-    { label: 'Всего надзоров', value: sd.total ?? '—', color: '#27AE60' },
-    { label: 'Активных', value: sd.active ?? '—', color: '#F39C12' },
-    { label: 'По индивид.', value: sd.by_project_type?.individual ?? '—', color: '#F57C00' },
-    { label: 'По шаблонным', value: sd.by_project_type?.template ?? '—', color: '#C62828' },
-    { label: 'Всего выездов', value: v.total ?? sd.site_visits ?? '—', color: '#E67E22' },
-    { label: 'На объект', value: v.on_site ?? '—', color: '#27AE60' },
-    { label: 'К поставщикам', value: v.supplier ?? '—', color: '#3498DB' },
-    { label: 'Просрочено выездов', value: v.overdue ?? '—', color: '#E74C3C' },
-    { label: 'Ср. выездов/надзор', value: avgVisits, color: '#9B59B6' },
-  ]
+  const indActive = sd.by_project_type?.individual ?? 0
+  const tmplActive = sd.by_project_type?.template ?? 0
+  const unspecified = (sd.active ?? 0) - indActive - tmplActive
+  return {
+    counters: [
+      { label: 'Всего надзоров', value: sd.total ?? '—', color: '#27AE60' },
+      { label: 'Активных', value: sd.active ?? '—', color: '#F39C12' },
+      { label: 'В архиве', value: sd.archived_total ?? '—', color: '#78909C' },
+      { label: 'По индивид.', value: indActive || '—', color: '#F57C00' },
+      { label: 'По шаблонным', value: tmplActive || '—', color: '#C62828' },
+      ...(unspecified > 0 ? [{ label: 'Тип не указан', value: unspecified, color: '#9E9E9E' }] : []),
+    ],
+    visits: [
+      { label: 'Всего выездов', value: v.total ?? sd.site_visits ?? '—', color: '#E67E22' },
+      { label: 'На объект', value: v.on_site ?? '—', color: '#27AE60' },
+      { label: 'К поставщикам', value: v.supplier ?? '—', color: '#3498DB' },
+      { label: 'Просрочено выездов', value: v.overdue ?? '—', color: '#E74C3C' },
+      { label: 'Ср. выездов/надзор', value: avgVisits, color: '#9B59B6' },
+    ],
+  }
 })
 
 // Надзоры по агентам — из supervision-analytics (включает агентов с 0)
@@ -1094,12 +1109,13 @@ async function exportPDF() {
 
     // ---- Авторский надзор (новая страница) ----
     body += '<h2 class="pb">Авторский надзор</h2>'
+    const supMiniFlat = [...supervisionMini.value.counters, ...supervisionMini.value.visits]
     if (chartData.supAgent) {
-      body += `<div class="side"><div class="side-l">${horzTable(supervisionMini.value)}</div>` +
+      body += `<div class="side"><div class="side-l">${horzTable(supMiniFlat)}</div>` +
         '<div class="side-r"><div class="ct">Надзоры по агентам</div>' +
         `<canvas id="supAgent" width="310" height="${supAgH}"></canvas></div></div>`
     } else {
-      body += horzTable(supervisionMini.value)
+      body += horzTable(supMiniFlat)
     }
     const sbc2 = supervisionByCityChart.value
     if (chartData.supCity && sbc2) {
