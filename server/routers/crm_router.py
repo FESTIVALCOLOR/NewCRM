@@ -1985,7 +1985,10 @@ async def workflow_repair(card_id: int, current_user: Employee = Depends(require
         # Определяем правильный status по роли подэтапа
         reviewer_roles = {POSITION_SDP, POSITION_MANAGER, POSITION_GAP}
         executor_roles = {POSITION_DRAFTSMAN, POSITION_DESIGNER}
-        if next_entry.executor_role in reviewer_roles:
+        if next_entry.stage_code.endswith("_ACT"):
+            # Подэтап подписания акта (S1_ACT, S2_ACT, S3_ACT и т.д.) → act_signing
+            wf.status = "act_signing"
+        elif next_entry.executor_role in reviewer_roles:
             wf.status = "pending_review"
         elif next_entry.executor_role in executor_roles:
             wf.status = "in_progress"
