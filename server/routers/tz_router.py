@@ -28,6 +28,7 @@ from sqlalchemy.orm import Session
 
 from database import (
     Contract,
+    CRMCard,
     TechnicalSurvey,
     TZSurveyTemplate,
     get_db,
@@ -484,6 +485,12 @@ def submit_survey_by_client(
     survey.answers = body.answers
     survey.status = "completed"
     survey.completed_at = datetime.utcnow()
+
+    # Автоматически ставим survey_date в CRM карточке, если ещё не установлена
+    crm_card = db.query(CRMCard).filter(CRMCard.contract_id == survey.contract_id).first()
+    if crm_card and not crm_card.survey_date:
+        crm_card.survey_date = datetime.utcnow().strftime("%Y-%m-%d")
+
     db.commit()
 
     # Генерируем PDF в фоне (не блокируем ответ)
