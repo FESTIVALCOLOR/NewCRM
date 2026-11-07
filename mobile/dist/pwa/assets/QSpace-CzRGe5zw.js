@@ -1,1 +1,0 @@
-import{Tn as e,nn as t}from"./index-BnAF8C6U.js";var n=t({name:`QSpace`,setup(){let t=e(`div`,{class:`q-space`});return()=>t}});export{n as t};
