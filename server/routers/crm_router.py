@@ -595,19 +595,20 @@ async def get_crm_card(card_id: int, current_user: Employee = Depends(get_curren
         if wf:
             # Всегда вычисляем substep из таймлайна напрямую — это единственный источник
             # истины. WF.current_substep_code устаревает после ручного сброса/repair.
+            # Фильтруем по stage_group текущей стадии — иначе при заполнении всех дат
+            # стадии 2 вручную substep_code прыгает на первую строку стадии 3.
             substep_code = None
             if contract and contract.id:
-                true_next = (
-                    db.query(ProjectTimelineEntry)
-                    .filter(
-                        ProjectTimelineEntry.contract_id == contract.id,
-                        ProjectTimelineEntry.executor_role != "header",
-                        or_(ProjectTimelineEntry.actual_date.is_(None), ProjectTimelineEntry.actual_date == ""),
-                        or_(ProjectTimelineEntry.status.is_(None), ProjectTimelineEntry.status != "skipped"),
-                    )
-                    .order_by(ProjectTimelineEntry.sort_order)
-                    .first()
+                card_stage_group = _resolve_stage_group(card.column_name) if card.column_name else ""
+                true_next_q = db.query(ProjectTimelineEntry).filter(
+                    ProjectTimelineEntry.contract_id == contract.id,
+                    ProjectTimelineEntry.executor_role != "header",
+                    or_(ProjectTimelineEntry.actual_date.is_(None), ProjectTimelineEntry.actual_date == ""),
+                    or_(ProjectTimelineEntry.status.is_(None), ProjectTimelineEntry.status != "skipped"),
                 )
+                if card_stage_group:
+                    true_next_q = true_next_q.filter(ProjectTimelineEntry.stage_group == card_stage_group)
+                true_next = true_next_q.order_by(ProjectTimelineEntry.sort_order).first()
                 substep_code = true_next.stage_code if true_next else None
             else:
                 substep_code = wf.current_substep_code
