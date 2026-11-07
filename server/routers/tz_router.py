@@ -503,10 +503,13 @@ def submit_survey_by_client(
     survey.status = "completed"
     survey.completed_at = datetime.utcnow()
 
-    # Автоматически ставим survey_date в CRM карточке, если ещё не установлена
+    # Автоматически ставим survey_date и tech_task_date в CRM карточке, если ещё не установлены
     crm_card = db.query(CRMCard).filter(CRMCard.contract_id == survey.contract_id).first()
+    today = datetime.utcnow().strftime("%Y-%m-%d")
     if crm_card and not crm_card.survey_date:
-        crm_card.survey_date = datetime.utcnow().strftime("%Y-%m-%d")
+        crm_card.survey_date = today
+    if crm_card and not crm_card.tech_task_date:
+        crm_card.tech_task_date = today
 
     db.commit()
 
