@@ -4064,7 +4064,20 @@ const substepProgress = computed(() => {
   let activeGroup = null
   if (activeCode) {
     const activeEntry = stageEntries.find(e => e.stage_code === activeCode)
-    if (activeEntry) activeGroup = activeEntry.substage_group || activeEntry.stage_group
+    if (activeEntry) {
+      if (activeEntry.substage_group) {
+        activeGroup = activeEntry.substage_group
+      } else if (activeCode.endsWith('_ACT')) {
+        // ACT-запись не имеет substage_group — подсвечиваем последний подэтап этой стадии
+        const sg = activeEntry.stage_group
+        const stageGroups = groups.filter(g =>
+          stageEntries.some(e => (e.substage_group || e.stage_group) === g.group && e.stage_group === sg),
+        )
+        if (stageGroups.length > 0) activeGroup = stageGroups[stageGroups.length - 1].group
+      } else {
+        activeGroup = activeEntry.stage_group
+      }
+    }
   }
 
   const result = groups.map(g => ({
