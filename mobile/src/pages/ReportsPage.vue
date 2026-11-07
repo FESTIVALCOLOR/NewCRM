@@ -185,13 +185,13 @@
               <div class="text-caption text-weight-bold q-mb-xs">
                 Договоры по агентам
               </div>
-              <bar-chart :labels="contractsByAgentChart.labels" :datasets="contractsByAgentChart.datasets" :stacked="contractsByAgentChart.stacked" />
+              <bar-chart :labels="contractsByAgentChart.labels" :datasets="contractsByAgentChart.datasets" />
             </div>
             <div v-if="amountByAgentChart" class="col-12 col-md-6">
               <div class="text-caption text-weight-bold q-mb-xs">
                 Стоимость по агентам
               </div>
-              <bar-chart :labels="amountByAgentChart.labels" :datasets="amountByAgentChart.datasets" :stacked="amountByAgentChart.stacked" horizontal />
+              <bar-chart :labels="amountByAgentChart.labels" :datasets="amountByAgentChart.datasets" horizontal />
             </div>
           </div>
           <!-- Подтипы договоров (Bug 7) -->
@@ -647,7 +647,6 @@ const contractsByAgentChart = computed(() => {
         { label: 'Инд.', data: ats.map(a => a.individual_count), color: ats.map(a => a.color) },
         { label: 'Шабл.', data: ats.map(a => a.template_count), color: ats.map(a => a.color + '99') },
       ],
-      stacked: true,
     }
   }
   const ba = summary.value?.by_agent || []
@@ -667,7 +666,6 @@ const amountByAgentChart = computed(() => {
         { label: 'Инд.', data: ats.map(a => a.individual_amount), color: ats.map(a => a.color) },
         { label: 'Шабл.', data: ats.map(a => a.template_amount), color: ats.map(a => a.color + '99') },
       ],
-      stacked: true,
     }
   }
   const ba = summary.value?.by_agent || []
