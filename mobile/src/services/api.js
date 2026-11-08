@@ -647,6 +647,13 @@ export const adminApi = {
   getRestoreStatus: () => api.get('/api/v1/admin/backup/restore/status'),
 }
 
+export const vpnApi = {
+  getStatus: () => api.get('/api/v1/admin/vpn/status'),
+  autoUpdate: () => api.post('/api/v1/admin/vpn/auto-update'),
+  setPassword: (password) => api.post('/api/v1/admin/vpn/set-password', { password }),
+  restart: () => api.post('/api/v1/admin/vpn/restart'),
+}
+
 // Push-уведомления для гостей клиентского чата (без JWT)
 export const clientPushApi = {
   getVapidKey: (token) => api.get(`/api/v1/client-chat/${token}/push/vapid-key`),

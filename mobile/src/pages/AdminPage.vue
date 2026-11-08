@@ -18,6 +18,7 @@
       <q-tab name="telegram" label="Telegram/Email" />
       <q-tab name="trash" label="Корзина" />
       <q-tab name="backup" label="Бекап" />
+      <q-tab name="vpn" label="VPN" />
       <q-tab name="doctemplates" label="Шаблоны" />
       <q-tab name="tz-survey" label="Анкета ТЗ" />
     </q-tabs>
@@ -1201,6 +1202,152 @@
         </div>
       </q-tab-panel>
 
+      <!-- VPN -->
+      <q-tab-panel name="vpn" class="q-pa-none">
+        <div class="text-subtitle2 text-weight-bold q-mb-sm" style="color: var(--fc-text)">
+          VPN управление (VPNBook)
+        </div>
+
+        <!-- Статус сервисов -->
+        <q-card class="is-card q-mb-md">
+          <q-card-section class="q-pa-sm">
+            <div class="row items-center justify-between q-mb-sm">
+              <div style="font-size: 13px; font-weight: 600; color: var(--fc-text)">
+                Статус сервисов
+              </div>
+              <q-btn
+                flat
+                dense
+                no-caps
+                size="xs"
+                icon="refresh"
+                color="grey-7"
+                :loading="vpnLoading"
+                @click="loadVpnStatus"
+              />
+            </div>
+            <div v-if="vpnLoading && !vpnStatus" class="text-center q-pa-sm">
+              <q-spinner size="20px" color="grey-5" />
+            </div>
+            <template v-else-if="vpnStatus">
+              <div
+                v-for="svc in vpnStatus.services"
+                :key="svc.name"
+                class="row items-center q-mb-xs"
+              >
+                <q-icon
+                  :name="svc.active ? 'check_circle' : 'cancel'"
+                  :color="svc.active ? 'green-7' : 'red-6'"
+                  size="16px"
+                  class="q-mr-sm"
+                />
+                <span style="font-size: 13px; color: var(--fc-text)">{{ svc.name }}</span>
+                <q-badge
+                  :color="svc.active ? 'green-7' : 'red-6'"
+                  class="q-ml-sm"
+                  style="font-size: 10px"
+                >
+                  {{ svc.active ? 'активен' : 'неактивен' }}
+                </q-badge>
+              </div>
+              <div v-if="vpnStatus.password" class="q-mt-sm" style="font-size: 12px; color: var(--fc-text-light)">
+                Текущий пароль:
+                <span style="font-family: monospace; color: var(--fc-text); font-weight: 600">
+                  {{ vpnStatus.password }}
+                </span>
+              </div>
+            </template>
+            <div v-else class="text-caption" style="color: var(--fc-text-disabled)">
+              Нет данных
+            </div>
+          </q-card-section>
+        </q-card>
+
+        <!-- Действия -->
+        <q-card class="is-card">
+          <q-card-section class="q-pa-sm">
+            <div style="font-size: 13px; font-weight: 600; color: var(--fc-text); margin-bottom: 10px">
+              Управление
+            </div>
+
+            <!-- Авто-обновление пароля -->
+            <div class="row items-center justify-between q-mb-sm">
+              <div>
+                <div style="font-size: 13px; color: var(--fc-text)">
+                  Обновить пароль автоматически
+                </div>
+                <div class="text-caption" style="color: var(--fc-text-light)">
+                  Парсит актуальный пароль с vpnbook.com
+                </div>
+              </div>
+              <q-btn
+                unelevated
+                no-caps
+                icon="autorenew"
+                label="Обновить"
+                color="primary"
+                size="sm"
+                :loading="vpnAutoUpdating"
+                :disable="vpnAutoUpdating || vpnRestarting || vpnSettingPass"
+                @click="vpnDoAutoUpdate"
+              />
+            </div>
+
+            <!-- Перезапуск сервисов -->
+            <div class="row items-center justify-between q-mb-sm">
+              <div>
+                <div style="font-size: 13px; color: var(--fc-text)">
+                  Перезапустить сервисы
+                </div>
+                <div class="text-caption" style="color: var(--fc-text-light)">
+                  Без смены пароля
+                </div>
+              </div>
+              <q-btn
+                unelevated
+                no-caps
+                icon="restart_alt"
+                label="Перезапустить"
+                color="orange-7"
+                size="sm"
+                :loading="vpnRestarting"
+                :disable="vpnAutoUpdating || vpnRestarting || vpnSettingPass"
+                @click="vpnDoRestart"
+              />
+            </div>
+
+            <q-separator class="q-my-sm" />
+
+            <!-- Ручной ввод пароля -->
+            <div style="font-size: 13px; color: var(--fc-text); margin-bottom: 6px">
+              Установить пароль вручную
+            </div>
+            <div class="row items-center q-gutter-sm">
+              <q-input
+                v-model="vpnPasswordInput"
+                outlined
+                dense
+                placeholder="Пароль из Telegram-уведомления"
+                style="flex: 1; font-size: 13px"
+                :disable="vpnAutoUpdating || vpnRestarting || vpnSettingPass"
+                @keyup.enter="vpnDoSetPassword"
+              />
+              <q-btn
+                unelevated
+                no-caps
+                icon="vpn_key"
+                label="Установить"
+                color="teal-7"
+                size="sm"
+                :loading="vpnSettingPass"
+                :disable="!vpnPasswordInput.trim() || vpnAutoUpdating || vpnRestarting || vpnSettingPass"
+                @click="vpnDoSetPassword"
+              />
+            </div>
+          </q-card-section>
+        </q-card>
+      </q-tab-panel>
+
       <!-- Вкладка Шаблоны договоров -->
       <q-tab-panel name="doctemplates" class="q-pa-sm">
         <!-- Памятка по шаблонам -->
@@ -1969,7 +2116,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useQuasar } from 'quasar'
 import { api } from 'src/boot/axios'
 import { useReferencesStore } from 'src/stores/references'
-import { deletedContractsApi, messengerApi, adminApi, contractDocsApi, tzApi } from 'src/services/api'
+import { deletedContractsApi, messengerApi, adminApi, contractDocsApi, tzApi, vpnApi } from 'src/services/api'
 import TzTemplateEditor from 'src/components/survey/TzTemplateEditor.vue'
 
 const $q = useQuasar()
@@ -2753,6 +2900,14 @@ const backupsLoading = ref(false)
 
 let _backupPollTimer = null
 
+// ─── VPN ─────────────────────────────────────────────────────────────────────
+const vpnStatus = ref(null)
+const vpnLoading = ref(false)
+const vpnAutoUpdating = ref(false)
+const vpnRestarting = ref(false)
+const vpnSettingPass = ref(false)
+const vpnPasswordInput = ref('')
+
 async function startBackup() {
   try {
     await adminApi.triggerBackup()
@@ -2851,10 +3006,64 @@ function _pollRestoreStatus() {
   }, 3000)
 }
 
+async function loadVpnStatus() {
+  vpnLoading.value = true
+  try {
+    const { data } = await vpnApi.getStatus()
+    vpnStatus.value = data
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'VPN Control API недоступен' })
+  } finally {
+    vpnLoading.value = false
+  }
+}
+
+async function vpnDoAutoUpdate() {
+  vpnAutoUpdating.value = true
+  try {
+    const { data } = await vpnApi.autoUpdate()
+    $q.notify({ type: 'positive', message: data.message || 'Пароль обновлён, сервисы перезапущены' })
+    await loadVpnStatus()
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка авто-обновления' })
+  } finally {
+    vpnAutoUpdating.value = false
+  }
+}
+
+async function vpnDoRestart() {
+  vpnRestarting.value = true
+  try {
+    const { data } = await vpnApi.restart()
+    $q.notify({ type: 'positive', message: data.message || 'Сервисы перезапущены' })
+    await loadVpnStatus()
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка перезапуска' })
+  } finally {
+    vpnRestarting.value = false
+  }
+}
+
+async function vpnDoSetPassword() {
+  if (!vpnPasswordInput.value.trim()) return
+  vpnSettingPass.value = true
+  try {
+    const { data } = await vpnApi.setPassword(vpnPasswordInput.value.trim())
+    $q.notify({ type: 'positive', message: data.message || 'Пароль установлен, сервисы перезапущены' })
+    vpnPasswordInput.value = ''
+    await loadVpnStatus()
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка установки пароля' })
+  } finally {
+    vpnSettingPass.value = false
+  }
+}
+
 watch(tab, (val) => {
   if (val === 'trash') loadTrash()
   if (val === 'normdays') loadNormDays()
   if (val === 'telegram') loadMessengerSettings()
+  if (val === 'vpn') loadVpnStatus()
   if (val === 'backup') {
     loadBackupList()
     adminApi.getBackupStatus().then(r => {
