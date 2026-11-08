@@ -919,11 +919,9 @@ app.include_router(deleted_contracts_router, prefix="/api/v1/admin/deleted-contr
 
 from routers.admin_router import router as admin_router
 from routers.preview_router import router as preview_router
-from routers.vpn_router import router as vpn_router
 
 app.include_router(admin_router, prefix="/api/v1/admin")
 app.include_router(preview_router, prefix="/api/v1/preview")
-app.include_router(vpn_router, prefix="/api/v1/admin")
 
 from routers.contract_templates_router import router as contract_templates_router
 
