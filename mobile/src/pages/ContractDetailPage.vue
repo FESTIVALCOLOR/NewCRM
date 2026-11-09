@@ -2485,7 +2485,24 @@ async function generateDoc(docType) {
       const fRes = await filesApi.getContractFiles(contract.value.id)
       if (fRes.data) files.value = fRes.data
       // Открываем файл сразу если есть URL
-      if (data.public_url) window.open(data.public_url, '_blank')
+      if (data.public_url) {
+        if (docType === 'contract_print') {
+          // Открываем PDF в новом окне с автоматическим диалогом печати
+          const w = window.open('', '_blank')
+          if (w) {
+            w.document.write(`<!DOCTYPE html><html><head>
+              <title>Договор для печати</title>
+              <style>*{margin:0;padding:0}html,body{width:100%;height:100%;overflow:hidden}</style>
+            </head><body>
+              <iframe src="${data.public_url}" style="width:100%;height:100%;border:none"
+                onload="setTimeout(()=>window.print(),300)"></iframe>
+            </body></html>`)
+            w.document.close()
+          }
+        } else {
+          window.open(data.public_url, '_blank')
+        }
+      }
     } else {
       $q.notify({ type: 'negative', message: data.message || 'Ошибка генерации', timeout: 4000 })
     }
