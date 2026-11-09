@@ -828,8 +828,10 @@
                   outline
                   color="teal"
                   icon="print"
+                  size="xs"
                   dense
                   class="col-auto"
+                  style="padding: 2px 5px"
                   :loading="printingAct === 'act_pr'"
                   @click="printAct('act_pr')"
                 >
@@ -838,12 +840,16 @@
                 <q-btn
                   outline
                   color="grey-7"
-                  label="Загрузить"
+                  icon="upload"
+                  size="xs"
                   no-caps
                   class="col-auto"
                   dense
+                  style="padding: 2px 5px"
                   @click="uploadFor('act_pr')"
-                />
+                >
+                  <q-tooltip>Загрузить файл</q-tooltip>
+                </q-btn>
               </div>
               <!-- Акт КД (только Индивидуальный) -->
               <div v-if="contract.project_type === 'Индивидуальный'" class="row q-gutter-xs q-mb-xs">
@@ -862,8 +868,10 @@
                   outline
                   color="teal"
                   icon="print"
+                  size="xs"
                   dense
                   class="col-auto"
+                  style="padding: 2px 5px"
                   :loading="printingAct === 'act_kd'"
                   @click="printAct('act_kd')"
                 >
@@ -872,12 +880,16 @@
                 <q-btn
                   outline
                   color="grey-7"
-                  label="Загрузить"
+                  icon="upload"
+                  size="xs"
                   no-caps
                   class="col-auto"
                   dense
+                  style="padding: 2px 5px"
                   @click="uploadFor('act_kd')"
-                />
+                >
+                  <q-tooltip>Загрузить файл</q-tooltip>
+                </q-btn>
               </div>
               <!-- Инф. письмо (только Индивидуальный) -->
               <div v-if="contract.project_type === 'Индивидуальный'" class="row q-gutter-xs q-mb-xs">
@@ -896,8 +908,10 @@
                   outline
                   color="teal"
                   icon="print"
+                  size="xs"
                   dense
                   class="col-auto"
+                  style="padding: 2px 5px"
                   :loading="printingAct === 'act_info'"
                   @click="printAct('act_info')"
                 >
@@ -906,12 +920,16 @@
                 <q-btn
                   outline
                   color="grey-7"
-                  label="Загрузить"
+                  icon="upload"
+                  size="xs"
                   no-caps
                   class="col-auto"
                   dense
+                  style="padding: 2px 5px"
                   @click="uploadFor('act_info')"
-                />
+                >
+                  <q-tooltip>Загрузить файл</q-tooltip>
+                </q-btn>
               </div>
               <!-- Акт финальный -->
               <div class="row q-gutter-xs">
@@ -930,8 +948,10 @@
                   outline
                   color="teal"
                   icon="print"
+                  size="xs"
                   dense
                   class="col-auto"
+                  style="padding: 2px 5px"
                   :loading="printingAct === 'act_final'"
                   @click="printAct('act_final')"
                 >
@@ -940,12 +960,16 @@
                 <q-btn
                   outline
                   color="grey-7"
-                  label="Загрузить"
+                  icon="upload"
+                  size="xs"
                   no-caps
                   class="col-auto"
                   dense
+                  style="padding: 2px 5px"
                   @click="uploadFor('act_rch')"
-                />
+                >
+                  <q-tooltip>Загрузить файл</q-tooltip>
+                </q-btn>
               </div>
             </q-card-section>
           </q-card>
