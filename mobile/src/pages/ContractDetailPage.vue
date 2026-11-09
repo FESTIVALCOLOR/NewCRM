@@ -451,6 +451,18 @@
                         @click.stop="openFile(f)"
                       />
                       <q-btn
+                        v-if="f.stage === 'documents_print'"
+                        outline
+                        dense
+                        size="xs"
+                        icon="print"
+                        color="teal"
+                        style="font-size: 10px; padding: 2px 6px; border-radius: 4px"
+                        @click.stop="printDocument(f)"
+                      >
+                        <q-tooltip>Открыть для печати</q-tooltip>
+                      </q-btn>
+                      <q-btn
                         v-if="canDeleteFiles"
                         outline
                         dense
@@ -481,15 +493,15 @@
                   <q-btn
                     outline
                     color="teal"
-                    icon="print"
-                    label="Печать"
+                    icon="edit_off"
+                    label="Для печати"
                     no-caps
                     class="col"
                     dense
                     :loading="generating === 'contract_print'"
                     @click="generateDoc('contract_print')"
                   >
-                    <q-tooltip>Договор для ручной подписи (без факсимиле)</q-tooltip>
+                    <q-tooltip>Сформировать договор без факсимиле (для ручной подписи)</q-tooltip>
                   </q-btn>
                 </div>
                 <div class="row q-gutter-xs">
@@ -2485,24 +2497,7 @@ async function generateDoc(docType) {
       const fRes = await filesApi.getContractFiles(contract.value.id)
       if (fRes.data) files.value = fRes.data
       // Открываем файл сразу если есть URL
-      if (data.public_url) {
-        if (docType === 'contract_print') {
-          // Открываем PDF в новом окне с автоматическим диалогом печати
-          const w = window.open('', '_blank')
-          if (w) {
-            w.document.write(`<!DOCTYPE html><html><head>
-              <title>Договор для печати</title>
-              <style>*{margin:0;padding:0}html,body{width:100%;height:100%;overflow:hidden}</style>
-            </head><body>
-              <iframe src="${data.public_url}" style="width:100%;height:100%;border:none"
-                onload="setTimeout(()=>window.print(),300)"></iframe>
-            </body></html>`)
-            w.document.close()
-          }
-        } else {
-          window.open(data.public_url, '_blank')
-        }
-      }
+      if (data.public_url) window.open(data.public_url, '_blank')
     } else {
       $q.notify({ type: 'negative', message: data.message || 'Ошибка генерации', timeout: 4000 })
     }
@@ -2511,6 +2506,25 @@ async function generateDoc(docType) {
     $q.notify({ type: 'negative', message: msg, timeout: 4000 })
   } finally {
     generating.value = null
+  }
+}
+
+async function printDocument(f) {
+  if (!f.yandex_path) return
+  const token = authStore.accessToken
+  const streamUrl = `/api/v1/files/stream?yandex_path=${encodeURIComponent(f.yandex_path)}&token=${token}`
+  try {
+    const resp = await fetch(streamUrl)
+    if (!resp.ok) throw new Error('stream error')
+    const blob = await resp.blob()
+    const blobUrl = URL.createObjectURL(blob)
+    const w = window.open(blobUrl, '_blank')
+    if (w) {
+      w.addEventListener('load', () => { setTimeout(() => w.print(), 300) }, { once: true })
+    }
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 120000)
+  } catch (e) {
+    $q.notify({ type: 'negative', message: 'Не удалось открыть файл для печати', timeout: 3000 })
   }
 }
 
