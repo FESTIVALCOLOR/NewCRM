@@ -446,10 +446,14 @@
                         icon="open_in_new"
                         color="primary"
                         no-caps
-                        label="Открыть"
-                        style="font-size: 10px; padding: 2px 8px; border-radius: 4px"
+                        :label="f.stage === 'documents_print' ? undefined : 'Открыть'"
+                        style="font-size: 10px; padding: 2px 6px; border-radius: 4px"
                         @click.stop="openFile(f)"
-                      />
+                      >
+                        <q-tooltip v-if="f.stage === 'documents_print'">
+                          Открыть файл
+                        </q-tooltip>
+                      </q-btn>
                       <q-btn
                         v-if="f.stage === 'documents_print'"
                         outline
@@ -2511,20 +2515,27 @@ async function generateDoc(docType) {
 
 async function printDocument(f) {
   if (!f.yandex_path) return
+  // Открываем окно синхронно в обработчике клика — иначе браузер блокирует как popup
+  const w = window.open('', '_blank')
+  if (!w) {
+    $q.notify({ type: 'warning', message: 'Разрешите всплывающие окна для этого сайта', timeout: 4000 })
+    return
+  }
+  w.document.write('<html><body style="font-family:sans-serif;padding:40px;color:#555"><p>Загрузка PDF...</p></body></html>')
   const token = authStore.accessToken
   const streamUrl = `/api/v1/files/stream?yandex_path=${encodeURIComponent(f.yandex_path)}&token=${token}`
   try {
     const resp = await fetch(streamUrl)
-    if (!resp.ok) throw new Error('stream error')
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
     const blob = await resp.blob()
     const blobUrl = URL.createObjectURL(blob)
-    const w = window.open(blobUrl, '_blank')
-    if (w) {
-      w.addEventListener('load', () => { setTimeout(() => w.print(), 300) }, { once: true })
-    }
+    w.location.href = blobUrl
+    // Даём время PDF-вьюверу отрисоваться, затем открываем печать
+    setTimeout(() => { try { w.print() } catch (e) { /* игнорируем если окно закрыто */ } }, 2000)
     setTimeout(() => URL.revokeObjectURL(blobUrl), 120000)
   } catch (e) {
-    $q.notify({ type: 'negative', message: 'Не удалось открыть файл для печати', timeout: 3000 })
+    w.document.write(`<html><body style="font-family:sans-serif;padding:40px;color:#c00"><p>Ошибка загрузки: ${e.message}</p></body></html>`)
+    $q.notify({ type: 'negative', message: 'Не удалось загрузить файл для печати', timeout: 3000 })
   }
 }
 
