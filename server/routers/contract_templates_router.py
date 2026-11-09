@@ -18,6 +18,7 @@ Endpoints:
 """
 
 from datetime import datetime
+from urllib.parse import quote
 
 from auth import get_current_user as get_current_active_user
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -389,8 +390,10 @@ def generate_print(
         pdf_bytes, pdf_name = generate_document_for_print(db, request.contract_id, request.doc_type, yd_service)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    # RFC 5987 — имя файла может содержать кириллицу
+    encoded_name = quote(pdf_name, safe="")
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'inline; filename="{pdf_name}"'},
+        headers={"Content-Disposition": f"inline; filename*=UTF-8''{encoded_name}"},
     )
