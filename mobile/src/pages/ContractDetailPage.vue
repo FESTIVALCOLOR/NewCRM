@@ -445,7 +445,7 @@
                           outline
                           dense
                           size="xs"
-                          icon="open_in_new"
+                          :icon="f.stage === 'documents_print' ? 'open_in_new' : undefined"
                           color="primary"
                           no-caps
                           :label="f.stage === 'documents_print' ? undefined : 'Открыть'"
