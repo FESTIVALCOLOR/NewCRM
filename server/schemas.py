@@ -1681,6 +1681,18 @@ class ContractTemplateResponse(BaseModel):
         from_attributes = True
 
 
+class CompositionTemplateResponse(BaseModel):
+    id: int
+    project_type: str
+    project_subtype: str
+    client_type: str = "физ"
+    file_name: str
+    uploaded_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
 class GenerateContractRequest(BaseModel):
     contract_id: int
     doc_type: str  # contract | act_pr | act_kd | act_info | act_final

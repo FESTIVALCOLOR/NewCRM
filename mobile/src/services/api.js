@@ -689,6 +689,21 @@ export const contractDocsApi = {
     ),
   generate: (contractId, docType) =>
     api.post('/api/v1/contract-templates/generate', { contract_id: contractId, doc_type: docType }),
+
+  getCompositionTemplates: () => api.get('/api/v1/contract-templates/composition-templates'),
+  uploadCompositionTemplate: (projectType, projectSubtype, clientType, file) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    return api.post(
+      `/api/v1/contract-templates/composition-templates/${encodeURIComponent(projectType)}/${encodeURIComponent(projectSubtype)}/${encodeURIComponent(clientType)}`,
+      fd,
+      _multipartConfig,
+    )
+  },
+  deleteCompositionTemplate: (projectType, projectSubtype, clientType) =>
+    api.delete(
+      `/api/v1/contract-templates/composition-templates/${encodeURIComponent(projectType)}/${encodeURIComponent(projectSubtype)}/${encodeURIComponent(clientType)}`,
+    ),
 }
 
 // === Анкеты ТЗ ===

@@ -1403,6 +1403,23 @@ class ContractTemplate(Base):
     __table_args__ = (UniqueConstraint("project_type", "doc_type", "client_type", name="uq_contract_template_type_v2"),)
 
 
+class CompositionTemplate(Base):
+    """Шаблоны состава проекта (вставляются по тегу {{СОСТАВ_ПРОЕКТА}} в договор)"""
+
+    __tablename__ = "composition_templates"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_type = Column(String(100), nullable=False)  # Индивидуальный | Шаблонный
+    project_subtype = Column(String(200), nullable=False)  # Полный (с 3д визуализацией) и т.д.
+    client_type = Column(String(10), nullable=False, server_default="физ")  # физ | юр
+    file_name = Column(String(255), nullable=False)
+    file_path = Column(String(500), nullable=False)  # disk:/CRM/Системные/Составы/...
+    uploaded_at = Column(DateTime, default=datetime.utcnow)
+    uploaded_by = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+
+    __table_args__ = (UniqueConstraint("project_type", "project_subtype", "client_type", name="uq_composition_template"),)
+
+
 def _auto_migrate_columns():
     """Автоматически добавляет недостающие столбцы в существующие таблицы.
 

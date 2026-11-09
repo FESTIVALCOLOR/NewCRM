@@ -24,6 +24,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from permissions import check_permission
 from schemas import (
     CompanyRequisiteResponse,
+    CompositionTemplateResponse,
     ContractTemplateResponse,
     GenerateContractRequest,
     GenerateContractResponse,
@@ -32,7 +33,7 @@ from services.docx_generator import generate_document
 from sqlalchemy.orm import Session
 from yandex_disk_service import YandexDiskService
 
-from database import CompanyRequisite, ContractTemplate, Employee, get_db
+from database import CompanyRequisite, CompositionTemplate, ContractTemplate, Employee, get_db
 
 router = APIRouter(prefix="/api/v1/contract-templates", tags=["contract-templates"])
 
@@ -57,6 +58,7 @@ VALID_CLIENT_TYPES = {"физ", "юр"}
 # Папки на ЯД (без «disk:» префикса — YandexDiskService принимает без него)
 YD_REQUISITES_FOLDER = "/CRM/Системные/Реквизиты"
 YD_TEMPLATES_FOLDER = "/CRM/Системные/Шаблоны"
+YD_COMPOSITIONS_FOLDER = "/CRM/Системные/Составы"
 
 
 def _require_admin(current_user: Employee = Depends(get_current_active_user)):
@@ -238,6 +240,106 @@ def delete_template(
     )
     if not tmpl:
         raise HTTPException(status_code=404, detail="Шаблон не найден")
+    yd = YandexDiskService()
+    try:
+        yd.delete_file(tmpl.file_path)
+    except Exception:
+        pass
+    db.delete(tmpl)
+    db.commit()
+
+
+# ─── Составы проекта ──────────────────────────────────────────────────────────
+
+
+@router.get("/composition-templates", response_model=list[CompositionTemplateResponse])
+def get_composition_templates(db: Session = Depends(get_db), current_user: Employee = Depends(get_current_active_user)):
+    return db.query(CompositionTemplate).all()
+
+
+@router.post("/composition-templates/{project_type}/{project_subtype}/{client_type}", response_model=CompositionTemplateResponse)
+async def upload_composition_template(
+    project_type: str,
+    project_subtype: str,
+    client_type: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(_require_admin),
+):
+    if project_type not in VALID_PROJECT_TYPES:
+        raise HTTPException(status_code=400, detail=f"Неверный тип проекта: {project_type}")
+    if client_type not in VALID_CLIENT_TYPES:
+        raise HTTPException(status_code=400, detail=f"Неверный тип клиента: {client_type}")
+
+    import os
+
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in (".docx", ".dotx", ".doc"):
+        raise HTTPException(status_code=400, detail="Разрешены только DOCX/DOC/DOTX файлы")
+
+    safe_type = project_type.replace(" ", "_")
+    safe_sub = project_subtype.replace(" ", "_").replace("(", "").replace(")", "").replace("/", "_")
+    file_name = f"{safe_type}_{safe_sub}_{client_type}{ext}"
+    yd_path = f"{YD_COMPOSITIONS_FOLDER}/{file_name}"
+
+    content = await file.read()
+    yd = YandexDiskService()
+    try:
+        yd.upload_file_from_bytes(content, yd_path)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки на ЯД: {e}")
+
+    existing = (
+        db.query(CompositionTemplate)
+        .filter(
+            CompositionTemplate.project_type == project_type,
+            CompositionTemplate.project_subtype == project_subtype,
+            CompositionTemplate.client_type == client_type,
+        )
+        .first()
+    )
+    if existing:
+        existing.file_name = file.filename or file_name
+        existing.file_path = yd_path
+        existing.uploaded_at = datetime.utcnow()
+        existing.uploaded_by = current_user.id
+        db.commit()
+        db.refresh(existing)
+        return existing
+
+    tmpl = CompositionTemplate(
+        project_type=project_type,
+        project_subtype=project_subtype,
+        client_type=client_type,
+        file_name=file.filename or file_name,
+        file_path=yd_path,
+        uploaded_by=current_user.id,
+    )
+    db.add(tmpl)
+    db.commit()
+    db.refresh(tmpl)
+    return tmpl
+
+
+@router.delete("/composition-templates/{project_type}/{project_subtype}/{client_type}", status_code=204)
+def delete_composition_template(
+    project_type: str,
+    project_subtype: str,
+    client_type: str,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(_require_admin),
+):
+    tmpl = (
+        db.query(CompositionTemplate)
+        .filter(
+            CompositionTemplate.project_type == project_type,
+            CompositionTemplate.project_subtype == project_subtype,
+            CompositionTemplate.client_type == client_type,
+        )
+        .first()
+    )
+    if not tmpl:
+        raise HTTPException(status_code=404, detail="Шаблон состава не найден")
     yd = YandexDiskService()
     try:
         yd.delete_file(tmpl.file_path)

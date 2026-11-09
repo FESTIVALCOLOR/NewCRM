@@ -31,7 +31,7 @@ from num2words import num2words
 from sqlalchemy.orm import Session
 from yandex_disk_service import YandexDiskService
 
-from database import Client, CompanyRequisite, Contract, ContractTemplate, ProjectFile
+from database import Client, CompanyRequisite, CompositionTemplate, Contract, ContractTemplate, ProjectFile
 
 logger = logging.getLogger(__name__)
 
@@ -556,6 +556,54 @@ def _fill_docx(doc: Document, ctx: dict, db: Session, yd_service: YandexDiskServ
 
 _lo_lock = threading.Lock()
 
+_WNS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+
+
+def _insert_composition_block(doc: Document, comp_doc: Document) -> bool:
+    """Находит параграф с {{СОСТАВ_ПРОЕКТА}} и заменяет его блоками из comp_doc.
+
+    Возвращает True если placeholder найден и заменён, False — если не найден.
+    Плейсхолдер может быть разбит по нескольким runs — ищем по полному тексту параграфа.
+    """
+    body = doc.element.body
+    target_idx = None
+    target_elem = None
+
+    for i, child in enumerate(body):
+        if child.tag != f"{{{_WNS}}}p":
+            continue
+        # Собираем полный текст параграфа из всех runs
+        text = "".join(t.text or "" for t in child.iter(f"{{{_WNS}}}t"))
+        if "{{СОСТАВ_ПРОЕКТА}}" in text:
+            target_idx = i
+            target_elem = child
+            break
+
+    if target_elem is None:
+        logger.warning("Плейсхолдер {{СОСТАВ_ПРОЕКТА}} не найден в шаблоне договора")
+        return False
+
+    # Собираем элементы из тела comp_doc (всё кроме sectPr — настроек раздела)
+    comp_body = comp_doc.element.body
+    comp_elements = []
+    for child in comp_body:
+        if child.tag == f"{{{_WNS}}}sectPr":
+            continue
+        comp_elements.append(copy.deepcopy(child))
+
+    if not comp_elements:
+        logger.warning("Шаблон состава пуст — плейсхолдер удалён без замены")
+        body.remove(target_elem)
+        return True
+
+    # Удаляем параграф-плейсхолдер и вставляем на его место блоки состава
+    body.remove(target_elem)
+    for offset, elem in enumerate(comp_elements):
+        body.insert(target_idx + offset, elem)
+
+    logger.info(f"Состав проекта вставлен: {len(comp_elements)} элементов")
+    return True
+
 
 def _convert_to_pdf(docx_path: str) -> bytes:
     """Конвертирует DOCX в PDF через LibreOffice headless.
@@ -592,6 +640,101 @@ def _convert_to_pdf(docx_path: str) -> bytes:
         raise RuntimeError("LibreOffice не создал PDF файл")
     with open(pdf_path, "rb") as f:
         return f.read()
+
+
+def _apply_composition_block(
+    db: Session,
+    doc: Document,
+    contract,
+    client_type: str,
+    yd_service,
+) -> None:
+    comp_tmpl = (
+        db.query(CompositionTemplate)
+        .filter(
+            CompositionTemplate.project_type == contract.project_type,
+            CompositionTemplate.project_subtype == contract.project_subtype,
+            CompositionTemplate.client_type == client_type,
+        )
+        .first()
+    )
+    if not comp_tmpl and client_type == "юр":
+        comp_tmpl = (
+            db.query(CompositionTemplate)
+            .filter(
+                CompositionTemplate.project_type == contract.project_type,
+                CompositionTemplate.project_subtype == contract.project_subtype,
+                CompositionTemplate.client_type == "физ",
+            )
+            .first()
+        )
+    if comp_tmpl:
+        try:
+            comp_bytes = yd_service.download_file_to_bytes(comp_tmpl.file_path)
+            comp_doc = Document(io.BytesIO(comp_bytes))
+            _insert_composition_block(doc, comp_doc)
+        except Exception as e:
+            logger.warning(f"Не удалось вставить состав проекта ({comp_tmpl.file_path}): {e}")
+    else:
+        logger.info(f"Шаблон состава не найден для {contract.project_type} / {contract.project_subtype} — {{{{СОСТАВ_ПРОЕКТА}}}} останется как есть")
+
+
+def _render_to_pdf(doc: Document, tmpdir: str, meta: dict, contract, contract_id: int, client) -> tuple:
+    agent = _agent_short(contract.agent_type)
+    client_name = _client_short_name(client.full_name if client else None)
+    name_parts = [p for p in [meta["label"], agent, client_name] if p]
+    base_name = re.sub(r'[<>:"/\\|?*]', "", "-".join(name_parts))
+    if not base_name:
+        base_name = f"{meta['label']}_{contract_id}"
+    docx_path = os.path.join(tmpdir, base_name + ".docx")
+    doc.save(docx_path)
+    pdf_bytes = _convert_to_pdf(docx_path)
+    return pdf_bytes, base_name + ".pdf"
+
+
+def _upload_and_persist(
+    db: Session,
+    yd_service,
+    pdf_bytes: bytes,
+    pdf_name: str,
+    contract,
+    contract_id: int,
+    meta: dict,
+) -> tuple:
+    yd_project = (contract.yandex_folder_path or "").lstrip("disk:").rstrip("/")
+    if not yd_project:
+        yd_project = f"/CRM/Проекты/{contract.contract_number}"
+    yd_path = f"{yd_project}/{meta['yd_subfolder']}/{pdf_name}"
+    yd_service.upload_file_from_bytes(pdf_bytes, yd_path)
+    file_info = yd_service.get_file_info(yd_path)
+    public_url = file_info.get("public_url") or file_info.get("href") or ""
+    db_stage = meta["db_stage"]
+    existing = (
+        db.query(ProjectFile)
+        .filter(
+            ProjectFile.contract_id == contract_id,
+            ProjectFile.stage == db_stage,
+            ProjectFile.file_name == pdf_name,
+        )
+        .first()
+    )
+    if existing:
+        existing.public_link = public_url
+        existing.yandex_path = yd_path
+        existing.upload_date = datetime.utcnow()
+        db.flush()
+        return existing.id, public_url
+    pf = ProjectFile(
+        contract_id=contract_id,
+        stage=db_stage,
+        file_type="pdf",
+        public_link=public_url,
+        yandex_path=yd_path,
+        file_name=pdf_name,
+    )
+    db.add(pf)
+    db.flush()
+    return pf.id, public_url
 
 
 def generate_document(
@@ -659,6 +802,11 @@ def generate_document(
             return {"success": False, "message": f"Не удалось скачать шаблон с ЯД: {e}"}
 
         doc = Document(io.BytesIO(template_bytes))
+
+        # Вставка состава проекта (только для договора, если есть подтип и шаблон состава)
+        if doc_type == "contract" and contract.project_subtype:
+            _apply_composition_block(db, doc, contract, client_type, yd_service)
+
         ctx = _build_context(contract, client, doc_type)
         image_params = _get_image_params(doc_type)
         logo_req = _agent_logo_req_type(contract.agent_type)
@@ -683,64 +831,9 @@ def generate_document(
         _fill_docx(doc, ctx, db, yd_service, image_params)
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            # Имя файла: «Договор-Фестиваль-Иванов ИА.pdf»
-            agent = _agent_short(contract.agent_type)
-            client_name = _client_short_name(client.full_name if client else None)
-            name_parts = [p for p in [meta["label"], agent, client_name] if p]
-            # Убираем символы, запрещённые в именах файлов ЯД
-            base_name = re.sub(r'[<>:"/\\|?*]', "", "-".join(name_parts))
-            if not base_name:
-                base_name = f"{meta['label']}_{contract_id}"
-
-            docx_path = os.path.join(tmpdir, base_name + ".docx")
-            doc.save(docx_path)
-
-            pdf_bytes = _convert_to_pdf(docx_path)
-
-            pdf_name = base_name + ".pdf"
-
-            # Путь на ЯД: папка проекта / подпапка (Документы или Документы/Акты)
-            yd_project = (contract.yandex_folder_path or "").lstrip("disk:").rstrip("/")
-            if not yd_project:
-                yd_project = f"/CRM/Проекты/{contract.contract_number}"
-            yd_path = f"{yd_project}/{meta['yd_subfolder']}/{pdf_name}"
-
-            yd_service.upload_file_from_bytes(pdf_bytes, yd_path)
-
-            file_info = yd_service.get_file_info(yd_path)
-            public_url = file_info.get("public_url") or file_info.get("href") or ""
-
-            db_stage = meta["db_stage"]
-            existing = (
-                db.query(ProjectFile)
-                .filter(
-                    ProjectFile.contract_id == contract_id,
-                    ProjectFile.stage == db_stage,
-                    ProjectFile.file_name == pdf_name,
-                )
-                .first()
-            )
-            if existing:
-                existing.public_link = public_url
-                existing.yandex_path = yd_path
-                existing.upload_date = datetime.utcnow()
-                db.flush()
-                file_id = existing.id
-            else:
-                pf = ProjectFile(
-                    contract_id=contract_id,
-                    stage=db_stage,
-                    file_type="pdf",
-                    public_link=public_url,
-                    yandex_path=yd_path,
-                    file_name=pdf_name,
-                )
-                db.add(pf)
-                db.flush()
-                file_id = pf.id
-
+            pdf_bytes, pdf_name = _render_to_pdf(doc, tmpdir, meta, contract, contract_id, client)
+            file_id, public_url = _upload_and_persist(db, yd_service, pdf_bytes, pdf_name, contract, contract_id, meta)
             db.commit()
-
             return {
                 "success": True,
                 "file_id": file_id,

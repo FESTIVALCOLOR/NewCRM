@@ -1478,6 +1478,77 @@
             </div>
           </q-card>
         </div>
+
+        <!-- Шаблоны состава проекта -->
+        <div style="font-size: 14px; font-weight: 600; color: var(--fc-text); margin: 16px 0 8px">
+          Шаблоны состава проекта
+        </div>
+        <div class="q-mb-xs" style="font-size:12px; color:var(--fc-text-secondary)">
+          Вставьте тег
+          <code style="background:#e8f5e9;color:#2e7d32;padding:1px 4px;border-radius:3px">&#123;&#123;СОСТАВ_ПРОЕКТА&#125;&#125;</code>
+          в шаблон договора — на его место подставится состав по подтипу.
+        </div>
+        <div>
+          <q-tabs
+            v-model="activeCompositionClientType"
+            dense
+            align="left"
+            active-color="primary"
+            indicator-color="primary"
+            class="q-mb-md"
+            style="border-bottom: 1px solid var(--fc-border-light)"
+          >
+            <q-tab name="физ" label="Физ. лица" />
+            <q-tab name="юр" label="Юр. лица" />
+          </q-tabs>
+        </div>
+        <div v-for="pt in compositionSlots" :key="pt.type" class="q-mb-md">
+          <div style="font-size: 13px; font-weight: 600; color: var(--fc-text); margin-bottom: 6px">
+            {{ pt.label }}
+          </div>
+          <q-card flat bordered style="border-radius: 8px; overflow: hidden">
+            <div
+              v-for="(sub, idx) in pt.subtypes"
+              :key="sub"
+              class="tmpl-row"
+              :style="idx < pt.subtypes.length - 1 ? 'border-bottom: 1px solid var(--fc-border-light)' : ''"
+            >
+              <span class="tmpl-label">{{ sub }}</span>
+              <span class="tmpl-dots" />
+              <div class="tmpl-right">
+                <template v-if="getCompositionTemplate(pt.type, sub, activeCompositionClientType)">
+                  <q-icon name="check_circle" color="positive" size="16px" />
+                  <span class="tmpl-filename">{{ getCompositionTemplate(pt.type, sub, activeCompositionClientType).file_name }}</span>
+                  <q-btn
+                    flat
+                    round
+                    dense
+                    icon="delete"
+                    color="negative"
+                    size="xs"
+                    @click="deleteCompositionTemplate(pt.type, sub, activeCompositionClientType)"
+                  />
+                </template>
+                <span v-else class="tmpl-empty">Не загружено</span>
+                <q-btn
+                  outline
+                  size="sm"
+                  :label="getCompositionTemplate(pt.type, sub, activeCompositionClientType) ? 'Заменить' : 'Загрузить'"
+                  color="primary"
+                  class="tmpl-btn"
+                  @click="triggerCompositionUpload(pt.type, sub, activeCompositionClientType)"
+                />
+                <input
+                  :ref="el => setCompositionInput(pt.type, sub, activeCompositionClientType, el)"
+                  type="file"
+                  accept=".docx,.dotx,.doc"
+                  style="display:none"
+                  @change="e => onCompositionFileSelected(pt.type, sub, activeCompositionClientType, e)"
+                >
+              </div>
+            </div>
+          </q-card>
+        </div>
       </q-tab-panel>
 
       <!-- === Анкеты ТЗ === -->
@@ -3048,6 +3119,72 @@ async function deleteTemplate(projectType, docType, clientType) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+// === Шаблоны состава проекта ===
+
+const compositionSlots = [
+  {
+    type: 'Индивидуальный',
+    label: 'Индивидуальный проект',
+    subtypes: ['Полный (с 3д визуализацией)', 'Эскизный (с коллажами)', 'Планировочный'],
+  },
+  {
+    type: 'Шаблонный',
+    label: 'Шаблонный проект',
+    subtypes: ['Стандарт', 'Стандарт с визуализацией', 'Проект ванной комнаты', 'Проект ванной комнаты с визуализацией'],
+  },
+]
+
+const compositionTemplates = ref([])
+const compositionInputs = ref({})
+const activeCompositionClientType = ref('физ')
+
+function getCompositionTemplate(projectType, subtype, clientType = 'физ') {
+  return compositionTemplates.value.find(
+    t => t.project_type === projectType && t.project_subtype === subtype && (t.client_type || 'физ') === clientType,
+  ) || null
+}
+
+function setCompositionInput(projectType, subtype, clientType, el) {
+  compositionInputs.value[`${projectType}::${subtype}::${clientType}`] = el
+}
+
+function triggerCompositionUpload(projectType, subtype, clientType) {
+  compositionInputs.value[`${projectType}::${subtype}::${clientType}`]?.click()
+}
+
+async function loadCompositionTemplates() {
+  try {
+    const { data } = await contractDocsApi.getCompositionTemplates()
+    compositionTemplates.value = data
+  } catch {}
+}
+
+async function onCompositionFileSelected(projectType, subtype, clientType, e) {
+  const file = e.target.files?.[0]
+  if (!file) return
+  try {
+    await contractDocsApi.uploadCompositionTemplate(projectType, subtype, clientType, file)
+    await loadCompositionTemplates()
+    $q.notify({ type: 'positive', message: 'Шаблон состава загружен', timeout: 2000 })
+  } catch {
+    $q.notify({ type: 'negative', message: 'Ошибка загрузки', timeout: 2000 })
+  } finally {
+    e.target.value = ''
+  }
+}
+
+async function deleteCompositionTemplate(projectType, subtype, clientType) {
+  try {
+    await contractDocsApi.deleteCompositionTemplate(projectType, subtype, clientType)
+    await loadCompositionTemplates()
+    $q.notify({ type: 'info', message: 'Шаблон состава удалён', timeout: 2000 })
+  } catch {
+    $q.notify({ type: 'negative', message: 'Ошибка удаления', timeout: 2000 })
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 // === Шаблоны анкет ТЗ ===
 const tzSurveyProjectType = ref('Индивидуальный')
 const tzSurveyTemplate = ref(null)
@@ -3148,6 +3285,7 @@ onMounted(async () => {
   loadRates()
   loadCitiesFull()
   loadDocTemplates()
+  loadCompositionTemplates()
   try {
     const { data } = await api.get('/api/v1/employees')
     inviteEmployeeOpts.value = data.filter(e => e.status === 'активный').map(e => ({ label: `${e.full_name} (${e.email || 'нет email'})`, value: e.id }))

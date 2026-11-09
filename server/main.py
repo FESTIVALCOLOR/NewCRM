@@ -274,6 +274,35 @@ async def startup_event():
         elif "duplicate" not in _em and "already" not in _em:
             logger.debug(f"visits migration note: {e}")
 
+    # Миграция: таблица composition_templates
+    try:
+        from sqlalchemy import text as _text_comp
+
+        with engine.begin() as conn:
+            conn.execute(_text_comp(f"SET LOCAL lock_timeout = '{_LOCK_TIMEOUT_MS}'"))
+            conn.execute(
+                _text_comp("""
+                CREATE TABLE IF NOT EXISTS composition_templates (
+                    id SERIAL PRIMARY KEY,
+                    project_type VARCHAR(100) NOT NULL,
+                    project_subtype VARCHAR(200) NOT NULL,
+                    client_type VARCHAR(10) NOT NULL DEFAULT 'физ',
+                    file_name VARCHAR(255) NOT NULL,
+                    file_path VARCHAR(500) NOT NULL,
+                    uploaded_at TIMESTAMP DEFAULT NOW(),
+                    uploaded_by INTEGER REFERENCES employees(id) ON DELETE SET NULL,
+                    CONSTRAINT uq_composition_template UNIQUE (project_type, project_subtype, client_type)
+                )
+            """)
+            )
+            logger.info("Migrated: composition_templates table ensured")
+    except Exception as e:
+        _em = str(e).lower()
+        if "lock" in _em or "timeout" in _em:
+            logger.warning(f"composition_templates migration: lock timeout, will retry on next restart")
+        elif "duplicate" not in _em and "already" not in _em and "exist" not in _em:
+            logger.debug(f"composition_templates migration note: {e}")
+
     # Миграция: notification_enabled в supervision_visits
     try:
         from sqlalchemy import text as _text_visit_notif
