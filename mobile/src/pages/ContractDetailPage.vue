@@ -466,7 +466,7 @@
                 </q-item>
               </q-list>
               <q-card-section class="q-pt-xs">
-                <div class="row q-gutter-xs">
+                <div class="row q-gutter-xs q-mb-xs">
                   <q-btn
                     outline
                     color="primary"
@@ -478,6 +478,21 @@
                     :loading="generating === 'contract'"
                     @click="generateDoc('contract')"
                   />
+                  <q-btn
+                    outline
+                    color="teal"
+                    icon="print"
+                    label="Печать"
+                    no-caps
+                    class="col"
+                    dense
+                    :loading="generating === 'contract_print'"
+                    @click="generateDoc('contract_print')"
+                  >
+                    <q-tooltip>Договор для ручной подписи (без факсимиле)</q-tooltip>
+                  </q-btn>
+                </div>
+                <div class="row q-gutter-xs">
                   <q-btn
                     outline
                     color="grey-7"
@@ -1675,7 +1690,7 @@ const filesByGroup = computed(() => {
   const ACT_STAGES = ['act_pr', 'act_kd', 'act_info', 'act_rch', 'acts']
   const ACT_SIGNED_STAGES = ['act_pr_signed', 'act_kd_signed', 'act_rch_signed']
   for (const f of files.value) {
-    if (f.stage === 'documents') groups.documents.push(f)
+    if (f.stage === 'documents' || f.stage === 'documents_print') groups.documents.push(f)
     else if (f.stage === 'tech_task') groups.tech_task.push(f)
     else if (f.stage === 'supervision') groups.supervision.push(f)
     else if (ACT_SIGNED_STAGES.includes(f.stage)) groups.actsSigned.push(f)

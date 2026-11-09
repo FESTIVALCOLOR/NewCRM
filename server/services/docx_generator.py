@@ -44,6 +44,11 @@ DOC_TYPE_META = {
         "yd_subfolder": "Документы",
         "db_stage": "documents",
     },
+    "contract_print": {
+        "label": "Договор (для печати)",
+        "yd_subfolder": "Документы",
+        "db_stage": "documents_print",
+    },
     "act_pr": {
         "label": "Акт ПР",
         "yd_subfolder": "Документы/Акты",
@@ -357,18 +362,19 @@ def _split_run_with_images(r, db: Session, yd_service: YandexDiskService, ctx: d
         if part in IMAGE_PLACEHOLDERS:
             _iparams = image_params if image_params is not None else _IMAGE_FLOAT_PARAMS
             params = _iparams.get(part, _IMAGE_FLOAT_DEFAULT)
-            img_bytes = _get_image_bytes(db, part, yd_service, params.get("logo_req"))
-            if img_bytes:
-                insert_after.addnext(new_r_elem)
-                insert_after = new_r_elem
-                new_run = DocxRun(new_r_elem, r._parent)
-                try:
-                    new_run.add_picture(io.BytesIO(img_bytes), width=Inches(params["width"]))
-                    if not params.get("inline", False):
-                        _make_picture_floating(new_run, params["pos_h"], params["pos_v"])
-                    logger.info(f"Изображение {part} вставлено (split, {len(img_bytes)} байт)")
-                except Exception as exc:
-                    logger.error(f"Ошибка вставки {part} (split): {exc}")
+            if not params.get("skip"):
+                img_bytes = _get_image_bytes(db, part, yd_service, params.get("logo_req"))
+                if img_bytes:
+                    insert_after.addnext(new_r_elem)
+                    insert_after = new_r_elem
+                    new_run = DocxRun(new_r_elem, r._parent)
+                    try:
+                        new_run.add_picture(io.BytesIO(img_bytes), width=Inches(params["width"]))
+                        if not params.get("inline", False):
+                            _make_picture_floating(new_run, params["pos_h"], params["pos_v"])
+                        logger.info(f"Изображение {part} вставлено (split, {len(img_bytes)} байт)")
+                    except Exception as exc:
+                        logger.error(f"Ошибка вставки {part} (split): {exc}")
         else:
             # Заменяем текстовые плейсхолдеры прямо здесь
             for key, value in ctx.items():
@@ -418,18 +424,21 @@ def _replace_cross_run_images(runs, ctx: dict, db: Session, yd_service: YandexDi
         if r.text.strip() == placeholder:
             _iparams = image_params if image_params is not None else _IMAGE_FLOAT_PARAMS
             params = _iparams.get(placeholder, _IMAGE_FLOAT_DEFAULT)
-            img_bytes = _get_image_bytes(db, placeholder, yd_service, params.get("logo_req"))
             r.text = ""
-            if img_bytes:
-                try:
-                    r.add_picture(io.BytesIO(img_bytes), width=Inches(params["width"]))
-                    if not params.get("inline", False):
-                        _make_picture_floating(r, params["pos_h"], params["pos_v"])
-                    logger.info(f"Изображение {placeholder} вставлено (cross-run, {len(img_bytes)} байт)")
-                except Exception as e:
-                    logger.error(f"Ошибка вставки {placeholder} (cross-run): {e}")
+            if params.get("skip"):
+                pass  # режим печати без подписей
             else:
-                logger.warning(f"Изображение {placeholder} не найдено (cross-run)")
+                img_bytes = _get_image_bytes(db, placeholder, yd_service, params.get("logo_req"))
+                if img_bytes:
+                    try:
+                        r.add_picture(io.BytesIO(img_bytes), width=Inches(params["width"]))
+                        if not params.get("inline", False):
+                            _make_picture_floating(r, params["pos_h"], params["pos_v"])
+                        logger.info(f"Изображение {placeholder} вставлено (cross-run, {len(img_bytes)} байт)")
+                    except Exception as e:
+                        logger.error(f"Ошибка вставки {placeholder} (cross-run): {e}")
+                else:
+                    logger.warning(f"Изображение {placeholder} не найдено (cross-run)")
         elif any(ph in r.text for ph in IMAGE_PLACEHOLDERS):
             _split_run_with_images(r, db, yd_service, ctx, image_params)
 
@@ -454,18 +463,21 @@ def _replace_text_in_runs(runs, ctx: dict, db: Session, yd_service: YandexDiskSe
         if stripped in IMAGE_PLACEHOLDERS:
             # Весь run = один плейсхолдер картинки
             params = _iparams.get(stripped, _IMAGE_FLOAT_DEFAULT)
-            img_bytes = _get_image_bytes(db, stripped, yd_service, params.get("logo_req"))
             r.text = ""
-            if img_bytes:
-                try:
-                    r.add_picture(io.BytesIO(img_bytes), width=Inches(params["width"]))
-                    if not params.get("inline", False):
-                        _make_picture_floating(r, params["pos_h"], params["pos_v"])
-                    logger.info(f"Изображение {stripped} вставлено ({len(img_bytes)} байт)")
-                except Exception as e:
-                    logger.error(f"Ошибка вставки {stripped}: {e}")
+            if params.get("skip"):
+                pass  # режим печати без подписей
             else:
-                logger.warning(f"Изображение {stripped} не найдено — плейсхолдер очищен")
+                img_bytes = _get_image_bytes(db, stripped, yd_service, params.get("logo_req"))
+                if img_bytes:
+                    try:
+                        r.add_picture(io.BytesIO(img_bytes), width=Inches(params["width"]))
+                        if not params.get("inline", False):
+                            _make_picture_floating(r, params["pos_h"], params["pos_v"])
+                        logger.info(f"Изображение {stripped} вставлено ({len(img_bytes)} байт)")
+                    except Exception as e:
+                        logger.error(f"Ошибка вставки {stripped}: {e}")
+                else:
+                    logger.warning(f"Изображение {stripped} не найдено — плейсхолдер очищен")
         elif any(ph in r.text for ph in IMAGE_PLACEHOLDERS):
             # IMAGE_PLACEHOLDER смешан с текстом — разбиваем run
             _split_run_with_images(r, db, yd_service, ctx, image_params)
@@ -583,17 +595,18 @@ def _insert_composition_block(doc: Document, comp_doc: Document) -> bool:
         logger.warning("Плейсхолдер {{СОСТАВ_ПРОЕКТА}} не найден в шаблоне договора")
         return False
 
-    # Проверяем, есть ли разрыв страницы перед плейсхолдером
+    # Определяем, нужно ли добавить разрыв страницы перед составом.
+    # Не добавляем только если предыдущий параграф уже заканчивается явным w:br type=page.
     W = f"{{{_WNS}}}"
-    has_page_break = False
-    pPr = target_elem.find(f"{W}pPr")
-    if pPr is not None and pPr.find(f"{W}pageBreakBefore") is not None:
-        has_page_break = True
-    if not has_page_break:
-        for r in target_elem.findall(f"{W}r"):
-            for br in r.findall(f"{W}br"):
-                if br.get(f"{W}type") == "page":
-                    has_page_break = True
+    prev_has_page_break = False
+    if target_idx > 0:
+        prev_elem = body[target_idx - 1]
+        if prev_elem.tag == f"{W}p":
+            for r_el in prev_elem.findall(f"{W}r"):
+                for br in r_el.findall(f"{W}br"):
+                    if br.get(f"{W}type") == "page":
+                        prev_has_page_break = True
+    need_page_break = not prev_has_page_break
 
     # Собираем элементы из тела comp_doc (всё кроме sectPr — настроек раздела)
     comp_body = comp_doc.element.body
@@ -608,8 +621,9 @@ def _insert_composition_block(doc: Document, comp_doc: Document) -> bool:
         body.remove(target_elem)
         return True
 
-    # Если плейсхолдер был с новой страницы — добавляем явный разрыв перед составом
-    if has_page_break:
+    # Добавляем явный разрыв страницы перед составом,
+    # если предыдущий параграф уже не имеет page break
+    if need_page_break:
         from lxml import etree as _etree
 
         pb_para = _etree.Element(f"{W}p")
@@ -784,11 +798,14 @@ def generate_document(
     else:
         client_type = "физ"
 
+    # contract_print использует тот же DOCX-шаблон что и contract
+    tmpl_doc_type = "contract" if doc_type == "contract_print" else doc_type
+
     template = (
         db.query(ContractTemplate)
         .filter(
             ContractTemplate.project_type == contract.project_type,
-            ContractTemplate.doc_type == doc_type,
+            ContractTemplate.doc_type == tmpl_doc_type,
             ContractTemplate.client_type == client_type,
         )
         .first()
@@ -800,7 +817,7 @@ def generate_document(
                 db.query(ContractTemplate)
                 .filter(
                     ContractTemplate.project_type == contract.project_type,
-                    ContractTemplate.doc_type == doc_type,
+                    ContractTemplate.doc_type == tmpl_doc_type,
                     ContractTemplate.client_type == "физ",
                 )
                 .first()
@@ -825,12 +842,19 @@ def generate_document(
 
         doc = Document(io.BytesIO(template_bytes))
 
-        # Вставка состава проекта (только для договора, если есть подтип и шаблон состава)
-        if doc_type == "contract" and contract.project_subtype:
+        # Вставка состава проекта (для договора и его print-версии)
+        if doc_type in ("contract", "contract_print") and contract.project_subtype:
             _apply_composition_block(db, doc, contract, client_type, yd_service)
 
         ctx = _build_context(contract, client, doc_type)
-        image_params = _get_image_params(doc_type)
+        # contract_print использует те же параметры вёрстки что и contract
+        base_doc_type = "contract" if doc_type == "contract_print" else doc_type
+        image_params = _get_image_params(base_doc_type)
+        # Для печатной версии — убираем подписи и печать
+        if doc_type == "contract_print":
+            _PRINT_SKIP = {"{{ПОДПИСЬ}}", "{{ПЕЧАТЬ}}", "{{ПОДПИСЬ_РАСШ}}"}
+            for _ph in _PRINT_SKIP:
+                image_params[_ph] = {**image_params.get(_ph, _IMAGE_FLOAT_DEFAULT), "skip": True}
         logo_req = _agent_logo_req_type(contract.agent_type)
         if logo_req:
             # Ширина лого = вся текстовая область (page_width - margins), в дюймах
@@ -840,7 +864,7 @@ def generate_document(
             )
             # Индивидуальный (все типы) и Шаблонный договор — уменьшить в 2 раза
             # Шаблонный акты — полный 0.75
-            if contract.project_type == "Шаблонный" and doc_type != "contract":
+            if contract.project_type == "Шаблонный" and base_doc_type != "contract":
                 logo_scale = 0.75
             else:
                 logo_scale = 0.1875

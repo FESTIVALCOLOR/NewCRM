@@ -52,7 +52,7 @@ def _is_valid_requisite_type(req_type: str) -> bool:
 
 
 VALID_PROJECT_TYPES = {"Индивидуальный", "Шаблонный", "Авторский надзор"}
-VALID_DOC_TYPES = {"contract", "act_pr", "act_kd", "act_info", "act_final"}
+VALID_DOC_TYPES = {"contract", "contract_print", "act_pr", "act_kd", "act_info", "act_final"}
 VALID_CLIENT_TYPES = {"физ", "юр"}
 
 # Папки на ЯД (без «disk:» префикса — YandexDiskService принимает без него)
@@ -360,8 +360,8 @@ def generate(
 ):
     if request.doc_type not in VALID_DOC_TYPES:
         raise HTTPException(status_code=400, detail=f"Неверный тип документа: {request.doc_type}")
-    # Проверка прав: договор vs акты
-    if request.doc_type == "contract":
+    # Проверка прав: договор/печать vs акты
+    if request.doc_type in ("contract", "contract_print"):
         required_perm = "contracts.generate_contract"
     else:
         required_perm = "contracts.generate_acts"
