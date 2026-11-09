@@ -491,6 +491,37 @@ async def check_supervision_visit_reminders():
             db.rollback()
 
 
+def _next_daily_run_utc(now: datetime) -> datetime:
+    """Вернуть UTC-время следующего ежедневного запуска (10:00 МСК = 07:00 UTC), включая выходные."""
+    candidate = now.replace(hour=7, minute=0, second=0, microsecond=0)
+    if now >= candidate:
+        candidate += timedelta(days=1)
+    return candidate
+
+
+async def daily_notif_checker_loop():
+    """Ежедневный цикл (включая выходные) для платёжных уведомлений и уведомлений о выездах.
+
+    Запускается каждый день в 10:00 МСК независимо от рабочего дня/праздника.
+    Это важно: payment reminder должен прийти точно в указанный день месяца,
+    а не только по рабочим дням.
+    """
+    logger.info("Daily notif checker запущен (10:00 МСК каждый день)")
+    while True:
+        try:
+            now = datetime.utcnow()
+            next_run = _next_daily_run_utc(now)
+            sleep_secs = (next_run - now).total_seconds()
+            logger.info(f"Daily notif checker: следующий запуск {next_run.strftime('%Y-%m-%d')} в 10:00 МСК (через {sleep_secs / 3600:.1f}ч)")
+            await asyncio.sleep(sleep_secs)
+
+            await check_supervision_client_payment_reminders()
+            await check_supervision_visit_reminders()
+        except Exception as e:
+            logger.error(f"daily_notif_checker_loop: {e}")
+            await asyncio.sleep(3600)
+
+
 def _next_workday_run_utc(now: datetime) -> datetime:
     """Вернуть UTC-время следующего запуска (10:00 МСК = 07:00 UTC) в ближайший рабочий день."""
     # Ближайший 07:00 UTC сегодня или завтра
@@ -618,8 +649,6 @@ async def deadline_checker_loop():
 
             try:
                 await check_deadlines_once()
-                await check_supervision_client_payment_reminders()
-                await check_supervision_visit_reminders()
             finally:
                 fcntl.flock(lock_fd, fcntl.LOCK_UN)
                 lock_fd.close()

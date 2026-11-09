@@ -476,7 +476,7 @@ async def startup_event():
     finally:
         db.close()
 
-    # N3: Запуск фонового планировщика дедлайнов
+    # N3: Запуск фонового планировщика дедлайнов (только рабочие дни)
     try:
         from services.deadline_checker import deadline_checker_loop
 
@@ -484,6 +484,15 @@ async def startup_event():
         logger.info("Deadline checker: задача запущена")
     except Exception as e:
         logger.warning(f"Deadline checker: {e}")
+
+    # N3b: Ежедневные уведомления о платежах/выездах (включая выходные)
+    try:
+        from services.deadline_checker import daily_notif_checker_loop
+
+        asyncio.create_task(daily_notif_checker_loop())
+        logger.info("Daily notif checker: задача запущена")
+    except Exception as e:
+        logger.warning(f"Daily notif checker: {e}")
 
     # N4: Запуск фонового расчёта KPI (ежедневные снимки)
     try:
