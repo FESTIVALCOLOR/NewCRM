@@ -274,6 +274,21 @@ async def startup_event():
         elif "duplicate" not in _em and "already" not in _em:
             logger.debug(f"visits migration note: {e}")
 
+    # Миграция: notification_enabled в supervision_visits
+    try:
+        from sqlalchemy import text as _text_visit_notif
+
+        with engine.begin() as conn:
+            conn.execute(_text_visit_notif(f"SET LOCAL lock_timeout = '{_LOCK_TIMEOUT_MS}'"))
+            conn.execute(_text_visit_notif("ALTER TABLE supervision_visits ADD COLUMN IF NOT EXISTS notification_enabled BOOLEAN DEFAULT TRUE"))
+            logger.info("Migrated supervision_visits: added notification_enabled column")
+    except Exception as e:
+        _em = str(e).lower()
+        if "lock" in _em or "timeout" in _em:
+            logger.warning(f"supervision_visits notification_enabled migration: lock timeout, will retry on next restart")
+        elif "duplicate" not in _em and "already" not in _em:
+            logger.debug(f"supervision_visits notification_enabled migration note: {e}")
+
     # Миграция: tag_color в crm_cards
     try:
         from sqlalchemy import text as _text_tag_color

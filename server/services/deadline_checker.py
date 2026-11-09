@@ -419,6 +419,76 @@ async def create_monthly_supervision_payments(db_session_factory):
             db.rollback()
 
 
+async def check_supervision_visit_reminders():
+    """Отправляет напоминания по запланированным датам выездов/закупок надзора.
+
+    Каждый день: находим выезды с visit_date == сегодня и notification_enabled == True,
+    уведомляем ДАНа и Старшего менеджера карточки.
+    """
+    from services.notification_dispatcher import dispatch_notification
+    from sqlalchemy import text
+
+    from database import Employee, SessionLocal, SupervisionCard, SupervisionVisit
+
+    with SessionLocal() as db:
+        try:
+            LOCK_ID = 7419825
+            acquired = db.execute(text("SELECT pg_try_advisory_lock(:lid)"), {"lid": LOCK_ID}).scalar()
+            if not acquired:
+                logger.info("Visit reminders: блокировка занята другим воркером, пропускаем")
+                return
+
+            try:
+                today = date.today()
+                today_str = today.strftime("%Y-%m-%d")
+
+                visits = (
+                    db.query(SupervisionVisit)
+                    .filter(
+                        SupervisionVisit.visit_date == today_str,
+                        SupervisionVisit.notification_enabled == True,
+                        SupervisionVisit.actual_date.is_(None),  # выезд ещё не состоялся
+                    )
+                    .all()
+                )
+
+                sent = 0
+                for visit in visits:
+                    card = db.query(SupervisionCard).filter(SupervisionCard.id == visit.supervision_card_id).first()
+                    if not card or card.column_name == "Выполненный проект":
+                        continue
+
+                    visit_kind = "закупки" if visit.visit_type == "К поставщику" else "выезда на объект"
+                    stage_label = visit.stage_name or visit.visit_type or "Выезд"
+                    address = card.address or f"Надзор #{card.id}"
+                    title = f"Запланированный {visit_kind}: {address}"
+                    message = f"Сегодня запланирован {visit_kind} по объекту «{address}» — {stage_label}."
+
+                    recipient_ids = [r for r in [card.dan_id, card.senior_manager_id] if r]
+                    for emp_id in recipient_ids:
+                        msg_key = f"visit_reminder_{visit.id}"
+                        if _already_sent_today(db, emp_id, card.id, msg_key):
+                            continue
+                        await dispatch_notification(
+                            db=db,
+                            employee_id=emp_id,
+                            event_type="visit_reminder",
+                            title=title,
+                            message=message,
+                            related_entity_type="supervision_card",
+                            related_entity_id=card.id,
+                        )
+                        sent += 1
+
+                logger.info(f"Visit reminders: отправлено {sent} уведомлений за {today_str}")
+            finally:
+                db.execute(text("SELECT pg_advisory_unlock(:lid)"), {"lid": LOCK_ID})
+                db.commit()
+        except Exception as e:
+            logger.exception(f"Ошибка при проверке напоминаний о выездах надзора: {e}")
+            db.rollback()
+
+
 def _next_workday_run_utc(now: datetime) -> datetime:
     """Вернуть UTC-время следующего запуска (10:00 МСК = 07:00 UTC) в ближайший рабочий день."""
     # Ближайший 07:00 UTC сегодня или завтра
@@ -547,6 +617,7 @@ async def deadline_checker_loop():
             try:
                 await check_deadlines_once()
                 await check_supervision_client_payment_reminders()
+                await check_supervision_visit_reminders()
             finally:
                 fcntl.flock(lock_fd, fcntl.LOCK_UN)
                 lock_fd.close()

@@ -775,6 +775,7 @@ class SupervisionVisit(Base):
     executor_role = Column(String(100), nullable=True)  # Роль исполнителя: 'ДАН' / 'Старший менеджер проектов'
     sort_order = Column(Integer, default=0)
     visit_yandex_folder = Column(String(500), nullable=True)  # Путь к папке выезда на ЯД
+    notification_enabled = Column(Boolean, default=True)  # Уведомление по дате выезда
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

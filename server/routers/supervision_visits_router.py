@@ -616,6 +616,24 @@ async def patch_visit(
     return visit
 
 
+@router.patch("/{visit_id}/toggle-notification")
+async def toggle_visit_notification(
+    visit_id: int,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Включить/выключить уведомление по дате выезда"""
+    visit = db.query(SupervisionVisit).filter(SupervisionVisit.id == visit_id).first()
+    if not visit:
+        raise HTTPException(status_code=404, detail="Выезд не найден")
+
+    visit.notification_enabled = not visit.notification_enabled
+    visit.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(visit)
+    return {"notification_enabled": visit.notification_enabled}
+
+
 @router.post("/upload-file")
 async def upload_visit_file(
     visit_id: int = Form(...),

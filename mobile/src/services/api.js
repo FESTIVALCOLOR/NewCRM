@@ -458,6 +458,12 @@ export const supervisionApi = {
 
   getPayments: (cardId) =>
     api.get(`/api/v1/payments/by-supervision-card/${cardId}`),
+
+  updateVisit: (visitId, data) =>
+    api.patch(`/api/v1/supervision-visits/${visitId}`, data),
+
+  toggleVisitNotif: (visitId) =>
+    api.patch(`/api/v1/supervision-visits/${visitId}/toggle-notification`),
 }
 
 // === Ежемесячные платежи клиента по надзору ===

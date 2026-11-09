@@ -1089,7 +1089,7 @@
                     />
                   </div>
 
-                  <!-- Строка 2: Отчёт + Фото (растягиваются) + edit + delete в одну строку -->
+                  <!-- Строка 2: Отчёт + Фото (растягиваются) + bell + edit + delete в одну строку -->
                   <div v-if="!isArchived" class="row q-gutter-xs q-mt-xs items-center">
                     <q-btn
                       outline
@@ -1114,6 +1114,17 @@
                       class="col"
                       style="font-size: 10px; padding: 2px 4px; border-radius: 4px"
                       @click="uploadVisitPhoto(visit)"
+                    />
+                    <q-btn
+                      outline
+                      dense
+                      size="xs"
+                      :icon="visit.notification_enabled !== false ? 'notifications' : 'notifications_off'"
+                      no-caps
+                      :color="visit.notification_enabled !== false ? 'teal' : 'grey-5'"
+                      style="font-size: 10px; padding: 2px 6px; border-radius: 4px; flex-shrink: 0"
+                      :title="visit.notification_enabled !== false ? 'Уведомление включено' : 'Уведомление выключено'"
+                      @click.stop="toggleVisitNotification(visit)"
                     />
                     <q-btn
                       outline
@@ -4269,6 +4280,14 @@ async function toggleClientPaymentNotif() {
     clientPaymentSettings.value = data
     $q.notify({ type: 'info', message: newVal ? 'Уведомления включены' : 'Уведомления отключены' })
   } catch { $q.notify({ type: 'negative', message: 'Ошибка' }) }
+}
+
+async function toggleVisitNotification(visit) {
+  try {
+    const { data } = await supervisionApi.toggleVisitNotif(visit.id)
+    visit.notification_enabled = data.notification_enabled
+    $q.notify({ type: 'info', message: data.notification_enabled ? 'Уведомление о выезде включено' : 'Уведомление о выезде отключено' })
+  } catch { $q.notify({ type: 'negative', message: 'Ошибка при изменении уведомления' }) }
 }
 
 function triggerClientPayReceiptUpload(paymentId) {

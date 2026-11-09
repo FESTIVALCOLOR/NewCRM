@@ -1310,6 +1310,7 @@ class SupervisionVisitResponse(BaseModel):
     executor_role: Optional[str] = None
     sort_order: int = 0
     visit_yandex_folder: Optional[str] = None
+    notification_enabled: bool = True
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
