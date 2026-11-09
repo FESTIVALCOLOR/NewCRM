@@ -447,7 +447,9 @@
                         color="primary"
                         no-caps
                         :label="f.stage === 'documents_print' ? undefined : 'Открыть'"
-                        style="font-size: 10px; padding: 2px 6px; border-radius: 4px"
+                        :style="f.stage === 'documents_print'
+                          ? 'font-size:10px;padding:2px 6px;border-radius:4px;min-width:62px'
+                          : 'font-size:10px;padding:2px 8px;border-radius:4px'"
                         @click.stop="openFile(f)"
                       >
                         <q-tooltip v-if="f.stage === 'documents_print'">
@@ -2515,26 +2517,34 @@ async function generateDoc(docType) {
 
 async function printDocument(f) {
   if (!f.yandex_path) return
-  // Открываем окно синхронно в обработчике клика — иначе браузер блокирует как popup
+  // Открываем окно синхронно — иначе браузер блокирует как popup
   const w = window.open('', '_blank')
   if (!w) {
     $q.notify({ type: 'warning', message: 'Разрешите всплывающие окна для этого сайта', timeout: 4000 })
     return
   }
-  w.document.write('<html><body style="font-family:sans-serif;padding:40px;color:#555"><p>Загрузка PDF...</p></body></html>')
+  w.document.write('<!DOCTYPE html><html><head><title>Загрузка...</title><style>body{font-family:sans-serif;padding:40px;color:#555}</style></head><body><p>Загрузка PDF...</p></body></html>')
   const token = authStore.accessToken
   const streamUrl = `/api/v1/files/stream?yandex_path=${encodeURIComponent(f.yandex_path)}&token=${token}`
   try {
     const resp = await fetch(streamUrl)
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
-    const blob = await resp.blob()
+    const arrayBuffer = await resp.arrayBuffer()
+    // stream endpoint возвращает application/octet-stream для PDF — принудительно исправляем
+    const blob = new Blob([arrayBuffer], { type: 'application/pdf' })
     const blobUrl = URL.createObjectURL(blob)
-    w.location.href = blobUrl
-    // Даём время PDF-вьюверу отрисоваться, затем открываем печать
-    setTimeout(() => { try { w.print() } catch (e) { /* игнорируем если окно закрыто */ } }, 2000)
+    // Пишем HTML со встроенным PDF — не навигируем (навигация вызвала бы скачивание)
+    w.document.open()
+    w.document.write(`<!DOCTYPE html><html><head><title>Договор для печати</title>
+<style>*{margin:0;padding:0}html,body{width:100%;height:100%}</style></head>
+<body><embed src="${blobUrl}" type="application/pdf" width="100%" height="100%"></body></html>`)
+    w.document.close()
+    setTimeout(() => { try { w.print() } catch (_e) {} }, 2500)
     setTimeout(() => URL.revokeObjectURL(blobUrl), 120000)
   } catch (e) {
-    w.document.write(`<html><body style="font-family:sans-serif;padding:40px;color:#c00"><p>Ошибка загрузки: ${e.message}</p></body></html>`)
+    w.document.open()
+    w.document.write(`<html><body style="font-family:sans-serif;padding:40px;color:#c00"><p>Ошибка: ${e.message}</p></body></html>`)
+    w.document.close()
     $q.notify({ type: 'negative', message: 'Не удалось загрузить файл для печати', timeout: 3000 })
   }
 }
