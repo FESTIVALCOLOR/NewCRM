@@ -458,11 +458,13 @@ async def check_supervision_visit_reminders():
                     if not card or card.column_name == "Выполненный проект":
                         continue
 
-                    visit_kind = "закупки" if visit.visit_type == "К поставщику" else "выезда на объект"
+                    is_supplier = visit.visit_type == "К поставщику"
+                    title_kind = "Закупка у поставщика" if is_supplier else "Выезд на объект"
+                    msg_kind = "закупка у поставщика" if is_supplier else "выезд на объект"
                     stage_label = visit.stage_name or visit.visit_type or "Выезд"
                     address = card.address or f"Надзор #{card.id}"
-                    title = f"Запланированный {visit_kind}: {address}"
-                    message = f"Сегодня запланирован {visit_kind} по объекту «{address}» — {stage_label}."
+                    title = f"{title_kind}: {address}"
+                    message = f"Сегодня запланирована {msg_kind} по объекту «{address}» — {stage_label}."
 
                     recipient_ids = [r for r in [card.dan_id, card.senior_manager_id] if r]
                     for emp_id in recipient_ids:
