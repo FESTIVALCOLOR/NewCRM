@@ -826,6 +826,17 @@
                 />
                 <q-btn
                   outline
+                  color="teal"
+                  icon="print"
+                  dense
+                  class="col-auto"
+                  :loading="printingAct === 'act_pr'"
+                  @click="printAct('act_pr')"
+                >
+                  <q-tooltip>Для печати (без подписей)</q-tooltip>
+                </q-btn>
+                <q-btn
+                  outline
                   color="grey-7"
                   label="Загрузить"
                   no-caps
@@ -847,6 +858,17 @@
                   :loading="generating === 'act_kd'"
                   @click="generateDoc('act_kd')"
                 />
+                <q-btn
+                  outline
+                  color="teal"
+                  icon="print"
+                  dense
+                  class="col-auto"
+                  :loading="printingAct === 'act_kd'"
+                  @click="printAct('act_kd')"
+                >
+                  <q-tooltip>Для печати (без подписей)</q-tooltip>
+                </q-btn>
                 <q-btn
                   outline
                   color="grey-7"
@@ -872,6 +894,17 @@
                 />
                 <q-btn
                   outline
+                  color="teal"
+                  icon="print"
+                  dense
+                  class="col-auto"
+                  :loading="printingAct === 'act_info'"
+                  @click="printAct('act_info')"
+                >
+                  <q-tooltip>Для печати (без подписей)</q-tooltip>
+                </q-btn>
+                <q-btn
+                  outline
                   color="grey-7"
                   label="Загрузить"
                   no-caps
@@ -893,6 +926,17 @@
                   :loading="generating === 'act_final'"
                   @click="generateDoc('act_final')"
                 />
+                <q-btn
+                  outline
+                  color="teal"
+                  icon="print"
+                  dense
+                  class="col-auto"
+                  :loading="printingAct === 'act_final'"
+                  @click="printAct('act_final')"
+                >
+                  <q-tooltip>Для печати (без подписей)</q-tooltip>
+                </q-btn>
                 <q-btn
                   outline
                   color="grey-7"
@@ -2547,6 +2591,42 @@ async function printDocument(f) {
     w.document.write(`<html><body style="font-family:sans-serif;padding:40px;color:#c00"><p>Ошибка: ${e.message}</p></body></html>`)
     w.document.close()
     $q.notify({ type: 'negative', message: 'Не удалось загрузить файл для печати', timeout: 3000 })
+  }
+}
+
+const printingAct = ref(null)  // 'act_pr' | 'act_kd' | 'act_info' | 'act_final' | null
+
+async function printAct(docType) {
+  if (!contract.value?.id) return
+  // Открываем окно синхронно — иначе браузер блокирует как popup
+  const w = window.open('', '_blank')
+  if (!w) {
+    $q.notify({ type: 'warning', message: 'Разрешите всплывающие окна для этого сайта', timeout: 4000 })
+    return
+  }
+  w.document.write('<!DOCTYPE html><html><head><title>Загрузка...</title><style>body{font-family:sans-serif;padding:40px;color:#555}</style></head><body><p>Формирование PDF...</p></body></html>')
+  printingAct.value = docType
+  try {
+    const resp = await contractDocsApi.generatePrint(contract.value.id, docType)
+    const blob = new Blob([resp.data], { type: 'application/pdf' })
+    const blobUrl = URL.createObjectURL(blob)
+    w.document.open()
+    w.document.write(`<!DOCTYPE html><html><head><title>Акт для печати</title>
+<style>*{margin:0;padding:0}html,body{width:100%;height:100%}</style></head>
+<body><embed src="${blobUrl}" type="application/pdf" width="100%" height="100%"></body></html>`)
+    w.document.close()
+    setTimeout(() => { try { w.print() } catch (_e2) {} }, 2500)
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 120000)
+  } catch (e2) {
+    const msg = e2.response?.data ? new TextDecoder().decode(e2.response.data) : e2.message
+    let detail = msg
+    try { detail = JSON.parse(msg)?.detail || msg } catch (_e3) {}
+    w.document.open()
+    w.document.write(`<html><body style="font-family:sans-serif;padding:40px;color:#c00"><p>Ошибка: ${detail}</p></body></html>`)
+    w.document.close()
+    $q.notify({ type: 'negative', message: `Ошибка: ${detail}`, timeout: 4000 })
+  } finally {
+    printingAct.value = null
   }
 }
 

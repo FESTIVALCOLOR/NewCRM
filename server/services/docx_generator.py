@@ -892,3 +892,71 @@ def generate_document(
         db.rollback()
         logger.exception(f"Ошибка генерации документа contract={contract_id} doc_type={doc_type}: {e}")
         return {"success": False, "message": f"Ошибка генерации: {e}"}
+
+
+def generate_document_for_print(
+    db: Session,
+    contract_id: int,
+    doc_type: str,
+    yd_service: YandexDiskService,
+) -> tuple[bytes, str]:
+    """Генерирует PDF без подписей/печати без сохранения на ЯД. Возвращает (pdf_bytes, filename)."""
+    _ACTS = {"act_pr", "act_kd", "act_info", "act_final"}
+    if doc_type not in _ACTS:
+        raise ValueError(f"generate_document_for_print поддерживает только акты, получен: {doc_type}")
+
+    contract = db.query(Contract).filter(Contract.id == contract_id).first()
+    if not contract:
+        raise ValueError("Договор не найден")
+
+    client = db.query(Client).filter(Client.id == contract.client_id).first()
+    explicit = getattr(contract, "client_type", None) or "физ"
+    if explicit == "юр" or (client and getattr(client, "organization_type", None)):
+        client_type = "юр"
+    else:
+        client_type = "физ"
+
+    template = (
+        db.query(ContractTemplate)
+        .filter(
+            ContractTemplate.project_type == contract.project_type,
+            ContractTemplate.doc_type == doc_type,
+            ContractTemplate.client_type == client_type,
+        )
+        .first()
+    )
+    if not template:
+        raise ValueError(f"Шаблон не найден: {doc_type}/{client_type}")
+
+    try:
+        template_bytes = yd_service.download_file(template.file_path)
+    except Exception as e:
+        raise ValueError(f"Не удалось скачать шаблон: {e}")
+
+    doc = Document(io.BytesIO(template_bytes))
+    meta = DOC_TYPE_META[doc_type]
+    ctx = _build_context(contract, client, doc_type)
+    image_params = _get_image_params(doc_type)
+
+    # Убираем все подписи/печати
+    _SKIP_PH = {"{{ПОДПИСЬ}}", "{{ПЕЧАТЬ}}", "{{ПОДПИСЬ_РАСШ}}"}
+    for _ph in _SKIP_PH:
+        image_params[_ph] = {**image_params.get(_ph, _IMAGE_FLOAT_DEFAULT), "skip": True}
+
+    logo_req = _agent_logo_req_type(contract.agent_type)
+    if logo_req:
+        sec = doc.sections[0] if doc.sections else None
+        text_area_w = (sec.page_width - sec.left_margin - sec.right_margin) / 914400 if sec and sec.page_width else 6.3
+        logo_scale = 0.75 if contract.project_type == "Шаблонный" else 0.1875
+        image_params["{{ЛОГО_АГЕНТА}}"] = {
+            **image_params["{{ЛОГО_АГЕНТА}}"],
+            "logo_req": logo_req,
+            "width": text_area_w * logo_scale,
+        }
+
+    _fill_docx(doc, ctx, db, yd_service, image_params)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        pdf_bytes, pdf_name = _render_to_pdf(doc, tmpdir, meta, contract, contract_id, client)
+
+    return pdf_bytes, pdf_name

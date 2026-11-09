@@ -21,6 +21,7 @@ from datetime import datetime
 
 from auth import get_current_user as get_current_active_user
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import Response
 from permissions import check_permission
 from schemas import (
     CompanyRequisiteResponse,
@@ -29,7 +30,7 @@ from schemas import (
     GenerateContractRequest,
     GenerateContractResponse,
 )
-from services.docx_generator import generate_document
+from services.docx_generator import generate_document, generate_document_for_print
 from sqlalchemy.orm import Session
 from yandex_disk_service import YandexDiskService
 
@@ -360,7 +361,6 @@ def generate(
 ):
     if request.doc_type not in VALID_DOC_TYPES:
         raise HTTPException(status_code=400, detail=f"Неверный тип документа: {request.doc_type}")
-    # Проверка прав: договор/печать vs акты
     if request.doc_type in ("contract", "contract_print"):
         required_perm = "contracts.generate_contract"
     else:
@@ -370,3 +370,27 @@ def generate(
     yd_service = YandexDiskService()
     result = generate_document(db, request.contract_id, request.doc_type, yd_service)
     return GenerateContractResponse(**result)
+
+
+@router.post("/generate-print")
+def generate_print(
+    request: GenerateContractRequest,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_active_user),
+):
+    """Генерирует PDF акта без подписей и печати. Возвращает файл напрямую, не сохраняет на ЯД."""
+    _ACTS = {"act_pr", "act_kd", "act_info", "act_final"}
+    if request.doc_type not in _ACTS:
+        raise HTTPException(status_code=400, detail="generate-print поддерживает только акты")
+    if not check_permission(current_user, "contracts.generate_acts", db):
+        raise HTTPException(status_code=403, detail="Недостаточно прав для формирования документа")
+    yd_service = YandexDiskService()
+    try:
+        pdf_bytes, pdf_name = generate_document_for_print(db, request.contract_id, request.doc_type, yd_service)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{pdf_name}"'},
+    )

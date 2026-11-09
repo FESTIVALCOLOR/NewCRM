@@ -689,6 +689,8 @@ export const contractDocsApi = {
     ),
   generate: (contractId, docType) =>
     api.post('/api/v1/contract-templates/generate', { contract_id: contractId, doc_type: docType }),
+  generatePrint: (contractId, docType) =>
+    api.post('/api/v1/contract-templates/generate-print', { contract_id: contractId, doc_type: docType }, { responseType: 'arraybuffer' }),
 
   getCompositionTemplates: () => api.get('/api/v1/contract-templates/composition-templates'),
   uploadCompositionTemplate: (projectType, projectSubtype, clientType, file) => {
