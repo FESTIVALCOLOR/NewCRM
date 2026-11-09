@@ -438,36 +438,37 @@
                     </q-item-label>
                   </q-item-section>
                   <q-item-section side>
-                    <div class="row q-gutter-xs items-center">
-                      <q-btn
-                        outline
-                        dense
-                        size="xs"
-                        icon="open_in_new"
-                        color="primary"
-                        no-caps
-                        :label="f.stage === 'documents_print' ? undefined : 'Открыть'"
-                        :style="f.stage === 'documents_print'
-                          ? 'font-size:10px;padding:2px 6px;border-radius:4px;min-width:62px'
-                          : 'font-size:10px;padding:2px 8px;border-radius:4px'"
-                        @click.stop="openFile(f)"
-                      >
-                        <q-tooltip v-if="f.stage === 'documents_print'">
-                          Открыть файл
-                        </q-tooltip>
-                      </q-btn>
-                      <q-btn
-                        v-if="f.stage === 'documents_print'"
-                        outline
-                        dense
-                        size="xs"
-                        icon="print"
-                        color="teal"
-                        style="font-size: 10px; padding: 2px 6px; border-radius: 4px"
-                        @click.stop="printDocument(f)"
-                      >
-                        <q-tooltip>Открыть для печати</q-tooltip>
-                      </q-btn>
+                    <div class="row items-center" style="gap: 4px">
+                      <!-- Кнопочная зона: одинаковая ширина для всех строк -->
+                      <div style="display: flex; gap: 4px; width: 76px">
+                        <q-btn
+                          outline
+                          dense
+                          size="xs"
+                          icon="open_in_new"
+                          color="primary"
+                          no-caps
+                          :label="f.stage === 'documents_print' ? undefined : 'Открыть'"
+                          style="flex: 1; font-size: 10px; padding: 2px 6px; border-radius: 4px; min-width: 0"
+                          @click.stop="openFile(f)"
+                        >
+                          <q-tooltip v-if="f.stage === 'documents_print'">
+                            Открыть файл
+                          </q-tooltip>
+                        </q-btn>
+                        <q-btn
+                          v-if="f.stage === 'documents_print'"
+                          outline
+                          dense
+                          size="xs"
+                          icon="print"
+                          color="teal"
+                          style="flex: 1; font-size: 10px; padding: 2px 6px; border-radius: 4px; min-width: 0"
+                          @click.stop="printDocument(f)"
+                        >
+                          <q-tooltip>Открыть для печати</q-tooltip>
+                        </q-btn>
+                      </div>
                       <q-btn
                         v-if="canDeleteFiles"
                         outline
