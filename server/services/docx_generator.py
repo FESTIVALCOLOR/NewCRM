@@ -929,7 +929,7 @@ def generate_document_for_print(
         raise ValueError(f"Шаблон не найден: {doc_type}/{client_type}")
 
     try:
-        template_bytes = yd_service.download_file(template.file_path)
+        template_bytes = yd_service.download_file_to_bytes(template.file_path)
     except Exception as e:
         raise ValueError(f"Не удалось скачать шаблон: {e}")
 

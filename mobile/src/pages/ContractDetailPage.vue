@@ -2586,7 +2586,14 @@ async function generateDoc(docType) {
 
 async function printDocument(f) {
   if (!f.yandex_path) return
-  // Открываем окно синхронно — иначе браузер блокирует как popup
+
+  if ($q.platform.is.mobile) {
+    // На мобильном <embed> не поддерживается — открываем файл напрямую
+    await openFile(f)
+    return
+  }
+
+  // Десктоп: popup + embed PDF + вызов печати
   const w = window.open('', '_blank')
   if (!w) {
     $q.notify({ type: 'warning', message: 'Разрешите всплывающие окна для этого сайта', timeout: 4000 })
@@ -2599,10 +2606,8 @@ async function printDocument(f) {
     const resp = await fetch(streamUrl)
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
     const arrayBuffer = await resp.arrayBuffer()
-    // stream endpoint возвращает application/octet-stream для PDF — принудительно исправляем
     const blob = new Blob([arrayBuffer], { type: 'application/pdf' })
     const blobUrl = URL.createObjectURL(blob)
-    // Пишем HTML со встроенным PDF — не навигируем (навигация вызвала бы скачивание)
     w.document.open()
     w.document.write(`<!DOCTYPE html><html><head><title>Договор для печати</title>
 <style>*{margin:0;padding:0}html,body{width:100%;height:100%}</style></head>
@@ -2622,14 +2627,42 @@ const printingAct = ref(null)  // 'act_pr' | 'act_kd' | 'act_info' | 'act_final'
 
 async function printAct(docType) {
   if (!contract.value?.id) return
-  // Открываем окно синхронно — иначе браузер блокирует как popup
+  printingAct.value = docType
+
+  if ($q.platform.is.mobile) {
+    // На мобильном <embed> не поддерживается — скачиваем blob и открываем через <a>
+    try {
+      $q.loading.show({ message: 'Формирование PDF...' })
+      const resp = await contractDocsApi.generatePrint(contract.value.id, docType)
+      const blob = new Blob([resp.data], { type: 'application/pdf' })
+      const blobUrl = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = blobUrl
+      a.target = '_blank'
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60000)
+    } catch (e2) {
+      const msg = e2.response?.data ? new TextDecoder().decode(e2.response.data) : e2.message
+      let detail = msg
+      try { detail = JSON.parse(msg)?.detail || msg } catch (_e3) {}
+      $q.notify({ type: 'negative', message: `Ошибка: ${detail}`, timeout: 4000 })
+    } finally {
+      $q.loading.hide()
+      printingAct.value = null
+    }
+    return
+  }
+
+  // Десктоп: popup + embed PDF + вызов печати
   const w = window.open('', '_blank')
   if (!w) {
     $q.notify({ type: 'warning', message: 'Разрешите всплывающие окна для этого сайта', timeout: 4000 })
+    printingAct.value = null
     return
   }
   w.document.write('<!DOCTYPE html><html><head><title>Загрузка...</title><style>body{font-family:sans-serif;padding:40px;color:#555}</style></head><body><p>Формирование PDF...</p></body></html>')
-  printingAct.value = docType
   try {
     const resp = await contractDocsApi.generatePrint(contract.value.id, docType)
     const blob = new Blob([resp.data], { type: 'application/pdf' })
