@@ -583,11 +583,23 @@ def _insert_composition_block(doc: Document, comp_doc: Document) -> bool:
         logger.warning("Плейсхолдер {{СОСТАВ_ПРОЕКТА}} не найден в шаблоне договора")
         return False
 
+    # Проверяем, есть ли разрыв страницы перед плейсхолдером
+    W = f"{{{_WNS}}}"
+    has_page_break = False
+    pPr = target_elem.find(f"{W}pPr")
+    if pPr is not None and pPr.find(f"{W}pageBreakBefore") is not None:
+        has_page_break = True
+    if not has_page_break:
+        for r in target_elem.findall(f"{W}r"):
+            for br in r.findall(f"{W}br"):
+                if br.get(f"{W}type") == "page":
+                    has_page_break = True
+
     # Собираем элементы из тела comp_doc (всё кроме sectPr — настроек раздела)
     comp_body = comp_doc.element.body
     comp_elements = []
     for child in comp_body:
-        if child.tag == f"{{{_WNS}}}sectPr":
+        if child.tag == f"{W}sectPr":
             continue
         comp_elements.append(copy.deepcopy(child))
 
@@ -595,6 +607,16 @@ def _insert_composition_block(doc: Document, comp_doc: Document) -> bool:
         logger.warning("Шаблон состава пуст — плейсхолдер удалён без замены")
         body.remove(target_elem)
         return True
+
+    # Если плейсхолдер был с новой страницы — добавляем явный разрыв перед составом
+    if has_page_break:
+        from lxml import etree as _etree
+
+        pb_para = _etree.Element(f"{W}p")
+        pb_run = _etree.SubElement(pb_para, f"{W}r")
+        pb_br = _etree.SubElement(pb_run, f"{W}br")
+        pb_br.set(f"{W}type", "page")
+        comp_elements.insert(0, pb_para)
 
     # Удаляем параграф-плейсхолдер и вставляем на его место блоки состава
     body.remove(target_elem)
