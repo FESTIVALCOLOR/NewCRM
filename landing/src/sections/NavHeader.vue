@@ -2,7 +2,10 @@
   <header class="header" :class="{ scrolled }">
     <div class="container header__inner">
       <a href="#hero" class="header__logo">
-        <span class="logo-festival">FESTIVAL</span><span class="logo-color">COLOR</span>
+        <img v-if="logoSrc" :src="logoSrc" alt="FESTIVAL COLOR" class="header__logo-img" />
+        <template v-else>
+          <span class="logo-festival">FESTIVAL</span><span class="logo-color">COLOR</span>
+        </template>
       </a>
       <nav class="header__nav">
         <a href="#hero">Главная</a>
@@ -39,6 +42,10 @@ const whatsappUrl = computed(() => {
   const phone = props.settings?.whatsapp_phone || '79062003365'
   return `https://wa.clck.bar/${phone}`
 })
+const logoSrc = computed(() => {
+  if (props.settings?.logo_url) return props.settings.logo_url
+  return import.meta.env.BASE_URL + 'media/logo/logo.png'
+})
 
 function onScroll() { scrolled.value = window.scrollY > 60 }
 onMounted(() => window.addEventListener('scroll', onScroll))
@@ -48,8 +55,7 @@ onUnmounted(() => window.removeEventListener('scroll', onScroll))
 <style scoped>
 .header {
   position: fixed; top: 0; left: 0; right: 0; z-index: 100;
-  background: rgba(255,255,255,0.95);
-  backdrop-filter: blur(8px);
+  background: #fff;
   transition: box-shadow 0.3s;
 }
 .header.scrolled { box-shadow: 0 2px 16px rgba(0,0,0,0.1); }
@@ -57,7 +63,8 @@ onUnmounted(() => window.removeEventListener('scroll', onScroll))
   display: flex; align-items: center; gap: 24px;
   height: 68px;
 }
-.header__logo { text-decoration: none; font-family: var(--font-head); font-weight: 800; font-size: 1.1rem; letter-spacing: 0.08em; }
+.header__logo { text-decoration: none; font-family: var(--font-head); font-weight: 800; font-size: 1.1rem; letter-spacing: 0.08em; display: flex; align-items: center; }
+.header__logo-img { height: 40px; width: auto; object-fit: contain; }
 .logo-festival { color: var(--dark); }
 .logo-color { color: var(--accent); }
 .header__nav { display: flex; gap: 24px; margin: 0 auto; }

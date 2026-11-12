@@ -1834,6 +1834,7 @@ class SiteServiceResponse(SiteServiceBase):
 class PricingItemBase(BaseModel):
     text: str
     sort_order: int = 0
+    subitems: Optional[list[str]] = None
 
 
 class PricingItemCreate(PricingItemBase):

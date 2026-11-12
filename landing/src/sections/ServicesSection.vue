@@ -24,8 +24,8 @@ defineProps({ services: Array })
 </script>
 
 <style scoped>
-.services__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 24px; }
-.service-card { background: var(--bg-alt); border-radius: 12px; padding: 32px 24px; text-align: center; border: 1px solid var(--border); transition: box-shadow 0.2s, transform 0.2s; }
+.services__grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 24px; }
+.service-card { background: var(--bg-alt); border-radius: 12px; padding: 32px 24px; text-align: center; border: 1px solid var(--border); transition: box-shadow 0.2s, transform 0.2s; flex: 0 0 220px; max-width: 240px; }
 .service-card:hover { box-shadow: 0 8px 32px rgba(232,98,42,0.12); transform: translateY(-4px); }
 .service-card__icon { width: 56px; height: 56px; background: var(--accent); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; }
 .service-card__icon svg { width: 28px; height: 28px; fill: #fff; }

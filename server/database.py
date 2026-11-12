@@ -1648,6 +1648,7 @@ class PricingItem(Base):
     plan_id = Column(Integer, ForeignKey("site_pricing_plans.id", ondelete="CASCADE"), nullable=False, index=True)
     text = Column(String(300), nullable=False)
     sort_order = Column(Integer, default=0)
+    subitems = Column(JSON, nullable=True, default=None)
     plan = relationship("PricingPlan", back_populates="items")
 
 
