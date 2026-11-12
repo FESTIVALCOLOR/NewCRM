@@ -103,6 +103,12 @@ export default [
         meta: { title: 'Администрирование', icon: 'admin_panel_settings', requiresPermission: 'access.admin' },
       },
       {
+        path: 'site-admin',
+        name: 'site-admin',
+        component: () => import('src/pages/SiteAdminPage.vue'),
+        meta: { title: 'Управление сайтом', icon: 'web', requiresPermission: 'access.admin' },
+      },
+      {
         path: 'notifications',
         name: 'notifications',
         component: () => import('src/pages/NotificationsPage.vue'),

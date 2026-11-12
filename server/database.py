@@ -1565,6 +1565,115 @@ class TechnicalSurvey(Base):
     editor = relationship("Employee", foreign_keys=[last_edited_by])
 
 
+# ──────────────────────────────────────────────
+# Публичный сайт festivalcolor.ru
+# ──────────────────────────────────────────────
+
+
+class SiteSetting(Base):
+    """Глобальные настройки сайта (key/value)"""
+
+    __tablename__ = "site_settings"
+    id = Column(Integer, primary_key=True)
+    key = Column(String(100), unique=True, nullable=False, index=True)
+    value = Column(Text)
+    label = Column(String(200))  # Человекочитаемое название для admin-UI
+
+
+class SiteSection(Base):
+    """Порядок и видимость секций лендинга"""
+
+    __tablename__ = "site_sections"
+    id = Column(Integer, primary_key=True)
+    key = Column(String(100), unique=True, nullable=False)
+    label = Column(String(200))
+    is_visible = Column(Boolean, default=True)
+    sort_order = Column(Integer, default=0)
+
+
+class TeamMember(Base):
+    """Секция «О команде»"""
+
+    __tablename__ = "site_team_members"
+    id = Column(Integer, primary_key=True)
+    name = Column(String(200), nullable=False)
+    position = Column(String(200))
+    role_label = Column(String(200))  # напр. «Руководитель студии»
+    description = Column(Text)
+    photo_url = Column(Text)
+    is_visible = Column(Boolean, default=True)
+    sort_order = Column(Integer, default=0)
+
+
+class StatItem(Base):
+    """Секция статистики (1000+ проектов, 13 лет…)"""
+
+    __tablename__ = "site_stat_items"
+    id = Column(Integer, primary_key=True)
+    value = Column(String(50), nullable=False)  # «1000+»
+    label = Column(String(200), nullable=False)  # «Проектов реализовано»
+    sort_order = Column(Integer, default=0)
+
+
+class SiteService(Base):
+    """Секция «Что мы предлагаем»"""
+
+    __tablename__ = "site_services"
+    id = Column(Integer, primary_key=True)
+    title = Column(String(200), nullable=False)
+    description = Column(Text)
+    icon = Column(String(100))  # имя SVG-иконки
+    sort_order = Column(Integer, default=0)
+    is_visible = Column(Boolean, default=True)
+
+
+class PricingPlan(Base):
+    """Тарифный план"""
+
+    __tablename__ = "site_pricing_plans"
+    id = Column(Integer, primary_key=True)
+    title = Column(String(200), nullable=False)
+    is_featured = Column(Boolean, default=False)  # выделенный (цветной)
+    whatsapp_text = Column(Text)  # текст сообщения в WhatsApp
+    sort_order = Column(Integer, default=0)
+    is_visible = Column(Boolean, default=True)
+    items = relationship("PricingItem", back_populates="plan", order_by="PricingItem.sort_order", cascade="all, delete-orphan")
+
+
+class PricingItem(Base):
+    """Строка тарифного плана"""
+
+    __tablename__ = "site_pricing_items"
+    id = Column(Integer, primary_key=True)
+    plan_id = Column(Integer, ForeignKey("site_pricing_plans.id", ondelete="CASCADE"), nullable=False, index=True)
+    text = Column(String(300), nullable=False)
+    sort_order = Column(Integer, default=0)
+    plan = relationship("PricingPlan", back_populates="items")
+
+
+class Review(Base):
+    """Отзывы клиентов"""
+
+    __tablename__ = "site_reviews"
+    id = Column(Integer, primary_key=True)
+    author_name = Column(String(200), nullable=False)
+    text = Column(Text, nullable=False)
+    is_active = Column(Boolean, default=True)
+    sort_order = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class PortfolioImage(Base):
+    """Галерея портфолио"""
+
+    __tablename__ = "site_portfolio_images"
+    id = Column(Integer, primary_key=True)
+    url = Column(Text, nullable=False)
+    alt = Column(String(300), default="")
+    is_visible = Column(Boolean, default=True)
+    sort_order = Column(Integer, default=0)
+
+
 def init_db():
     """Инициализация базы данных"""
     try:

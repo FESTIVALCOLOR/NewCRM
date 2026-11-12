@@ -980,6 +980,12 @@ from routers.contract_templates_router import router as contract_templates_route
 
 app.include_router(contract_templates_router)
 
+from routers.site_admin_router import router as site_admin_router
+from routers.site_router import router as site_router
+
+app.include_router(site_router)
+app.include_router(site_admin_router)
+
 
 # =========================
 # СИНХРОНИЗАЦИЯ

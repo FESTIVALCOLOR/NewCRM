@@ -1725,3 +1725,206 @@ class BudgetExtraUpdate(BaseModel):
     materials_payments: Optional[list[dict]] = None
 
     unexpected_expenses: Optional[list[dict]] = None
+
+
+# =========================
+# ПУБЛИЧНЫЙ САЙТ festivalcolor.ru
+# =========================
+
+
+class SiteSettingResponse(BaseModel):
+    id: int
+    key: str
+    value: Optional[str]
+    label: Optional[str]
+
+    class Config:
+        from_attributes = True
+
+
+class SiteSettingUpdate(BaseModel):
+    value: Optional[str] = None
+
+
+class SiteSectionResponse(BaseModel):
+    id: int
+    key: str
+    label: Optional[str]
+    is_visible: bool
+    sort_order: int
+
+    class Config:
+        from_attributes = True
+
+
+class SiteSectionUpdate(BaseModel):
+    is_visible: Optional[bool] = None
+    sort_order: Optional[int] = None
+
+
+class TeamMemberBase(BaseModel):
+    name: str
+    position: Optional[str] = None
+    role_label: Optional[str] = None
+    description: Optional[str] = None
+    photo_url: Optional[str] = None
+    is_visible: bool = True
+    sort_order: int = 0
+
+
+class TeamMemberCreate(TeamMemberBase):
+    pass
+
+
+class TeamMemberUpdate(TeamMemberBase):
+    pass
+
+
+class TeamMemberResponse(TeamMemberBase):
+    id: int
+
+    class Config:
+        from_attributes = True
+
+
+class StatItemBase(BaseModel):
+    value: str
+    label: str
+    sort_order: int = 0
+
+
+class StatItemCreate(StatItemBase):
+    pass
+
+
+class StatItemUpdate(StatItemBase):
+    pass
+
+
+class StatItemResponse(StatItemBase):
+    id: int
+
+    class Config:
+        from_attributes = True
+
+
+class SiteServiceBase(BaseModel):
+    title: str
+    description: Optional[str] = None
+    icon: Optional[str] = None
+    sort_order: int = 0
+    is_visible: bool = True
+
+
+class SiteServiceCreate(SiteServiceBase):
+    pass
+
+
+class SiteServiceUpdate(SiteServiceBase):
+    pass
+
+
+class SiteServiceResponse(SiteServiceBase):
+    id: int
+
+    class Config:
+        from_attributes = True
+
+
+class PricingItemBase(BaseModel):
+    text: str
+    sort_order: int = 0
+
+
+class PricingItemCreate(PricingItemBase):
+    pass
+
+
+class PricingItemResponse(PricingItemBase):
+    id: int
+    plan_id: int
+
+    class Config:
+        from_attributes = True
+
+
+class PricingPlanBase(BaseModel):
+    title: str
+    is_featured: bool = False
+    whatsapp_text: Optional[str] = None
+    sort_order: int = 0
+    is_visible: bool = True
+
+
+class PricingPlanCreate(PricingPlanBase):
+    items: list[PricingItemCreate] = []
+
+
+class PricingPlanUpdate(PricingPlanBase):
+    items: Optional[list[PricingItemCreate]] = None
+
+
+class PricingPlanResponse(PricingPlanBase):
+    id: int
+    items: list[PricingItemResponse] = []
+
+    class Config:
+        from_attributes = True
+
+
+class ReviewBase(BaseModel):
+    author_name: str
+    text: str
+    is_active: bool = True
+    sort_order: int = 0
+
+
+class ReviewCreate(ReviewBase):
+    pass
+
+
+class ReviewUpdate(ReviewBase):
+    pass
+
+
+class ReviewResponse(ReviewBase):
+    id: int
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class PortfolioImageBase(BaseModel):
+    url: str
+    alt: str = ""
+    is_visible: bool = True
+    sort_order: int = 0
+
+
+class PortfolioImageCreate(PortfolioImageBase):
+    pass
+
+
+class PortfolioImageUpdate(PortfolioImageBase):
+    pass
+
+
+class PortfolioImageResponse(PortfolioImageBase):
+    id: int
+
+    class Config:
+        from_attributes = True
+
+
+class SitePublicResponse(BaseModel):
+    """Весь контент сайта одним запросом (публичный endpoint)"""
+
+    settings: dict[str, Optional[str]] = {}  # key → value
+    sections: list[SiteSectionResponse] = []
+    team: list[TeamMemberResponse] = []
+    stats: list[StatItemResponse] = []
+    services: list[SiteServiceResponse] = []
+    pricing: list[PricingPlanResponse] = []
+    reviews: list[ReviewResponse] = []
+    portfolio: list[PortfolioImageResponse] = []
