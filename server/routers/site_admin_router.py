@@ -48,7 +48,7 @@ from database import (
     get_db,
 )
 
-router = APIRouter(prefix="/api/site/admin", tags=["site-admin"])
+router = APIRouter(prefix="/site/admin", tags=["site-admin"])
 
 
 # ──────────────────────────────────────────────

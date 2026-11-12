@@ -19,7 +19,7 @@ from database import (
     get_db,
 )
 
-router = APIRouter(prefix="/api/site", tags=["site-public"])
+router = APIRouter(prefix="/site", tags=["site-public"])
 
 
 @router.get("/public", response_model=SitePublicResponse)
