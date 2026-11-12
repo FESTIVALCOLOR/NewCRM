@@ -39,7 +39,7 @@ const heroBg = computed(() => {
   padding-top: 68px;
 }
 .hero__title {
-  font-size: clamp(2rem, 5vw, 3.5rem);
+  font-size: calc(clamp(2rem, 5vw, 3.5rem) * var(--head-scale, 1));
   font-weight: 800; letter-spacing: 0.02em;
   margin-bottom: 20px;
   text-shadow: 0 2px 12px rgba(0,0,0,0.3);

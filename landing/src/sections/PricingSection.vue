@@ -54,10 +54,10 @@ function buildWhatsApp(plan) {
 @media (max-width: 560px) { .pricing__grid { grid-template-columns: 1fr; } }
 .pricing-card { background: var(--bg-alt); border: 2px solid var(--border); border-radius: 12px; padding: 28px 24px; display: flex; flex-direction: column; gap: 16px; transition: transform 0.2s, box-shadow 0.2s; }
 .pricing-card:hover { transform: translateY(-4px); box-shadow: 0 8px 24px rgba(0,0,0,0.08); }
-.pricing-card.featured { border-color: var(--accent); background: #fff; box-shadow: 0 4px 24px rgba(232,98,42,0.15); }
+.pricing-card.featured { border-color: var(--accent); background: #fff; box-shadow: 0 4px 24px color-mix(in srgb, var(--accent) 15%, transparent); }
 .pricing-card__title { font-family: var(--font-head); font-weight: 700; font-size: 1rem; letter-spacing: 0.04em; text-align: center; }
 .featured .pricing-card__title { color: var(--accent); }
-.pricing-card__price { text-align: center; font-size: 1.1rem; font-weight: 700; color: var(--accent); background: rgba(232,98,42,0.08); border-radius: 6px; padding: 6px 12px; }
+.pricing-card__price { text-align: center; font-size: 1.1rem; font-weight: 700; color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); border-radius: 6px; padding: 6px 12px; }
 .pricing-card__list { list-style: none; display: flex; flex-direction: column; gap: 2px; flex: 1; }
 .pricing-item { display: flex; flex-direction: column; }
 .pricing-item__row { display: flex; align-items: center; gap: 6px; padding: 4px 0 4px 18px; position: relative; }
@@ -72,7 +72,7 @@ function buildWhatsApp(plan) {
 .pricing-item__toggle.open { transform: rotate(180deg); }
 .pricing-item__sub {
   list-style: none; margin: 2px 0 4px 18px;
-  background: rgba(232,98,42,0.06); border-left: 2px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 6%, transparent); border-left: 2px solid var(--accent);
   border-radius: 0 4px 4px 0; padding: 6px 10px; display: flex; flex-direction: column; gap: 3px;
 }
 .pricing-item__sub li { font-size: 0.8rem; color: var(--text-light); padding-left: 10px; position: relative; }

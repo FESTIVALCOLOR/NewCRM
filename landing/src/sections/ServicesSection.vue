@@ -38,7 +38,7 @@ defineProps({ services: Array })
   text-align: center; border: 1px solid var(--border);
   transition: box-shadow 0.2s, transform 0.2s;
 }
-.service-card:hover { box-shadow: 0 8px 32px rgba(232,98,42,0.12); transform: translateY(-4px); }
+.service-card:hover { box-shadow: 0 8px 32px color-mix(in srgb, var(--accent) 12%, transparent); transform: translateY(-4px); }
 .service-card__icon { width: 56px; height: 56px; background: var(--accent); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; }
 .service-card__icon svg { width: 28px; height: 28px; fill: #fff; }
 .service-card h3 { font-size: 1rem; font-weight: 700; margin-bottom: 12px; letter-spacing: 0.03em; }

@@ -36,6 +36,9 @@ import ContactsSection from './sections/ContactsSection.vue'
 import FooterSection   from './sections/FooterSection.vue'
 import { whatsappUrl } from './contact.js'
 import { applyAnalytics } from './analytics.js'
+import { applyTheme, applyCachedTheme, cacheTheme } from './theme.js'
+
+applyCachedTheme()
 
 const DEFAULT_SECTIONS = ['hero', 'about', 'stats', 'services', 'portfolio', 'pricing', 'reviews', 'contacts']
 
@@ -64,6 +67,8 @@ async function loadSiteData() {
     if (!res.ok) return
     const json = await res.json()
     Object.assign(data, json)
+    applyTheme(json.settings)
+    cacheTheme(json.settings)
     applyAnalytics(json.analytics)
   } catch (e) {
     console.warn('Не удалось загрузить данные сайта:', e)

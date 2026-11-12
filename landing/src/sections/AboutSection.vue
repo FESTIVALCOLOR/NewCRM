@@ -26,7 +26,7 @@ import { computed } from 'vue'
 <style scoped>
 .about { display: grid; grid-template-columns: 320px 1fr; gap: 60px; align-items: center; }
 .about__photo img { width: 100%; border-radius: 12px; object-fit: cover; aspect-ratio: 3/4; box-shadow: 0 8px 32px rgba(0,0,0,0.12); }
-.about__heading { font-size: 1.8rem; font-weight: 700; margin-bottom: 20px; letter-spacing: 0.05em; }
+.about__heading { font-size: calc(1.8rem * var(--head-scale, 1)); font-weight: 700; margin-bottom: 20px; letter-spacing: 0.05em; }
 .about__desc { color: var(--text-light); line-height: 1.8; margin-bottom: 24px; }
 .about__person { display: flex; flex-direction: column; gap: 4px; }
 .about__person strong { font-size: 1.1rem; font-weight: 700; font-family: var(--font-head); }

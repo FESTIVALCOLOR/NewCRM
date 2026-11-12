@@ -366,6 +366,78 @@
         </div>
       </section>
 
+      <!-- ── Стиль ── -->
+      <section v-if="currentTab === 'style'" class="tab-body">
+        <div class="card-info">
+          Оформление всего сайта. Изменения сразу видны в блоке «Предпросмотр» справа, а на сайте появятся после нажатия «Сохранить стиль».
+        </div>
+        <div class="style-layout">
+          <div class="style-form">
+            <div class="card">
+              <h3>Шрифты</h3>
+              <div class="form-grid">
+                <label>Шрифт заголовков
+                  <select v-model="stf.style_font_head">
+                    <option v-for="f in FONTS" :key="f.name" :value="f.name">{{ f.name }}{{ f.fallback === 'serif' ? ' (с засечками)' : '' }}</option>
+                  </select>
+                </label>
+                <label>Шрифт основного текста
+                  <select v-model="stf.style_font_body">
+                    <option v-for="f in FONTS" :key="f.name" :value="f.name">{{ f.name }}{{ f.fallback === 'serif' ? ' (с засечками)' : '' }}</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+            <div class="card">
+              <h3>Размеры</h3>
+              <label>Размер заголовков — {{ stf.style_head_size }}%
+                <input type="range" :min="SIZE_MIN" :max="SIZE_MAX" step="5" v-model="stf.style_head_size" />
+              </label>
+              <label style="margin-top:12px">Размер текста — {{ stf.style_text_size }}%
+                <input type="range" :min="SIZE_MIN" :max="SIZE_MAX" step="5" v-model="stf.style_text_size" />
+              </label>
+              <p class="hint" style="margin:10px 0 0">100% — исходный размер. Текст меняется вместе с кнопками и меню, заголовки — отдельно.</p>
+            </div>
+            <div class="card">
+              <h3>Цвета</h3>
+              <div class="form-grid">
+                <label v-for="c in styleColors" :key="c.key">{{ c.label }}
+                  <div class="color-row">
+                    <input type="color" v-model="stf[c.key]" />
+                    <input v-model="stf[c.key]" maxlength="7" placeholder="#000000" />
+                  </div>
+                </label>
+              </div>
+            </div>
+            <div class="list-toolbar">
+              <button class="btn-primary" @click="saveStyle">Сохранить стиль</button>
+              <button class="btn-ghost" @click="resetStyle">Вернуть исходный стиль</button>
+            </div>
+          </div>
+
+          <div class="style-preview" :style="stylePreview.vars">
+            <div class="sp-label">Предпросмотр</div>
+            <div class="sp-hero">
+              <div class="sp-h1">Заголовок главного экрана</div>
+              <span class="sp-btn">Свяжитесь с нами</span>
+            </div>
+            <div class="sp-body">
+              <div class="sp-h2">ЗАГОЛОВОК РАЗДЕЛА</div>
+              <p class="sp-text">Основной текст сайта: описание услуг, отзывы клиентов, рассказ о студии.</p>
+              <p class="sp-text sp-light">Второстепенный текст: подписи и пояснения.</p>
+              <div class="sp-card">
+                <span class="sp-icon"></span>
+                <div>
+                  <div class="sp-h3">НАЗВАНИЕ УСЛУГИ</div>
+                  <span class="sp-price">5 000 руб/м²</span>
+                </div>
+              </div>
+              <span class="sp-btn sp-btn--outline">Заказать</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- ── Цифры ── -->
       <section v-if="currentTab === 'stats'" class="tab-body">
         <div class="card-info">Блок с цифрами на сайте («1000+ проектов реализовано»). Порядок меняется перетаскиванием.</div>
@@ -508,6 +580,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import * as api from './api.js'
 import { SERVICE_ICONS, serviceIconPath } from '../serviceIcons.js'
+import { FONTS, STYLE_DEFAULTS, SIZE_MIN, SIZE_MAX, themeVars, loadFont } from '../theme.js'
 
 // ══ Auth ══
 const authed = ref(!!localStorage.getItem('admin_token'))
@@ -533,6 +606,7 @@ function doLogout() { api.logout(); authed.value = false }
 // ══ Tabs ══
 const tabs = [
   { id: 'settings',  icon: '⚙',  label: 'Настройки' },
+  { id: 'style',     icon: '✎',  label: 'Стиль' },
   { id: 'sections',  icon: '☰',  label: 'Секции меню' },
   { id: 'services',  icon: '◈',  label: 'Услуги' },
   { id: 'pricing',   icon: '₽',  label: 'Цены' },
@@ -618,6 +692,7 @@ async function loadSettings() {
       if (r.key in hf) hf[r.key] = r.value || ''
       if (r.key === 'cta_method') ctaMethod.value = r.value || 'whatsapp'
     })
+    loadStyle(rows)
   } catch (e) { loadError(e) }
 }
 async function saveSettings() {
@@ -864,6 +939,37 @@ async function deleteTeamMember(id) {
   catch (e) { toast(e.message, 'error') }
 }
 
+// ══ Style ══
+const stf = reactive({ ...STYLE_DEFAULTS })
+const styleColors = [
+  { key: 'style_accent', label: 'Акцентный цвет (кнопки, иконки, цены)' },
+  { key: 'style_head_color', label: 'Цвет заголовков' },
+  { key: 'style_text_color', label: 'Цвет основного текста' },
+  { key: 'style_text_light_color', label: 'Цвет второстепенного текста' },
+]
+// Предпросмотр использует те же переменные, что и сайт; шрифты подгружаются по мере выбора
+const stylePreview = computed(() => {
+  const theme = themeVars(stf)
+  theme.fonts.forEach(loadFont)
+  return { vars: { ...theme.vars, '--sp-text-scale': theme.textSize / 100, '--sp-head-scale': stf.style_head_size / 100 } }
+})
+
+function loadStyle(rows) {
+  rows.forEach(r => { if (r.key in stf && r.value) stf[r.key] = r.value })
+}
+async function saveStyle() {
+  const badColor = styleColors.find(c => !/^#[0-9a-f]{6}$/i.test(stf[c.key]))
+  if (badColor) { toast(`«${badColor.label}»: цвет должен быть в виде #RRGGBB, например #E8622A`, 'error'); return }
+  try {
+    for (const key of Object.keys(stf)) await api.settings.update(key, String(stf[key]))
+    toast('Стиль сохранён — обновите страницу сайта, чтобы увидеть изменения')
+  } catch (e) { toast(e.message, 'error') }
+}
+function resetStyle() {
+  Object.assign(stf, STYLE_DEFAULTS)
+  toast('Исходный стиль выставлен в форме — нажмите «Сохранить стиль», чтобы применить его на сайте')
+}
+
 // ══ Stats ══
 const statsData = ref([])
 const editingStat = ref(null)
@@ -1046,6 +1152,28 @@ label input.warn, label textarea.warn { border-color: #faad14; background: #fffb
 .preview-og { max-width: 100%; max-height: 150px; border-radius: 6px; object-fit: contain; border: 1px solid #e8eaed; }
 
 .field { display: flex; flex-direction: column; gap: 5px; font-size: 0.85rem; color: #374151; }
+
+.style-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 420px); gap: 20px; align-items: start; }
+.style-form { display: flex; flex-direction: column; gap: 20px; }
+.color-row { display: flex; gap: 8px; align-items: center; }
+.color-row input[type="color"] { width: 44px; height: 36px; padding: 2px; cursor: pointer; flex-shrink: 0; }
+.color-row input:not([type="color"]) { flex: 1; min-width: 0; font-family: Consolas, monospace; }
+label input[type="range"] { padding: 0; border: none; accent-color: #c0392b; }
+.style-preview { position: sticky; top: 16px; background: #fff; border-radius: 10px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.07); font-family: var(--font-body); font-size: calc(16px * var(--sp-text-scale)); color: var(--text); line-height: 1.6; }
+.sp-label { font-family: Inter, sans-serif; font-size: 12px; color: #9ca3af; padding: 8px 16px; border-bottom: 1px solid #e8eaed; }
+.sp-hero { background: linear-gradient(135deg, #2b2b2b, #555); color: #fff; text-align: center; padding: 28px 16px; }
+.sp-h1 { font-family: var(--font-head); font-weight: 800; font-size: calc(26px * var(--sp-head-scale)); line-height: 1.25; margin-bottom: 14px; }
+.sp-body { padding: 20px 16px; display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
+.sp-h2 { font-family: var(--font-head); font-weight: 700; font-size: calc(22px * var(--sp-head-scale)); color: var(--head-color); letter-spacing: 0.03em; line-height: 1.25; }
+.sp-h3 { font-family: var(--font-head); font-weight: 700; font-size: 1em; color: var(--head-color); }
+.sp-text { font-size: 0.95em; }
+.sp-light { color: var(--text-light); font-size: 0.9em; }
+.sp-card { display: flex; align-items: center; gap: 12px; background: #f8f8f8; border: 1px solid #e0e0e0; border-radius: 10px; padding: 12px 14px; width: 100%; }
+.sp-icon { width: 40px; height: 40px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+.sp-price { color: var(--accent); font-weight: 700; }
+.sp-btn { display: inline-block; background: var(--accent); color: #fff; font-family: var(--font-head); font-weight: 600; font-size: 0.9em; padding: 10px 22px; border-radius: 8px; }
+.sp-btn--outline { background: transparent; color: var(--accent); border: 2px solid var(--accent); }
+@media (max-width: 1100px) { .style-layout { grid-template-columns: 1fr; } .style-preview { position: static; } }
 .icon-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .icon-pick { width: 44px; height: 44px; border-radius: 50%; border: 2px solid transparent; background: #e5e7eb; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 .icon-pick svg { width: 22px; height: 22px; fill: #6b7280; }
