@@ -66,7 +66,6 @@ from database import (
 )
 
 UPLOADS_DIR = os.environ.get("SITE_UPLOADS_DIR", "/app/uploads/site")
-os.makedirs(UPLOADS_DIR, exist_ok=True)
 
 router = APIRouter(prefix="/site/admin", tags=["site-admin"])
 
@@ -477,6 +476,8 @@ async def upload_image(file: UploadFile = File(...), _: Employee = Depends(requi
     content = await file.read()
     if len(content) > MAX_SIZE:
         raise HTTPException(400, "Файл слишком большой (максимум 10 МБ)")
+    # Каталог создаётся при первой загрузке, а не при импорте: вне Docker пути /app может не быть
+    os.makedirs(UPLOADS_DIR, exist_ok=True)
     with open(path, "wb") as f:
         f.write(content)
     return {"url": f"/api/v1/site/media/{filename}", "filename": filename}
