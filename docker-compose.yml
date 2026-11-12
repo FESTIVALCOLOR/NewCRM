@@ -45,6 +45,8 @@ services:
       context: ./server
       dockerfile: Dockerfile
     container_name: crm_api
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: always
     depends_on:
       postgres:
