@@ -1,6 +1,6 @@
 """
-Admin API для управления контентом сайта festivalcolor.ru
-Все endpoints требуют авторизации (JWT).
+Admin API РґР»СЏ СѓРїСЂР°РІР»РµРЅРёСЏ РєРѕРЅС‚РµРЅС‚РѕРј СЃР°Р№С‚Р° festivalcolor.ru
+Р’СЃРµ endpoints С‚СЂРµР±СѓСЋС‚ Р°РІС‚РѕСЂРёР·Р°С†РёРё (JWT).
 Prefix: /api/v1/site/admin
 """
 
@@ -9,9 +9,19 @@ from typing import List
 import uuid
 
 from auth import get_current_user
+from constants import SUPERUSER_ROLES
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+
+
+def require_site_admin(current_user: "Employee" = Depends(get_current_user)) -> "Employee":
+    """РўРѕР»СЊРєРѕ Р СѓРєРѕРІРѕРґРёС‚РµР»СЊ СЃС‚СѓРґРёРё / admin / director"""
+    if current_user.position not in SUPERUSER_ROLES and current_user.role not in {"admin", "director"}:
+        raise HTTPException(403, "Р”РѕСЃС‚СѓРї СЂР°Р·СЂРµС€С‘РЅ С‚РѕР»СЊРєРѕ Р СѓРєРѕРІРѕРґРёС‚РµР»СЋ СЃС‚СѓРґРёРё")
+    return current_user
+
+
 from schemas import (
     PortfolioImageCreate,
     PortfolioImageResponse,
@@ -61,42 +71,44 @@ os.makedirs(UPLOADS_DIR, exist_ok=True)
 router = APIRouter(prefix="/site/admin", tags=["site-admin"])
 
 
-# ──────────────────────────────────────────────
-# НАСТРОЙКИ (key/value)
-# ──────────────────────────────────────────────
+# в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+# РќРђРЎРўР РћР™РљР (key/value)
+# в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 
 @router.get("/settings", response_model=list[SiteSettingResponse])
-def list_settings(db: Session = Depends(get_db), _: Employee = Depends(get_current_user)):
+def list_settings(db: Session = Depends(get_db), _: Employee = Depends(require_site_admin)):
     return db.query(SiteSetting).order_by(SiteSetting.id).all()
 
 
 @router.put("/settings/{key}", response_model=SiteSettingResponse)
-def update_setting(key: str, data: SiteSettingUpdate, db: Session = Depends(get_db), _: Employee = Depends(get_current_user)):
+def update_setting(key: str, data: SiteSettingUpdate, db: Session = Depends(get_db), _: Employee = Depends(require_site_admin)):
     obj = db.query(SiteSetting).filter(SiteSetting.key == key).first()
     if not obj:
-        raise HTTPException(404, f"Настройка '{key}' не найдена")
-    obj.value = data.value
+        obj = SiteSetting(key=key, value=data.value)
+        db.add(obj)
+    else:
+        obj.value = data.value
     db.commit()
     db.refresh(obj)
     return obj
 
 
-# ──────────────────────────────────────────────
-# СЕКЦИИ (видимость / порядок)
-# ──────────────────────────────────────────────
+# в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+# РЎР•РљР¦РР (РІРёРґРёРјРѕСЃС‚СЊ / РїРѕСЂСЏРґРѕРє)
+# в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 
 @router.get("/sections", response_model=list[SiteSectionResponse])
-def list_sections(db: Session = Depends(get_db), _: Employee = Depends(get_current_user)):
+def list_sections(db: Session = Depends(get_db), _: Employee = Depends(require_site_admin)):
     return db.query(SiteSection).order_by(SiteSection.sort_order).all()
 
 
 @router.put("/sections/{key}", response_model=SiteSectionResponse)
-def update_section(key: str, data: SiteSectionUpdate, db: Session = Depends(get_db), _: Employee = Depends(get_current_user)):
+def update_section(key: str, data: SiteSectionUpdate, db: Session = Depends(get_db), _: Employee = Depends(require_site_admin)):
     obj = db.query(SiteSection).filter(SiteSection.key == key).first()
     if not obj:
-        raise HTTPException(404, f"Секция '{key}' не найдена")
+        raise HTTPException(404, f"РЎРµРєС†РёСЏ '{key}' РЅРµ РЅР°Р№РґРµРЅР°")
     if data.is_visible is not None:
         obj.is_visible = data.is_visible
     if data.sort_order is not None:
@@ -106,18 +118,18 @@ def update_section(key: str, data: SiteSectionUpdate, db: Session = Depends(get_
     return obj
 
 
-# ──────────────────────────────────────────────
-# КОМАНДА
-# ──────────────────────────────────────────────
+# в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+# РљРћРњРђРќР”Рђ
+# в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 
 @router.get("/team", response_model=list[TeamMemberResponse])
-def list_team(db: Session = Depends(get_db), _: Employee = Depends(get_current_user)):
+def list_team(db: Session = Depends(get_db), _: Employee = Depends(require_site_admin)):
     return db.query(TeamMember).order_by(TeamMember.sort_order).all()
 
 
 @router.post("/team", response_model=TeamMemberResponse)
-def create_team(data: TeamMemberCreate, db: Session = Depends(get_db), _: Employee = Depends(get_current_user)):
+def create_team(data: TeamMemberCreate, db: Session = Depends(get_db), _: Employee = Depends(require_site_admin)):
     obj = TeamMember(**data.model_dump())
     db.add(obj)
     db.commit()
@@ -126,7 +138,7 @@ def create_team(data: TeamMemberCreate, db: Session = Depends(get_db), _: Employ
 
 
 @router.put("/team/{id}", response_model=TeamMemberResponse)
-def update_team(id: int, data: TeamMemberUpdate, db: Session = Depends(get_db), _: Employee = Depends(get_current_user)):
+def update_team(id: int, data: TeamMemberUpdate, db: Session = Depends(get_db), _: Employee = Depends(require_site_admin)):
     obj = db.query(TeamMember).filter(TeamMember.id == id).first()
     if not obj:
         raise HTTPException(404)
@@ -138,7 +150,7 @@ def update_team(id: int, data: TeamMemberUpdate, db: Session = Depends(get_db), 
 
 
 @router.delete("/team/{id}")
-def delete_team(id: int, db: Session = Depends(get_db), _: Employee = Depends(get_current_user)):
+def delete_team(id: int, db: Session = Depends(get_db), _: Employee = Depends(require_site_admin)):
     obj = db.query(TeamMember).filter(TeamMember.id == id).first()
     if not obj:
         raise HTTPException(404)
@@ -147,18 +159,18 @@ def delete_team(id: int, db: Session = Depends(get_db), _: Employee = Depends(ge
     return {"ok": True}
 
 
-# ──────────────────────────────────────────────
-# СТАТИСТИКА
-# ──────────────────────────────────────────────
+# в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+# РЎРўРђРўРРЎРўРРљРђ
+# в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 
 @router.get("/stats", response_model=list[StatItemResponse])
-def list_stats(db: Session = Depends(get_db), _: Employee = Depends(get_current_user)):
+def list_stats(db: Session = Depends(get_db), _: Employee = Depends(require_site_admin)):
     return db.query(StatItem).order_by(StatItem.sort_order).all()
 
 
 @router.post("/stats", response_model=StatItemResponse)
-def create_stat(data: StatItemCreate, db: Session = Depends(get_db), _: Employee = Depends(get_current_user)):
+def create_stat(data: StatItemCreate, db: Session = Depends(get_db), _: Employee = Depends(require_site_admin)):
     obj = StatItem(**data.model_dump())
     db.add(obj)
     db.commit()
@@ -167,7 +179,7 @@ def create_stat(data: StatItemCreate, db: Session = Depends(get_db), _: Employee
 
 
 @router.put("/stats/{id}", response_model=StatItemResponse)
-def update_stat(id: int, data: StatItemUpdate, db: Session = Depends(get_db), _: Employee = Depends(get_current_user)):
+def update_stat(id: int, data: StatItemUpdate, db: Session = Depends(get_db), _: Employee = Depends(require_site_admin)):
     obj = db.query(StatItem).filter(StatItem.id == id).first()
     if not obj:
         raise HTTPException(404)
@@ -179,7 +191,7 @@ def update_stat(id: int, data: StatItemUpdate, db: Session = Depends(get_db), _:
 
 
 @router.delete("/stats/{id}")
-def delete_stat(id: int, db: Session = Depends(get_db), _: Employee = Depends(get_current_user)):
+def delete_stat(id: int, db: Session = Depends(get_db), _: Employee = Depends(require_site_admin)):
     obj = db.query(StatItem).filter(StatItem.id == id).first()
     if not obj:
         raise HTTPException(404)
@@ -188,18 +200,18 @@ def delete_stat(id: int, db: Session = Depends(get_db), _: Employee = Depends(ge
     return {"ok": True}
 
 
-# ──────────────────────────────────────────────
-# УСЛУГИ
-# ──────────────────────────────────────────────
+# в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+# РЈРЎР›РЈР“Р
+# в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 
 @router.get("/services", response_model=list[SiteServiceResponse])
-def list_services(db: Session = Depends(get_db), _: Employee = Depends(get_current_user)):
+def list_services(db: Session = Depends(get_db), _: Employee = Depends(require_site_admin)):
     return db.query(SiteService).order_by(SiteService.sort_order).all()
 
 
 @router.post("/services", response_model=SiteServiceResponse)
-def create_service(data: SiteServiceCreate, db: Session = Depends(get_db), _: Employee = Depends(get_current_user)):
+def create_service(data: SiteServiceCreate, db: Session = Depends(get_db), _: Employee = Depends(require_site_admin)):
     obj = SiteService(**data.model_dump())
     db.add(obj)
     db.commit()
@@ -208,7 +220,7 @@ def create_service(data: SiteServiceCreate, db: Session = Depends(get_db), _: Em
 
 
 @router.put("/services/{id}", response_model=SiteServiceResponse)
-def update_service(id: int, data: SiteServiceUpdate, db: Session = Depends(get_db), _: Employee = Depends(get_current_user)):
+def update_service(id: int, data: SiteServiceUpdate, db: Session = Depends(get_db), _: Employee = Depends(require_site_admin)):
     obj = db.query(SiteService).filter(SiteService.id == id).first()
     if not obj:
         raise HTTPException(404)
@@ -220,7 +232,7 @@ def update_service(id: int, data: SiteServiceUpdate, db: Session = Depends(get_d
 
 
 @router.delete("/services/{id}")
-def delete_service(id: int, db: Session = Depends(get_db), _: Employee = Depends(get_current_user)):
+def delete_service(id: int, db: Session = Depends(get_db), _: Employee = Depends(require_site_admin)):
     obj = db.query(SiteService).filter(SiteService.id == id).first()
     if not obj:
         raise HTTPException(404)
@@ -229,18 +241,18 @@ def delete_service(id: int, db: Session = Depends(get_db), _: Employee = Depends
     return {"ok": True}
 
 
-# ──────────────────────────────────────────────
-# ТАРИФЫ
-# ──────────────────────────────────────────────
+# в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+# РўРђР РР¤Р«
+# в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 
 @router.get("/pricing", response_model=list[PricingPlanResponse])
-def list_pricing(db: Session = Depends(get_db), _: Employee = Depends(get_current_user)):
+def list_pricing(db: Session = Depends(get_db), _: Employee = Depends(require_site_admin)):
     return db.query(PricingPlan).order_by(PricingPlan.sort_order).all()
 
 
 @router.post("/pricing", response_model=PricingPlanResponse)
-def create_pricing(data: PricingPlanCreate, db: Session = Depends(get_db), _: Employee = Depends(get_current_user)):
+def create_pricing(data: PricingPlanCreate, db: Session = Depends(get_db), _: Employee = Depends(require_site_admin)):
     plan_data = data.model_dump(exclude={"items"})
     plan = PricingPlan(**plan_data)
     db.add(plan)
@@ -253,7 +265,7 @@ def create_pricing(data: PricingPlanCreate, db: Session = Depends(get_db), _: Em
 
 
 @router.put("/pricing/{id}", response_model=PricingPlanResponse)
-def update_pricing(id: int, data: PricingPlanUpdate, db: Session = Depends(get_db), _: Employee = Depends(get_current_user)):
+def update_pricing(id: int, data: PricingPlanUpdate, db: Session = Depends(get_db), _: Employee = Depends(require_site_admin)):
     plan = db.query(PricingPlan).filter(PricingPlan.id == id).first()
     if not plan:
         raise HTTPException(404)
@@ -269,7 +281,7 @@ def update_pricing(id: int, data: PricingPlanUpdate, db: Session = Depends(get_d
 
 
 @router.delete("/pricing/{id}")
-def delete_pricing(id: int, db: Session = Depends(get_db), _: Employee = Depends(get_current_user)):
+def delete_pricing(id: int, db: Session = Depends(get_db), _: Employee = Depends(require_site_admin)):
     plan = db.query(PricingPlan).filter(PricingPlan.id == id).first()
     if not plan:
         raise HTTPException(404)
@@ -278,18 +290,18 @@ def delete_pricing(id: int, db: Session = Depends(get_db), _: Employee = Depends
     return {"ok": True}
 
 
-# ──────────────────────────────────────────────
-# ОТЗЫВЫ
-# ──────────────────────────────────────────────
+# в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+# РћРўР—Р«Р’Р«
+# в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 
 @router.get("/reviews", response_model=list[ReviewResponse])
-def list_reviews(db: Session = Depends(get_db), _: Employee = Depends(get_current_user)):
+def list_reviews(db: Session = Depends(get_db), _: Employee = Depends(require_site_admin)):
     return db.query(Review).order_by(Review.sort_order).all()
 
 
 @router.post("/reviews", response_model=ReviewResponse)
-def create_review(data: ReviewCreate, db: Session = Depends(get_db), _: Employee = Depends(get_current_user)):
+def create_review(data: ReviewCreate, db: Session = Depends(get_db), _: Employee = Depends(require_site_admin)):
     obj = Review(**data.model_dump())
     db.add(obj)
     db.commit()
@@ -298,7 +310,7 @@ def create_review(data: ReviewCreate, db: Session = Depends(get_db), _: Employee
 
 
 @router.put("/reviews/{id}", response_model=ReviewResponse)
-def update_review(id: int, data: ReviewUpdate, db: Session = Depends(get_db), _: Employee = Depends(get_current_user)):
+def update_review(id: int, data: ReviewUpdate, db: Session = Depends(get_db), _: Employee = Depends(require_site_admin)):
     obj = db.query(Review).filter(Review.id == id).first()
     if not obj:
         raise HTTPException(404)
@@ -310,7 +322,7 @@ def update_review(id: int, data: ReviewUpdate, db: Session = Depends(get_db), _:
 
 
 @router.delete("/reviews/{id}")
-def delete_review(id: int, db: Session = Depends(get_db), _: Employee = Depends(get_current_user)):
+def delete_review(id: int, db: Session = Depends(get_db), _: Employee = Depends(require_site_admin)):
     obj = db.query(Review).filter(Review.id == id).first()
     if not obj:
         raise HTTPException(404)
@@ -319,18 +331,18 @@ def delete_review(id: int, db: Session = Depends(get_db), _: Employee = Depends(
     return {"ok": True}
 
 
-# ──────────────────────────────────────────────
-# ПОРТФОЛИО
-# ──────────────────────────────────────────────
+# в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+# РџРћР РўР¤РћР›РРћ
+# в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 
 @router.get("/portfolio", response_model=list[PortfolioImageResponse])
-def list_portfolio(db: Session = Depends(get_db), _: Employee = Depends(get_current_user)):
+def list_portfolio(db: Session = Depends(get_db), _: Employee = Depends(require_site_admin)):
     return db.query(PortfolioImage).order_by(PortfolioImage.sort_order).all()
 
 
 @router.post("/portfolio", response_model=PortfolioImageResponse)
-def create_portfolio(data: PortfolioImageCreate, db: Session = Depends(get_db), _: Employee = Depends(get_current_user)):
+def create_portfolio(data: PortfolioImageCreate, db: Session = Depends(get_db), _: Employee = Depends(require_site_admin)):
     obj = PortfolioImage(**data.model_dump())
     db.add(obj)
     db.commit()
@@ -339,7 +351,7 @@ def create_portfolio(data: PortfolioImageCreate, db: Session = Depends(get_db), 
 
 
 @router.put("/portfolio/{id}", response_model=PortfolioImageResponse)
-def update_portfolio(id: int, data: PortfolioImageUpdate, db: Session = Depends(get_db), _: Employee = Depends(get_current_user)):
+def update_portfolio(id: int, data: PortfolioImageUpdate, db: Session = Depends(get_db), _: Employee = Depends(require_site_admin)):
     obj = db.query(PortfolioImage).filter(PortfolioImage.id == id).first()
     if not obj:
         raise HTTPException(404)
@@ -351,7 +363,7 @@ def update_portfolio(id: int, data: PortfolioImageUpdate, db: Session = Depends(
 
 
 @router.delete("/portfolio/{id}")
-def delete_portfolio(id: int, db: Session = Depends(get_db), _: Employee = Depends(get_current_user)):
+def delete_portfolio(id: int, db: Session = Depends(get_db), _: Employee = Depends(require_site_admin)):
     obj = db.query(PortfolioImage).filter(PortfolioImage.id == id).first()
     if not obj:
         raise HTTPException(404)
@@ -360,9 +372,9 @@ def delete_portfolio(id: int, db: Session = Depends(get_db), _: Employee = Depen
     return {"ok": True}
 
 
-# ──────────────────────────────────────────────
+# в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 # REORDER (bulk sort_order update)
-# ──────────────────────────────────────────────
+# в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 
 class ReorderItem(BaseModel):
@@ -376,7 +388,7 @@ class ReorderSectionItem(BaseModel):
 
 
 @router.put("/sections/reorder")
-def reorder_sections(items: list[ReorderSectionItem], db: Session = Depends(get_db), _: Employee = Depends(get_current_user)):
+def reorder_sections(items: list[ReorderSectionItem], db: Session = Depends(get_db), _: Employee = Depends(require_site_admin)):
     for item in items:
         obj = db.query(SiteSection).filter(SiteSection.key == item.key).first()
         if obj:
@@ -386,7 +398,7 @@ def reorder_sections(items: list[ReorderSectionItem], db: Session = Depends(get_
 
 
 @router.put("/services/reorder")
-def reorder_services(items: list[ReorderItem], db: Session = Depends(get_db), _: Employee = Depends(get_current_user)):
+def reorder_services(items: list[ReorderItem], db: Session = Depends(get_db), _: Employee = Depends(require_site_admin)):
     for item in items:
         obj = db.query(SiteService).filter(SiteService.id == item.id).first()
         if obj:
@@ -396,7 +408,7 @@ def reorder_services(items: list[ReorderItem], db: Session = Depends(get_db), _:
 
 
 @router.put("/reviews/reorder")
-def reorder_reviews(items: list[ReorderItem], db: Session = Depends(get_db), _: Employee = Depends(get_current_user)):
+def reorder_reviews(items: list[ReorderItem], db: Session = Depends(get_db), _: Employee = Depends(require_site_admin)):
     for item in items:
         obj = db.query(Review).filter(Review.id == item.id).first()
         if obj:
@@ -406,7 +418,7 @@ def reorder_reviews(items: list[ReorderItem], db: Session = Depends(get_db), _: 
 
 
 @router.put("/portfolio/reorder")
-def reorder_portfolio(items: list[ReorderItem], db: Session = Depends(get_db), _: Employee = Depends(get_current_user)):
+def reorder_portfolio(items: list[ReorderItem], db: Session = Depends(get_db), _: Employee = Depends(require_site_admin)):
     for item in items:
         obj = db.query(PortfolioImage).filter(PortfolioImage.id == item.id).first()
         if obj:
@@ -416,7 +428,7 @@ def reorder_portfolio(items: list[ReorderItem], db: Session = Depends(get_db), _
 
 
 @router.put("/stats/reorder")
-def reorder_stats(items: list[ReorderItem], db: Session = Depends(get_db), _: Employee = Depends(get_current_user)):
+def reorder_stats(items: list[ReorderItem], db: Session = Depends(get_db), _: Employee = Depends(require_site_admin)):
     for item in items:
         obj = db.query(StatItem).filter(StatItem.id == item.id).first()
         if obj:
@@ -426,7 +438,7 @@ def reorder_stats(items: list[ReorderItem], db: Session = Depends(get_db), _: Em
 
 
 @router.put("/pricing/reorder")
-def reorder_pricing(items: list[ReorderItem], db: Session = Depends(get_db), _: Employee = Depends(get_current_user)):
+def reorder_pricing(items: list[ReorderItem], db: Session = Depends(get_db), _: Employee = Depends(require_site_admin)):
     for item in items:
         obj = db.query(PricingPlan).filter(PricingPlan.id == item.id).first()
         if obj:
@@ -435,44 +447,44 @@ def reorder_pricing(items: list[ReorderItem], db: Session = Depends(get_db), _: 
     return {"ok": True}
 
 
-# ──────────────────────────────────────────────
-# ЗАГРУЗКА ИЗОБРАЖЕНИЙ
-# ──────────────────────────────────────────────
+# в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+# Р—РђР“Р РЈР—РљРђ РР—РћР‘Р РђР–Р•РќРР™
+# в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 ALLOWED_MIME = {"image/jpeg", "image/png", "image/gif", "image/webp", "image/svg+xml"}
 MAX_SIZE = 10 * 1024 * 1024  # 10 MB
 
 
 @router.post("/upload")
-async def upload_image(file: UploadFile = File(...), _: Employee = Depends(get_current_user)):
+async def upload_image(file: UploadFile = File(...), _: Employee = Depends(require_site_admin)):
     if file.content_type not in ALLOWED_MIME:
-        raise HTTPException(400, "Недопустимый тип файла. Разрешены: JPEG, PNG, GIF, WebP, SVG")
+        raise HTTPException(400, "РќРµРґРѕРїСѓСЃС‚РёРјС‹Р№ С‚РёРї С„Р°Р№Р»Р°. Р Р°Р·СЂРµС€РµРЅС‹: JPEG, PNG, GIF, WebP, SVG")
     ext = os.path.splitext(file.filename or "")[1].lower() or ".jpg"
     filename = f"{uuid.uuid4().hex}{ext}"
     path = os.path.join(UPLOADS_DIR, filename)
     content = await file.read()
     if len(content) > MAX_SIZE:
-        raise HTTPException(400, "Файл слишком большой (максимум 10 МБ)")
+        raise HTTPException(400, "Р¤Р°Р№Р» СЃР»РёС€РєРѕРј Р±РѕР»СЊС€РѕР№ (РјР°РєСЃРёРјСѓРј 10 РњР‘)")
     with open(path, "wb") as f:
         f.write(content)
     return {"url": f"/api/v1/site/media/{filename}", "filename": filename}
 
 
 @router.get("/media/{filename}", include_in_schema=False)
-def serve_media(filename: str, _: Employee = Depends(get_current_user)):
+def serve_media(filename: str, _: Employee = Depends(require_site_admin)):
     path = os.path.join(UPLOADS_DIR, filename)
     if not os.path.isfile(path):
         raise HTTPException(404)
     return FileResponse(path)
 
 
-# ──────────────────────────────────────────────
-# АНАЛИТИКА / SEO
-# ──────────────────────────────────────────────
+# в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+# РђРќРђР›РРўРРљРђ / SEO
+# в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 
 @router.get("/analytics", response_model=SiteAnalyticsResponse)
-def get_analytics(db: Session = Depends(get_db), _: Employee = Depends(get_current_user)):
+def get_analytics(db: Session = Depends(get_db), _: Employee = Depends(require_site_admin)):
     obj = db.query(SiteAnalytics).filter(SiteAnalytics.id == 1).first()
     if not obj:
         obj = SiteAnalytics(id=1)
@@ -483,7 +495,7 @@ def get_analytics(db: Session = Depends(get_db), _: Employee = Depends(get_curre
 
 
 @router.put("/analytics", response_model=SiteAnalyticsResponse)
-def update_analytics(data: SiteAnalyticsUpdate, db: Session = Depends(get_db), _: Employee = Depends(get_current_user)):
+def update_analytics(data: SiteAnalyticsUpdate, db: Session = Depends(get_db), _: Employee = Depends(require_site_admin)):
     from datetime import datetime
 
     obj = db.query(SiteAnalytics).filter(SiteAnalytics.id == 1).first()
