@@ -34,6 +34,7 @@
 
 <script setup>
 import { ref } from 'vue'
+import { ctaUrl } from '../contact.js'
 const props = defineProps({ pricing: Array, settings: Object })
 const expanded = ref({})
 
@@ -42,9 +43,7 @@ function toggle(id) {
 }
 
 function buildWhatsApp(plan) {
-  const phone = props.settings?.whatsapp_phone || '79062003365'
-  const text = encodeURIComponent(plan.whatsapp_text || `Здравствуйте, интересует тариф: ${plan.title}`)
-  return `https://wa.clck.bar/${phone}?text=${text}`
+  return ctaUrl(props.settings, plan.whatsapp_text || `Здравствуйте, интересует тариф: ${plan.title}`)
 }
 </script>
 

@@ -53,7 +53,7 @@
           <h3>Контактные данные</h3>
           <div class="form-grid">
             <label>Телефон<input v-model="sf.phone" placeholder="+7 (495) 000-00-00" /></label>
-            <label>WhatsApp (только цифры, без +)<input v-model="sf.whatsapp" placeholder="79991234567" /></label>
+            <label>WhatsApp (номер с кодом страны)<input v-model="sf.whatsapp_phone" placeholder="79991234567" /></label>
             <label>Telegram (@username без @)<input v-model="sf.telegram" placeholder="festivalcolor" /></label>
             <label>ВКонтакте (полный URL)<input v-model="sf.vk_url" placeholder="https://vk.com/festivalcolor" /></label>
             <label>Instagram (полный URL)<input v-model="sf.instagram_url" placeholder="https://instagram.com/festivalcolor" /></label>
@@ -62,22 +62,47 @@
           </div>
           <button class="btn-primary" @click="saveSettings">Сохранить контакты</button>
         </div>
+        <div class="card">
+          <h3>Главный экран и оформление</h3>
+          <p class="hint">Первый экран сайта: заголовок, подзаголовок, текст кнопки и фоновое фото.</p>
+          <div class="form-grid">
+            <label>Заголовок<input v-model="hf.hero_title" placeholder="Креативный дизайн для вашего успеха" /></label>
+            <label>Текст кнопки<input v-model="hf.hero_cta" placeholder="Свяжитесь с нами" /></label>
+          </div>
+          <label>Подзаголовок<textarea v-model="hf.hero_subtitle" rows="2"></textarea></label>
+          <label>Фоновое фото главного экрана
+            <div class="upload-row">
+              <input v-model="hf.hero_bg_url" placeholder="https://... или загрузите" />
+              <button class="btn-sm" @click.prevent="$refs.heroBgInput.click()">Загрузить</button>
+              <input ref="heroBgInput" type="file" accept="image/jpeg,image/png,image/webp" style="display:none" @change="uploadImg($event, v => hf.hero_bg_url = v)" />
+            </div>
+          </label>
+          <label>Логотип в шапке
+            <div class="upload-row">
+              <input v-model="hf.logo_url" placeholder="https://... или загрузите" />
+              <button class="btn-sm" @click.prevent="$refs.logoInput.click()">Загрузить</button>
+              <input ref="logoInput" type="file" accept="image/jpeg,image/png,image/webp" style="display:none" @change="uploadImg($event, v => hf.logo_url = v)" />
+            </div>
+          </label>
+          <label>Текст в подвале сайта (копирайт)<input v-model="hf.copyright" /></label>
+          <button class="btn-primary mt" @click="saveHero">Сохранить оформление</button>
+        </div>
       </section>
 
       <!-- ── Секции ── -->
       <section v-if="currentTab === 'sections'" class="tab-body">
-        <p class="hint">Перетащите секции чтобы изменить порядок в меню и на странице. Включите/выключите видимость.</p>
+        <p class="hint">Перетащите секцию мышью, чтобы изменить порядок в меню и на странице — порядок сохраняется сразу. Переключатель скрывает секцию с сайта и из меню.</p>
         <div class="drag-list" @dragover.prevent>
           <div v-for="(sec, i) in sectionsData" :key="sec.key"
             class="drag-item"
             draggable="true"
-            @dragstart="dragFrom = i; dragKey = 'sections'"
+            @dragstart="onDragStart($event, i, 'sections')"
             @dragover.prevent
             @drop.prevent="onDrop(i, 'sections')">
             <span class="drag-handle">⠿</span>
             <div class="drag-info">
               <strong>{{ sectionLabel(sec) }}</strong>
-              <span class="sec-key">{{ sec.key }}</span>
+              <span class="sec-key">{{ sectionHint(sec) }}</span>
             </div>
             <label class="toggle">
               <input type="checkbox" v-model="sec.is_visible" @change="saveSectionVisibility(sec)" />
@@ -86,13 +111,12 @@
             </label>
           </div>
         </div>
-        <button class="btn-primary mt" @click="saveSectionsOrder">Сохранить порядок</button>
       </section>
 
       <!-- ── Услуги ── -->
       <section v-if="currentTab === 'services'" class="tab-body">
         <div class="card-info">
-          <strong>Иконки:</strong> введите любой эмодзи (🏠 🖊 📐 🎨 📄 ✏) — он отображается перед названием услуги на сайте.
+          Карточки блока «Что мы предлагаем». Иконка выбирается из готового набора при редактировании услуги. Порядок меняется перетаскиванием и сохраняется сразу.
         </div>
         <div class="list-toolbar">
           <button class="btn-primary" @click="openServiceEdit({})">+ Добавить услугу</button>
@@ -101,11 +125,11 @@
           <div v-for="(svc, i) in servicesData" :key="svc.id"
             class="drag-item"
             draggable="true"
-            @dragstart="dragFrom = i; dragKey = 'services'"
+            @dragstart="onDragStart($event, i, 'services')"
             @dragover.prevent
             @drop.prevent="onDrop(i, 'services')">
             <span class="drag-handle">⠿</span>
-            <span style="font-size:1.4rem;width:30px;text-align:center">{{ svc.icon }}</span>
+            <span class="svc-icon"><svg viewBox="0 0 24 24"><path :d="serviceIconPath(svc.icon)" /></svg></span>
             <div class="drag-info">
               <strong>{{ svc.title }}</strong>
             </div>
@@ -119,20 +143,20 @@
             </div>
           </div>
         </div>
-        <button class="btn-ghost mt" @click="saveServicesOrder">Сохранить порядок</button>
 
         <div v-if="editingService" class="modal-overlay" @click.self="editingService = null">
           <div class="modal">
             <h3>{{ editingService.id ? 'Редактировать услугу' : 'Новая услуга' }}</h3>
             <label>Название услуги<input v-model="editingService.title" placeholder="Дизайн-проект квартиры" /></label>
-            <label>
-              Иконка (эмодзи)
-              <div class="emoji-row">
-                <input v-model="editingService.icon" placeholder="🏠" style="width:80px" />
-                <span v-for="e in ['🏠','🖊','📐','🎨','📄','✏','🔑','🛋','🪟','💡','📏','🏗']"
-                  :key="e" class="emoji-pick" @click="editingService.icon = e">{{ e }}</span>
+            <div class="field">
+              Иконка — нажмите на нужную
+              <div class="icon-row">
+                <button v-for="(ic, name) in SERVICE_ICONS" :key="name" type="button" :title="ic.label"
+                  :class="['icon-pick', { active: editingService.icon === name }]" @click="editingService.icon = name">
+                  <svg viewBox="0 0 24 24"><path :d="ic.path" /></svg>
+                </button>
               </div>
-            </label>
+            </div>
             <label>Описание<textarea v-model="editingService.description" rows="3" placeholder="Краткое описание услуги"></textarea></label>
             <div class="modal-footer">
               <button class="btn-ghost" @click="editingService = null">Отмена</button>
@@ -144,7 +168,7 @@
 
       <!-- ── Цены ── -->
       <section v-if="currentTab === 'pricing'" class="tab-body">
-        <div class="card-info">Каждый план — это один столбец на странице цен. Состав — список пунктов (что входит в услугу).</div>
+        <div class="card-info">Каждый план — одна карточка в блоке «Наши цены». Состав — список пунктов (что входит в услугу); у пункта могут быть раскрывающиеся подпункты.</div>
         <div class="list-toolbar">
           <button class="btn-primary" @click="openPlanEdit({})">+ Добавить план</button>
         </div>
@@ -152,7 +176,7 @@
           <div v-for="(plan, i) in pricingData" :key="plan.id"
             class="drag-item"
             draggable="true"
-            @dragstart="dragFrom = i; dragKey = 'pricing'"
+            @dragstart="onDragStart($event, i, 'pricing')"
             @dragover.prevent
             @drop.prevent="onDrop(i, 'pricing')">
             <span class="drag-handle">⠿</span>
@@ -170,7 +194,6 @@
             </div>
           </div>
         </div>
-        <button class="btn-ghost mt" @click="savePricingOrder">Сохранить порядок</button>
 
         <div v-if="editingPlan" class="modal-overlay" @click.self="editingPlan = null">
           <div class="modal">
@@ -179,11 +202,11 @@
               <label>Название плана<input v-model="editingPlan.title" placeholder="Планировочные решения" /></label>
               <label>Цена (текст)<input v-model="editingPlan.price_label" placeholder="от 90 000 ₽" /></label>
             </div>
-            <label>Текст для WhatsApp-кнопки (необязательно)<input v-model="editingPlan.whatsapp_text" placeholder="Хочу заказать..." /></label>
+            <label>Текст сообщения, которое клиент отправит по кнопке «Заказать» (необязательно)<input v-model="editingPlan.whatsapp_text" placeholder="Здравствуйте, интересует тариф…" /></label>
             <label class="cb-row"><input type="checkbox" v-model="editingPlan.is_featured" /> Выделить (цветной блок)</label>
-            <label>Состав услуги — каждый пункт с новой строки
-              <textarea v-model="editingPlan.items_text" rows="8"
-                placeholder="Обмерный план квартиры&#10;Планировочное решение (3 варианта)&#10;3D-визуализация&#10;..."></textarea>
+            <label>Состав услуги — каждый пункт с новой строки. Строка, начинающаяся с дефиса «-», становится подпунктом предыдущего пункта
+              <textarea v-model="editingPlan.items_text" rows="10"
+                placeholder="Обмерный план квартиры&#10;Планировочное решение&#10;- 3 варианта планировки&#10;- расстановка мебели&#10;3D-визуализация"></textarea>
             </label>
             <div class="modal-footer">
               <button class="btn-ghost" @click="editingPlan = null">Отмена</button>
@@ -198,14 +221,15 @@
         <div class="list-toolbar">
           <button class="btn-primary" @click="$refs.portfolioInput.click()">+ Загрузить фото</button>
           <span v-if="uploading" class="upload-progress">Загрузка {{ uploadProgress }}/{{ uploadTotal }}…</span>
-          <input ref="portfolioInput" type="file" accept="image/*" multiple style="display:none" @change="uploadPortfolio" />
+          <input ref="portfolioInput" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple style="display:none" @change="uploadPortfolio" />
+          <span class="hint" style="margin:0">JPEG, PNG или WebP до 10 МБ. Порядок меняется перетаскиванием.</span>
         </div>
         <div v-if="portfolioData.length === 0" class="empty-state">Фото ещё не добавлены — нажмите «Загрузить фото»</div>
         <div class="portfolio-grid" @dragover.prevent>
           <div v-for="(img, i) in portfolioData" :key="img.id"
             class="portfolio-thumb"
             draggable="true"
-            @dragstart="dragFrom = i; dragKey = 'portfolio'"
+            @dragstart="onDragStart($event, i, 'portfolio')"
             @dragover.prevent
             @drop.prevent="onDrop(i, 'portfolio')">
             <img :src="img.url" :alt="img.alt" />
@@ -219,7 +243,6 @@
             </div>
           </div>
         </div>
-        <button v-if="portfolioData.length > 0" class="btn-ghost mt" @click="savePortfolioOrder">Сохранить порядок</button>
 
         <div v-if="editingPortfolio" class="modal-overlay" @click.self="editingPortfolio = null">
           <div class="modal">
@@ -243,7 +266,7 @@
           <div v-for="(rev, i) in reviewsData" :key="rev.id"
             class="drag-item"
             draggable="true"
-            @dragstart="dragFrom = i; dragKey = 'reviews'"
+            @dragstart="onDragStart($event, i, 'reviews')"
             @dragover.prevent
             @drop.prevent="onDrop(i, 'reviews')">
             <span class="drag-handle">⠿</span>
@@ -255,7 +278,7 @@
             </div>
             <div class="drag-actions">
               <label class="toggle">
-                <input type="checkbox" v-model="rev.is_active" @change="api.reviews.update(rev.id, {is_active: rev.is_active, author_name: rev.author_name, text: rev.text}).catch(e=>toast(e.message,'error'))" />
+                <input type="checkbox" v-model="rev.is_active" @change="api.reviews.update(rev.id, {is_active: rev.is_active}).catch(e=>toast(e.message,'error'))" />
                 <span class="toggle-track"></span>
                 <span class="toggle-label">{{ rev.is_active ? 'Показывать' : 'Скрыт' }}</span>
               </label>
@@ -264,7 +287,6 @@
             </div>
           </div>
         </div>
-        <button class="btn-ghost mt" @click="saveReviewsOrder">Сохранить порядок</button>
 
         <div v-if="editingReview" class="modal-overlay" @click.self="editingReview = null">
           <div class="modal">
@@ -293,7 +315,7 @@
       <!-- ── Команда ── -->
       <section v-if="currentTab === 'team'" class="tab-body">
         <div class="card-info">
-          Сотрудники отображаются в секции «Наша команда» на сайте. Добавьте фото и должность каждого сотрудника.
+          На сайте в блоке «О нас» показывается <strong>первый видимый</strong> человек из этого списка: его фото, текст «о себе», имя, специальность и должность. Остальные хранятся про запас — перетащите нужного на первое место, чтобы показать его.
         </div>
         <div class="list-toolbar">
           <button class="btn-primary" @click="openTeamEdit({})">+ Добавить сотрудника</button>
@@ -301,7 +323,7 @@
         <div class="team-grid">
           <div v-for="(m, i) in teamData" :key="m.id" class="team-card"
             draggable="true"
-            @dragstart="dragFrom = i; dragKey = 'team'"
+            @dragstart="onDragStart($event, i, 'team')"
             @dragover.prevent
             @drop.prevent="onDrop(i, 'team')">
             <img v-if="m.photo_url" :src="m.photo_url" class="team-photo" />
@@ -310,7 +332,7 @@
             <div class="team-pos">{{ m.role_label }}</div>
             <div class="team-actions">
               <label class="toggle">
-                <input type="checkbox" v-model="m.is_visible" @change="api.team.update(m.id, {...m}).catch(e=>toast(e.message,'error'))" />
+                <input type="checkbox" v-model="m.is_visible" @change="api.team.update(m.id, {is_visible: m.is_visible}).catch(e=>toast(e.message,'error'))" />
                 <span class="toggle-track"></span>
               </label>
               <button class="btn-sm" @click="openTeamEdit(m)">✏</button>
@@ -324,9 +346,10 @@
             <h3>{{ editingTeam.id ? 'Редактировать сотрудника' : 'Новый сотрудник' }}</h3>
             <div class="form-grid">
               <label>Имя<input v-model="editingTeam.name" placeholder="Мария Иванова" /></label>
-              <label>Должность / роль<input v-model="editingTeam.role_label" placeholder="Главный дизайнер" /></label>
+              <label>Специальность<input v-model="editingTeam.position" placeholder="Дизайнер / Архитектор" /></label>
             </div>
-            <label>О сотруднике (несколько слов)<textarea v-model="editingTeam.description" rows="2" placeholder="10 лет опыта, специализация — современный минимализм"></textarea></label>
+            <label>Должность (выделяется цветом)<input v-model="editingTeam.role_label" placeholder="Руководитель студии FESTIVAL COLOR" /></label>
+            <label>Текст блока «О нас»<textarea v-model="editingTeam.description" rows="8" placeholder="Здравствуйте, меня зовут…"></textarea></label>
             <label>Фото
               <div class="upload-row">
                 <input v-model="editingTeam.photo_url" placeholder="https://... или загрузите" />
@@ -343,8 +366,51 @@
         </div>
       </section>
 
+      <!-- ── Цифры ── -->
+      <section v-if="currentTab === 'stats'" class="tab-body">
+        <div class="card-info">Блок с цифрами на сайте («1000+ проектов реализовано»). Порядок меняется перетаскиванием.</div>
+        <div class="list-toolbar">
+          <button class="btn-primary" @click="openStatEdit({})">+ Добавить цифру</button>
+        </div>
+        <div class="drag-list" @dragover.prevent>
+          <div v-for="(st, i) in statsData" :key="st.id"
+            class="drag-item"
+            draggable="true"
+            @dragstart="onDragStart($event, i, 'stats')"
+            @dragover.prevent
+            @drop.prevent="onDrop(i, 'stats')">
+            <span class="drag-handle">⠿</span>
+            <div class="drag-info">
+              <strong>{{ st.value }}</strong>
+              <span class="sec-key">{{ st.label }}</span>
+            </div>
+            <div class="drag-actions">
+              <button class="btn-sm" @click="openStatEdit(st)">✏ Изменить</button>
+              <button class="btn-sm btn-danger" @click="deleteStat(st.id)">✕</button>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="editingStat" class="modal-overlay" @click.self="editingStat = null">
+          <div class="modal">
+            <h3>{{ editingStat.id ? 'Редактировать цифру' : 'Новая цифра' }}</h3>
+            <div class="form-grid">
+              <label>Значение<input v-model="editingStat.value" placeholder="1000+" /></label>
+              <label>Подпись<input v-model="editingStat.label" placeholder="Проектов реализовано" /></label>
+            </div>
+            <div class="modal-footer">
+              <button class="btn-ghost" @click="editingStat = null">Отмена</button>
+              <button class="btn-primary" @click="saveStatEdit">Сохранить</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- ── Аналитика / SEO ── -->
       <section v-if="currentTab === 'analytics'" class="tab-body">
+        <div class="card-info">
+          Все поля здесь необязательные — пустое поле просто не используется. Чтобы видеть посещаемость, достаточно завести счётчик в Яндекс.Метрике и вставить его номер в первое поле. Блок «SEO» отвечает за то, как сайт подписан в поиске, «Open Graph» — как выглядит ссылка в мессенджерах. Остальное можно заполнить позже или не заполнять вовсе.
+        </div>
         <div class="card">
           <h3>Яндекс.Метрика и счётчики</h3>
           <p class="hint">Вставьте номер счётчика (только цифры) — скрипты подключатся автоматически.</p>
@@ -441,6 +507,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import * as api from './api.js'
+import { SERVICE_ICONS, serviceIconPath } from '../serviceIcons.js'
 
 // ══ Auth ══
 const authed = ref(!!localStorage.getItem('admin_token'))
@@ -471,7 +538,8 @@ const tabs = [
   { id: 'pricing',   icon: '₽',  label: 'Цены' },
   { id: 'portfolio', icon: '◉',  label: 'Портфолио' },
   { id: 'reviews',   icon: '★',  label: 'Отзывы' },
-  { id: 'team',      icon: '◎',  label: 'Команда' },
+  { id: 'team',      icon: '◎',  label: 'О нас / команда' },
+  { id: 'stats',     icon: '#',  label: 'Цифры' },
   { id: 'analytics', icon: '📈', label: 'Аналитика / SEO' },
 ]
 const currentTab = ref('settings')
@@ -490,16 +558,32 @@ function toast(text, type = 'success') {
 const dragFrom = ref(null)
 const dragKey = ref(null)
 
-function onDrop(toIdx, listName) {
-  if (dragKey.value !== listName || dragFrom.value === null || dragFrom.value === toIdx) return
-  const arr = listRef(listName)
-  const [item] = arr.splice(dragFrom.value, 1)
-  arr.splice(toIdx, 0, item)
-  dragFrom.value = null; dragKey.value = null
+function onDragStart(e, idx, listName) {
+  dragFrom.value = idx; dragKey.value = listName
+  // Firefox не начинает перетаскивание, пока в dataTransfer нет данных
+  e.dataTransfer.effectAllowed = 'move'
+  e.dataTransfer.setData('text/plain', String(idx))
 }
-function listRef(name) {
-  return { sections: sectionsData.value, services: servicesData.value, pricing: pricingData.value,
-           portfolio: portfolioData.value, reviews: reviewsData.value, team: teamData.value }[name]
+async function onDrop(toIdx, listName) {
+  const from = dragFrom.value
+  const sameList = dragKey.value === listName
+  dragFrom.value = null; dragKey.value = null
+  if (!sameList || from === null || from === toIdx) return
+  const list = dragLists[listName]
+  const arr = list.data.value
+  const [item] = arr.splice(from, 1)
+  arr.splice(toIdx, 0, item)
+  try {
+    await list.reorder(arr.map((it, i) => (listName === 'sections' ? { key: it.key, sort_order: i } : { id: it.id, sort_order: i })))
+    toast('Порядок сохранён')
+  } catch (err) {
+    toast('Не удалось сохранить порядок: ' + err.message, 'error')
+    list.load()
+  }
+}
+
+function loadError(e) {
+  if (e.message !== '401') toast('Не удалось загрузить данные: ' + e.message, 'error')
 }
 
 // ══ Upload helper ══
@@ -515,8 +599,9 @@ async function uploadImg(e, setter) {
 
 // ══ Settings ══
 const sf = reactive({
-  phone: '', whatsapp: '', telegram: '', vk_url: '', instagram_url: '', email: '', address: '',
+  phone: '', whatsapp_phone: '', telegram: '', vk_url: '', instagram_url: '', email: '', address: '',
 })
+const hf = reactive({ hero_title: '', hero_subtitle: '', hero_cta: '', hero_bg_url: '', logo_url: '', copyright: '' })
 const ctaMethod = ref('whatsapp')
 const contactMethods = [
   { value: 'whatsapp', label: 'WhatsApp' },
@@ -530,14 +615,26 @@ async function loadSettings() {
     const rows = await api.settings.list()
     rows.forEach(r => {
       if (r.key in sf) sf[r.key] = r.value || ''
+      if (r.key in hf) hf[r.key] = r.value || ''
       if (r.key === 'cta_method') ctaMethod.value = r.value || 'whatsapp'
     })
-  } catch (e) { console.error(e) }
+  } catch (e) { loadError(e) }
 }
 async function saveSettings() {
+  sf.whatsapp_phone = sf.whatsapp_phone.replace(/\D/g, '')
+  sf.telegram = sf.telegram.trim().replace(/^@/, '')
+  if (sf.whatsapp_phone && (sf.whatsapp_phone.length < 10 || sf.whatsapp_phone.length > 15)) {
+    toast('Номер WhatsApp должен содержать от 10 до 15 цифр, например 79991234567', 'error'); return
+  }
   try {
     for (const key of Object.keys(sf)) await api.settings.update(key, sf[key])
     toast('Контакты сохранены')
+  } catch (e) { toast(e.message, 'error') }
+}
+async function saveHero() {
+  try {
+    for (const key of Object.keys(hf)) await api.settings.update(key, hf[key])
+    toast('Оформление сохранено')
   } catch (e) { toast(e.message, 'error') }
 }
 async function saveCta() {
@@ -547,34 +644,30 @@ async function saveCta() {
 
 // ══ Sections ══
 const sectionsData = ref([])
+// Названия совпадают с пунктами меню сайта; у секции «Цифры» пункта меню нет
 const sectionLabels = {
-  hero: 'Главный экран',
+  hero: 'Главная',
   about: 'О нас',
-  services: 'Что мы делаем',
-  stats: 'Цифры и достижения',
+  services: 'Услуги',
+  stats: 'Цифры',
   portfolio: 'Портфолио',
   pricing: 'Цены',
   reviews: 'Отзывы',
   contacts: 'Контакты',
-  team: 'Команда',
-  cta: 'Призыв к действию',
 }
 function sectionLabel(sec) {
-  return sec.label || sectionLabels[sec.key] || sec.key
+  return sectionLabels[sec.key] || sec.label || sec.key
+}
+function sectionHint(sec) {
+  return sec.key === 'stats' ? 'Блок с цифрами — показывается на странице, в меню пункта нет' : 'Пункт меню и блок на странице'
 }
 
 async function loadSections() {
-  try { sectionsData.value = await api.sections.list() } catch (e) { console.error(e) }
+  try { sectionsData.value = await api.sections.list() } catch (e) { loadError(e) }
 }
 async function saveSectionVisibility(sec) {
   try { await api.sections.update(sec.key, { is_visible: sec.is_visible }) }
   catch (e) { toast(e.message, 'error') }
-}
-async function saveSectionsOrder() {
-  try {
-    await api.sections.reorder(sectionsData.value.map((s, i) => ({ key: s.key, sort_order: i })))
-    toast('Порядок секций сохранён')
-  } catch (e) { toast(e.message, 'error') }
 }
 
 // ══ Services ══
@@ -582,21 +675,22 @@ const servicesData = ref([])
 const editingService = ref(null)
 
 async function loadServices() {
-  try { servicesData.value = await api.services.list() } catch (e) { console.error(e) }
+  try { servicesData.value = await api.services.list() } catch (e) { loadError(e) }
 }
 function openServiceEdit(svc) {
-  editingService.value = { title: '', icon: '', description: '', is_visible: true, ...svc }
+  editingService.value = { title: '', icon: 'star', description: '', is_visible: true, ...svc }
 }
 async function saveServiceEdit() {
+  if (!editingService.value.title.trim()) { toast('Укажите название услуги', 'error'); return }
   try {
     const d = { title: editingService.value.title, icon: editingService.value.icon,
                 description: editingService.value.description, is_visible: editingService.value.is_visible }
     if (editingService.value.id) {
-      await api.services.update(editingService.value.id, d)
-      const i = servicesData.value.findIndex(s => s.id === editingService.value.id)
-      if (i >= 0) servicesData.value[i] = { ...servicesData.value[i], ...d }
+      const r = await api.services.update(editingService.value.id, d)
+      const i = servicesData.value.findIndex(s => s.id === r.id)
+      if (i >= 0) servicesData.value[i] = r
     } else {
-      const r = await api.services.create(d)
+      const r = await api.services.create({ ...d, sort_order: servicesData.value.length })
       servicesData.value.push(r)
     }
     editingService.value = null; toast('Услуга сохранена')
@@ -607,37 +701,48 @@ async function deleteService(id) {
   try { await api.services.delete(id); servicesData.value = servicesData.value.filter(s => s.id !== id); toast('Удалено') }
   catch (e) { toast(e.message, 'error') }
 }
-async function saveServicesOrder() {
-  try { await api.services.reorder(servicesData.value.map((s, i) => ({ id: s.id, sort_order: i }))); toast('Порядок сохранён') }
-  catch (e) { toast(e.message, 'error') }
-}
 
 // ══ Pricing ══
 const pricingData = ref([])
 const editingPlan = ref(null)
 
 async function loadPricing() {
-  try { pricingData.value = await api.pricing.list() } catch (e) { console.error(e) }
+  try { pricingData.value = await api.pricing.list() } catch (e) { loadError(e) }
 }
 function openPlanEdit(plan) {
   editingPlan.value = {
     title: '', price_label: '', whatsapp_text: '', is_featured: false, is_visible: true,
     ...plan,
-    items_text: (plan.items || []).map(it => it.text).join('\n'),
+    items_text: itemsToText(plan.items || []),
   }
 }
+// Пункт — обычная строка, подпункт — строка с дефисом в начале
+function itemsToText(items) {
+  return items.flatMap(it => [it.text, ...(it.subitems || []).map(sub => `- ${sub}`)]).join('\n')
+}
+function textToItems(text) {
+  const items = []
+  for (const raw of (text || '').split('\n')) {
+    const line = raw.trim()
+    if (!line) continue
+    const sub = line.match(/^[-–—•]\s*(.+)$/)
+    if (sub && items.length) items[items.length - 1].subitems.push(sub[1])
+    else items.push({ text: sub ? sub[1] : line, sort_order: items.length, subitems: [] })
+  }
+  return items
+}
 async function savePlanEdit() {
+  if (!editingPlan.value.title.trim()) { toast('Укажите название плана', 'error'); return }
   try {
-    const items = (editingPlan.value.items_text || '').split('\n').filter(Boolean).map((text, i) => ({ text, sort_order: i }))
     const payload = { title: editingPlan.value.title, price_label: editingPlan.value.price_label,
                       whatsapp_text: editingPlan.value.whatsapp_text, is_featured: editingPlan.value.is_featured,
-                      is_visible: editingPlan.value.is_visible, items }
+                      is_visible: editingPlan.value.is_visible, items: textToItems(editingPlan.value.items_text) }
     if (editingPlan.value.id) {
-      await api.pricing.update(editingPlan.value.id, payload)
-      const i = pricingData.value.findIndex(p => p.id === editingPlan.value.id)
-      if (i >= 0) pricingData.value[i] = { ...pricingData.value[i], ...payload }
+      const r = await api.pricing.update(editingPlan.value.id, payload)
+      const i = pricingData.value.findIndex(p => p.id === r.id)
+      if (i >= 0) pricingData.value[i] = r
     } else {
-      const r = await api.pricing.create(payload)
+      const r = await api.pricing.create({ ...payload, sort_order: pricingData.value.length })
       pricingData.value.push(r)
     }
     editingPlan.value = null; toast('Сохранено')
@@ -646,10 +751,6 @@ async function savePlanEdit() {
 async function deletePlan(id) {
   if (!confirm('Удалить план?')) return
   try { await api.pricing.delete(id); pricingData.value = pricingData.value.filter(p => p.id !== id) }
-  catch (e) { toast(e.message, 'error') }
-}
-async function savePricingOrder() {
-  try { await api.pricing.reorder(pricingData.value.map((p, i) => ({ id: p.id, sort_order: i }))); toast('Порядок цен сохранён') }
   catch (e) { toast(e.message, 'error') }
 }
 
@@ -661,22 +762,24 @@ const uploadProgress = ref(0)
 const uploadTotal = ref(0)
 
 async function loadPortfolio() {
-  try { portfolioData.value = await api.portfolio.list() } catch (e) { console.error(e) }
+  try { portfolioData.value = await api.portfolio.list() } catch (e) { loadError(e) }
 }
 async function uploadPortfolio(e) {
   const files = Array.from(e.target.files)
   if (!files.length) return
   uploading.value = true; uploadTotal.value = files.length; uploadProgress.value = 0
+  const failed = []
   for (const file of files) {
     try {
       const r = await api.portfolio.upload(file)
-      const created = await api.portfolio.create({ url: r.url, alt: '', is_visible: true })
+      const created = await api.portfolio.create({ url: r.url, alt: '', is_visible: true, sort_order: portfolioData.value.length })
       portfolioData.value.push(created)
       uploadProgress.value++
-    } catch (err) { toast('Ошибка: ' + err.message, 'error') }
+    } catch (err) { failed.push(`${file.name}: ${err.message}`) }
   }
   uploading.value = false; e.target.value = ''
-  toast(`Загружено ${files.length} фото`)
+  if (failed.length) toast(`Загружено ${uploadProgress.value} из ${files.length}. Не загружены — ${failed.join('; ')}`, 'error')
+  else toast(`Загружено ${files.length} фото`)
 }
 function openPortfolioEdit(img) { editingPortfolio.value = { ...img } }
 async function savePortfolioEdit() {
@@ -692,31 +795,30 @@ async function deletePortfolio(id) {
   try { await api.portfolio.delete(id); portfolioData.value = portfolioData.value.filter(p => p.id !== id) }
   catch (e) { toast(e.message, 'error') }
 }
-async function savePortfolioOrder() {
-  try { await api.portfolio.reorder(portfolioData.value.map((p, i) => ({ id: p.id, sort_order: i }))); toast('Порядок сохранён') }
-  catch (e) { toast(e.message, 'error') }
-}
 
 // ══ Reviews ══
 const reviewsData = ref([])
 const editingReview = ref(null)
 
 async function loadReviews() {
-  try { reviewsData.value = await api.reviews.list() } catch (e) { console.error(e) }
+  try { reviewsData.value = await api.reviews.list() } catch (e) { loadError(e) }
 }
 function openReviewEdit(rev) {
   editingReview.value = { author_name: '', author_city: '', avatar_url: '', text: '', is_active: true, ...rev }
 }
 async function saveReviewEdit() {
+  if (!editingReview.value.author_name.trim() || !editingReview.value.text.trim()) {
+    toast('Заполните имя клиента и текст отзыва', 'error'); return
+  }
   try {
     const d = { author_name: editingReview.value.author_name, author_city: editingReview.value.author_city,
                 avatar_url: editingReview.value.avatar_url, text: editingReview.value.text, is_active: editingReview.value.is_active }
     if (editingReview.value.id) {
-      await api.reviews.update(editingReview.value.id, d)
-      const i = reviewsData.value.findIndex(r => r.id === editingReview.value.id)
-      if (i >= 0) reviewsData.value[i] = { ...reviewsData.value[i], ...d }
+      const r = await api.reviews.update(editingReview.value.id, d)
+      const i = reviewsData.value.findIndex(x => x.id === r.id)
+      if (i >= 0) reviewsData.value[i] = r
     } else {
-      const r = await api.reviews.create(d)
+      const r = await api.reviews.create({ ...d, sort_order: reviewsData.value.length })
       reviewsData.value.push(r)
     }
     editingReview.value = null; toast('Отзыв сохранён')
@@ -727,32 +829,30 @@ async function deleteReview(id) {
   try { await api.reviews.delete(id); reviewsData.value = reviewsData.value.filter(r => r.id !== id) }
   catch (e) { toast(e.message, 'error') }
 }
-async function saveReviewsOrder() {
-  try { await api.reviews.reorder(reviewsData.value.map((r, i) => ({ id: r.id, sort_order: i }))); toast('Порядок отзывов сохранён') }
-  catch (e) { toast(e.message, 'error') }
-}
 
 // ══ Team ══
 const teamData = ref([])
 const editingTeam = ref(null)
 
 async function loadTeam() {
-  try { teamData.value = await api.team.list() } catch (e) { console.error(e) }
+  try { teamData.value = await api.team.list() } catch (e) { loadError(e) }
 }
 function openTeamEdit(m) {
-  editingTeam.value = { name: '', role_label: '', description: '', photo_url: '', is_visible: true, ...m }
+  editingTeam.value = { name: '', position: '', role_label: '', description: '', photo_url: '', is_visible: true, ...m }
 }
 async function saveTeamEdit() {
+  if (!editingTeam.value.name.trim()) { toast('Укажите имя', 'error'); return }
   try {
-    const d = { name: editingTeam.value.name, role_label: editingTeam.value.role_label,
-                description: editingTeam.value.description, photo_url: editingTeam.value.photo_url,
+    const d = { name: editingTeam.value.name, position: editingTeam.value.position || '',
+                role_label: editingTeam.value.role_label || '',
+                description: editingTeam.value.description || '', photo_url: editingTeam.value.photo_url || '',
                 is_visible: editingTeam.value.is_visible }
     if (editingTeam.value.id) {
-      await api.team.update(editingTeam.value.id, d)
-      const i = teamData.value.findIndex(t => t.id === editingTeam.value.id)
-      if (i >= 0) teamData.value[i] = { ...teamData.value[i], ...d }
+      const r = await api.team.update(editingTeam.value.id, d)
+      const i = teamData.value.findIndex(t => t.id === r.id)
+      if (i >= 0) teamData.value[i] = r
     } else {
-      const r = await api.team.create(d)
+      const r = await api.team.create({ ...d, sort_order: teamData.value.length })
       teamData.value.push(r)
     }
     editingTeam.value = null; toast('Сохранено')
@@ -762,6 +862,45 @@ async function deleteTeamMember(id) {
   if (!confirm('Удалить сотрудника?')) return
   try { await api.team.delete(id); teamData.value = teamData.value.filter(t => t.id !== id) }
   catch (e) { toast(e.message, 'error') }
+}
+
+// ══ Stats ══
+const statsData = ref([])
+const editingStat = ref(null)
+
+async function loadStats() {
+  try { statsData.value = await api.stats.list() } catch (e) { loadError(e) }
+}
+function openStatEdit(st) { editingStat.value = { value: '', label: '', ...st } }
+async function saveStatEdit() {
+  if (!editingStat.value.value.trim() || !editingStat.value.label.trim()) { toast('Заполните значение и подпись', 'error'); return }
+  try {
+    const d = { value: editingStat.value.value, label: editingStat.value.label }
+    if (editingStat.value.id) {
+      const r = await api.stats.update(editingStat.value.id, d)
+      const i = statsData.value.findIndex(s => s.id === r.id)
+      if (i >= 0) statsData.value[i] = r
+    } else {
+      statsData.value.push(await api.stats.create({ ...d, sort_order: statsData.value.length }))
+    }
+    editingStat.value = null; toast('Сохранено')
+  } catch (e) { toast(e.message, 'error') }
+}
+async function deleteStat(id) {
+  if (!confirm('Удалить цифру?')) return
+  try { await api.stats.delete(id); statsData.value = statsData.value.filter(s => s.id !== id) }
+  catch (e) { toast(e.message, 'error') }
+}
+
+// Списки с перетаскиванием: данные, сохранение порядка и перезагрузка при ошибке
+const dragLists = {
+  sections:  { data: sectionsData,  reorder: api.sections.reorder,  load: loadSections },
+  services:  { data: servicesData,  reorder: api.services.reorder,  load: loadServices },
+  pricing:   { data: pricingData,   reorder: api.pricing.reorder,   load: loadPricing },
+  portfolio: { data: portfolioData, reorder: api.portfolio.reorder, load: loadPortfolio },
+  reviews:   { data: reviewsData,   reorder: api.reviews.reorder,   load: loadReviews },
+  team:      { data: teamData,      reorder: api.team.reorder,      load: loadTeam },
+  stats:     { data: statsData,     reorder: api.stats.reorder,     load: loadStats },
 }
 
 // ══ Analytics ══
@@ -778,7 +917,10 @@ const af = reactive({
 })
 
 async function loadAnalytics() {
-  try { const r = await api.analytics.get(); if (r) Object.assign(af, r) } catch (e) { console.error(e) }
+  try {
+    const r = await api.analytics.get()
+    for (const key of Object.keys(af)) if (r?.[key] != null) af[key] = r[key]
+  } catch (e) { loadError(e) }
 }
 async function saveAnalytics() {
   try { await api.analytics.update({ ...af }); toast('Аналитика сохранена') }
@@ -788,7 +930,7 @@ async function saveAnalytics() {
 // ══ Init ══
 function loadAll() {
   loadSettings(); loadSections(); loadServices(); loadPricing()
-  loadPortfolio(); loadReviews(); loadTeam(); loadAnalytics()
+  loadPortfolio(); loadReviews(); loadTeam(); loadStats(); loadAnalytics()
 }
 onMounted(() => { if (authed.value) loadAll() })
 </script>
@@ -903,7 +1045,13 @@ label input.warn, label textarea.warn { border-color: #faad14; background: #fffb
 .preview-avatar { width: 80px; height: 80px; border-radius: 50%; object-fit: cover; }
 .preview-og { max-width: 100%; max-height: 150px; border-radius: 6px; object-fit: contain; border: 1px solid #e8eaed; }
 
-.emoji-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.emoji-pick { font-size: 1.4rem; cursor: pointer; padding: 4px; border-radius: 4px; }
-.emoji-pick:hover { background: #f3f4f6; }
+.field { display: flex; flex-direction: column; gap: 5px; font-size: 0.85rem; color: #374151; }
+.icon-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.icon-pick { width: 44px; height: 44px; border-radius: 50%; border: 2px solid transparent; background: #e5e7eb; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.icon-pick svg { width: 22px; height: 22px; fill: #6b7280; }
+.icon-pick:hover { background: #d1d5db; }
+.icon-pick.active { background: #c0392b; border-color: #7f1d1d; }
+.icon-pick.active svg { fill: #fff; }
+.svc-icon { width: 32px; height: 32px; border-radius: 50%; background: #c0392b; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.svc-icon svg { width: 16px; height: 16px; fill: #fff; }
 </style>

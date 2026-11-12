@@ -30,7 +30,7 @@
             </div>
             <div class="contacts__item-body">
               <span class="contacts__label">Сотрудничество:</span>
-              <a href="mailto:festivalcolor@mail.ru?subject=Сотрудничество" class="contacts__val contacts__val--link">festivalcolor@mail.ru</a>
+              <a :href="`mailto:${email}?subject=Сотрудничество`" class="contacts__val contacts__val--link">{{ email }}</a>
               <span class="contacts__hint">Тема письма: «Сотрудничество»</span>
             </div>
           </div>
@@ -64,11 +64,10 @@
 
 <script setup>
 import { computed } from 'vue'
+import { whatsappUrl as buildWhatsappUrl } from '../contact.js'
 const props = defineProps({ settings: Object })
-const whatsappUrl = computed(() => {
-  const phone = props.settings?.whatsapp_phone || '79062003365'
-  return `https://wa.clck.bar/${phone}`
-})
+const whatsappUrl = computed(() => buildWhatsappUrl(props.settings))
+const email = computed(() => props.settings?.email || 'festivalcolor@mail.ru')
 const mapSrc = computed(() => props.settings?.google_map_src || props.settings?.yandex_map_src || null)
 </script>
 

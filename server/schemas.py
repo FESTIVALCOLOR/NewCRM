@@ -1776,8 +1776,16 @@ class TeamMemberCreate(TeamMemberBase):
     pass
 
 
-class TeamMemberUpdate(TeamMemberBase):
-    pass
+class TeamMemberUpdate(BaseModel):
+    """Частичное обновление: меняются только переданные поля"""
+
+    name: Optional[str] = None
+    position: Optional[str] = None
+    role_label: Optional[str] = None
+    description: Optional[str] = None
+    photo_url: Optional[str] = None
+    is_visible: Optional[bool] = None
+    sort_order: Optional[int] = None
 
 
 class TeamMemberResponse(TeamMemberBase):
@@ -1797,8 +1805,10 @@ class StatItemCreate(StatItemBase):
     pass
 
 
-class StatItemUpdate(StatItemBase):
-    pass
+class StatItemUpdate(BaseModel):
+    value: Optional[str] = None
+    label: Optional[str] = None
+    sort_order: Optional[int] = None
 
 
 class StatItemResponse(StatItemBase):
@@ -1820,8 +1830,12 @@ class SiteServiceCreate(SiteServiceBase):
     pass
 
 
-class SiteServiceUpdate(SiteServiceBase):
-    pass
+class SiteServiceUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    icon: Optional[str] = None
+    sort_order: Optional[int] = None
+    is_visible: Optional[bool] = None
 
 
 class SiteServiceResponse(SiteServiceBase):
@@ -1862,8 +1876,14 @@ class PricingPlanCreate(PricingPlanBase):
     items: list[PricingItemCreate] = []
 
 
-class PricingPlanUpdate(PricingPlanBase):
-    items: Optional[list[PricingItemCreate]] = None
+class PricingPlanUpdate(BaseModel):
+    title: Optional[str] = None
+    price_label: Optional[str] = None
+    is_featured: Optional[bool] = None
+    whatsapp_text: Optional[str] = None
+    sort_order: Optional[int] = None
+    is_visible: Optional[bool] = None
+    items: Optional[list[PricingItemCreate]] = None  # None — состав не трогаем
 
 
 class PricingPlanResponse(PricingPlanBase):
@@ -1887,8 +1907,13 @@ class ReviewCreate(ReviewBase):
     pass
 
 
-class ReviewUpdate(ReviewBase):
-    pass
+class ReviewUpdate(BaseModel):
+    author_name: Optional[str] = None
+    author_city: Optional[str] = None
+    avatar_url: Optional[str] = None
+    text: Optional[str] = None
+    is_active: Optional[bool] = None
+    sort_order: Optional[int] = None
 
 
 class ReviewResponse(ReviewBase):
@@ -1910,8 +1935,11 @@ class PortfolioImageCreate(PortfolioImageBase):
     pass
 
 
-class PortfolioImageUpdate(PortfolioImageBase):
-    pass
+class PortfolioImageUpdate(BaseModel):
+    url: Optional[str] = None
+    alt: Optional[str] = None
+    is_visible: Optional[bool] = None
+    sort_order: Optional[int] = None
 
 
 class PortfolioImageResponse(PortfolioImageBase):

@@ -8,25 +8,15 @@
         </template>
       </a>
       <nav class="header__nav">
-        <a href="#hero">Главная</a>
-        <a href="#about">О нас</a>
-        <a href="#services">Услуги</a>
-        <a href="#pricing">Цены</a>
-        <a href="#portfolio">Портфолио</a>
-        <a href="#contacts">Контакты</a>
+        <a v-for="item in menu" :key="item.key" :href="`#${item.key}`">{{ item.label }}</a>
       </nav>
-      <a :href="whatsappUrl" target="_blank" rel="noopener" class="btn btn--accent header__cta">Написать нам</a>
+      <a :href="contactUrl" target="_blank" rel="noopener" class="btn btn--accent header__cta">Написать нам</a>
       <button class="header__burger" @click="menuOpen = !menuOpen" aria-label="Меню">
         <span /><span /><span />
       </button>
     </div>
     <div class="header__mobile-nav" :class="{ open: menuOpen }" @click="menuOpen = false">
-      <a href="#hero">Главная</a>
-      <a href="#about">О нас</a>
-      <a href="#services">Услуги</a>
-      <a href="#pricing">Цены</a>
-      <a href="#portfolio">Портфолио</a>
-      <a href="#contacts">Контакты</a>
+      <a v-for="item in menu" :key="item.key" :href="`#${item.key}`">{{ item.label }}</a>
     </div>
   </header>
 </template>
@@ -34,14 +24,17 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 
-const props = defineProps({ settings: Object })
+import { ctaUrl } from '../contact.js'
+
+const MENU_LABELS = { hero: 'Главная', about: 'О нас', services: 'Услуги', pricing: 'Цены', portfolio: 'Портфолио', reviews: 'Отзывы', contacts: 'Контакты' }
+
+const props = defineProps({ settings: Object, sectionKeys: { type: Array, default: () => [] } })
 const scrolled = ref(false)
 const menuOpen = ref(false)
 
-const whatsappUrl = computed(() => {
-  const phone = props.settings?.whatsapp_phone || '79062003365'
-  return `https://wa.clck.bar/${phone}`
-})
+// Пункты меню идут в том же порядке, что и секции на странице; скрытые секции в меню не попадают
+const menu = computed(() => props.sectionKeys.filter(k => MENU_LABELS[k]).map(k => ({ key: k, label: MENU_LABELS[k] })))
+const contactUrl = computed(() => ctaUrl(props.settings))
 const logoSrc = computed(() => {
   if (props.settings?.logo_url) return props.settings.logo_url
   return import.meta.env.BASE_URL + 'media/logo/logo.png'

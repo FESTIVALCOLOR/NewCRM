@@ -37,6 +37,9 @@ export async function login(username, password) {
     throw new Error(err.detail || 'Неверный логин или пароль')
   }
   const data = await res.json()
+  // Войти в CRM может любой сотрудник, а в панель сайта — только руководитель: проверяем сразу
+  const check = await fetch(`${BASE}/site/admin/settings`, { headers: { Authorization: `Bearer ${data.access_token}` } })
+  if (!check.ok) throw new Error('Доступ к панели сайта есть только у Руководителя студии')
   localStorage.setItem('admin_token', data.access_token)
   return data
 }
@@ -60,6 +63,7 @@ export const team = {
   create: (d) => req('POST', '/site/admin/team', d),
   update: (id, d) => req('PUT', `/site/admin/team/${id}`, d),
   delete: (id) => req('DELETE', `/site/admin/team/${id}`),
+  reorder: (items) => req('PUT', '/site/admin/team/reorder', items),
 }
 
 // ── Stats ───────────────────────────────────

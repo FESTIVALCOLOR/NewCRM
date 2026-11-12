@@ -13,11 +13,9 @@
 
 <script setup>
 import { computed } from 'vue'
+import { ctaUrl } from '../contact.js'
 const props = defineProps({ settings: Object })
-const whatsappUrl = computed(() => {
-  const phone = props.settings?.whatsapp_phone || '79062003365'
-  return `https://wa.clck.bar/${phone}`
-})
+const whatsappUrl = computed(() => ctaUrl(props.settings))
 const heroBg = computed(() => {
   const url = props.settings?.hero_bg_url
   return url ? { background: `url('${url}') center/cover no-repeat` } : {}

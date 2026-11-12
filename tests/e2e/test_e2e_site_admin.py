@@ -1,0 +1,113 @@
+# -*- coding: utf-8 -*-
+"""
+E2E Tests: CMS сайта (site admin)
+Регрессионные тесты на дефекты админки сайта:
+  - PUT /site/admin/<list>/reorder отдавал 422 (маршрут перехватывался /<list>/{id})
+  - частичное обновление ({is_visible}) отдавало 422 или затирало остальные поля
+  - сохранение тарифа стирало подпункты (subitems)
+  - доступ к CMS должен быть только у руководителя студии
+"""
+
+import os
+import sys
+
+import pytest
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+from tests.e2e.conftest import TEST_PREFIX, api_delete, api_get, api_post, api_put
+
+BASE = "/api/v1/site/admin"
+
+
+@pytest.fixture
+def stat(api_base, admin_headers):
+    resp = api_post(api_base, f"{BASE}/stats", admin_headers, json={"value": "42", "label": f"{TEST_PREFIX}цифра", "sort_order": 7})
+    assert resp.status_code == 200, resp.text
+    item = resp.json()
+    yield item
+    api_delete(api_base, f"{BASE}/stats/{item['id']}", admin_headers)
+
+
+@pytest.fixture
+def plan(api_base, admin_headers):
+    payload = {
+        "title": f"{TEST_PREFIX}тариф",
+        "price_label": "1 руб",
+        "sort_order": 5,
+        "items": [{"text": "Пункт", "sort_order": 0, "subitems": ["подпункт 1", "подпункт 2"]}],
+    }
+    resp = api_post(api_base, f"{BASE}/pricing", admin_headers, json=payload)
+    assert resp.status_code == 200, resp.text
+    item = resp.json()
+    yield item
+    api_delete(api_base, f"{BASE}/pricing/{item['id']}", admin_headers)
+
+
+@pytest.mark.e2e
+class TestSiteAdminReorder:
+    @pytest.mark.parametrize("name", ["services", "reviews", "portfolio", "stats", "pricing", "team"])
+    def test_reorder_route_not_shadowed_by_id_route(self, api_base, admin_headers, name):
+        resp = api_put(api_base, f"{BASE}/{name}/reorder", admin_headers, json=[])
+        assert resp.status_code == 200, f"{name}: {resp.status_code} {resp.text}"
+
+    def test_sections_reorder(self, api_base, admin_headers):
+        sections = api_get(api_base, f"{BASE}/sections", admin_headers).json()
+        same_order = [{"key": s["key"], "sort_order": s["sort_order"]} for s in sections]
+        resp = api_put(api_base, f"{BASE}/sections/reorder", admin_headers, json=same_order)
+        assert resp.status_code == 200, resp.text
+
+    def test_reorder_changes_sort_order(self, api_base, admin_headers, stat):
+        resp = api_put(api_base, f"{BASE}/stats/reorder", admin_headers, json=[{"id": stat["id"], "sort_order": 99}])
+        assert resp.status_code == 200, resp.text
+        stats = api_get(api_base, f"{BASE}/stats", admin_headers).json()
+        assert next(s for s in stats if s["id"] == stat["id"])["sort_order"] == 99
+
+
+@pytest.mark.e2e
+class TestSiteAdminPartialUpdate:
+    def test_partial_update_keeps_other_fields(self, api_base, admin_headers, stat):
+        resp = api_put(api_base, f"{BASE}/stats/{stat['id']}", admin_headers, json={"value": "43"})
+        assert resp.status_code == 200, resp.text
+        updated = resp.json()
+        assert updated["value"] == "43"
+        assert updated["label"] == stat["label"]
+        assert updated["sort_order"] == 7
+
+    def test_visibility_toggle_keeps_plan_items_and_subitems(self, api_base, admin_headers, plan):
+        resp = api_put(api_base, f"{BASE}/pricing/{plan['id']}", admin_headers, json={"is_visible": False})
+        assert resp.status_code == 200, resp.text
+        updated = resp.json()
+        assert updated["is_visible"] is False
+        assert updated["title"] == plan["title"]
+        assert updated["sort_order"] == 5
+        assert updated["items"][0]["subitems"] == ["подпункт 1", "подпункт 2"]
+
+    def test_plan_items_replace_saves_subitems(self, api_base, admin_headers, plan):
+        items = [{"text": "Новый пункт", "sort_order": 0, "subitems": ["а", "б"]}, {"text": "Без подпунктов", "sort_order": 1}]
+        resp = api_put(api_base, f"{BASE}/pricing/{plan['id']}", admin_headers, json={"items": items})
+        assert resp.status_code == 200, resp.text
+        saved = resp.json()["items"]
+        assert [i["text"] for i in saved] == ["Новый пункт", "Без подпунктов"]
+        assert saved[0]["subitems"] == ["а", "б"]
+        assert not saved[1]["subitems"]
+
+
+@pytest.mark.e2e
+class TestSiteAdminAccess:
+    def test_requires_auth(self, api_base):
+        assert api_get(api_base, f"{BASE}/settings", {}).status_code == 401
+
+    def test_forbidden_for_non_director(self, api_base, role_tokens):
+        headers = role_tokens.get("designer")
+        if not headers:
+            pytest.skip("нет токена дизайнера")
+        resp = api_get(api_base, f"{BASE}/settings", headers)
+        assert resp.status_code == 403
+        assert "Руководителю студии" in resp.json()["detail"]
+
+    def test_setting_upsert(self, api_base, admin_headers):
+        key = f"{TEST_PREFIX}key"
+        resp = api_put(api_base, f"{BASE}/settings/{key}", admin_headers, json={"value": "79991234567"})
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["value"] == "79991234567"

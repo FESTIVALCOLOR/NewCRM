@@ -1,15 +1,17 @@
 <template>
   <div>
-    <NavHeader :settings="data.settings" />
+    <NavHeader :settings="data.settings" :section-keys="sectionKeys" />
     <main>
-      <HeroSection    :settings="data.settings" />
-      <AboutSection   :team="data.team" />
-      <StatsSection   :stats="data.stats" />
-      <ServicesSection :services="data.services" />
-      <PortfolioSection :portfolio="data.portfolio" />
-      <PricingSection  :pricing="data.pricing" :settings="data.settings" />
-      <ReviewsSection  :reviews="data.reviews" />
-      <ContactsSection :settings="data.settings" />
+      <template v-for="key in sectionKeys" :key="key">
+        <HeroSection      v-if="key === 'hero'" :settings="data.settings" />
+        <AboutSection     v-else-if="key === 'about'" :team="data.team" />
+        <StatsSection     v-else-if="key === 'stats'" :stats="data.stats" />
+        <ServicesSection  v-else-if="key === 'services'" :services="data.services" />
+        <PortfolioSection v-else-if="key === 'portfolio'" :portfolio="data.portfolio" />
+        <PricingSection   v-else-if="key === 'pricing'" :pricing="data.pricing" :settings="data.settings" />
+        <ReviewsSection   v-else-if="key === 'reviews'" :reviews="data.reviews" />
+        <ContactsSection  v-else-if="key === 'contacts'" :settings="data.settings" />
+      </template>
     </main>
     <FooterSection :settings="data.settings" />
 
@@ -32,6 +34,10 @@ import PricingSection  from './sections/PricingSection.vue'
 import ReviewsSection  from './sections/ReviewsSection.vue'
 import ContactsSection from './sections/ContactsSection.vue'
 import FooterSection   from './sections/FooterSection.vue'
+import { whatsappUrl } from './contact.js'
+import { applyAnalytics } from './analytics.js'
+
+const DEFAULT_SECTIONS = ['hero', 'about', 'stats', 'services', 'portfolio', 'pricing', 'reviews', 'contacts']
 
 const data = reactive({
   settings: {},
@@ -44,17 +50,21 @@ const data = reactive({
   portfolio: [],
 })
 
-const waUrl = computed(() => {
-  const phone = data.settings.whatsapp_phone || '79062003365'
-  return `https://wa.clck.bar/${phone}`
+const waUrl = computed(() => whatsappUrl(data.settings))
+
+// Порядок и видимость секций задаются в админке (вкладка «Секции меню»)
+const sectionKeys = computed(() => {
+  if (!data.sections.length) return DEFAULT_SECTIONS
+  return data.sections.filter(s => s.is_visible && DEFAULT_SECTIONS.includes(s.key)).map(s => s.key)
 })
 
 async function loadSiteData() {
   try {
-    const res = await fetch('/api/site/public')
+    const res = await fetch('/api/v1/site/public')
     if (!res.ok) return
     const json = await res.json()
     Object.assign(data, json)
+    applyAnalytics(json.analytics)
   } catch (e) {
     console.warn('Не удалось загрузить данные сайта:', e)
   }
