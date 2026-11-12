@@ -41,8 +41,8 @@ defineProps({ services: Array })
 .service-card:hover { box-shadow: 0 8px 32px color-mix(in srgb, var(--accent) 12%, transparent); transform: translateY(-4px); }
 .service-card__icon { width: 56px; height: 56px; background: var(--accent); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; }
 .service-card__icon svg { width: 28px; height: 28px; fill: #fff; }
-.service-card h3 { font-size: 1rem; font-weight: 700; margin-bottom: 12px; letter-spacing: 0.03em; }
-.service-card p { color: var(--text-light); font-size: 0.9rem; line-height: 1.6; }
+.service-card h3 { font-size: calc(1rem * var(--ts, 1)); font-weight: 700; margin-bottom: 12px; letter-spacing: 0.03em; }
+.service-card p { color: var(--text-light); font-size: calc(0.9rem * var(--ts, 1)); line-height: 1.6; }
 @media (max-width: 768px) {
   .services__grid { grid-template-columns: repeat(2, 1fr); }
   .service-card, .service-card:nth-child(4), .service-card:nth-child(5) { grid-column: span 1; }

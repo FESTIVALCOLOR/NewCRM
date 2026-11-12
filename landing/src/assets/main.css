@@ -27,6 +27,9 @@ body {
 
 h1, h2, h3, h4 { font-family: var(--font-head); line-height: 1.25; }
 h2, h3 { color: var(--head-color, inherit); }
+h1 { color: var(--h1-color, inherit); }
+/* Блок может переопределить шрифт и цвет текста через свои переменные */
+main > section { font-family: var(--font-body); color: var(--text); }
 
 .container {
   max-width: var(--max-w);
@@ -51,7 +54,7 @@ h2, h3 { color: var(--head-color, inherit); }
   border-radius: var(--radius);
   font-family: var(--font-head);
   font-weight: 600;
-  font-size: 0.95rem;
+  font-size: calc(0.95rem * var(--ts, 1));
   letter-spacing: 0.04em;
   text-decoration: none;
   cursor: pointer;

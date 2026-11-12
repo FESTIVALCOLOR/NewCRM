@@ -79,21 +79,21 @@ const mapSrc = computed(() => props.settings?.google_map_src || props.settings?.
 .contacts__icon { width: 40px; height: 40px; background: var(--accent); border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 2px; }
 .contacts__icon svg { width: 20px; height: 20px; fill: #fff; }
 .contacts__item-body { display: flex; flex-direction: column; gap: 3px; }
-.contacts__label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-light); }
-.contacts__val { font-size: 0.95rem; color: var(--dark); line-height: 1.4; }
+.contacts__label { font-size: calc(0.72rem * var(--ts, 1)); text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-light); }
+.contacts__val { font-size: calc(0.95rem * var(--ts, 1)); color: var(--dark); line-height: 1.4; }
 .contacts__val--link { color: var(--accent); text-decoration: none; font-weight: 500; }
 .contacts__val--link:hover { text-decoration: underline; }
-.contacts__hint { font-size: 0.78rem; color: var(--text-light); font-style: italic; }
+.contacts__hint { font-size: calc(0.78rem * var(--ts, 1)); color: var(--text-light); font-style: italic; }
 .contacts__right { display: flex; flex-direction: column; gap: 20px; justify-content: center; padding-top: 8px; }
 .contacts__socials { display: flex; flex-direction: column; gap: 12px; }
-.social-btn { display: inline-flex; align-items: center; gap: 10px; padding: 12px 20px; border-radius: 8px; text-decoration: none; font-size: 0.9rem; font-weight: 600; transition: opacity 0.2s, transform 0.2s; width: 100%; }
+.social-btn { display: inline-flex; align-items: center; gap: 10px; padding: 12px 20px; border-radius: 8px; text-decoration: none; font-size: calc(0.9rem * var(--ts, 1)); font-weight: 600; transition: opacity 0.2s, transform 0.2s; width: 100%; }
 .social-btn:hover { opacity: 0.85; transform: translateX(3px); }
 .social-btn svg { width: 20px; height: 20px; flex-shrink: 0; }
 .social-btn--vk { background: #0077ff; color: #fff; }
 .social-btn--vk svg { fill: #fff; }
 .social-btn--ig { background: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888); color: #fff; }
 .social-btn--ig svg { fill: #fff; }
-.btn--wa { display: inline-flex; align-items: center; gap: 10px; font-size: 0.9rem; padding: 12px 20px; width: 100%; justify-content: center; }
+.btn--wa { display: inline-flex; align-items: center; gap: 10px; font-size: calc(0.9rem * var(--ts, 1)); padding: 12px 20px; width: 100%; justify-content: center; }
 .btn--wa svg { width: 20px; height: 20px; fill: #fff; }
 .contacts__map iframe { filter: grayscale(100%) contrast(1.1); -webkit-filter: grayscale(100%) contrast(1.1); }
 @media (max-width: 700px) {

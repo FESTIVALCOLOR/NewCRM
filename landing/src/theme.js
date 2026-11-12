@@ -90,6 +90,49 @@ export function themeVars(settings) {
   }
 }
 
+// ── Стиль отдельных блоков ──
+// Хранится одной настройкой style_sections в виде JSON: { about: { accent: '#...', head_size: '120' }, ... }.
+// В блоке задаётся только то, что отличается от общего стиля.
+export const SECTION_STYLE_KEY = 'style_sections'
+export const SECTION_KEYS = ['hero', 'about', 'stats', 'services', 'portfolio', 'pricing', 'reviews', 'contacts']
+
+export function parseSectionStyles(settings) {
+  try {
+    const value = JSON.parse(settings?.[SECTION_STYLE_KEY] || '{}')
+    return value && typeof value === 'object' && !Array.isArray(value) ? value : {}
+  } catch {
+    return {}
+  }
+}
+
+// Inline-стиль для <section>: переменные действуют только внутри блока
+export function sectionStyle(key, sec, settings) {
+  const style = {}
+  if (!sec) return style
+  const globalText = validSize(settings?.style_text_size)
+  const head = validFont(sec.font_head)
+  const body = validFont(sec.font_body)
+  if (head) { style['--font-head'] = `'${head.name}', ${head.fallback}`; loadFont(head.name) }
+  if (body) { style['--font-body'] = `'${body.name}', ${body.fallback}`; loadFont(body.name) }
+  if (HEX.test(sec.accent || '')) { style['--accent'] = sec.accent; style['--accent-hover'] = darken(sec.accent) }
+  if (HEX.test(sec.head_color || '')) { style['--head-color'] = sec.head_color; style['--h1-color'] = sec.head_color }
+  if (HEX.test(sec.text_color || '')) {
+    style['--text'] = sec.text_color; style['--sec-text'] = sec.text_color; style['--hero-text'] = sec.text_color
+  }
+  if (HEX.test(sec.text_light_color || '')) { style['--text-light'] = sec.text_light_color; style['--sec-text-light'] = sec.text_light_color }
+  // Базовый размер страницы уже умножен на общий размер текста, поэтому делим на него
+  if (sec.head_size) style['--head-scale'] = String(validSize(sec.head_size) / globalText)
+  if (sec.text_size) style['--ts'] = String(validSize(sec.text_size) / globalText)
+  // У главного экрана фон — фотография, цвет фона для него не задаётся
+  if (key !== 'hero' && HEX.test(sec.bg || '')) style.background = sec.bg
+  return style
+}
+
+export function allSectionStyles(settings) {
+  const parsed = parseSectionStyles(settings)
+  return Object.fromEntries(SECTION_KEYS.map(key => [key, sectionStyle(key, parsed[key], settings)]))
+}
+
 const CACHE_KEY = 'site_style'
 
 export function applyTheme(settings) {
@@ -104,11 +147,12 @@ export function applyTheme(settings) {
 export function applyCachedTheme() {
   try {
     const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null')
-    if (cached) applyTheme(cached)
+    if (cached) { applyTheme(cached); return cached }
   } catch { /* повреждённый кэш игнорируется */ }
+  return {}
 }
 export function cacheTheme(settings) {
   const style = {}
-  for (const key of Object.keys(STYLE_DEFAULTS)) if (settings?.[key]) style[key] = settings[key]
+  for (const key of [...Object.keys(STYLE_DEFAULTS), SECTION_STYLE_KEY]) if (settings?.[key]) style[key] = settings[key]
   try { localStorage.setItem(CACHE_KEY, JSON.stringify(style)) } catch { /* хранилище недоступно */ }
 }

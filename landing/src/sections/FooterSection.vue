@@ -24,10 +24,10 @@ defineProps({ settings: Object })
 <style scoped>
 .footer { background: var(--dark); color: rgba(255,255,255,0.7); padding: 28px 0; }
 .footer__inner { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
-.footer__logo { text-decoration: none; font-family: var(--font-head); font-weight: 800; font-size: 1rem; letter-spacing: 0.08em; display: flex; align-items: center; }
+.footer__logo { text-decoration: none; font-family: var(--font-head); font-weight: 800; font-size: calc(1rem * var(--ts, 1)); letter-spacing: 0.08em; display: flex; align-items: center; }
 .logo-festival { color: #fff; }
 .logo-color { color: var(--accent); }
-.footer__copy { font-size: 0.82rem; flex: 1; text-align: center; color: rgba(255,255,255,0.5); }
+.footer__copy { font-size: calc(0.82rem * var(--ts, 1)); flex: 1; text-align: center; color: rgba(255,255,255,0.5); }
 .footer__socials { display: flex; gap: 10px; }
 .footer__social-btn {
   width: 36px; height: 36px; border-radius: 50%;

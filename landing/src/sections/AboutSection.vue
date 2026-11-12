@@ -29,8 +29,8 @@ import { computed } from 'vue'
 .about__heading { font-size: calc(1.8rem * var(--head-scale, 1)); font-weight: 700; margin-bottom: 20px; letter-spacing: 0.05em; }
 .about__desc { color: var(--text-light); line-height: 1.8; margin-bottom: 24px; }
 .about__person { display: flex; flex-direction: column; gap: 4px; }
-.about__person strong { font-size: 1.1rem; font-weight: 700; font-family: var(--font-head); }
-.about__person span { color: var(--text-light); font-size: 0.9rem; }
+.about__person strong { font-size: calc(1.1rem * var(--ts, 1)); font-weight: 700; font-family: var(--font-head); }
+.about__person span { color: var(--text-light); font-size: calc(0.9rem * var(--ts, 1)); }
 .about__role { color: var(--accent); font-weight: 600; }
 @media (max-width: 768px) {
   .about { grid-template-columns: 1fr; }

@@ -35,7 +35,7 @@ const heroBg = computed(() => {
 }
 .hero__content {
   position: relative; z-index: 1;
-  text-align: center; color: #fff;
+  text-align: center; color: var(--hero-text, #fff);
   padding-top: 68px;
 }
 .hero__title {
@@ -45,7 +45,7 @@ const heroBg = computed(() => {
   text-shadow: 0 2px 12px rgba(0,0,0,0.3);
 }
 .hero__sub {
-  font-size: clamp(1rem, 2vw, 1.3rem);
+  font-size: calc(clamp(1rem, 2vw, 1.3rem) * var(--ts, 1));
   margin-bottom: 36px;
   opacity: 0.9;
   max-width: 640px; margin-left: auto; margin-right: auto;

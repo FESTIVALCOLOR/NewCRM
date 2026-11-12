@@ -1,5 +1,5 @@
 <template>
-  <section class="section section--alt">
+  <section id="reviews" class="section section--alt">
     <div class="container">
       <h2 class="section-title">СЧАСТЛИВЫЕ КЛИЕНТЫ</h2>
       <div class="reviews__grid">
@@ -34,9 +34,9 @@ function initials(name) {
 .review-card__header { display: flex; align-items: center; gap: 14px; }
 .review-card__avatar { width: 56px; height: 56px; border-radius: 50%; overflow: hidden; flex-shrink: 0; background: var(--accent); display: flex; align-items: center; justify-content: center; }
 .review-card__avatar img { width: 100%; height: 100%; object-fit: cover; }
-.review-card__avatar span { color: #fff; font-family: var(--font-head); font-weight: 700; font-size: 1.1rem; }
+.review-card__avatar span { color: #fff; font-family: var(--font-head); font-weight: 700; font-size: calc(1.1rem * var(--ts, 1)); }
 .review-card__meta { display: flex; flex-direction: column; gap: 2px; }
-.review-card__name { font-family: var(--font-head); font-size: 1rem; color: var(--dark); font-weight: 700; }
-.review-card__city { font-size: 0.8rem; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.06em; }
-.review-card__text { color: var(--text-light); font-size: 0.9rem; line-height: 1.75; flex: 1; font-style: italic; }
+.review-card__name { font-family: var(--font-head); font-size: calc(1rem * var(--ts, 1)); color: var(--dark); font-weight: 700; }
+.review-card__city { font-size: calc(0.8rem * var(--ts, 1)); color: var(--text-light); text-transform: uppercase; letter-spacing: 0.06em; }
+.review-card__text { color: var(--text-light); font-size: calc(0.9rem * var(--ts, 1)); line-height: 1.75; flex: 1; font-style: italic; }
 </style>

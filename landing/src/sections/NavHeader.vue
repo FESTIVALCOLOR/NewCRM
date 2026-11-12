@@ -56,14 +56,14 @@ onUnmounted(() => window.removeEventListener('scroll', onScroll))
   display: flex; align-items: center; gap: 24px;
   height: 68px;
 }
-.header__logo { text-decoration: none; font-family: var(--font-head); font-weight: 800; font-size: 1.1rem; letter-spacing: 0.08em; display: flex; align-items: center; }
+.header__logo { text-decoration: none; font-family: var(--font-head); font-weight: 800; font-size: calc(1.1rem * var(--ts, 1)); letter-spacing: 0.08em; display: flex; align-items: center; }
 .header__logo-img { height: 40px; width: auto; object-fit: contain; }
 .logo-festival { color: var(--dark); }
 .logo-color { color: var(--accent); }
 .header__nav { display: flex; gap: 24px; margin: 0 auto; }
-.header__nav a { text-decoration: none; color: var(--text); font-size: 0.9rem; font-weight: 500; transition: color 0.2s; }
+.header__nav a { text-decoration: none; color: var(--text); font-size: calc(0.9rem * var(--ts, 1)); font-weight: 500; transition: color 0.2s; }
 .header__nav a:hover { color: var(--accent); }
-.header__cta { padding: 10px 22px; font-size: 0.85rem; }
+.header__cta { padding: 10px 22px; font-size: calc(0.85rem * var(--ts, 1)); }
 .header__burger { display: none; flex-direction: column; gap: 5px; background: none; border: none; cursor: pointer; padding: 4px; }
 .header__burger span { display: block; width: 24px; height: 2px; background: var(--dark); border-radius: 2px; }
 .header__mobile-nav { display: none; flex-direction: column; background: #fff; padding: 16px 20px; border-top: 1px solid var(--border); }

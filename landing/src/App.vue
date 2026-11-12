@@ -3,14 +3,14 @@
     <NavHeader :settings="data.settings" :section-keys="sectionKeys" />
     <main>
       <template v-for="key in sectionKeys" :key="key">
-        <HeroSection      v-if="key === 'hero'" :settings="data.settings" />
-        <AboutSection     v-else-if="key === 'about'" :team="data.team" />
-        <StatsSection     v-else-if="key === 'stats'" :stats="data.stats" />
-        <ServicesSection  v-else-if="key === 'services'" :services="data.services" />
-        <PortfolioSection v-else-if="key === 'portfolio'" :portfolio="data.portfolio" />
-        <PricingSection   v-else-if="key === 'pricing'" :pricing="data.pricing" :settings="data.settings" />
-        <ReviewsSection   v-else-if="key === 'reviews'" :reviews="data.reviews" />
-        <ContactsSection  v-else-if="key === 'contacts'" :settings="data.settings" />
+        <HeroSection      v-if="key === 'hero'" :style="sectionStyles[key]" :settings="data.settings" />
+        <AboutSection     v-else-if="key === 'about'" :style="sectionStyles[key]" :team="data.team" />
+        <StatsSection     v-else-if="key === 'stats'" :style="sectionStyles[key]" :stats="data.stats" />
+        <ServicesSection  v-else-if="key === 'services'" :style="sectionStyles[key]" :services="data.services" />
+        <PortfolioSection v-else-if="key === 'portfolio'" :style="sectionStyles[key]" :portfolio="data.portfolio" />
+        <PricingSection   v-else-if="key === 'pricing'" :style="sectionStyles[key]" :pricing="data.pricing" :settings="data.settings" />
+        <ReviewsSection   v-else-if="key === 'reviews'" :style="sectionStyles[key]" :reviews="data.reviews" />
+        <ContactsSection  v-else-if="key === 'contacts'" :style="sectionStyles[key]" :settings="data.settings" />
       </template>
     </main>
     <FooterSection :settings="data.settings" />
@@ -36,14 +36,14 @@ import ContactsSection from './sections/ContactsSection.vue'
 import FooterSection   from './sections/FooterSection.vue'
 import { whatsappUrl } from './contact.js'
 import { applyAnalytics } from './analytics.js'
-import { applyTheme, applyCachedTheme, cacheTheme } from './theme.js'
+import { applyTheme, applyCachedTheme, cacheTheme, allSectionStyles } from './theme.js'
 
-applyCachedTheme()
+const cachedStyle = applyCachedTheme()
 
 const DEFAULT_SECTIONS = ['hero', 'about', 'stats', 'services', 'portfolio', 'pricing', 'reviews', 'contacts']
 
 const data = reactive({
-  settings: {},
+  settings: cachedStyle,
   sections: [],
   team: [],
   stats: [],
@@ -56,6 +56,9 @@ const data = reactive({
 const waUrl = computed(() => whatsappUrl(data.settings))
 
 // Порядок и видимость секций задаются в админке (вкладка «Секции меню»)
+// Свои шрифты, цвета и размеры отдельных блоков (вкладка «Стиль» → блок)
+const sectionStyles = computed(() => allSectionStyles(data.settings))
+
 const sectionKeys = computed(() => {
   if (!data.sections.length) return DEFAULT_SECTIONS
   return data.sections.filter(s => s.is_visible && DEFAULT_SECTIONS.includes(s.key)).map(s => s.key)

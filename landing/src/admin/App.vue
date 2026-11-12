@@ -369,10 +369,42 @@
       <!-- ── Стиль ── -->
       <section v-if="currentTab === 'style'" class="tab-body">
         <div class="card-info">
-          Оформление всего сайта. Изменения сразу видны в блоке «Предпросмотр» справа, а на сайте появятся после нажатия «Сохранить стиль».
+          «Весь сайт» — общее оформление. Выберите блок, чтобы задать ему свои шрифты, размеры, цвета и фон: всё, что не отмечено галочкой, берётся из общего стиля. Изменения сразу видны в «Предпросмотре», а на сайте появятся после нажатия «Сохранить стиль».
+        </div>
+        <div class="scope-row">
+          <button :class="['scope-chip', { active: !styleScope }]" @click="styleScope = ''">Весь сайт</button>
+          <button v-for="key in SECTION_KEYS" :key="key"
+            :class="['scope-chip', { active: styleScope === key, custom: Object.keys(secStyles[key]).length > 0 }]"
+            :title="Object.keys(secStyles[key]).length ? 'У блока есть свои настройки' : ''"
+            @click="styleScope = key">{{ sectionLabels[key] }}</button>
         </div>
         <div class="style-layout">
           <div class="style-form">
+            <div v-if="styleScope" class="card">
+              <h3>Блок «{{ sectionLabels[styleScope] }}» — свои настройки</h3>
+              <p class="hint">Отметьте галочкой то, что в этом блоке должно отличаться от общего стиля.</p>
+              <div v-for="f in scopeFields" :key="f.key" class="sec-field">
+                <label class="cb-row sec-field-name">
+                  <input type="checkbox" :checked="f.key in curSec" @change="toggleSecField(f, $event.target.checked)" />
+                  {{ f.label }}
+                </label>
+                <template v-if="f.key in curSec">
+                  <select v-if="f.type === 'font'" v-model="curSec[f.key]">
+                    <option v-for="font in FONTS" :key="font.name" :value="font.name">{{ font.name }}{{ font.fallback === 'serif' ? ' (с засечками)' : '' }}</option>
+                  </select>
+                  <div v-else-if="f.type === 'size'" class="size-row">
+                    <input type="range" :min="SIZE_MIN" :max="SIZE_MAX" step="5" v-model="curSec[f.key]" />
+                    <span>{{ curSec[f.key] }}%</span>
+                  </div>
+                  <div v-else class="color-row">
+                    <input type="color" v-model="curSec[f.key]" />
+                    <input v-model="curSec[f.key]" maxlength="7" placeholder="#000000" />
+                  </div>
+                </template>
+                <span v-else class="sec-inherit">как на всём сайте</span>
+              </div>
+            </div>
+            <template v-else>
             <div class="card">
               <h3>Шрифты</h3>
               <div class="form-grid">
@@ -409,19 +441,22 @@
                 </label>
               </div>
             </div>
+            </template>
             <div class="list-toolbar">
               <button class="btn-primary" @click="saveStyle">Сохранить стиль</button>
-              <button class="btn-ghost" @click="resetStyle">Вернуть исходный стиль</button>
+              <button v-if="styleScope" class="btn-ghost" @click="resetSection">Сбросить настройки блока</button>
+              <button v-else class="btn-ghost" @click="resetStyle">Вернуть исходный стиль</button>
             </div>
           </div>
 
           <div class="style-preview" :style="stylePreview.vars">
-            <div class="sp-label">Предпросмотр</div>
-            <div class="sp-hero">
+            <div class="sp-label">Предпросмотр — {{ styleScope ? 'блок «' + sectionLabels[styleScope] + '»' : 'весь сайт' }}</div>
+            <div v-if="!styleScope || styleScope === 'hero'" class="sp-hero">
               <div class="sp-h1">Заголовок главного экрана</div>
+              <p class="sp-hero-sub">Подзаголовок главного экрана</p>
               <span class="sp-btn">Свяжитесь с нами</span>
             </div>
-            <div class="sp-body">
+            <div v-if="styleScope !== 'hero'" class="sp-body" :style="{ background: stylePreview.bg }">
               <div class="sp-h2">ЗАГОЛОВОК РАЗДЕЛА</div>
               <p class="sp-text">Основной текст сайта: описание услуг, отзывы клиентов, рассказ о студии.</p>
               <p class="sp-text sp-light">Второстепенный текст: подписи и пояснения.</p>
@@ -580,7 +615,10 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import * as api from './api.js'
 import { SERVICE_ICONS, serviceIconPath } from '../serviceIcons.js'
-import { FONTS, STYLE_DEFAULTS, SIZE_MIN, SIZE_MAX, themeVars, loadFont } from '../theme.js'
+import {
+  FONTS, STYLE_DEFAULTS, SIZE_MIN, SIZE_MAX, SECTION_KEYS, SECTION_STYLE_KEY,
+  themeVars, loadFont, sectionStyle, parseSectionStyles,
+} from '../theme.js'
 
 // ══ Auth ══
 const authed = ref(!!localStorage.getItem('admin_token'))
@@ -947,21 +985,78 @@ const styleColors = [
   { key: 'style_text_color', label: 'Цвет основного текста' },
   { key: 'style_text_light_color', label: 'Цвет второстепенного текста' },
 ]
+// Стиль отдельных блоков: в объекте блока лежат только поля, отмеченные галочкой
+const styleScope = ref('')
+const secStyles = reactive(Object.fromEntries(SECTION_KEYS.map(key => [key, {}])))
+const curSec = computed(() => secStyles[styleScope.value])
+const sectionFields = [
+  { key: 'font_head', type: 'font', label: 'Шрифт заголовков', global: 'style_font_head' },
+  { key: 'font_body', type: 'font', label: 'Шрифт текста', global: 'style_font_body' },
+  { key: 'head_size', type: 'size', label: 'Размер заголовков', global: 'style_head_size' },
+  { key: 'text_size', type: 'size', label: 'Размер текста', global: 'style_text_size' },
+  { key: 'bg', type: 'color', label: 'Цвет фона блока' },
+  { key: 'accent', type: 'color', label: 'Акцентный цвет', global: 'style_accent' },
+  { key: 'head_color', type: 'color', label: 'Цвет заголовков', global: 'style_head_color' },
+  { key: 'text_color', type: 'color', label: 'Цвет основного текста', global: 'style_text_color' },
+  { key: 'text_light_color', type: 'color', label: 'Цвет второстепенного текста', global: 'style_text_light_color' },
+]
+// У главного экрана фон — фотография, поэтому цвет фона для него не предлагается
+const scopeFields = computed(() => sectionFields.filter(f => !(styleScope.value === 'hero' && f.key === 'bg')))
+// Фон блоков на сайте до настройки — чтобы предпросмотр был похож на реальный блок
+const defaultSectionBg = { about: '#f8f8f8', portfolio: '#f8f8f8', reviews: '#f8f8f8', stats: '#1a1a1a' }
+
+function toggleSecField(field, checked) {
+  if (!checked) { delete curSec.value[field.key]; return }
+  // Стартовое значение — то, что блок показывает сейчас, чтобы включение галочки ничего не меняло
+  curSec.value[field.key] = field.global ? String(stf[field.global]) : (defaultSectionBg[styleScope.value] || '#ffffff')
+}
+function resetSection() {
+  for (const key of Object.keys(curSec.value)) delete curSec.value[key]
+  toast('Настройки блока сброшены в форме — нажмите «Сохранить стиль», чтобы применить')
+}
+
 // Предпросмотр использует те же переменные, что и сайт; шрифты подгружаются по мере выбора
 const stylePreview = computed(() => {
   const theme = themeVars(stf)
   theme.fonts.forEach(loadFont)
-  return { vars: { ...theme.vars, '--sp-text-scale': theme.textSize / 100, '--sp-head-scale': stf.style_head_size / 100 } }
+  const scope = styleScope.value
+  const sec = scope ? curSec.value : {}
+  const { background, ...secVars } = sectionStyle(scope, sec, stf)
+  const vars = { ...theme.vars, ...secVars }
+  if (scope === 'stats') {
+    // Блок цифр тёмный: без своих цветов текст в нём светлый
+    if (!sec.text_color) vars['--text'] = '#ffffff'
+    if (!sec.text_light_color) vars['--text-light'] = 'rgba(255,255,255,0.7)'
+    if (!sec.head_color) vars['--head-color'] = '#ffffff'
+  }
+  if (scope === 'hero') vars['--sp-hero-text'] = sec.text_color || '#ffffff'
+  if (scope === 'hero' && sec.head_color) vars['--sp-hero-title'] = sec.head_color
+  vars['--sp-text-scale'] = (sec.text_size || theme.textSize) / 100
+  vars['--sp-head-scale'] = (sec.head_size || stf.style_head_size) / 100
+  return { vars, bg: background || defaultSectionBg[scope] || '#ffffff' }
 })
 
 function loadStyle(rows) {
   rows.forEach(r => { if (r.key in stf && r.value) stf[r.key] = r.value })
+  const saved = parseSectionStyles(Object.fromEntries(rows.map(r => [r.key, r.value])))
+  for (const key of SECTION_KEYS) {
+    for (const field of Object.keys(secStyles[key])) delete secStyles[key][field]
+    Object.assign(secStyles[key], saved[key] || {})
+  }
 }
 async function saveStyle() {
-  const badColor = styleColors.find(c => !/^#[0-9a-f]{6}$/i.test(stf[c.key]))
+  const isHex = v => /^#[0-9a-f]{6}$/i.test(v)
+  const badColor = styleColors.find(c => !isHex(stf[c.key]))
   if (badColor) { toast(`«${badColor.label}»: цвет должен быть в виде #RRGGBB, например #E8622A`, 'error'); return }
+  const sections = {}
+  for (const key of SECTION_KEYS) {
+    const bad = sectionFields.find(f => f.type === 'color' && f.key in secStyles[key] && !isHex(secStyles[key][f.key]))
+    if (bad) { toast(`Блок «${sectionLabels[key]}», «${bad.label}»: цвет должен быть в виде #RRGGBB`, 'error'); return }
+    if (Object.keys(secStyles[key]).length) sections[key] = { ...secStyles[key] }
+  }
   try {
     for (const key of Object.keys(stf)) await api.settings.update(key, String(stf[key]))
+    await api.settings.update(SECTION_STYLE_KEY, JSON.stringify(sections))
     toast('Стиль сохранён — обновите страницу сайта, чтобы увидеть изменения')
   } catch (e) { toast(e.message, 'error') }
 }
@@ -1161,8 +1256,23 @@ label input.warn, label textarea.warn { border-color: #faad14; background: #fffb
 label input[type="range"] { padding: 0; border: none; accent-color: #c0392b; }
 .style-preview { position: sticky; top: 16px; background: #fff; border-radius: 10px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.07); font-family: var(--font-body); font-size: calc(16px * var(--sp-text-scale)); color: var(--text); line-height: 1.6; }
 .sp-label { font-family: Inter, sans-serif; font-size: 12px; color: #9ca3af; padding: 8px 16px; border-bottom: 1px solid #e8eaed; }
-.sp-hero { background: linear-gradient(135deg, #2b2b2b, #555); color: #fff; text-align: center; padding: 28px 16px; }
-.sp-h1 { font-family: var(--font-head); font-weight: 800; font-size: calc(26px * var(--sp-head-scale)); line-height: 1.25; margin-bottom: 14px; }
+.scope-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.scope-chip { background: #fff; border: 1px solid #d9d9d9; border-radius: 16px; padding: 6px 14px; font-size: 0.85rem; cursor: pointer; color: #374151; }
+.scope-chip:hover { background: #f3f4f6; }
+.scope-chip.custom::after { content: ' •'; color: #c0392b; font-weight: 700; }
+.scope-chip.active { background: #c0392b; border-color: #c0392b; color: #fff; }
+.scope-chip.active.custom::after { color: #fff; }
+.sec-field { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 12px; align-items: center; padding: 8px 0; border-top: 1px solid #f0f1f3; }
+.sec-field-name { cursor: pointer; }
+.sec-field select { border: 1px solid #d9d9d9; border-radius: 6px; padding: 8px 12px; font-size: 0.9rem; font-family: inherit; }
+.sec-field input:not([type="checkbox"]):not([type="range"]) { border: 1px solid #d9d9d9; border-radius: 6px; padding: 8px 12px; font-size: 0.9rem; }
+.sec-inherit { font-size: 0.82rem; color: #9ca3af; }
+.size-row { display: flex; align-items: center; gap: 10px; font-size: 0.85rem; color: #374151; }
+.size-row input { flex: 1; accent-color: #c0392b; }
+@media (max-width: 700px) { .sec-field { grid-template-columns: 1fr; } }
+.sp-hero { background: linear-gradient(135deg, #2b2b2b, #555); color: var(--sp-hero-text, #fff); text-align: center; padding: 28px 16px; }
+.sp-h1 { font-family: var(--font-head); font-weight: 800; font-size: calc(26px * var(--sp-head-scale)); line-height: 1.25; margin-bottom: 10px; color: var(--sp-hero-title, inherit); }
+.sp-hero-sub { font-size: 1em; opacity: 0.9; margin-bottom: 14px; }
 .sp-body { padding: 20px 16px; display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
 .sp-h2 { font-family: var(--font-head); font-weight: 700; font-size: calc(22px * var(--sp-head-scale)); color: var(--head-color); letter-spacing: 0.03em; line-height: 1.25; }
 .sp-h3 { font-family: var(--font-head); font-weight: 700; font-size: 1em; color: var(--head-color); }
