@@ -1657,6 +1657,8 @@ class Review(Base):
     __tablename__ = "site_reviews"
     id = Column(Integer, primary_key=True)
     author_name = Column(String(200), nullable=False)
+    author_city = Column(String(200))
+    avatar_url = Column(Text)
     text = Column(Text, nullable=False)
     is_active = Column(Boolean, default=True)
     sort_order = Column(Integer, default=0)

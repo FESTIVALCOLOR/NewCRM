@@ -1,5 +1,5 @@
 <template>
-  <section id="hero" class="hero">
+  <section id="hero" class="hero" :style="heroBg">
     <div class="hero__overlay" />
     <div class="container hero__content">
       <h1 class="hero__title reveal">{{ settings.hero_title || 'Дизайн интерьеров вашей мечты' }}</h1>
@@ -18,6 +18,10 @@ const whatsappUrl = computed(() => {
   const phone = props.settings?.whatsapp_phone || '79062003365'
   return `https://wa.clck.bar/${phone}`
 })
+const heroBg = computed(() => {
+  const url = props.settings?.hero_bg_url
+  return url ? { background: `url('${url}') center/cover no-repeat` } : {}
+})
 </script>
 
 <style scoped>
@@ -25,7 +29,6 @@ const whatsappUrl = computed(() => {
   position: relative;
   min-height: 100vh;
   display: flex; align-items: center;
-  background: url('/hero-bg.jpg') center/cover no-repeat;
   background-color: #2a2a2a;
 }
 .hero__overlay {

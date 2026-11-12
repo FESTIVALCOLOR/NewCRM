@@ -25,12 +25,13 @@
       </div>
       <div class="contacts__map reveal">
         <iframe
-          v-if="settings.yandex_map_src"
-          :src="settings.yandex_map_src"
+          v-if="mapSrc"
+          :src="mapSrc"
           width="100%" height="400"
           frameborder="0"
           allowfullscreen
           loading="lazy"
+          style="border:0"
         />
       </div>
     </div>
@@ -44,6 +45,8 @@ const whatsappUrl = computed(() => {
   const phone = props.settings?.whatsapp_phone || '79062003365'
   return `https://wa.clck.bar/${phone}`
 })
+// Поддержка и google_map_src, и yandex_map_src
+const mapSrc = computed(() => props.settings?.google_map_src || props.settings?.yandex_map_src || null)
 </script>
 
 <style scoped>

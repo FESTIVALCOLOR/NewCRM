@@ -1874,6 +1874,8 @@ class PricingPlanResponse(PricingPlanBase):
 
 class ReviewBase(BaseModel):
     author_name: str
+    author_city: Optional[str] = None
+    avatar_url: Optional[str] = None
     text: str
     is_active: bool = True
     sort_order: int = 0
