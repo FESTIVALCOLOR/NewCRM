@@ -1633,6 +1633,7 @@ class PricingPlan(Base):
     __tablename__ = "site_pricing_plans"
     id = Column(Integer, primary_key=True)
     title = Column(String(200), nullable=False)
+    price_label = Column(String(100), nullable=True)  # напр. "от 500 руб/м²"
     is_featured = Column(Boolean, default=False)  # выделенный (цветной)
     whatsapp_text = Column(Text)  # текст сообщения в WhatsApp
     sort_order = Column(Integer, default=0)

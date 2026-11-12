@@ -1851,6 +1851,7 @@ class PricingItemResponse(PricingItemBase):
 
 class PricingPlanBase(BaseModel):
     title: str
+    price_label: Optional[str] = None
     is_featured: bool = False
     whatsapp_text: Optional[str] = None
     sort_order: int = 0

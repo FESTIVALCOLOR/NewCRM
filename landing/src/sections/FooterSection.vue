@@ -33,7 +33,7 @@ const logoSrc = computed(() => {
 .footer { background: var(--dark); color: rgba(255,255,255,0.7); padding: 28px 0; }
 .footer__inner { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
 .footer__logo { text-decoration: none; font-family: var(--font-head); font-weight: 800; font-size: 1rem; letter-spacing: 0.08em; display: flex; align-items: center; }
-.footer__logo-img { height: 36px; width: auto; object-fit: contain; }
+.footer__logo-img { height: 36px; width: auto; object-fit: contain; filter: grayscale(1) brightness(2); }
 .logo-festival { color: #fff; }
 .logo-color { color: var(--accent); }
 .footer__copy { font-size: 0.82rem; flex: 1; text-align: center; color: rgba(255,255,255,0.5); }
