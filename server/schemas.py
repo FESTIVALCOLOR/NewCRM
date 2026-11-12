@@ -6,7 +6,7 @@ from datetime import date, datetime
 import re
 from typing import Dict, List, Optional
 
-from pydantic import BaseModel, EmailStr, Field, field_serializer, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_serializer, field_validator, model_validator
 
 # =========================
 # ОБЩИЕ ОТВЕТЫ
@@ -1921,6 +1921,43 @@ class PortfolioImageResponse(PortfolioImageBase):
         from_attributes = True
 
 
+class SiteAnalyticsBase(BaseModel):
+    yandex_metrika_id: Optional[str] = None
+    yandex_metrika_webvisor: Optional[bool] = True
+    google_analytics_id: Optional[str] = None
+    google_tag_manager_id: Optional[str] = None
+    vk_pixel_id: Optional[str] = None
+    google_search_console_key: Optional[str] = None
+    yandex_webmaster_key: Optional[str] = None
+    meta_title: Optional[str] = None
+    meta_description: Optional[str] = None
+    meta_keywords: Optional[str] = None
+    canonical_url: Optional[str] = None
+    robots: Optional[str] = "index, follow"
+    og_title: Optional[str] = None
+    og_description: Optional[str] = None
+    og_image_url: Optional[str] = None
+    schema_org_name: Optional[str] = None
+    schema_org_address: Optional[str] = None
+    schema_org_phone: Optional[str] = None
+    schema_org_latitude: Optional[str] = None
+    schema_org_longitude: Optional[str] = None
+    schema_org_opening_hours: Optional[str] = None
+    schema_org_price_range: Optional[str] = None
+    custom_head_scripts: Optional[str] = None
+    custom_body_end_scripts: Optional[str] = None
+
+
+class SiteAnalyticsUpdate(SiteAnalyticsBase):
+    pass
+
+
+class SiteAnalyticsResponse(SiteAnalyticsBase):
+    id: int
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class SitePublicResponse(BaseModel):
     """Весь контент сайта одним запросом (публичный endpoint)"""
 
@@ -1932,3 +1969,4 @@ class SitePublicResponse(BaseModel):
     pricing: list[PricingPlanResponse] = []
     reviews: list[ReviewResponse] = []
     portfolio: list[PortfolioImageResponse] = []
+    analytics: Optional[SiteAnalyticsResponse] = None

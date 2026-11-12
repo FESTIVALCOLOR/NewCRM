@@ -48,8 +48,11 @@ defineProps({ services: Array })
 @media (max-width: 768px) {
   .services__grid { grid-template-columns: repeat(2, 1fr); }
   .service-card, .service-card:nth-child(4), .service-card:nth-child(5) { grid-column: span 1; }
+  /* Если последняя карточка одна в строке (нечётная позиция) — растянуть на всю ширину */
+  .service-card:last-child:nth-child(odd) { grid-column: span 2; }
 }
 @media (max-width: 480px) {
   .services__grid { grid-template-columns: 1fr; }
+  .service-card:last-child:nth-child(odd) { grid-column: span 1; }
 }
 </style>

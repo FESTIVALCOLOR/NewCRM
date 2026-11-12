@@ -1,13 +1,17 @@
 """
 Admin API для управления контентом сайта festivalcolor.ru
 Все endpoints требуют авторизации (JWT).
-Prefix: /api/site/admin
+Prefix: /api/v1/site/admin
 """
 
+import os
 from typing import List
+import uuid
 
 from auth import get_current_user
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse
+from pydantic import BaseModel
 from schemas import (
     PortfolioImageCreate,
     PortfolioImageResponse,
@@ -18,6 +22,8 @@ from schemas import (
     ReviewCreate,
     ReviewResponse,
     ReviewUpdate,
+    SiteAnalyticsResponse,
+    SiteAnalyticsUpdate,
     SiteSectionResponse,
     SiteSectionUpdate,
     SiteServiceCreate,
@@ -40,6 +46,7 @@ from database import (
     PricingItem,
     PricingPlan,
     Review,
+    SiteAnalytics,
     SiteSection,
     SiteService,
     SiteSetting,
@@ -47,6 +54,9 @@ from database import (
     TeamMember,
     get_db,
 )
+
+UPLOADS_DIR = os.environ.get("SITE_UPLOADS_DIR", "/app/uploads/site")
+os.makedirs(UPLOADS_DIR, exist_ok=True)
 
 router = APIRouter(prefix="/site/admin", tags=["site-admin"])
 
@@ -348,3 +358,141 @@ def delete_portfolio(id: int, db: Session = Depends(get_db), _: Employee = Depen
     db.delete(obj)
     db.commit()
     return {"ok": True}
+
+
+# ──────────────────────────────────────────────
+# REORDER (bulk sort_order update)
+# ──────────────────────────────────────────────
+
+
+class ReorderItem(BaseModel):
+    id: int
+    sort_order: int
+
+
+class ReorderSectionItem(BaseModel):
+    key: str
+    sort_order: int
+
+
+@router.put("/sections/reorder")
+def reorder_sections(items: list[ReorderSectionItem], db: Session = Depends(get_db), _: Employee = Depends(get_current_user)):
+    for item in items:
+        obj = db.query(SiteSection).filter(SiteSection.key == item.key).first()
+        if obj:
+            obj.sort_order = item.sort_order
+    db.commit()
+    return {"ok": True}
+
+
+@router.put("/services/reorder")
+def reorder_services(items: list[ReorderItem], db: Session = Depends(get_db), _: Employee = Depends(get_current_user)):
+    for item in items:
+        obj = db.query(SiteService).filter(SiteService.id == item.id).first()
+        if obj:
+            obj.sort_order = item.sort_order
+    db.commit()
+    return {"ok": True}
+
+
+@router.put("/reviews/reorder")
+def reorder_reviews(items: list[ReorderItem], db: Session = Depends(get_db), _: Employee = Depends(get_current_user)):
+    for item in items:
+        obj = db.query(Review).filter(Review.id == item.id).first()
+        if obj:
+            obj.sort_order = item.sort_order
+    db.commit()
+    return {"ok": True}
+
+
+@router.put("/portfolio/reorder")
+def reorder_portfolio(items: list[ReorderItem], db: Session = Depends(get_db), _: Employee = Depends(get_current_user)):
+    for item in items:
+        obj = db.query(PortfolioImage).filter(PortfolioImage.id == item.id).first()
+        if obj:
+            obj.sort_order = item.sort_order
+    db.commit()
+    return {"ok": True}
+
+
+@router.put("/stats/reorder")
+def reorder_stats(items: list[ReorderItem], db: Session = Depends(get_db), _: Employee = Depends(get_current_user)):
+    for item in items:
+        obj = db.query(StatItem).filter(StatItem.id == item.id).first()
+        if obj:
+            obj.sort_order = item.sort_order
+    db.commit()
+    return {"ok": True}
+
+
+@router.put("/pricing/reorder")
+def reorder_pricing(items: list[ReorderItem], db: Session = Depends(get_db), _: Employee = Depends(get_current_user)):
+    for item in items:
+        obj = db.query(PricingPlan).filter(PricingPlan.id == item.id).first()
+        if obj:
+            obj.sort_order = item.sort_order
+    db.commit()
+    return {"ok": True}
+
+
+# ──────────────────────────────────────────────
+# ЗАГРУЗКА ИЗОБРАЖЕНИЙ
+# ──────────────────────────────────────────────
+
+ALLOWED_MIME = {"image/jpeg", "image/png", "image/gif", "image/webp", "image/svg+xml"}
+MAX_SIZE = 10 * 1024 * 1024  # 10 MB
+
+
+@router.post("/upload")
+async def upload_image(file: UploadFile = File(...), _: Employee = Depends(get_current_user)):
+    if file.content_type not in ALLOWED_MIME:
+        raise HTTPException(400, "Недопустимый тип файла. Разрешены: JPEG, PNG, GIF, WebP, SVG")
+    ext = os.path.splitext(file.filename or "")[1].lower() or ".jpg"
+    filename = f"{uuid.uuid4().hex}{ext}"
+    path = os.path.join(UPLOADS_DIR, filename)
+    content = await file.read()
+    if len(content) > MAX_SIZE:
+        raise HTTPException(400, "Файл слишком большой (максимум 10 МБ)")
+    with open(path, "wb") as f:
+        f.write(content)
+    return {"url": f"/api/v1/site/media/{filename}", "filename": filename}
+
+
+@router.get("/media/{filename}", include_in_schema=False)
+def serve_media(filename: str, _: Employee = Depends(get_current_user)):
+    path = os.path.join(UPLOADS_DIR, filename)
+    if not os.path.isfile(path):
+        raise HTTPException(404)
+    return FileResponse(path)
+
+
+# ──────────────────────────────────────────────
+# АНАЛИТИКА / SEO
+# ──────────────────────────────────────────────
+
+
+@router.get("/analytics", response_model=SiteAnalyticsResponse)
+def get_analytics(db: Session = Depends(get_db), _: Employee = Depends(get_current_user)):
+    obj = db.query(SiteAnalytics).filter(SiteAnalytics.id == 1).first()
+    if not obj:
+        obj = SiteAnalytics(id=1)
+        db.add(obj)
+        db.commit()
+        db.refresh(obj)
+    return obj
+
+
+@router.put("/analytics", response_model=SiteAnalyticsResponse)
+def update_analytics(data: SiteAnalyticsUpdate, db: Session = Depends(get_db), _: Employee = Depends(get_current_user)):
+    from datetime import datetime
+
+    obj = db.query(SiteAnalytics).filter(SiteAnalytics.id == 1).first()
+    if not obj:
+        obj = SiteAnalytics(id=1)
+        db.add(obj)
+    for k, v in data.model_dump().items():
+        setattr(obj, k, v)
+    obj.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(obj)
+    return obj

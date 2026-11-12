@@ -1678,6 +1678,44 @@ class PortfolioImage(Base):
     sort_order = Column(Integer, default=0)
 
 
+class SiteAnalytics(Base):
+    """Настройки аналитики и SEO (singleton, id=1)"""
+
+    __tablename__ = "site_analytics"
+    id = Column(Integer, primary_key=True, default=1)
+    # ── Аналитика ──────────────────────────────────
+    yandex_metrika_id = Column(String(20))  # "12345678"
+    yandex_metrika_webvisor = Column(Boolean, default=True)
+    google_analytics_id = Column(String(30))  # "G-XXXXXXXXXX"
+    google_tag_manager_id = Column(String(20))  # "GTM-XXXXXXX"
+    vk_pixel_id = Column(String(30))  # VK Ads пиксель
+    # ── Верификация поисковиков ──────────────────────
+    google_search_console_key = Column(String(200))  # meta verification
+    yandex_webmaster_key = Column(String(200))  # meta verification
+    # ── SEO метатеги ────────────────────────────────
+    meta_title = Column(String(200))
+    meta_description = Column(Text)
+    meta_keywords = Column(Text)
+    canonical_url = Column(String(300))
+    robots = Column(String(50), default="index, follow")
+    # ── Open Graph ──────────────────────────────────
+    og_title = Column(String(200))
+    og_description = Column(Text)
+    og_image_url = Column(Text)
+    # ── Schema.org LocalBusiness ─────────────────────
+    schema_org_name = Column(String(200))
+    schema_org_address = Column(String(300))
+    schema_org_phone = Column(String(50))
+    schema_org_latitude = Column(String(20))
+    schema_org_longitude = Column(String(20))
+    schema_org_opening_hours = Column(Text)  # "Mo-Fr 09:00-18:00"
+    schema_org_price_range = Column(String(20))  # "$$"
+    # ── Произвольные скрипты ────────────────────────
+    custom_head_scripts = Column(Text)  # вставляется в <head>
+    custom_body_end_scripts = Column(Text)  # вставляется перед </body>
+    updated_at = Column(DateTime, default=datetime.utcnow)
+
+
 def init_db():
     """Инициализация базы данных"""
     try:
