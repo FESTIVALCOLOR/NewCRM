@@ -121,8 +121,11 @@ watch(() => ready.designs.length, () => scheduleReveal())
 .drawings__note { margin-top: 14px; font-size: calc(0.8rem * var(--ts, 1)); color: var(--text-light); }
 @media (max-width: 560px) {
   .drawings__lead { margin-top: -16px; }
-  .drawings__grid { grid-template-columns: 1fr 1fr; gap: 10px; }
-  .drawing { padding: 16px 14px; }
+  /* На телефоне — одна колонка: длинные названия («Электрооборудование») не помещаются в половину ширины.
+     Номер слева, заголовок и текст справа — так десять карточек остаются компактными */
+  .drawings__grid { grid-template-columns: 1fr; gap: 10px; }
+  .drawing { display: grid; grid-template-columns: 30px 1fr; column-gap: 10px; row-gap: 4px; padding: 14px 16px; }
+  .drawing__num { grid-row: span 2; padding-top: 2px; }
 }
 .pricing { display: grid; grid-template-columns: 1fr minmax(340px, 440px); gap: 36px; align-items: start; }
 .pricing__tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 24px; }
