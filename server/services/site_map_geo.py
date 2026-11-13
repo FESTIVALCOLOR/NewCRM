@@ -39,10 +39,14 @@ CITIES = {
     "ВН": ("Великий Новгород", 58.522, 31.275),
 }
 
-# Поиск ограничен областью вокруг города (примерно 140 км), чтобы одноимённая улица
-# в другом регионе не поставила точку за тысячу километров
-VIEWBOX_LAT = 1.3
-VIEWBOX_LON = 2.2
+# Поиск ограничен областью вокруг города, чтобы одноимённая улица или деревня в другом
+# месте не поставила точку за сотни километров. Сначала ищем рядом с городом (около 55 км);
+# дальше (около 140 км) — только если в адресе назван населённый пункт вместе с улицей.
+NEAR_BOX = (0.5, 0.9)  # градусы широты и долготы в каждую сторону
+FAR_BOX = (1.3, 2.2)
+
+# Меняется при изменении правил поиска: входит в отпечаток адреса, поэтому все точки пересчитываются
+ALGORITHM_VERSION = "2"
 
 # Ранг результата Nominatim: 30 — дом, 26–27 — улица, меньше — район или город (слишком грубо)
 RANK_HOUSE = 28
@@ -82,6 +86,8 @@ _TOWN_MARK_RE = re.compile(r"\b(?:город|гор|г|пгт|пос[её]лок
 _EXPLICIT_TOWN_RE = re.compile(r"(?:^|[\s,])(?:г|пгт|пос|дер)\.?\s+[А-ЯЁ]|[А-ЯЁ][а-яё]+\s+дер\b")
 
 _HOUSE_PART_RE = re.compile(r"^\d+[\w/-]*(?:\s+[кс]\d+\w*)*$", re.IGNORECASE)
+# Служебное слово, оставшееся без номера после очистки («дом» от «дом 2 этажа»)
+_ORPHAN_WORD_RE = re.compile(r"^(?:дом|д|корпус|корп|к|строение|стр|с|владение|вл)\.?$", re.IGNORECASE)
 _CORPUS_PART_RE = re.compile(r"^[кс]\d+\w*$", re.IGNORECASE)
 _TRAILING_CORPUS_RE = re.compile(r"(\d[\w/-]*?)(?:\s+[кс]\d+\w*)+", re.IGNORECASE)
 _FRACTION_RE = re.compile(r"\b(\d+[а-яё]?)/\d+\w*", re.IGNORECASE)
@@ -93,6 +99,13 @@ class GeoResult:
     lat: float
     lon: float
     precision: str  # 'house' или 'street'
+
+
+@dataclass(frozen=True)
+class Query:
+    text: str
+    with_house: bool  # в запросе есть номер дома
+    names_place: bool  # кроме улицы назван населённый пункт: такой запрос можно искать и вдали от города
 
 
 def city_name(code: Optional[str]) -> str:
@@ -119,7 +132,7 @@ def _normalize_parts(address: str) -> list[str]:
     parts: list[str] = []
     for raw in re.split(r"[,;]", text):
         part = re.sub(r"\s+", " ", raw).strip(" .")
-        if not part or _NOISE_PART_RE.search(part) or _NOISE_CODE_RE.search(part):
+        if not part or _ORPHAN_WORD_RE.match(part) or _NOISE_PART_RE.search(part) or _NOISE_CODE_RE.search(part):
             continue
         part = _TOWN_MARK_RE.sub("", part).strip(" .")
         if not part:
@@ -141,21 +154,24 @@ def clean_address(address: str) -> tuple[str, str, str]:
     return full, simple, street
 
 
-def build_queries(address: str, city_code: Optional[str]) -> list[tuple[str, bool]]:
-    """Варианты запроса от точного к грубому, без повторов: (текст, содержит ли номер дома)."""
+def build_queries(address: str, city_code: Optional[str]) -> list[Query]:
+    """Варианты запроса от точного к грубому, без повторов."""
     full, simple, street = clean_address(address)
     name = city_name(city_code)
     source = address or ""
     # Если в адресе уже назван город («г. Химки»), название города договора может только помешать
     has_town = bool(_EXPLICIT_TOWN_RE.search(source)) or (bool(name) and name.lower() in source.lower())
-    queries: dict[str, bool] = {}
-    for base, with_house in ((full, True), (simple, True), (street, False)):
+    queries: dict[str, Query] = {}
+    for base, has_number in ((full, True), (simple, True), (street, False)):
         if not base:
             continue
+        with_house = has_number and base != street
+        names_place = ", " in base
         if name and not has_town:
-            queries.setdefault(f"{base}, {name}", with_house and base != street)
-        queries.setdefault(base, with_house and base != street)
-    return list(queries.items())
+            text = f"{base}, {name}"
+            queries.setdefault(text, Query(text, with_house, names_place))
+        queries.setdefault(base, Query(base, with_house, names_place))
+    return list(queries.values())
 
 
 def _word_stems(text: str) -> list[str]:
@@ -184,9 +200,10 @@ def house_number(address: str) -> Optional[str]:
     return None
 
 
-def city_viewbox(lat: float, lon: float) -> tuple[float, float, float, float]:
+def city_viewbox(lat: float, lon: float, size: tuple[float, float] = NEAR_BOX) -> tuple[float, float, float, float]:
     """Область поиска вокруг города: запад, юг, восток, север."""
-    return lon - VIEWBOX_LON, lat - VIEWBOX_LAT, lon + VIEWBOX_LON, lat + VIEWBOX_LAT
+    d_lat, d_lon = size
+    return lon - d_lon, lat - d_lat, lon + d_lon, lat + d_lat
 
 
 def nominatim_search(query: str, box: Optional[tuple[float, float, float, float]] = None) -> Optional[dict]:
@@ -269,13 +286,35 @@ def geocode_address(
     """
     if not center:
         return None
-    box = city_viewbox(*center)
     queries = build_queries(address, city_code)
     if not queries:
         return None
+    tokens = street_tokens(address, city_code)
+    house = house_number(address)
+
+    near = _search(queries, city_viewbox(*center, NEAR_BOX), strict, fuzzy, tokens, house)
+    if near:
+        return near
+    # Одиночное название («Заречная 5», «Рязаново 28А») вдали от города почти наверняка совпадёт
+    # с чужой улицей или деревней, поэтому дальний поиск — только для адресов с населённым пунктом
+    far_queries = [q for q in queries if q.names_place]
+    if not far_queries:
+        return None
+    return _search(far_queries, city_viewbox(*center, FAR_BOX), strict, fuzzy, tokens, house)
+
+
+def _search(
+    queries: list[Query],
+    box: tuple[float, float, float, float],
+    strict: StrictSearch,
+    fuzzy: Optional[FuzzySearch],
+    tokens: list[str],
+    house: Optional[str],
+) -> Optional[GeoResult]:
+    """Поиск в одной области: сначала строгим геокодером, затем нестрогим."""
     street_level: Optional[GeoResult] = None
-    for query, _ in queries:
-        found = strict(query, box)
+    for query in queries:
+        found = strict(query.text, box)
         if not found:
             continue
         rank = int(found.get("place_rank", 0))
@@ -283,17 +322,12 @@ def geocode_address(
             return GeoResult(float(found["lat"]), float(found["lon"]), "house")
         if rank >= RANK_STREET and street_level is None:
             street_level = GeoResult(float(found["lat"]), float(found["lon"]), "street")
-    # Точки на карте всё равно сдвигаются на десятки метров, поэтому улицы достаточно
-    if street_level is not None or fuzzy is None:
+    # Точки на карте всё равно сдвигаются на десятки метров, поэтому улицы достаточно.
+    # Без названия улицы ответ нестрогого геокодера нечем проверить — его не спрашиваем.
+    if street_level is not None or fuzzy is None or not tokens:
         return street_level
-
-    tokens = street_tokens(address, city_code)
-    if not tokens:
-        # Без названия улицы ответ нестрогого геокодера нечем проверить
-        return None
-    house = house_number(address)
-    for query, with_house in queries:
-        picked = _pick_fuzzy(fuzzy(query, box), tokens, house if with_house else None)
+    for query in queries:
+        picked = _pick_fuzzy(fuzzy(query.text, box), tokens, house if query.with_house else None)
         if picked:
             return picked
     return None
@@ -301,7 +335,7 @@ def geocode_address(
 
 def address_hash(address: Optional[str], city: Optional[str]) -> str:
     """Отпечаток адреса: по нему видно, что адрес в договоре изменили и точку нужно искать заново."""
-    normalized = f"{(city or '').strip().lower()}|{(address or '').strip().lower()}"
+    normalized = f"v{ALGORITHM_VERSION}|{(city or '').strip().lower()}|{(address or '').strip().lower()}"
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:40]
 
 

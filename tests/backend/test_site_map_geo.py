@@ -57,20 +57,25 @@ class TestCleanAddress:
 
     @pytest.mark.parametrize("address", ["ул. Ленина 5, кв. 12", "ул. Ленина 5, квартира 12", "ул. Ленина 5 оф 12", "ул. Ленина 5, 12 этаж"])
     def test_apartment_never_reaches_geocoder(self, address):
-        for query, _ in geo.build_queries(address, "МСК"):
-            assert "12" not in query
+        for query in geo.build_queries(address, "МСК"):
+            assert "12" not in query.text
 
     def test_only_residential_complex_name_gives_no_queries(self):
         assert geo.build_queries("ЖК «Солнечный» (ванная)", "МСК") == []
 
     def test_city_added_first_when_address_has_no_town(self):
-        queries = [q for q, _ in geo.build_queries("ул. Ленина 5", "СПБ")]
+        queries = [q.text for q in geo.build_queries("ул. Ленина 5", "СПБ")]
         assert queries[0] == "улица Ленина 5, Санкт-Петербург"
         assert "улица Ленина 5" in queries
 
     def test_city_not_added_when_town_is_explicit(self):
-        queries = [q for q, _ in geo.build_queries("Московская область, г. Красногорск, ул. Ленина, 5", "МСК")]
-        assert queries == ["Красногорск, улица Ленина 5", "Красногорск, улица Ленина"]
+        queries = geo.build_queries("Московская область, г. Красногорск, ул. Ленина, 5", "МСК")
+        assert [q.text for q in queries] == ["Красногорск, улица Ленина 5", "Красногорск, улица Ленина"]
+        assert [q.with_house for q in queries] == [True, False]
+        assert all(q.names_place for q in queries)
+
+    def test_bare_street_does_not_name_a_place(self):
+        assert not any(q.names_place for q in geo.build_queries("ул. Ленина 5", "СПБ"))
 
     def test_house_number_and_street_tokens(self):
         assert geo.house_number("пр-кт Пацаева, 7 к1, кв. 120") == "7"
@@ -103,6 +108,27 @@ class TestGeocodeAddress:
         geo.geocode_address("ул. Ленина 5", "МСК", MOSCOW, strict=strict, fuzzy=None)
         west, south, east, north = boxes[0]
         assert west < MOSCOW[1] < east and south < MOSCOW[0] < north
+
+    def test_bare_name_is_never_searched_far_from_city(self):
+        # Регрессия: «деревня Рязаново, 28А» нашлась в одноимённой деревне за 155 км от Москвы
+        boxes = []
+
+        def strict(query, box):
+            boxes.append(box)
+            return None
+
+        def fuzzy(query, box):
+            boxes.append(box)
+            return []
+
+        result = geo.geocode_address("Рязаново дер., д.28А, Щербинка р-н, дом 2 этажа", "МСК", MOSCOW, strict=strict, fuzzy=fuzzy)
+        assert result is None
+        assert set(boxes) == {geo.city_viewbox(*MOSCOW, geo.NEAR_BOX)}
+
+    def test_address_with_town_falls_back_to_wide_region(self):
+        far = geo.city_viewbox(*MOSCOW, geo.FAR_BOX)
+        result = geo.geocode_address("г. Клин, ул. Ленина, 5", "МСК", MOSCOW, strict=lambda q, box: house() if box == far else None, fuzzy=None)
+        assert result is not None and result.precision == "house"
 
     def test_too_coarse_result_is_rejected(self):
         # Геокодер узнал только город — такую точку показывать нельзя
@@ -185,3 +211,9 @@ class TestPrivacy:
         assert base == geo.address_hash("  УЛ. ЛЕНИНА 5 ", "мск")
         assert base != geo.address_hash("ул. Ленина 6", "МСК")
         assert base != geo.address_hash("ул. Ленина 5", "СПБ")
+
+    def test_address_hash_changes_with_algorithm_version(self, monkeypatch):
+        # Смена правил поиска должна заставить пересчитать все точки
+        base = geo.address_hash("ул. Ленина 5", "МСК")
+        monkeypatch.setattr(geo, "ALGORITHM_VERSION", "next")
+        assert base != geo.address_hash("ул. Ленина 5", "МСК")
