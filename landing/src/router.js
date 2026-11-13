@@ -36,3 +36,30 @@ export function setPageTitle(title) {
   document.title = title ? `${title} — ${SITE_NAME}` : homeTitle
 }
 router.afterEach((to) => setPageTitle(to.meta.title))
+
+// После выкладки новой версии у вкладки, открытой раньше, может не оказаться файла нужной страницы.
+// Вместо молчаливого «не открывается» перезагружаем страницу сразу на нужном адресе — один раз, без зацикливания
+const RELOAD_KEY = 'chunk_reload_at'
+export function reloadForNewVersion(path) {
+  try {
+    const last = Number(sessionStorage.getItem(RELOAD_KEY) || 0)
+    if (Date.now() - last < 10000) return false
+    sessionStorage.setItem(RELOAD_KEY, String(Date.now()))
+  } catch { /* хранилище недоступно — перезагрузка всё равно поможет */ }
+  window.location.assign(path)
+  return true
+}
+// Куда идёт переход прямо сейчас: файл страницы подгружается уже после начала перехода
+let pendingHref = null
+router.beforeEach((to) => { pendingHref = router.resolve(to).href })
+router.afterEach(() => { pendingHref = null })
+export function reloadTarget() {
+  return pendingHref || window.location.href
+}
+
+router.onError((error, to) => {
+  const message = String(error?.message || error || '')
+  if (/dynamically imported module|Importing a module script failed|Failed to fetch|Unable to preload/i.test(message)) {
+    reloadForNewVersion(router.resolve(to).href)
+  }
+})
