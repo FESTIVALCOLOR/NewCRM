@@ -11,7 +11,7 @@ import threading
 from typing import Optional
 
 from constants import STATUS_COMPLETED, STATUS_SUPERVISION, STATUS_TERMINATED
-from services.site_map_geo import ADDRESS_MODES, address_hash, address_key, city_name, geocode_address, point_label, privacy_offset, resolve_city_center
+from services.site_map_geo import ADDRESS_MODES, FuzzyGuard, address_hash, address_key, city_name, geocode_address, point_label, privacy_offset, resolve_city_center
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -81,6 +81,8 @@ def sync_map_points() -> bool:
         jobs += [(None, extra, extra.address, extra.city) for extra in db.query(SiteMapExtraObject).order_by(SiteMapExtraObject.id).all()]
         centers: dict = {}
         failures = 0
+        fuzzy = FuzzyGuard()
+        postponed = 0
         for contract_id, extra, address, raw_city in jobs:
             now = datetime.utcnow()
             current_hash = address_hash(address, raw_city)
@@ -91,7 +93,7 @@ def sync_map_points() -> bool:
                 city = (raw_city or "").strip()
                 if city not in centers:
                     centers[city] = resolve_city_center(city)
-                found = geocode_address(address, city, centers[city])
+                found = geocode_address(address, city, centers[city], fuzzy=fuzzy)
             except Exception as exc:
                 # Сбой сети — не «адрес не найден»: точку не трогаем, адрес проверим при следующем запуске.
                 # Один сбой не останавливает обновление — остальные адреса ищутся дальше
@@ -102,6 +104,10 @@ def sync_map_points() -> bool:
                     break
                 continue
             failures = 0
+            if found is None and fuzzy.down:
+                # Без нестрогого геокодера поиск неполный: «не найден» ставить нельзя — адрес остаётся в очереди
+                postponed += 1
+                continue
             if point is None:
                 point = SiteMapPoint(contract_id=contract_id)
                 db.add(point)
@@ -114,6 +120,8 @@ def sync_map_points() -> bool:
                 point.lat, point.lon, point.precision, point.status = None, None, None, "not_found"
                 point.place, point.street, point.house = None, None, None
             db.commit()
+        if postponed and not _state["last_error"]:
+            _state["last_error"] = f"Быстрый геокодер временно недоступен — {postponed} адресов ждут его возвращения, поиск повторится автоматически"
         _state["last_sync"] = datetime.utcnow()
         return True
     except Exception as exc:

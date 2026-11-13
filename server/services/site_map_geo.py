@@ -30,8 +30,9 @@ PHOTON_URL = "https://photon.komoot.io/api/"
 GEOCODER_HEADERS = {"User-Agent": "site-objects-map/1.0", "Accept-Language": "ru"}
 # Nominatim по своим правилам принимает не больше одного запроса в секунду
 GEOCODER_PAUSE = 1.1
-# Photon жёсткого ограничения не задаёт и просит лишь не перегружать сервис — короткой паузы достаточно
-PHOTON_PAUSE = 0.35
+# Photon жёсткого ограничения не публикует, но при частых запросах закрывает доступ серверу целиком
+# (пауза 0,35 с привела к блокировке) — поэтому темп такой же, как у Nominatim
+PHOTON_PAUSE = 1.1
 # Сбой сети на одном запросе не должен останавливать поиск: запрос повторяется после паузы
 RETRY_ATTEMPTS = 3
 RETRY_PAUSE = 3.0
@@ -299,6 +300,29 @@ def photon_search(query: str, box: tuple[float, float, float, float]) -> list[di
 
 StrictSearch = Callable[[str, Optional[tuple[float, float, float, float]]], Optional[dict]]
 FuzzySearch = Callable[[str, tuple[float, float, float, float]], list[dict]]
+
+
+class FuzzyGuard:
+    """Нестрогий геокодер с предохранителем на один запуск обновления.
+
+    Если сервис недоступен (сбой сети, блокировка, перегрузка), до конца запуска к нему больше
+    не обращаемся: поиск продолжается только строгим геокодером — медленнее, но без остановки.
+    По флагу down видно, что ответ «не найдено» мог быть неполным.
+    """
+
+    def __init__(self, search: FuzzySearch = None):
+        self.search = search or photon_search
+        self.down = False
+
+    def __call__(self, query: str, box: tuple[float, float, float, float]) -> list[dict]:
+        if self.down:
+            return []
+        try:
+            return self.search(query, box)
+        except requests.RequestException as exc:
+            self.down = True
+            logger.warning("Геокодер Photon недоступен (%s) — до следующего запуска ищем только через Nominatim", type(exc).__name__)
+            return []
 
 
 def resolve_city_center(city_code: Optional[str], search: StrictSearch = nominatim_search) -> Optional[tuple[float, float]]:

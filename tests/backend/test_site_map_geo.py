@@ -359,3 +359,26 @@ class TestGluedApartment:
     def test_house_and_building_survive(self):
         assert geo.clean_address("Мурино,ул. Екатерининская, 18к3кв447,")[0] == "Мурино, улица Екатерининская 18 к3"
         assert geo.clean_address("Белоостровская улица, 10кв826")[0] == "Белоостровская улица 10"
+
+
+@pytest.mark.backend
+class TestFuzzyGuard:
+    def test_unavailable_fuzzy_is_not_asked_again_and_strict_still_works(self):
+        calls = []
+
+        def broken(query, box):
+            calls.append(query)
+            raise geo.requests.ConnectionError("connection refused")
+
+        guard = geo.FuzzyGuard(broken)
+        result = geo.geocode_address("ул. Ленина 5", "МСК", MOSCOW, strict=lambda q, b: house(), fuzzy=guard)
+        assert result is not None and result.precision == "house"
+        assert guard.down
+        geo.geocode_address("ул. Гагарина 7", "МСК", MOSCOW, strict=lambda q, b: house(), fuzzy=guard)
+        assert len(calls) == 1
+
+    def test_working_fuzzy_passes_answers_through(self):
+        feature = photon_feature("house", street_name="улица Ленина", housenumber="5")
+        guard = geo.FuzzyGuard(lambda q, b: [feature])
+        result = geo.geocode_address("ул. Ленина 5", "МСК", MOSCOW, strict=lambda q, b: None, fuzzy=guard)
+        assert result.precision == "house" and not guard.down
