@@ -81,10 +81,14 @@ services:
       FILE_STORAGE_PATH: /app/uploads
       PREVIEW_CACHE_PATH: /app/previews
       BASE_URL: https://crm.festivalcolor.ru
+      # Запросы сайта (/api/v1/site/) пока обслуживает этот сервис: работающий nginx ещё не перечитал
+      # конфигурацию, которая направляет их в site_api. Поэтому база DB-IP подключена и сюда
+      SITE_GEOIP_DB: /app/geoip/dbip-city-lite.mmdb
     volumes:
       - uploads_data:/app/uploads
       - previews_data:/app/previews
       - ./resources:/app/resources:ro
+      - ./geoip:/app/geoip:ro
     ports:
       - "127.0.0.1:8000:8000"
     healthcheck:
