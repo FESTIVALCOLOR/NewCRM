@@ -127,6 +127,7 @@ export const ready = {
   updateImage: (imageId, d) => req('PUT', `/site/admin/ready-designs/images/${imageId}`, d),
   deleteImage: (imageId) => req('DELETE', `/site/admin/ready-designs/images/${imageId}`),
   reorderImages: (items) => req('PUT', '/site/admin/ready-designs/images/reorder', items),
+  productPreview: (url) => req('POST', '/site/admin/ready-designs/product-preview', { url }),
 }
 
 // ── Карта объектов ──────────────────────────

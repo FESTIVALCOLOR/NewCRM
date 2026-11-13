@@ -207,8 +207,9 @@ class TestSiteReadyDesigns:
         image = api_post(api_base, f"{READY}/{design_id}/images", admin_headers, json={"url": "/api/v1/site/media/test.jpg"}).json()
         assert image["markers"] == []
 
+        product = {"image_url": "/api/v1/site/media/sofa.jpg", "sku": "SF-1", "color": "серый", "shape": "угловой", "size": "240 × 160 см"}
         markers = [
-            {"x": 12.5, "y": 80, "title": " Диван ", "description": "угловой", "url": "https://example.com/sofa"},
+            {"x": 12.5, "y": 80, "title": " Диван ", "description": "угловой", "url": "https://example.com/sofa", **product},
             {"x": 100, "y": 0, "title": "Торшер"},
         ]
         resp = api_put(api_base, f"{READY}/images/{image['id']}", admin_headers, json={"markers": markers})
@@ -219,7 +220,9 @@ class TestSiteReadyDesigns:
         assert public is not None
         assert public["title"] == ready_design["title"]
         assert len(public["images"]) == 1
-        assert public["images"][0]["markers"][0] == {"x": 12.5, "y": 80.0, "title": "Диван", "description": "угловой", "url": "https://example.com/sofa"}
+        assert public["images"][0]["markers"][0] == {"x": 12.5, "y": 80.0, "title": "Диван", "description": "угловой", "url": "https://example.com/sofa", **product}
+        # Отметка без данных товара остаётся допустимой: поля просто пустые
+        assert public["images"][0]["markers"][1]["image_url"] == "" and public["images"][0]["markers"][1]["sku"] == ""
 
     @pytest.mark.parametrize(
         "marker",
@@ -228,6 +231,8 @@ class TestSiteReadyDesigns:
             {"x": 101, "y": 10, "title": "Диван"},
             {"x": 10, "y": -1, "title": "Диван"},
             {"x": 10, "y": 10, "title": "   "},
+            {"x": 10, "y": 10, "title": "Диван", "image_url": "javascript:alert(1)"},
+            {"x": 10, "y": 10, "title": "Диван", "sku": "x" * 101},
         ],
     )
     def test_bad_marker_is_rejected_and_nothing_saved(self, api_base, admin_headers, ready_design, marker):
@@ -264,3 +269,12 @@ class TestSiteReadyDesigns:
         assert api_delete(api_base, f"{READY}/{ready_design['id']}", admin_headers).status_code == 200
         assert api_put(api_base, f"{READY}/images/{image['id']}", admin_headers, json={"alt": "x"}).status_code == 404
         assert api_delete(api_base, f"{READY}/{ready_design['id']}", admin_headers).status_code == 404
+
+    def test_product_preview_requires_site_admin(self, api_base):
+        assert api_post(api_base, f"{READY}/product-preview", {}, json={"url": "https://example.com/"}).status_code == 401
+
+    @pytest.mark.parametrize("url", ["http://127.0.0.1:8000/health", "http://localhost/admin", "ftp://example.com/a", "file:///etc/passwd", "http://169.254.169.254/latest/meta-data/"])
+    def test_product_preview_refuses_non_public_links(self, api_base, admin_headers, url):
+        # Запрос по ссылке делает сервер, поэтому внутренние адреса должны отсекаться
+        resp = api_post(api_base, f"{READY}/product-preview", admin_headers, json={"url": url})
+        assert resp.status_code == 400, resp.text

@@ -34,11 +34,25 @@ class Marker(BaseModel):
     title: str = Field(min_length=1, max_length=120)
     description: str = Field(default="", max_length=500)
     url: str = Field(default="", max_length=500)
+    # Данные товара: фото и характеристики (вводятся вручную или подставляются по ссылке на магазин)
+    image_url: str = Field(default="", max_length=1000)
+    sku: str = Field(default="", max_length=100)
+    color: str = Field(default="", max_length=120)
+    shape: str = Field(default="", max_length=120)
+    size: str = Field(default="", max_length=200)
 
-    @field_validator("title", "description", "url")
+    @field_validator("title", "description", "url", "image_url", "sku", "color", "shape", "size")
     @classmethod
     def _strip(cls, value: str) -> str:
         return value.strip()
+
+    @field_validator("image_url")
+    @classmethod
+    def _only_image_links(cls, value: str) -> str:
+        # Адрес попадает в src на публичном сайте: только наши загрузки или обычная веб-ссылка
+        if value and not value.startswith("/api/v1/site/media/") and not value.lower().startswith(("http://", "https://")):
+            raise ValueError("Фото должно быть загружено в панель или задано ссылкой http(s)://")
+        return value
 
     @field_validator("title")
     @classmethod
@@ -55,6 +69,10 @@ class Marker(BaseModel):
         if value and not value.lower().startswith(("http://", "https://")):
             raise ValueError("Ссылка должна начинаться с http:// или https://")
         return value
+
+
+class ProductLink(BaseModel):
+    url: str = Field(min_length=1, max_length=1000)
 
 
 class ImageCreate(BaseModel):
@@ -168,6 +186,18 @@ def create_design(data: DesignCreate, db: Session = Depends(get_db), _: Employee
     db.commit()
     db.refresh(design)
     return design
+
+
+@admin_router.post("/product-preview")
+def preview_product(data: ProductLink, _: Employee = Depends(require_site_admin)):
+    """Данные товара по ссылке на страницу магазина — для заполнения отметки на фото."""
+    from routers.site_admin_router import UPLOADS_DIR
+    from services.site_product_import import ProductImportError, fetch_product
+
+    try:
+        return fetch_product(data.url, UPLOADS_DIR)
+    except ProductImportError as exc:
+        raise HTTPException(400, str(exc))
 
 
 @admin_router.put("/reorder")

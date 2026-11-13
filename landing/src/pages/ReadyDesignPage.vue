@@ -25,8 +25,15 @@
               <div
                 v-if="activeMarker" class="tip" :class="tipSide" :style="{ left: activeMarker.x + '%', top: activeMarker.y + '%' }" @click.stop
               >
+                <img v-if="activeMarker.image_url" :src="activeMarker.image_url" :alt="activeMarker.title" class="tip__photo" />
                 <strong>{{ activeMarker.title }}</strong>
+                <span v-if="activeMarker.sku" class="tip__sku">Артикул: {{ activeMarker.sku }}</span>
                 <p v-if="activeMarker.description">{{ activeMarker.description }}</p>
+                <dl v-if="specs(activeMarker).length" class="tip__specs">
+                  <template v-for="spec in specs(activeMarker)" :key="spec.label">
+                    <dt>{{ spec.label }}</dt><dd>{{ spec.value }}</dd>
+                  </template>
+                </dl>
                 <a v-if="activeMarker.url" :href="activeMarker.url" target="_blank" rel="noopener nofollow">Подробнее о предмете →</a>
               </div>
             </template>
@@ -52,10 +59,13 @@
             <ol>
               <li v-for="(marker, index) in current.markers" :key="index" :class="{ active: active === index }" @mouseenter="hover(index)" @click="showMarkers = true; active = index">
                 <span class="items__num">{{ index + 1 }}</span>
-                <span>
+                <img v-if="marker.image_url" :src="marker.image_url" alt="" class="items__photo" loading="lazy" />
+                <span class="items__text">
                   <strong>{{ marker.title }}</strong>
-                  <template v-if="marker.description"> — {{ marker.description }}</template>
-                  <a v-if="marker.url" :href="marker.url" target="_blank" rel="noopener nofollow" @click.stop> ↗</a>
+                  <a v-if="marker.url" :href="marker.url" target="_blank" rel="noopener nofollow" title="Открыть страницу товара" @click.stop> ↗</a>
+                  <span v-if="marker.sku" class="items__meta">Артикул: {{ marker.sku }}</span>
+                  <span v-if="specs(marker).length" class="items__meta">{{ specs(marker).map(spec => `${spec.label.toLowerCase()}: ${spec.value}`).join(' · ') }}</span>
+                  <span v-if="marker.description" class="items__desc">{{ marker.description }}</span>
                 </span>
               </li>
             </ol>
@@ -100,6 +110,12 @@ const tipSide = computed(() => {
   if (!marker) return ''
   return `${marker.x > 55 ? 'tip--left' : 'tip--right'} ${marker.y > 60 ? 'tip--up' : 'tip--down'}`
 })
+
+// Характеристики товара: показываются только заполненные
+const SPEC_LABELS = [['color', 'Цвет'], ['shape', 'Форма'], ['size', 'Размеры']]
+function specs(marker) {
+  return SPEC_LABELS.filter(([field]) => marker[field]).map(([field, label]) => ({ label, value: marker[field] }))
+}
 
 function select(index) {
   currentIndex.value = index
@@ -152,6 +168,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   position: absolute; z-index: 3; width: min(260px, 70vw); background: #fff; color: var(--text); border-radius: 10px; padding: 12px 14px;
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28); line-height: 1.45; font-size: calc(0.85rem * var(--ts, 1)); display: flex; flex-direction: column; gap: 4px;
 }
+.tip__photo { width: 100%; height: 150px; object-fit: contain; background: #f6f6f6; border-radius: 6px; margin-bottom: 4px; }
+.tip__sku { font-size: calc(0.76rem * var(--ts, 1)); color: var(--text-light); }
+.tip__specs { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 2px 0; font-size: calc(0.8rem * var(--ts, 1)); }
+.tip__specs dt { color: var(--text-light); }
+.tip__specs dd { color: var(--text); }
 .tip strong { font-family: var(--font-head); font-size: calc(0.92rem * var(--ts, 1)); color: var(--dark); }
 .tip p { color: var(--text-light); }
 .tip a { color: var(--accent); text-decoration: none; font-weight: 600; }
@@ -182,7 +203,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .items h3 { font-size: calc(1.05rem * var(--head-scale, 1)); }
 .items__toggle { background: none; border: none; color: var(--accent); cursor: pointer; font-family: inherit; font-size: calc(0.85rem * var(--ts, 1)); padding: 0; }
 .items__toggle:hover { text-decoration: underline; }
-.items ol { list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 6px 20px; }
+.items ol { list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 6px 20px; }
+.items__photo { flex: 0 0 64px; width: 64px; height: 64px; object-fit: contain; background: #f6f6f6; border-radius: 6px; }
+.items__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.items__text > strong, .items__text > a { display: inline; }
+.items__meta { font-size: calc(0.8rem * var(--ts, 1)); color: var(--text-light); }
+.items__desc { font-size: calc(0.84rem * var(--ts, 1)); color: var(--text-light); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .items li { display: flex; gap: 10px; align-items: flex-start; padding: 6px 8px; border-radius: 8px; cursor: pointer; font-size: calc(0.9rem * var(--ts, 1)); color: var(--text-light); }
 .items li:hover, .items li.active { background: var(--bg-alt); }
 .items li strong { color: var(--text); }

@@ -117,7 +117,7 @@
     <div v-if="marking" class="modal-overlay" style="z-index:1100">
       <div class="modal modal--wide">
         <h3>Отметки мебели на фото</h3>
-        <p class="hint" style="margin:0">Нажмите на предмет на фото, чтобы поставить отметку, затем впишите название. Отметку можно перетащить. На сайте посетитель видит номер на фото и подпись при наведении или касании.</p>
+        <p class="hint" style="margin:0">Нажмите на предмет на фото, чтобы поставить отметку, затем впишите название. Отметку можно перетащить. Вставьте ссылку на товар и нажмите «Заполнить по ссылке» — панель сама найдёт на странице магазина фото, артикул, описание, цвет, форму и размеры; найденное можно поправить. На сайте посетитель видит номер на фото и карточку товара при наведении или касании.</p>
         <div class="mk">
           <div class="mk__stage">
             <div class="mk__photo" ref="photoEl" @click="addMarker" @pointermove="dragMove" @pointerup="dragEnd" @pointerleave="dragEnd">
@@ -135,12 +135,32 @@
                 <button class="btn-sm btn-danger" title="Удалить отметку" @click.stop="removeMarker(index)">✕</button>
               </div>
               <template v-if="selected === index">
-                <textarea v-model="marker.description" rows="2" maxlength="500" placeholder="Описание: производитель, модель, материал (необязательно)"></textarea>
-                <input v-model="marker.url" maxlength="500" placeholder="Ссылка на предмет, https://… (необязательно)" />
+                <div class="mk__link">
+                  <input v-model="marker.url" maxlength="500" placeholder="Ссылка на товар в магазине, https://…" @keyup.enter="fillFromLink(marker)" />
+                  <button class="btn-sm" :disabled="fetching || !marker.url" title="Найти на странице магазина фото, артикул, описание, цвет, форму и размеры" @click.stop="fillFromLink(marker)">{{ fetching ? 'Загрузка…' : 'Заполнить по ссылке' }}</button>
+                </div>
+                <div class="mk__product">
+                  <div class="mk__pic" :class="{ empty: !marker.image_url }" title="Фото товара" @click.stop="pickPhoto(marker)">
+                    <img v-if="marker.image_url" :src="marker.image_url" alt="" />
+                    <span v-else>+ фото</span>
+                  </div>
+                  <div class="mk__fields">
+                    <input v-model="marker.sku" maxlength="100" placeholder="Артикул" />
+                    <input v-model="marker.color" maxlength="120" placeholder="Цвет" />
+                    <input v-model="marker.shape" maxlength="120" placeholder="Форма" />
+                    <input v-model="marker.size" maxlength="200" placeholder="Размеры" />
+                  </div>
+                </div>
+                <div v-if="marker.image_url" class="mk__pic-actions">
+                  <button class="btn-sm" @click.stop="pickPhoto(marker)">Заменить фото</button>
+                  <button class="btn-sm btn-danger" @click.stop="marker.image_url = ''">Убрать фото</button>
+                </div>
+                <textarea v-model="marker.description" rows="3" maxlength="500" placeholder="Описание: производитель, модель, материал"></textarea>
               </template>
             </div>
           </div>
         </div>
+        <input ref="markerPhotoInput" type="file" accept="image/jpeg,image/png,image/webp" style="display:none" @change="uploadMarkerPhoto" />
         <div class="modal-footer">
           <button class="btn-ghost" @click="marking = null">Отмена</button>
           <button class="btn-primary" @click="saveMarkers">Сохранить отметки</button>
@@ -315,8 +335,14 @@ let dragging = -1
 let justDragged = false
 
 function setTitleRef(el, index) { if (el) titleRefs[index] = el; else delete titleRefs[index] }
+const PRODUCT_FIELDS = ['description', 'url', 'image_url', 'sku', 'color', 'shape', 'size']
+const emptyProduct = () => Object.fromEntries(PRODUCT_FIELDS.map(field => [field, '']))
+const fetching = ref(false)
+const markerPhotoInput = ref(null)
+let photoTarget = null
+
 function openMarkers(image) {
-  marking.value = { id: image.id, url: image.url, markers: image.markers.map(m => ({ description: '', url: '', ...m })) }
+  marking.value = { id: image.id, url: image.url, markers: image.markers.map(m => ({ ...emptyProduct(), ...m })) }
   selected.value = -1
 }
 function pointerPosition(e) {
@@ -328,7 +354,7 @@ function addMarker(e) {
   // Клик, которым закончилось перетаскивание, новой отметки не ставит
   if (justDragged) { justDragged = false; return }
   if (marking.value.markers.length >= MAX_MARKERS) { props.toast(`На одном фото не больше ${MAX_MARKERS} отметок`, 'error'); return }
-  marking.value.markers.push({ ...pointerPosition(e), title: '', description: '', url: '' })
+  marking.value.markers.push({ ...pointerPosition(e), title: '', ...emptyProduct() })
   selected.value = marking.value.markers.length - 1
   nextTick(() => titleRefs[selected.value]?.focus())
 }
@@ -347,8 +373,45 @@ function dragEnd() {
   // Если клика после перетаскивания не последует, признак не должен «съесть» следующий клик
   setTimeout(() => { justDragged = false }, 0)
 }
+// Данные товара со страницы магазина: заполняются найденные поля, остальные остаются как были
+async function fillFromLink(marker) {
+  const url = (marker.url || '').trim()
+  if (!url || fetching.value) return
+  if (!/^https?:\/\//i.test(url)) { props.toast('Ссылка должна начинаться с http:// или https://', 'error'); return }
+  fetching.value = true
+  try {
+    const product = await api.ready.productPreview(url)
+    const labels = { title: 'название', image_url: 'фото', sku: 'артикул', description: 'описание', color: 'цвет', shape: 'форма', size: 'размеры' }
+    const found = []
+    for (const [field, label] of Object.entries(labels)) {
+      if (!product[field]) continue
+      // Название, вписанное вручную, ссылка не затирает
+      if (field === 'title' && marker.title.trim()) continue
+      marker[field] = product[field]
+      found.push(label)
+    }
+    const missing = Object.entries(labels).filter(([field]) => field !== 'title' && !product[field]).map(([, label]) => label)
+    const tail = missing.length ? ` Не найдено: ${missing.join(', ')} — впишите вручную.` : ''
+    if (found.length) props.toast(`Найдено: ${found.join(', ')}.${tail}`)
+    else props.toast('На странице ничего не нашлось — заполните поля вручную', 'error')
+  } catch (e) { props.toast(e.message, 'error') }
+  fetching.value = false
+}
+function pickPhoto(marker) {
+  photoTarget = marker
+  markerPhotoInput.value.click()
+}
+async function uploadMarkerPhoto(e) {
+  const file = e.target.files[0]
+  e.target.value = ''
+  if (!file || !photoTarget) return
+  try { photoTarget.image_url = (await api.portfolio.upload(file)).url } catch (err) { props.toast('Ошибка загрузки: ' + err.message, 'error') }
+}
 async function saveMarkers() {
-  const markers = marking.value.markers.map(m => ({ x: m.x, y: m.y, title: m.title.trim(), description: (m.description || '').trim(), url: (m.url || '').trim() }))
+  const markers = marking.value.markers.map(m => ({
+    x: m.x, y: m.y, title: m.title.trim(),
+    ...Object.fromEntries(PRODUCT_FIELDS.map(field => [field, (m[field] || '').trim()])),
+  }))
   const untitled = markers.findIndex(m => !m.title)
   if (untitled >= 0) { selected.value = untitled; props.toast(`У отметки ${untitled + 1} нет названия`, 'error'); return }
   const badLink = markers.findIndex(m => m.url && !/^https?:\/\//i.test(m.url))
@@ -384,7 +447,7 @@ onMounted(load)
 .rd-image__badge { position: absolute; top: 8px; left: 8px; background: #c0392b; color: #fff; font-size: 0.72rem; padding: 2px 8px; border-radius: 10px; }
 .rd-image__actions { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px; background: #fff; }
 
-.mk { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 18px; align-items: start; }
+.mk { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 18px; align-items: start; }
 .mk__stage { display: flex; justify-content: center; background: #f3f4f6; border-radius: 8px; min-width: 0; }
 /* Рамка сжимается точно до размеров снимка: координаты отметок — проценты от самого фото, а не от поля вокруг него */
 .mk__photo { position: relative; width: fit-content; max-width: 100%; line-height: 0; cursor: crosshair; user-select: none; touch-action: none; }
@@ -402,5 +465,14 @@ onMounted(load)
 .mk__num { flex: 0 0 22px; height: 22px; border-radius: 50%; background: #c0392b; color: #fff; font-size: 0.72rem; font-weight: 700; display: flex; align-items: center; justify-content: center; }
 .mk__row input, .mk__row textarea { flex: 1; min-width: 0; width: 100%; border: 1px solid #d9d9d9; border-radius: 6px; padding: 6px 10px; font-size: 0.85rem; font-family: inherit; outline: none; }
 .mk__row input:focus, .mk__row textarea:focus { border-color: #c0392b; }
+.mk__link { display: flex; gap: 6px; }
+.mk__product { display: flex; gap: 8px; align-items: stretch; }
+.mk__pic { flex: 0 0 96px; min-height: 96px; border-radius: 6px; overflow: hidden; background: #fff; border: 1px solid #d9d9d9; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; color: #6b7280; }
+.mk__pic.empty { border-style: dashed; }
+.mk__pic:hover { border-color: #c0392b; color: #c0392b; }
+.mk__pic img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.mk__fields { flex: 1; min-width: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.mk__fields input:last-child { grid-column: 1 / -1; }
+.mk__pic-actions { display: flex; gap: 6px; }
 @media (max-width: 900px) { .mk { grid-template-columns: 1fr; } }
 </style>
