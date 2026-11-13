@@ -30,10 +30,11 @@ TIMEOUT = 12
 # Магазины часто отдают страницу только «браузеру»; название намеренно обезличенное
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
-    "Accept": "text/html,application/xhtml+xml,image/avif,image/webp,*/*;q=0.8",
+    "Accept": "text/html,application/xhtml+xml,*/*;q=0.8",
     "Accept-Language": "ru-RU,ru;q=0.9,en;q=0.5",
 }
-IMAGE_TYPES = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif"}
+# Фото просим в форматах, которые открываются в любом браузере: иначе сервер картинок может отдать AVIF
+IMAGE_ACCEPT = "image/jpeg,image/png,image/webp;q=0.9,image/gif;q=0.8"
 
 FIELD_LIMITS = {"title": 120, "description": 500, "sku": 100, "color": 120, "shape": 120, "size": 200}
 
@@ -393,13 +394,27 @@ def _check_public_url(url: str) -> None:
             raise ProductImportError("Ссылка ведёт не на публичный сайт")
 
 
-def _download(url: str, max_bytes: int) -> tuple[bytes, str, str, str]:
+def image_extension(body: bytes) -> str:
+    """Расширение по содержимому файла: заголовку ответа доверять нельзя. Пусто — формат не подходит."""
+    if body[:3] == b"\xff\xd8\xff":
+        return ".jpg"
+    if body[:8] == b"\x89PNG\r\n\x1a\n":
+        return ".png"
+    if body[:6] in (b"GIF87a", b"GIF89a"):
+        return ".gif"
+    if body[:4] == b"RIFF" and body[8:12] == b"WEBP":
+        return ".webp"
+    return ""
+
+
+def _download(url: str, max_bytes: int, accept: Optional[str] = None) -> tuple[bytes, str, str, str]:
     """Скачивает адрес с проверкой каждого шага переадресации. Возвращает тело, тип, кодировку и итоговый адрес."""
     current = url
     for _ in range(MAX_REDIRECTS + 1):
         _check_public_url(current)
         try:
-            response = requests.get(current, headers=HEADERS, timeout=TIMEOUT, stream=True, allow_redirects=False)
+            headers = {**HEADERS, "Accept": accept} if accept else HEADERS
+            response = requests.get(current, headers=headers, timeout=TIMEOUT, stream=True, allow_redirects=False)
         except requests.RequestException as exc:
             raise ProductImportError("Сайт не ответил — попробуйте позже или заполните поля вручную") from exc
         try:
@@ -439,11 +454,11 @@ def _decode(body: bytes, declared: str) -> str:
 def save_remote_image(url: str, uploads_dir: str) -> str:
     """Копирует фото товара к нам: чужая ссылка может перестать работать. Пустая строка — если не вышло."""
     try:
-        body, content_type, _, _ = _download(url, MAX_IMAGE_BYTES)
+        body, _, _, _ = _download(url, MAX_IMAGE_BYTES, accept=IMAGE_ACCEPT)
     except ProductImportError:
         return ""
-    extension = IMAGE_TYPES.get(content_type)
-    if not extension or not body:
+    extension = image_extension(body)
+    if not extension:
         return ""
     os.makedirs(uploads_dir, exist_ok=True)
     filename = f"{uuid.uuid4().hex}{extension}"

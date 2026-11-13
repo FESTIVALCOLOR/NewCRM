@@ -176,3 +176,42 @@ class TestOnlyPublicAddresses:
         with pytest.raises(imp.ProductImportError, match="публичный"):
             imp._download("https://shop.example/product", 1000)
         assert calls == ["https://shop.example/product"]
+
+
+@pytest.mark.backend
+class TestProductImage:
+    @pytest.mark.parametrize(
+        "body, extension",
+        [
+            (b"\xff\xd8\xff\xe0" + b"0" * 20, ".jpg"),
+            (b"\x89PNG\r\n\x1a\n" + b"0" * 20, ".png"),
+            (b"GIF89a" + b"0" * 20, ".gif"),
+            (b"RIFF\x00\x00\x00\x00WEBPVP8 ", ".webp"),
+            # AVIF открывается не везде, HTML и SVG под видом картинки недопустимы
+            (b"\x00\x00\x00\x1cftypavif", ""),
+            (b"<html><body>captcha</body></html>", ""),
+            (b"<svg xmlns='http://www.w3.org/2000/svg'><script>alert(1)</script></svg>", ""),
+            (b"", ""),
+        ],
+    )
+    def test_format_is_taken_from_file_content(self, body, extension):
+        assert imp.image_extension(body) == extension
+
+    def test_image_is_saved_only_in_supported_format(self, monkeypatch, tmp_path):
+        seen = {}
+
+        def fake_download(url, max_bytes, accept=None):
+            seen["accept"] = accept
+            return fake_download.body, "image/jpeg", "", url
+
+        monkeypatch.setattr(imp, "_download", fake_download)
+        fake_download.body = b"\x89PNG\r\n\x1a\n" + b"0" * 20
+        saved = imp.save_remote_image("https://cdn.shop.example/a.jpg", str(tmp_path))
+        assert saved.startswith("/api/v1/site/media/") and saved.endswith(".png")
+        assert (tmp_path / saved.rsplit("/", 1)[1]).read_bytes() == fake_download.body
+        # Формат AVIF не запрашивается: его открывают не все браузеры
+        assert "avif" not in seen["accept"]
+
+        fake_download.body = b"<html>not an image</html>"
+        assert imp.save_remote_image("https://cdn.shop.example/a.jpg", str(tmp_path)) == ""
+        assert len(list(tmp_path.iterdir())) == 1
