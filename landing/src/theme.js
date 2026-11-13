@@ -30,6 +30,9 @@ export const STYLE_DEFAULTS = {
   style_text_light_color: '#666666',
   style_head_size: '100',
   style_text_size: '100',
+  // Предметы интерьера в боковых полях на широких экранах: '1' — показывать, '0' — скрыть
+  style_decor: '1',
+  style_decor_color: '#cfc8c0',
 }
 
 export const SIZE_MIN = 80
@@ -86,6 +89,7 @@ export function themeVars(settings) {
       '--text-light': validColor(s.style_text_light_color, d.style_text_light_color),
       // Размер текста задаёт базу для всей страницы, поэтому заголовки делятся на него — так два ползунка независимы
       '--head-scale': String(headSize / textSize),
+      '--decor-color': validColor(s.style_decor_color, d.style_decor_color),
     },
   }
 }
@@ -141,6 +145,7 @@ export function applyTheme(settings) {
   const root = document.documentElement
   for (const [key, value] of Object.entries(vars)) root.style.setProperty(key, value)
   root.style.fontSize = textSize + '%'
+  root.classList.toggle('no-decor', settings?.style_decor === '0')
 }
 
 // Стиль прошлого визита применяется до ответа сервера, чтобы страница не «прыгала» при загрузке

@@ -431,6 +431,14 @@
               <p class="hint" style="margin:10px 0 0">100% — исходный размер. Текст меняется вместе с кнопками и меню, заголовки — отдельно.</p>
             </div>
             <div class="card">
+              <h3>Декор по краям</h3>
+              <label class="cb-row">
+                <input type="checkbox" v-model="stf.style_decor" true-value="1" false-value="0" />
+                Показывать предметы интерьера в пустых полях по бокам блоков
+              </label>
+              <p class="hint" style="margin:10px 0 0">Линейные рисунки светильников, кресла, растения и столика в блоках «О нас», «Услуги», «Цены», «Отзывы» и «Контакты». Видны только на широких экранах (от 1600 px), где по бокам от содержимого остаётся свободное место. Цвет рисунков задаётся ниже.</p>
+            </div>
+            <div class="card">
               <h3>Цвета</h3>
               <div class="form-grid">
                 <label v-for="c in styleColors" :key="c.key">{{ c.label }}
@@ -984,6 +992,7 @@ const styleColors = [
   { key: 'style_head_color', label: 'Цвет заголовков' },
   { key: 'style_text_color', label: 'Цвет основного текста' },
   { key: 'style_text_light_color', label: 'Цвет второстепенного текста' },
+  { key: 'style_decor_color', label: 'Цвет декора по краям' },
 ]
 // Стиль отдельных блоков: в объекте блока лежат только поля, отмеченные галочкой
 const styleScope = ref('')

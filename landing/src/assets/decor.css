@@ -1,0 +1,43 @@
+/*
+  Декор в боковых полях блоков с фиксированной шириной.
+  Показывается только на широких экранах, где по бокам от содержимого остаётся пустое поле.
+  Рисунок задаётся маской, а цвет — переменной --decor-color, поэтому его можно менять из админки.
+*/
+.section { position: relative; }
+
+@media (min-width: 1600px) {
+  html:not(.no-decor) :is(#about, #services, #pricing, #reviews, #contacts)::before,
+  html:not(.no-decor) :is(#about, #services, #pricing, #reviews, #contacts)::after {
+    content: '';
+    position: absolute;
+    pointer-events: none;
+    background: var(--decor-color, #cfc8c0);
+    /* Ширина поля между краем окна и содержимым */
+    --gutter: calc((100% - var(--max-w)) / 2);
+    /* Предмет стоит посередине поля, но не дальше 230px от содержимого — иначе на сверхшироком экране он «улетает» к краю */
+    --offset: calc(var(--gutter) - min(var(--gutter) / 2, 230px));
+    width: min(var(--w), calc(var(--gutter) - 56px));
+    aspect-ratio: var(--ratio);
+    -webkit-mask: var(--img) no-repeat center / contain;
+    mask: var(--img) no-repeat center / contain;
+  }
+  html:not(.no-decor) :is(#about, #services, #pricing, #reviews, #contacts)::before { left: var(--offset); transform: translateX(-50%); }
+  html:not(.no-decor) :is(#about, #services, #pricing, #reviews, #contacts)::after { right: var(--offset); transform: translateX(50%); }
+
+  /* Напольные предметы стоят на нижней границе блока, подвесные светильники свисают с верхней */
+  #about::before { --img: url('./decor/floor-lamp.svg'); --w: 160px; --ratio: 200 / 420; bottom: 0; }
+  #about::after { --img: url('./decor/plant.svg'); --w: 140px; --ratio: 160 / 300; bottom: 0; }
+
+  #services::before { --img: url('./decor/pendant-dome.svg'); --w: 110px; --ratio: 120 / 300; top: 0; }
+  #services::after { --img: url('./decor/armchair.svg'); --w: 200px; --ratio: 240 / 230; bottom: 0; }
+
+  #pricing::before { --img: url('./decor/side-table.svg'); --w: 140px; --ratio: 160 / 280; bottom: 0; }
+  #pricing::after { --img: url('./decor/pendant-cone.svg'); --w: 110px; --ratio: 120 / 270; top: 0; }
+
+  #reviews::before { --img: url('./decor/chair.svg'); --w: 120px; --ratio: 140 / 260; bottom: 0; }
+  #reviews::after { --img: url('./decor/pendant-dome.svg'); --w: 110px; --ratio: 120 / 300; top: 0; }
+
+  /* В «Контактах» внизу карта во всю ширину, поэтому здесь только подвесные светильники */
+  #contacts::before { --img: url('./decor/pendant-cone.svg'); --w: 110px; --ratio: 120 / 270; top: 0; }
+  #contacts::after { --img: url('./decor/pendant-dome.svg'); --w: 110px; --ratio: 120 / 300; top: 0; }
+}
