@@ -22,6 +22,7 @@
             <div class="contacts__item-body">
               <span class="contacts__label">Адрес:</span>
               <span class="contacts__val">{{ settings.address }}</span>
+              <a v-if="office" :href="routeUrl" target="_blank" rel="noopener" class="contacts__route">Открыть в Яндекс Картах</a>
             </div>
           </div>
           <div class="contacts__item">
@@ -56,19 +57,128 @@
       </div>
     </div>
 
-    <div class="contacts__map" v-if="mapSrc">
-      <iframe :src="mapSrc" width="100%" height="420" frameborder="0" allowfullscreen loading="lazy" style="border:0;display:block;" />
-    </div>
+    <div v-if="office" ref="mapEl" class="contacts__map" :class="`contacts__map--${provider}`" />
   </section>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { whatsappUrl as buildWhatsappUrl } from '../contact.js'
 const props = defineProps({ settings: Object })
 const whatsappUrl = computed(() => buildWhatsappUrl(props.settings))
 const email = computed(() => props.settings?.email || 'festivalcolor@mail.ru')
-const mapSrc = computed(() => props.settings?.google_map_src || props.settings?.yandex_map_src || null)
+
+const OFFICE_ZOOM = 16
+const YANDEX_TIMEOUT = 8000
+// Монохромная схема Яндекс Карт: цвет убирается у всех объектов карты, метка офиса остаётся цветной
+const YANDEX_MONOCHROME = [{ stylers: [{ saturation: -1 }, { lightness: 0.1 }] }]
+const NUMBER = '(-?\\d+(?:\\.\\d+)?)'
+
+// Координаты офиса: «широта, долгота» из настроек; если не заданы — из старой ссылки на виджет Яндекса
+const office = computed(() => {
+  const own = String(props.settings?.office_coords || '').match(new RegExp(`^\\s*${NUMBER}\\s*[,;]\\s*${NUMBER}\\s*$`))
+  if (own) return { lat: Number(own[1]), lon: Number(own[2]) }
+  let legacy = String(props.settings?.yandex_map_src || '')
+  try { legacy = decodeURIComponent(legacy) } catch { /* ссылка с битой кодировкой разбирается как есть */ }
+  const old = legacy.match(new RegExp(`[?&]ll=${NUMBER},${NUMBER}`))
+  return old ? { lat: Number(old[2]), lon: Number(old[1]) } : null
+})
+const routeUrl = computed(() => office.value && `https://yandex.ru/maps/?pt=${office.value.lon},${office.value.lat}&z=17&l=map`)
+
+const mapEl = ref(null)
+const provider = ref('none')
+let observer = null
+let destroyMap = null
+
+function loadYandexApi(key) {
+  if (window.ymaps3) return window.ymaps3.ready.then(() => window.ymaps3)
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('Яндекс Карты не ответили вовремя')), YANDEX_TIMEOUT)
+    const fail = (error) => { clearTimeout(timer); reject(error) }
+    const script = document.createElement('script')
+    script.src = `https://api-maps.yandex.ru/v3/?apikey=${encodeURIComponent(key)}&lang=ru_RU`
+    script.onerror = () => fail(new Error('Яндекс Карты не загрузились (проверьте ключ API)'))
+    script.onload = () => {
+      if (!window.ymaps3) { fail(new Error('Яндекс Карты не загрузились')); return }
+      window.ymaps3.ready.then(() => { clearTimeout(timer); resolve(window.ymaps3) }, fail)
+    }
+    document.head.appendChild(script)
+  })
+}
+
+async function initYandex(key, touch) {
+  const ymaps3 = await loadYandexApi(key)
+  if (!mapEl.value) return
+  const { YMap, YMapDefaultSchemeLayer, YMapDefaultFeaturesLayer, YMapMarker } = ymaps3
+  const center = [office.value.lon, office.value.lat]
+  // На сенсорных экранах карта не перехватывает прокрутку страницы: приближается двумя пальцами
+  const base = touch ? ['pinchZoom', 'dblClickZoom'] : ['drag', 'dblClickZoom']
+  const map = new YMap(mapEl.value, { location: { center, zoom: OFFICE_ZOOM }, behaviors: base })
+  map.addChild(new YMapDefaultSchemeLayer({ customization: YANDEX_MONOCHROME }))
+  map.addChild(new YMapDefaultFeaturesLayer({}))
+  const dot = document.createElement('div')
+  dot.style.cssText = 'width:20px;height:20px;margin:-10px 0 0 -10px;border-radius:50%;background:var(--accent);border:3px solid #fff;box-shadow:0 1px 6px rgba(0,0,0,0.35);box-sizing:border-box;'
+  map.addChild(new YMapMarker({ coordinates: center }, dot))
+  // Колесо мыши приближает карту только после клика по ней — иначе карта «ловит» прокрутку страницы
+  mapEl.value.addEventListener('click', () => map.setBehaviors([...base, 'scrollZoom']))
+  mapEl.value.addEventListener('mouseleave', () => map.setBehaviors(base))
+  destroyMap = () => map.destroy()
+}
+
+// Та же подложка и тот же кружок, что на карте объектов
+async function initLeaflet(touch) {
+  const [leaflet] = await Promise.all([import('leaflet'), import('leaflet/dist/leaflet.css')])
+  if (!mapEl.value) return
+  const L = leaflet.default ?? leaflet
+  const center = [office.value.lat, office.value.lon]
+  const map = L.map(mapEl.value, { scrollWheelZoom: false, dragging: !touch, minZoom: 3, maxZoom: 18 }).setView(center, OFFICE_ZOOM)
+  map.attributionControl.setPrefix(false)
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 18,
+    attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>',
+  }).addTo(map)
+  const accent = getComputedStyle(mapEl.value).getPropertyValue('--accent').trim() || '#E8622A'
+  L.circleMarker(center, { radius: 9, weight: 3, color: '#ffffff', fillColor: accent, fillOpacity: 1, interactive: false }).addTo(map)
+  map.on('click', () => map.scrollWheelZoom.enable())
+  mapEl.value.addEventListener('mouseleave', () => map.scrollWheelZoom.disable())
+  destroyMap = () => map.remove()
+}
+
+async function initMap() {
+  if (!mapEl.value || !office.value || destroyMap) return
+  const touch = window.matchMedia('(pointer: coarse)').matches
+  const key = String(props.settings?.yandex_maps_api_key || '').trim()
+  if (key) {
+    try {
+      provider.value = 'yandex'
+      await initYandex(key, touch)
+      return
+    } catch (e) {
+      // Ключ не подошёл или Яндекс недоступен — посетитель всё равно должен увидеть карту
+      console.warn('Карта офиса: Яндекс Карты недоступны, показана запасная карта.', e)
+      if (mapEl.value) mapEl.value.innerHTML = ''
+    }
+  }
+  provider.value = 'osm'
+  await initLeaflet(touch)
+}
+
+// Карта загружается, только когда посетитель долистал почти до блока
+function watchVisibility() {
+  if (observer || !mapEl.value) return
+  observer = new IntersectionObserver((entries) => {
+    if (entries.some(e => e.isIntersecting)) { observer.disconnect(); initMap() }
+  }, { rootMargin: '600px' })
+  observer.observe(mapEl.value)
+}
+onMounted(watchVisibility)
+// Настройки могут прийти уже после появления блока на странице
+watch(office, () => nextTick(watchVisibility))
+onBeforeUnmount(() => {
+  observer?.disconnect()
+  destroyMap?.()
+  destroyMap = null
+})
 </script>
 
 <style scoped>
@@ -95,7 +205,13 @@ const mapSrc = computed(() => props.settings?.google_map_src || props.settings?.
 .social-btn--ig svg { fill: #fff; }
 .btn--wa { display: inline-flex; align-items: center; gap: 10px; font-size: calc(0.9rem * var(--ts, 1)); padding: 12px 20px; width: 100%; justify-content: center; }
 .btn--wa svg { width: 20px; height: 20px; fill: #fff; }
-.contacts__map iframe { filter: grayscale(100%) contrast(1.1); -webkit-filter: grayscale(100%) contrast(1.1); }
+.contacts__route { font-size: calc(0.82rem * var(--ts, 1)); color: var(--accent); text-decoration: none; margin-top: 2px; }
+.contacts__route:hover { text-decoration: underline; }
+/* z-index создаёт свой слой наложения: иначе панели карты перекрывают шапку сайта и кнопку WhatsApp */
+.contacts__map { position: relative; z-index: 0; width: 100%; height: 420px; background: #ececec; }
+/* Монохромной делается только подложка — кружок офиса остаётся цветным */
+.contacts__map--osm :deep(.leaflet-tile-pane) { filter: grayscale(1) contrast(0.9) brightness(1.07); }
+.contacts__map :deep(.leaflet-container) { font-family: inherit; }
 @media (max-width: 700px) {
   .contacts__grid { grid-template-columns: 1fr; gap: 32px; }
   .social-btn { width: auto; }

@@ -557,3 +557,70 @@ def set_map_point_visibility(contract_id: int, data: MapPointVisibility, db: Ses
     if not set_point_hidden(db, contract_id, data.hidden):
         raise HTTPException(404, "Для этого договора на карте ещё нет точки")
     return {"ok": True}
+
+
+@router.put("/map/extra/{extra_id}")
+def set_map_extra_visibility(extra_id: int, data: MapPointVisibility, db: Session = Depends(get_db), _: Employee = Depends(require_site_admin)):
+    """Скрывает с публичной карты объект, загруженный из файла, или возвращает его."""
+    from services.site_map_service import set_extra_hidden
+
+    if not set_extra_hidden(db, extra_id, data.hidden):
+        raise HTTPException(404, "Объект не найден")
+    return {"ok": True}
+
+
+@router.delete("/map/extra")
+def delete_all_map_extra(db: Session = Depends(get_db), _: Employee = Depends(require_site_admin)):
+    """Удаляет все объекты, загруженные из файлов (объекты договоров CRM не затрагиваются)."""
+    from services.site_map_service import delete_extra
+
+    return {"deleted": delete_extra(db)}
+
+
+@router.delete("/map/extra/{extra_id}")
+def delete_map_extra(extra_id: int, db: Session = Depends(get_db), _: Employee = Depends(require_site_admin)):
+    """Удаляет один объект, загруженный из файла."""
+    from services.site_map_service import delete_extra
+
+    if not delete_extra(db, extra_id):
+        raise HTTPException(404, "Объект не найден")
+    return {"deleted": 1}
+
+
+@router.get("/map/import-template")
+def download_map_import_template(_: Employee = Depends(require_site_admin)):
+    """Образец файла Excel для загрузки объектов."""
+    from fastapi.responses import Response
+    from services.site_map_import import build_template_xlsx
+
+    return Response(
+        build_template_xlsx(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="objects-template.xlsx"'},
+    )
+
+
+@router.post("/map/import")
+async def import_map_objects(file: UploadFile = File(...), db: Session = Depends(get_db), _: Employee = Depends(require_site_admin)):
+    """Догружает на карту объекты из файла Excel со столбцами «Город» и «Адрес»."""
+    from services.site_map_import import MAX_FILE_SIZE, ImportFileError, parse_objects_xlsx
+    from services.site_map_service import import_extra_objects, map_status, start_sync_in_background
+
+    # Читаем не больше лимита плюс один байт: по нему видно превышение, а огромный файл в память не попадёт
+    content = await file.read(MAX_FILE_SIZE + 1)
+    try:
+        parsed = parse_objects_xlsx(content)
+    except ImportFileError as exc:
+        raise HTTPException(400, str(exc))
+    if not parsed.rows and not parsed.skipped:
+        raise HTTPException(400, "В файле нет ни одной строки с адресом")
+    result = import_extra_objects(db, parsed.rows)
+    if result["added"]:
+        start_sync_in_background()
+    return {
+        "added": result["added"],
+        "duplicates": result["duplicates"] + parsed.duplicates,
+        "skipped": parsed.skipped[:50],
+        "skipped_count": len(parsed.skipped),
+        **map_status(db),
+    }

@@ -63,6 +63,17 @@
           <button class="btn-primary" @click="saveSettings">Сохранить контакты</button>
         </div>
         <div class="card">
+          <h3>Карта с офисом в блоке «Контакты»</h3>
+          <p class="hint">Монохромная карта с цветным кружком на месте офиса — в том же стиле, что карта объектов. Цвет кружка — акцентный цвет сайта.</p>
+          <div class="form-grid">
+            <label>Координаты офиса (широта, долгота)<input v-model="sf.office_coords" placeholder="59.964229, 30.308495" /></label>
+            <label>Ключ API Яндекс Карт<input v-model="sf.yandex_maps_api_key" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" /></label>
+          </div>
+          <p class="hint"><strong>Координаты:</strong> откройте Яндекс Карты, нажмите правой кнопкой на здание офиса и выберите «Что здесь?» — координаты появятся в карточке, скопируйте их сюда как есть.</p>
+          <p class="hint"><strong>Ключ:</strong> с ключом карта рисуется на Яндекс Картах, без ключа — на OpenStreetMap в том же оформлении. Ключ бесплатный: в «Кабинете разработчика» Яндекса (developer.tech.yandex.ru) подключите «JavaScript API и HTTP Геокодер» и в ограничениях ключа укажите адрес сайта. Если ключ не подойдёт, сайт сам покажет карту OpenStreetMap.</p>
+          <button class="btn-primary" @click="saveSettings">Сохранить</button>
+        </div>
+        <div class="card">
           <h3>Главный экран и оформление</h3>
           <p class="hint">Первый экран сайта: заголовок, подзаголовок, текст кнопки и фоновое фото.</p>
           <div class="form-grid">
@@ -524,13 +535,14 @@
       <!-- ── Карта объектов ── -->
       <section v-if="currentTab === 'map'" class="tab-body">
         <div class="card-info">
-          Блок с картой в конце сайта. Объекты берутся из договоров CRM автоматически (все, кроме расторгнутых): новые договоры появляются на карте в течение шести часов или сразу по кнопке «Обновить карту».
+          Блок с картой в конце сайта. Объекты берутся из договоров CRM автоматически (все, кроме расторгнутых): новые договоры появляются на карте в течение шести часов или сразу по кнопке «Обновить карту». Объекты, которых в CRM нет, можно догрузить из файла Excel.
           Адреса клиентов на сайт не передаются: каждая точка сдвинута на 60–150 метров в случайную сторону, а карта не приближается до отдельного дома. Показать, скрыть или переместить блок можно во вкладке «Секции меню».
         </div>
         <div class="card">
           <h3>Состояние карты</h3>
           <div class="map-stats">
             <div><strong>{{ mapInfo.total }}</strong><span>объектов в CRM</span></div>
+            <div><strong>{{ mapInfo.extra_total }}</strong><span>загружено из файлов</span></div>
             <div><strong>{{ mapInfo.shown }}</strong><span>показано на карте</span></div>
             <div><strong>{{ mapInfo.not_found }}</strong><span>адрес не найден</span></div>
             <div><strong>{{ mapInfo.hidden }}</strong><span>скрыто вручную</span></div>
@@ -543,13 +555,31 @@
             <span v-else-if="mapInfo.last_error" class="alert-err">{{ mapInfo.last_error }}</span>
           </div>
         </div>
+        <div class="card">
+          <h3>Объекты из файла Excel</h3>
+          <p class="hint">Для объектов, которых нет в CRM, — например, проектов прошлых лет. Нужен файл .xlsx с двумя столбцами: «Город» и «Адрес» (остальные столбцы не читаются). Файлы можно загружать по очереди: новые адреса добавляются к уже загруженным, а адреса, которые уже есть в CRM или были загружены раньше, пропускаются. На карте такие объекты показываются как сданные проекты.</p>
+          <div class="list-toolbar">
+            <button class="btn-primary" :disabled="mapImporting" @click="$refs.mapFileInput.click()">{{ mapImporting ? 'Загрузка…' : 'Загрузить файл Excel' }}</button>
+            <button class="btn-ghost" @click="downloadMapTemplate">Скачать образец файла</button>
+            <button v-if="mapInfo.extra_total" class="btn-sm btn-danger" @click="deleteAllMapExtra">Удалить все загруженные ({{ mapInfo.extra_total }})</button>
+            <input ref="mapFileInput" type="file" accept=".xlsx" style="display:none" @change="importMapFile" />
+          </div>
+          <div v-if="mapImportResult" class="map-import-result">
+            <p>Добавлено объектов: <strong>{{ mapImportResult.added }}</strong><template v-if="mapImportResult.duplicates">, пропущено повторов: {{ mapImportResult.duplicates }}</template><template v-if="mapImportResult.skipped_count">, строк с ошибками: {{ mapImportResult.skipped_count }}</template>.
+              <template v-if="mapImportResult.added"> Координаты ищутся по одному адресу в секунду — объекты появятся на карте по мере поиска.</template></p>
+            <ul v-if="mapImportResult.skipped.length">
+              <li v-for="line in mapImportResult.skipped" :key="line">{{ line }}</li>
+              <li v-if="mapImportResult.skipped_count > mapImportResult.skipped.length">…и ещё {{ mapImportResult.skipped_count - mapImportResult.skipped.length }}</li>
+            </ul>
+          </div>
+        </div>
         <div v-if="mapFailed.length" class="card">
           <h3>Адреса, которые не удалось найти</h3>
-          <p class="hint">Этих объектов на карте нет. Чаще всего мешает название ЖК вместо улицы, опечатка или лишние пометки. Исправьте адрес в договоре CRM до вида «город, улица, дом» — объект появится при следующем обновлении карты.</p>
+          <p class="hint">Этих объектов на карте нет. Чаще всего мешает название ЖК вместо улицы, опечатка или лишние пометки. Исправьте адрес в договоре CRM до вида «город, улица, дом» — объект появится при следующем обновлении карты. Объект из файла удалите в списке ниже и загрузите заново с исправленным адресом.</p>
           <table class="map-failed">
-            <thead><tr><th>Договор</th><th>Город</th><th>Адрес в CRM</th></tr></thead>
+            <thead><tr><th>Договор</th><th>Город</th><th>Адрес</th></tr></thead>
             <tbody>
-              <tr v-for="row in mapFailed" :key="row.contract_id">
+              <tr v-for="row in mapFailed" :key="row.key">
                 <td>{{ row.contract_number }}</td><td>{{ row.city }}</td><td>{{ row.address }}</td>
               </tr>
             </tbody>
@@ -561,9 +591,9 @@
           <input v-model="mapFilter" class="map-filter" placeholder="Поиск по номеру договора, городу или адресу" />
           <div class="map-objects">
             <table class="map-failed">
-              <thead><tr><th>Договор</th><th>Город</th><th>Адрес в CRM</th><th>Состояние</th><th>Показывать</th></tr></thead>
+              <thead><tr><th>Договор</th><th>Город</th><th>Адрес</th><th>Состояние</th><th>Показывать</th><th></th></tr></thead>
               <tbody>
-                <tr v-for="row in mapObjectsFiltered" :key="row.contract_id" :class="{ muted: row.state !== 'shown' }">
+                <tr v-for="row in mapObjectsFiltered" :key="row.key" :class="{ muted: row.state !== 'shown' }">
                   <td>{{ row.contract_number }}</td><td>{{ row.city }}</td><td>{{ row.address }}</td>
                   <td>{{ mapStateLabels[row.state] }}</td>
                   <td>
@@ -572,6 +602,7 @@
                       <span class="toggle-track"></span>
                     </label>
                   </td>
+                  <td><button v-if="row.source === 'file'" class="btn-sm btn-danger" title="Удалить объект, загруженный из файла" @click="deleteMapExtra(row)">✕</button></td>
                 </tr>
               </tbody>
             </table>
@@ -585,7 +616,7 @@
             <input type="checkbox" v-model="mf.map_show_counts" true-value="1" false-value="0" />
             Показывать количество объектов рядом с названиями городов
           </label>
-          <p class="hint" style="margin:6px 0 14px">По умолчанию выключено: на карте только объекты из CRM, и их число может расходиться с цифрами в блоке «Цифры».</p>
+          <p class="hint" style="margin:6px 0 14px">По умолчанию выключено: на карте только объекты из CRM и загруженных файлов, и их число может расходиться с цифрами в блоке «Цифры».</p>
           <div class="form-grid">
             <label v-for="c in mapColors" :key="c.key">Цвет кружков — {{ c.label }}
               <div class="color-row">
@@ -798,6 +829,7 @@ async function uploadImg(e, setter) {
 // ══ Settings ══
 const sf = reactive({
   phone: '', whatsapp_phone: '', telegram: '', vk_url: '', instagram_url: '', email: '', address: '',
+  office_coords: '', yandex_maps_api_key: '',
 })
 const hf = reactive({ hero_title: '', hero_subtitle: '', hero_cta: '', hero_bg_url: '', logo_url: '', copyright: '' })
 const ctaMethod = ref('whatsapp')
@@ -816,6 +848,11 @@ async function loadSettings() {
       if (r.key in hf) hf[r.key] = r.value || ''
       if (r.key === 'cta_method') ctaMethod.value = r.value || 'whatsapp'
     })
+    // Пока координаты не заданы, сайт берёт их из старой ссылки на карту — показываем их же
+    if (!sf.office_coords) {
+      const legacy = decodeURIComponent(rows.find(r => r.key === 'yandex_map_src')?.value || '').match(/[?&]ll=(-?[\d.]+),(-?[\d.]+)/)
+      if (legacy) sf.office_coords = `${legacy[2]}, ${legacy[1]}`
+    }
     loadStyle(rows)
     loadMapSettings(rows)
   } catch (e) { loadError(e) }
@@ -825,6 +862,12 @@ async function saveSettings() {
   sf.telegram = sf.telegram.trim().replace(/^@/, '')
   if (sf.whatsapp_phone && (sf.whatsapp_phone.length < 10 || sf.whatsapp_phone.length > 15)) {
     toast('Номер WhatsApp должен содержать от 10 до 15 цифр, например 79991234567', 'error'); return
+  }
+  sf.office_coords = sf.office_coords.trim()
+  sf.yandex_maps_api_key = sf.yandex_maps_api_key.trim()
+  const coords = sf.office_coords.match(/^(-?\d+(?:\.\d+)?)\s*[,;]\s*(-?\d+(?:\.\d+)?)$/)
+  if (sf.office_coords && (!coords || Math.abs(coords[1]) > 90 || Math.abs(coords[2]) > 180)) {
+    toast('Координаты офиса — два числа через запятую: широта, долгота. Например: 59.964229, 30.308495', 'error'); return
   }
   try {
     for (const key of Object.keys(sf)) await api.settings.update(key, sf[key])
@@ -1159,7 +1202,7 @@ function resetStyle() {
 }
 
 // ══ Objects map ══
-const mapInfo = reactive({ total: 0, shown: 0, approximate: 0, not_found: 0, pending: 0, hidden: 0, running: false, last_error: null, objects: [] })
+const mapInfo = reactive({ total: 0, extra_total: 0, shown: 0, approximate: 0, not_found: 0, pending: 0, hidden: 0, running: false, last_error: null, objects: [] })
 const mapStateLabels = { shown: 'на карте', hidden: 'скрыт вручную', not_found: 'адрес не найден', pending: 'ждёт обработки' }
 const mapFilter = ref('')
 const mapFailed = computed(() => mapInfo.objects.filter(o => o.state === 'not_found'))
@@ -1170,9 +1213,37 @@ const mapObjectsFiltered = computed(() => {
 })
 async function toggleMapObject(row, show) {
   try {
-    await api.map.setHidden(row.contract_id, !show)
+    if (row.source === 'file') await api.map.setExtraHidden(row.extra_id, !show)
+    else await api.map.setHidden(row.contract_id, !show)
     await loadMap()
   } catch (e) { toast(e.message, 'error'); loadMap() }
+}
+const mapImporting = ref(false)
+const mapImportResult = ref(null)
+async function importMapFile(e) {
+  const file = e.target.files[0]
+  e.target.value = ''
+  if (!file) return
+  mapImporting.value = true
+  mapImportResult.value = null
+  try {
+    const { added, duplicates, skipped, skipped_count, ...info } = await api.map.importFile(file)
+    mapImportResult.value = { added, duplicates, skipped, skipped_count }
+    applyMapInfo(info)
+    toast(added ? `Добавлено объектов: ${added}` : 'Новых объектов в файле нет', added ? 'success' : 'error')
+  } catch (err) { toast(err.message, 'error') }
+  mapImporting.value = false
+}
+async function downloadMapTemplate() {
+  try { await api.map.downloadTemplate() } catch (e) { toast(e.message, 'error') }
+}
+async function deleteMapExtra(row) {
+  if (!confirm(`Удалить объект «${row.city}, ${row.address}»?`)) return
+  try { await api.map.deleteExtra(row.extra_id); await loadMap(); toast('Удалено') } catch (e) { toast(e.message, 'error') }
+}
+async function deleteAllMapExtra() {
+  if (!confirm(`Удалить все объекты, загруженные из файлов (${mapInfo.extra_total})? Объекты из договоров CRM останутся.`)) return
+  try { await api.map.deleteAllExtra(); mapImportResult.value = null; await loadMap(); toast('Загруженные объекты удалены') } catch (e) { toast(e.message, 'error') }
 }
 const mf = reactive({ map_title: '', map_subtitle: '', map_show_counts: '0', map_color_done: '', map_color_work: '', map_color_supervision: '' })
 // Цвет сданных проектов по умолчанию совпадает с акцентным цветом сайта и меняется вместе с ним
@@ -1397,6 +1468,9 @@ label input.warn, label textarea.warn { border-color: #faad14; background: #fffb
 .map-stats div { background: #f7f8fa; border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px; }
 .map-stats strong { font-size: 1.5rem; font-weight: 700; color: #1a1a1a; }
 .map-stats span { font-size: 0.8rem; color: #6b7280; }
+.map-import-result { margin-top: 12px; background: #f7f8fa; border-radius: 8px; padding: 12px 14px; font-size: 0.88rem; }
+.map-import-result p { margin: 0; }
+.map-import-result ul { margin: 8px 0 0; padding-left: 18px; color: #6b7280; max-height: 160px; overflow: auto; }
 .map-failed { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
 .map-failed th { text-align: left; font-weight: 600; color: #6b7280; padding: 6px 10px; border-bottom: 1px solid #e8eaed; }
 .map-failed td { padding: 6px 10px; border-bottom: 1px solid #f0f1f3; vertical-align: top; }

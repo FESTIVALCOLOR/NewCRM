@@ -12,6 +12,7 @@ import os
 import sys
 
 import pytest
+import requests
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
@@ -135,9 +136,34 @@ class TestSiteObjectsMap:
         resp = api_get(api_base, f"{BASE}/map/status", admin_headers)
         assert resp.status_code == 200, resp.text
         status = resp.json()
-        assert status["total"] == len(status["objects"])
-        assert status["total"] == status["shown"] + status["hidden"] + status["not_found"] + status["pending"]
+        everything = status["total"] + status["extra_total"]
+        assert everything == len(status["objects"])
+        assert everything == status["shown"] + status["hidden"] + status["not_found"] + status["pending"]
+        assert {obj["source"] for obj in status["objects"]} <= {"crm", "file"}
 
     def test_hiding_unknown_point_returns_404(self, api_base, admin_headers):
         resp = api_put(api_base, f"{BASE}/map/points/999999999", admin_headers, json={"hidden": True})
         assert resp.status_code == 404
+
+    def test_import_requires_site_admin(self, api_base):
+        files = {"file": ("objects.xlsx", b"x", "application/octet-stream")}
+        assert requests.post(f"{api_base}{BASE}/map/import", files=files, timeout=30).status_code == 401
+        assert api_delete(api_base, f"{BASE}/map/extra", {}).status_code == 401
+
+    def test_import_of_non_excel_file_is_rejected(self, api_base, admin_headers):
+        # Отказ должен случиться до записи в базу: объектов из файла не прибавляется
+        before = api_get(api_base, f"{BASE}/map/status", admin_headers).json()["extra_total"]
+        files = {"file": ("objects.xlsx", "Город;Адрес".encode("utf-8"), "application/octet-stream")}
+        resp = requests.post(f"{api_base}{BASE}/map/import", headers=admin_headers, files=files, timeout=30)
+        assert resp.status_code == 400, resp.text
+        assert "xlsx" in resp.json()["detail"]
+        assert api_get(api_base, f"{BASE}/map/status", admin_headers).json()["extra_total"] == before
+
+    def test_import_template_is_an_excel_file(self, api_base, admin_headers):
+        resp = api_get(api_base, f"{BASE}/map/import-template", admin_headers)
+        assert resp.status_code == 200
+        assert resp.content[:2] == b"PK"
+
+    def test_unknown_extra_object_returns_404(self, api_base, admin_headers):
+        assert api_put(api_base, f"{BASE}/map/extra/999999999", admin_headers, json={"hidden": True}).status_code == 404
+        assert api_delete(api_base, f"{BASE}/map/extra/999999999", admin_headers).status_code == 404

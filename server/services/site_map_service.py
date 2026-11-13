@@ -11,12 +11,12 @@ import threading
 from typing import Optional
 
 from constants import STATUS_COMPLETED, STATUS_SUPERVISION, STATUS_TERMINATED
-from services.site_map_geo import address_hash, city_name, geocode_address, privacy_offset, resolve_city_center
+from services.site_map_geo import address_hash, address_key, city_name, geocode_address, privacy_offset, resolve_city_center
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from config import get_settings
-from database import Contract, SessionLocal, SiteMapPoint, SiteSection
+from database import Contract, SessionLocal, SiteMapExtraObject, SiteMapPoint, SiteSection
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +50,7 @@ def point_kind(contract_status: Optional[str]) -> str:
     return "work"
 
 
-def _needs_geocoding(point: Optional[SiteMapPoint], current_hash: str, now: datetime) -> bool:
+def _needs_geocoding(point, current_hash: str, now: datetime) -> bool:
     if point is None or point.address_hash != current_hash:
         return True
     if point.status == "not_found":
@@ -74,25 +74,28 @@ def sync_map_points() -> bool:
                 db.delete(point)
         db.commit()
 
+        # Сначала объекты договоров, затем загруженные из файла
+        jobs = [(contract.id, None, contract.address, contract.city) for contract in contracts]
+        jobs += [(None, extra, extra.address, extra.city) for extra in db.query(SiteMapExtraObject).order_by(SiteMapExtraObject.id).all()]
         centers: dict = {}
-        for contract in contracts:
+        for contract_id, extra, address, raw_city in jobs:
             now = datetime.utcnow()
-            current_hash = address_hash(contract.address, contract.city)
-            point = points.get(contract.id)
+            current_hash = address_hash(address, raw_city)
+            point = extra if extra is not None else points.get(contract_id)
             if not _needs_geocoding(point, current_hash, now):
                 continue
             try:
-                city = (contract.city or "").strip()
+                city = (raw_city or "").strip()
                 if city not in centers:
                     centers[city] = resolve_city_center(city)
-                found = geocode_address(contract.address, city, centers[city])
+                found = geocode_address(address, city, centers[city])
             except Exception as exc:
                 # Сбой сети — не «адрес не найден»: точку не трогаем, попробуем при следующем запуске
                 _state["last_error"] = f"Геокодер недоступен: {type(exc).__name__}"
                 logger.warning("Карта объектов: сбой геокодера: %s", type(exc).__name__)
                 break
             if point is None:
-                point = SiteMapPoint(contract_id=contract.id)
+                point = SiteMapPoint(contract_id=contract_id)
                 db.add(point)
             point.address_hash = current_hash
             point.geocoded_at = now
@@ -118,6 +121,8 @@ def start_sync_in_background() -> bool:
     """Запускает синхронизацию в отдельном потоке. False — если она уже идёт."""
     if _state["running"]:
         return False
+    # Признак выставляется сразу, а не в потоке: панель по нему понимает, что нужно следить за ходом поиска
+    _state["running"] = True
     threading.Thread(target=sync_map_points, name="site-map-sync", daemon=True).start()
     return True
 
@@ -139,6 +144,18 @@ def public_points(db: Session) -> dict:
         lat, lon = privacy_offset(point.contract_id, point.lat, point.lon, secret)
         name = city_name(city) or "Другие города"
         points.append({"lat": lat, "lon": lon, "kind": point_kind(contract_status), "city": name})
+        city_counts[name] = city_counts.get(name, 0) + 1
+    extras = (
+        db.query(SiteMapExtraObject)
+        .filter(SiteMapExtraObject.status == "ok", SiteMapExtraObject.lat.isnot(None), SiteMapExtraObject.lon.isnot(None))
+        .filter(SiteMapExtraObject.hidden.is_(False))
+        .all()
+    )
+    for extra in extras:
+        # Объекты из файла — выполненные проекты прошлых лет; сдвигаются так же, как объекты договоров
+        lat, lon = privacy_offset(f"extra-{extra.id}", extra.lat, extra.lon, secret)
+        name = city_name(extra.city) or "Другие города"
+        points.append({"lat": lat, "lon": lon, "kind": "done", "city": name})
         city_counts[name] = city_counts.get(name, 0) + 1
     cities = [{"name": name, "count": count} for name, count in sorted(city_counts.items(), key=lambda item: -item[1])]
     return {"points": points, "cities": cities, "total": len(points)}
@@ -165,6 +182,9 @@ def map_status(db: Session) -> dict:
         counts[state] += 1
         objects.append(
             {
+                "key": f"crm-{contract.id}",
+                "source": "crm",
+                "extra_id": None,
                 "contract_id": contract.id,
                 "contract_number": contract.contract_number,
                 "city": city_name(contract.city),
@@ -174,8 +194,35 @@ def map_status(db: Session) -> dict:
                 "can_toggle": point is not None and state in ("shown", "hidden"),
             }
         )
+    extras = db.query(SiteMapExtraObject).order_by(SiteMapExtraObject.id.desc()).all()
+    for extra in extras:
+        if extra.address_hash != address_hash(extra.address, extra.city):
+            state = "pending"
+        elif extra.status == "not_found":
+            state = "not_found"
+        elif extra.hidden:
+            state = "hidden"
+        else:
+            state = "shown"
+            if extra.precision == "street":
+                counts["approximate"] += 1
+        counts[state] += 1
+        objects.append(
+            {
+                "key": f"file-{extra.id}",
+                "source": "file",
+                "extra_id": extra.id,
+                "contract_id": None,
+                "contract_number": "из файла",
+                "city": city_name(extra.city),
+                "address": extra.address,
+                "state": state,
+                "can_toggle": state in ("shown", "hidden"),
+            }
+        )
     return {
         "total": len(contracts),
+        "extra_total": len(extras),
         **counts,
         "running": _state["running"],
         "last_sync": _state["last_sync"].isoformat() + "Z" if _state["last_sync"] else None,
@@ -192,3 +239,40 @@ def set_point_hidden(db: Session, contract_id: int, hidden: bool) -> bool:
     point.hidden = hidden
     db.commit()
     return True
+
+
+def set_extra_hidden(db: Session, extra_id: int, hidden: bool) -> bool:
+    """Скрывает с карты объект из файла или возвращает его. False — если такого объекта нет."""
+    extra = db.query(SiteMapExtraObject).filter(SiteMapExtraObject.id == extra_id).first()
+    if extra is None:
+        return False
+    extra.hidden = hidden
+    db.commit()
+    return True
+
+
+def delete_extra(db: Session, extra_id: Optional[int] = None) -> int:
+    """Удаляет один объект из файла или, без номера, все загруженные. Возвращает число удалённых."""
+    query = db.query(SiteMapExtraObject)
+    if extra_id is not None:
+        query = query.filter(SiteMapExtraObject.id == extra_id)
+    deleted = query.delete(synchronize_session=False)
+    db.commit()
+    return deleted
+
+
+def import_extra_objects(db: Session, rows: list) -> dict:
+    """Добавляет объекты из файла; уже известные адреса (в CRM или загруженные раньше) пропускает."""
+    known = {address_key(c.address, c.city) for c in _eligible_contracts(db).all()}
+    known |= {address_key(e.address, e.city) for e in db.query(SiteMapExtraObject).all()}
+    added = duplicates = 0
+    for city, address in rows:
+        key = address_key(address, city)
+        if key in known:
+            duplicates += 1
+            continue
+        known.add(key)
+        db.add(SiteMapExtraObject(city=city, address=address, address_hash="", status="pending"))
+        added += 1
+    db.commit()
+    return {"added": added, "duplicates": duplicates}

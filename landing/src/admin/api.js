@@ -121,6 +121,25 @@ export const map = {
   status: () => req('GET', '/site/admin/map/status'),
   sync: () => req('POST', '/site/admin/map/sync'),
   setHidden: (contractId, hidden) => req('PUT', `/site/admin/map/points/${contractId}`, { hidden }),
+  setExtraHidden: (extraId, hidden) => req('PUT', `/site/admin/map/extra/${extraId}`, { hidden }),
+  deleteExtra: (extraId) => req('DELETE', `/site/admin/map/extra/${extraId}`),
+  deleteAllExtra: () => req('DELETE', '/site/admin/map/extra'),
+  importFile: (file) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    return req('POST', '/site/admin/map/import', fd, true)
+  },
+  // Файл отдаётся только с токеном, поэтому скачивается запросом, а не обычной ссылкой
+  downloadTemplate: async () => {
+    const res = await fetch(`${BASE}/site/admin/map/import-template`, { headers: { Authorization: `Bearer ${token()}` } })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const url = URL.createObjectURL(await res.blob())
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'Объекты для карты — образец.xlsx'
+    link.click()
+    URL.revokeObjectURL(url)
+  },
 }
 
 // ── Analytics / SEO ─────────────────────────

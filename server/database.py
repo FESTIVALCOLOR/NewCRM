@@ -1731,6 +1731,23 @@ class SiteMapPoint(Base):
     geocoded_at = Column(DateTime, default=datetime.utcnow)
 
 
+class SiteMapExtraObject(Base):
+    """Объект для карты на сайте, загруженный из файла Excel (не из договоров CRM)"""
+
+    __tablename__ = "site_map_extra_objects"
+    id = Column(Integer, primary_key=True)
+    city = Column(String(100), nullable=False)
+    address = Column(String(500), nullable=False)
+    address_hash = Column(String(40), nullable=False, default="")  # пустой — координаты ещё не искали
+    lat = Column(Float)
+    lon = Column(Float)
+    precision = Column(String(10))
+    status = Column(String(20), nullable=False, default="pending")  # 'pending' | 'ok' | 'not_found'
+    hidden = Column(Boolean, nullable=False, default=False)
+    geocoded_at = Column(DateTime)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 def init_db():
     """Инициализация базы данных"""
     try:

@@ -108,10 +108,41 @@ class Query:
     names_place: bool  # кроме улицы назван населённый пункт: такой запрос можно искать и вдали от города
 
 
+_CITY_PREFIX_RE = re.compile(r"^(?:город|гор\.?|г\.?)\s+", re.IGNORECASE)
+_CITY_ALIASES = {"спб": "СПБ", "питер": "СПБ", "петербург": "СПБ", "с-петербург": "СПБ", "мск": "МСК", "екб": "ЕКБ"}
+
+
+def _known_city(value: Optional[str]) -> Optional[tuple[str, float, float]]:
+    """Город из справочника по коду CRM, названию или привычному сокращению."""
+    text = _CITY_PREFIX_RE.sub("", (value or "").strip()).strip(" .").lower().replace("ё", "е")
+    if not text:
+        return None
+    for code, entry in CITIES.items():
+        if text in (code.lower(), entry[0].lower()):
+            return entry
+    alias = _CITY_ALIASES.get(text)
+    return CITIES[alias] if alias else None
+
+
 def city_name(code: Optional[str]) -> str:
     """Название города по коду CRM; незнакомое значение считается самим названием."""
-    code = (code or "").strip()
-    return CITIES[code.upper()][0] if code.upper() in CITIES else code
+    known = _known_city(code)
+    return known[0] if known else (code or "").strip()
+
+
+def normalize_city(value: Optional[str]) -> str:
+    """Город из файла в едином написании: «г. москва», «МСК» и «Москва» — один город."""
+    known = _known_city(value)
+    if known:
+        return known[0]
+    text = re.sub(r"\s+", " ", _CITY_PREFIX_RE.sub("", (value or "").strip())).strip(" .,")
+    return text[:1].upper() + text[1:] if text else ""
+
+
+def address_key(address: Optional[str], city: Optional[str]) -> str:
+    """Ключ для поиска повторов: один и тот же дом, записанный по-разному, даёт один ключ."""
+    full = clean_address(address or "")[0] or (address or "")
+    return f"{city_name(city).lower()}|{re.sub(r'[^0-9a-zа-яё]+', ' ', full.lower()).strip()}"
 
 
 def _normalize_parts(address: str) -> list[str]:
@@ -242,9 +273,9 @@ FuzzySearch = Callable[[str, tuple[float, float, float, float]], list[dict]]
 def resolve_city_center(city_code: Optional[str], search: StrictSearch = nominatim_search) -> Optional[tuple[float, float]]:
     """Центр города: из справочника или, для незнакомого названия, от геокодера."""
     code = (city_code or "").strip()
-    if code.upper() in CITIES:
-        _, lat, lon = CITIES[code.upper()]
-        return lat, lon
+    known = _known_city(code)
+    if known:
+        return known[1], known[2]
     if len(code) < 4:
         # Короткое незнакомое значение — это неизвестный код, а не название города
         return None
@@ -339,8 +370,8 @@ def address_hash(address: Optional[str], city: Optional[str]) -> str:
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:40]
 
 
-def privacy_offset(contract_id: int, lat: float, lon: float, secret: str) -> tuple[float, float]:
-    """Сдвигает точку на 60–150 м в постоянную для договора сторону.
+def privacy_offset(contract_id: "int | str", lat: float, lon: float, secret: str) -> tuple[float, float]:
+    """Сдвигает точку на 60–150 м в постоянную для договора (или объекта из файла) сторону.
 
     Объекты — жильё клиентов, поэтому точный дом на публичной карте не показывается.
     Сдвиг зависит от секретного ключа сервера: зная номер договора, его не вычислить обратно.
