@@ -39,5 +39,14 @@ defineProps({ settings: Object })
 .footer__social-btn:hover { background: var(--accent); transform: translateY(-2px); }
 .footer__social-btn--ig:hover { background: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888); }
 .footer__social-btn svg { width: 18px; height: 18px; fill: #fff; }
-@media (max-width: 600px) { .footer__inner { flex-direction: column; text-align: center; } .footer__copy { order: 3; } }
+/* Телефон: первая строка — логотип слева и соцсети справа, вторая — копирайт */
+@media (max-width: 600px) {
+  /* Нижний отступ — чтобы плавающая кнопка связи не закрывала соцсети и копирайт в самом низу страницы */
+  .footer { padding-bottom: 96px; }
+  .footer__inner { row-gap: 16px; }
+  .footer__logo { order: 1; }
+  .footer__socials { order: 2; margin-left: auto; }
+  .footer__copy { order: 3; flex: 0 0 100%; text-align: left; line-height: 1.5; }
+  .footer__logo-img { height: 34px; max-width: 180px; }
+}
 </style>
