@@ -992,6 +992,10 @@ from routers.site_ready_router import public_router as site_ready_public_router
 app.include_router(site_ready_public_router, prefix="/api/v1")
 app.include_router(site_ready_admin_router, prefix="/api/v1")
 
+from routers.site_example_router import admin_router as site_example_admin_router
+
+app.include_router(site_example_admin_router, prefix="/api/v1")
+
 
 # =========================
 # СИНХРОНИЗАЦИЯ

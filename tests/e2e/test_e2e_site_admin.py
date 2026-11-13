@@ -281,3 +281,28 @@ class TestSiteReadyDesigns:
         # Запрос по ссылке делает сервер, поэтому внутренние адреса должны отсекаться
         resp = api_post(api_base, f"{READY}/product-preview", admin_headers, json={"url": url})
         assert resp.status_code == 400, resp.text
+
+
+EXAMPLE = f"{BASE}/example-project"
+
+
+class TestSiteExampleProject:
+    """Блок «Пример проекта»: загрузка PDF только руководителем, не-PDF отклоняется до обработки."""
+
+    def test_requires_site_admin(self, api_base, role_tokens):
+        assert api_get(api_base, EXAMPLE, {}).status_code == 401
+        assert requests.post(f"{api_base}{EXAMPLE}", files={"file": ("a.pdf", b"%PDF", "application/pdf")}, timeout=30).status_code == 401
+        assert api_delete(api_base, EXAMPLE, {}).status_code == 401
+        designer = role_tokens.get("designer")
+        if designer:
+            assert api_get(api_base, EXAMPLE, designer).status_code == 403
+
+    def test_state_shape(self, api_base, admin_headers):
+        resp = api_get(api_base, EXAMPLE, admin_headers)
+        assert resp.status_code == 200, resp.text
+        assert set(resp.json()) == {"project", "job"}
+
+    @pytest.mark.parametrize("content", [b"GIF89a not a pdf", b"%PDF-1.7 broken file"])
+    def test_bad_file_is_rejected(self, api_base, admin_headers, content):
+        resp = requests.post(f"{api_base}{EXAMPLE}", headers=admin_headers, files={"file": ("project.pdf", content, "application/pdf")}, timeout=30)
+        assert resp.status_code == 400, resp.text
