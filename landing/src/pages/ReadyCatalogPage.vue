@@ -30,7 +30,22 @@
       </div>
     </section>
 
-    <section id="ready-pricing" class="section section--alt">
+    <section v-if="drawings.length" id="ready-drawings" class="section section--alt">
+      <div class="container">
+        <h2 class="section-title">{{ site.settings.ready_drawings_title || 'ЧТО ВХОДИТ В КОМПЛЕКТ ЧЕРТЕЖЕЙ' }}</h2>
+        <p class="drawings__lead">{{ site.settings.ready_drawings_text || 'К выбранному дизайну мы готовим рабочие чертежи под вашу квартиру — по ним строители выполнят ремонт без лишних вопросов.' }}</p>
+        <div class="drawings__grid">
+          <article v-for="(item, index) in drawings" :key="index" class="drawing reveal">
+            <span class="drawing__num">{{ String(index + 1).padStart(2, '0') }}</span>
+            <h3>{{ item.title }}</h3>
+            <p v-if="item.text">{{ item.text }}</p>
+          </article>
+        </div>
+        <p v-if="drawingsNote" class="drawings__note">{{ drawingsNote }}</p>
+      </div>
+    </section>
+
+    <section id="ready-pricing" class="section">
       <div class="container">
         <h2 class="section-title">ЦЕНЫ И СРОКИ</h2>
         <div class="pricing">
@@ -60,8 +75,12 @@ import ReadyCalculator from '../components/ReadyCalculator.vue'
 import { site, ready, loadReadyDesigns, designCover } from '../store.js'
 import { REGIONS, readyConfig, minReadyPrice, formatPrice, formatDays } from '../readyPricing.js'
 import { scheduleReveal } from '../reveal.js'
+import { parseDrawings, DEFAULT_DRAWINGS_NOTE } from '../readyDrawings.js'
 
 const config = computed(() => readyConfig(site.settings))
+const drawings = computed(() => parseDrawings(site.settings))
+// Сноска к рубрикам со звёздочкой; своя из настроек, пустая строка — без сноски
+const drawingsNote = computed(() => site.settings.ready_drawings_note ?? (drawings.value.some(item => item.text.includes('*')) ? DEFAULT_DRAWINGS_NOTE : ''))
 const minPrice = computed(() => minReadyPrice(site.settings))
 const tiles = computed(() => REGIONS.map(region => ({
   label: region.key === 'region' ? 'Другие города' : region.label,
@@ -89,6 +108,22 @@ watch(() => ready.designs.length, () => scheduleReveal())
 .design-card__more { font-size: calc(0.85rem * var(--ts, 1)); color: var(--text-light); white-space: nowrap; }
 .design-card:hover .design-card__more { color: var(--accent); }
 
+.drawings__lead { max-width: 720px; margin: -28px auto 36px; text-align: center; color: var(--text-light); font-size: calc(1rem * var(--ts, 1)); line-height: 1.6; }
+.drawings__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(205px, 1fr)); gap: 16px; }
+.drawing {
+  position: relative; background: #fff; border-radius: 12px; padding: 22px 20px 20px; display: flex; flex-direction: column; gap: 6px;
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.05); border-top: 3px solid transparent; transition: border-color 0.25s, transform 0.25s, box-shadow 0.25s;
+}
+.drawing:hover { border-top-color: var(--accent); transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08); }
+.drawing__num { font-family: var(--font-head); font-weight: 800; font-size: calc(0.85rem * var(--ts, 1)); color: var(--accent); letter-spacing: 0.04em; }
+.drawing h3 { font-size: calc(0.98rem * var(--head-scale, 1)); line-height: 1.3; color: var(--dark); }
+.drawing p { font-size: calc(0.86rem * var(--ts, 1)); line-height: 1.55; color: var(--text-light); }
+.drawings__note { margin-top: 14px; font-size: calc(0.8rem * var(--ts, 1)); color: var(--text-light); }
+@media (max-width: 560px) {
+  .drawings__lead { margin-top: -16px; }
+  .drawings__grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .drawing { padding: 16px 14px; }
+}
 .pricing { display: grid; grid-template-columns: 1fr minmax(340px, 440px); gap: 36px; align-items: start; }
 .pricing__tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 24px; }
 .tile { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 18px 16px; display: flex; flex-direction: column; gap: 6px; }

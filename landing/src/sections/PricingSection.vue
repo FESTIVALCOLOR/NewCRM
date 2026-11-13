@@ -75,7 +75,7 @@ function buildWhatsApp(plan) {
   background: color-mix(in srgb, var(--accent) 6%, transparent); border-left: 2px solid var(--accent);
   border-radius: 0 4px 4px 0; padding: 6px 10px; display: flex; flex-direction: column; gap: 3px;
 }
-.pricing-item__sub li { font-size: calc(0.8rem * var(--ts, 1)); color: var(--text-light); padding-left: 10px; position: relative; }
+.pricing-item__sub li { font-size: calc(0.8rem * var(--ts, 1)); color: var(--text-light); padding-left: 18px; position: relative; line-height: 1.45; }
 .pricing-item__sub li::before { content: '—'; position: absolute; left: 0; color: var(--accent); }
 .btn { text-align: center; }
 </style>

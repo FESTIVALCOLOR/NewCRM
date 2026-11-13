@@ -38,7 +38,7 @@ const ITEMS = {
 
 // Блоки с содержимым фиксированной ширины — у них по бокам есть пустое поле
 // У блока «Пример проекта» декора нет: книга во всю ширину, рисунки по бокам ей мешают
-const DECORATED = new Set(['about', 'services', 'directions', 'advantages', 'pricing', 'catalog', 'ready-pricing', 'reviews', 'contacts'])
+const DECORATED = new Set(['about', 'services', 'directions', 'advantages', 'pricing', 'catalog', 'ready-drawings', 'ready-pricing', 'reviews', 'contacts'])
 const SIDES = ['left', 'right']
 const SHIFT_PX = 70 // насколько предмет может сместиться левее или правее
 const ATTRS = ['data-decor-left', 'data-decor-right', 'data-decor-ceiling-line']

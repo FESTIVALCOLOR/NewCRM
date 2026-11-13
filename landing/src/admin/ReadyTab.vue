@@ -51,6 +51,36 @@
       <button class="btn-primary" @click="saveSettings">Сохранить цены и сроки</button>
     </div>
 
+    <!-- ── Что входит в комплект чертежей ── -->
+    <div class="card">
+      <h3>Что входит в комплект чертежей</h3>
+      <p class="hint">Блок на странице «Готовый дизайн» сразу после каталога. Короткий заголовок рубрики и одна строка пояснения. Звёздочка «*» в тексте добавляет сноску под блоком. Если удалить все рубрики, блок не показывается.</p>
+      <div class="form-grid">
+        <label>Заголовок блока<input v-model="form.ready_drawings_title" placeholder="ЧТО ВХОДИТ В КОМПЛЕКТ ЧЕРТЕЖЕЙ" /></label>
+        <label>Сноска под блоком<input v-model="form.ready_drawings_note" placeholder="* При необходимости" /></label>
+      </div>
+      <label>Текст под заголовком<input v-model="form.ready_drawings_text" placeholder="К выбранному дизайну мы готовим рабочие чертежи под вашу квартиру — по ним строители выполнят ремонт без лишних вопросов." /></label>
+      <div class="dr-list">
+        <div v-for="(item, index) in drawingsList" :key="index" class="dr-row">
+          <span class="dr-row__num">{{ index + 1 }}</span>
+          <div class="dr-row__fields">
+            <input v-model="item.title" maxlength="60" placeholder="Рубрика" />
+            <input v-model="item.text" maxlength="160" placeholder="Пояснение" />
+          </div>
+          <div class="dr-row__actions">
+            <button class="btn-sm" :disabled="index === 0" title="Выше" @click="moveDrawing(index, -1)">↑</button>
+            <button class="btn-sm" :disabled="index === drawingsList.length - 1" title="Ниже" @click="moveDrawing(index, 1)">↓</button>
+            <button class="btn-sm btn-danger" title="Удалить" @click="drawingsList.splice(index, 1)">✕</button>
+          </div>
+        </div>
+      </div>
+      <div class="list-toolbar" style="margin:12px 0 16px">
+        <button class="btn-sm" :disabled="drawingsList.length >= MAX_DRAWINGS" @click="drawingsList.push({ title: '', text: '' })">+ Добавить рубрику</button>
+        <button class="btn-sm" @click="resetDrawings">Вернуть стандартные</button>
+      </div>
+      <button class="btn-primary" @click="saveDrawings">Сохранить блок</button>
+    </div>
+
     <!-- ── Тексты ── -->
     <div class="card">
       <h3>Тексты страницы и карточки на главной</h3>
@@ -175,6 +205,7 @@
 import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import * as api from './api.js'
 import { READY_DEFAULTS, DEFAULT_REGION_CITIES, calcReady, formatPrice, formatDays } from '../readyPricing.js'
+import { DRAWINGS_KEY, DEFAULT_DRAWINGS, MAX_DRAWINGS, parseDrawings } from '../readyDrawings.js'
 
 const props = defineProps({ toast: { type: Function, required: true } })
 
@@ -189,7 +220,7 @@ const priceFields = [
   { key: 'ready_days_base', label: 'Срок, рабочих дней' },
   { key: 'ready_days_step', label: 'Плюс дней за каждый шаг' },
 ]
-const textKeys = ['ready_region_cities', 'ready_title', 'ready_subtitle', 'ready_card_text', 'ready_cover_url', 'directions_title']
+const textKeys = ['ready_region_cities', 'ready_title', 'ready_subtitle', 'ready_card_text', 'ready_cover_url', 'directions_title', 'ready_drawings_title', 'ready_drawings_text', 'ready_drawings_note']
 
 const form = reactive(Object.fromEntries([...priceFields.map(f => [f.key, '']), ...textKeys.map(key => [key, ''])]))
 const example = computed(() => calcReady('msk', 120, form))
@@ -207,8 +238,33 @@ async function load() {
   try {
     const [rows, list] = await Promise.all([api.settings.list(), api.ready.list()])
     rows.forEach(row => { if (row.key in form) form[row.key] = row.value || '' })
+    drawingsList.value = parseDrawings(Object.fromEntries(rows.map(row => [row.key, row.value]))).map(item => ({ ...item }))
+    // Сноска хранится как есть: пусто в поле — значит, сноски нет (если её сохраняли)
+    const note = rows.find(row => row.key === 'ready_drawings_note')
+    form.ready_drawings_note = note ? note.value || '' : '* При необходимости'
     designs.value = list
   } catch (e) { if (e.message !== '401') props.toast('Не удалось загрузить данные: ' + e.message, 'error') }
+}
+
+// ── Что входит в комплект чертежей ──
+const drawingsList = ref([])
+function moveDrawing(index, delta) {
+  const [item] = drawingsList.value.splice(index, 1)
+  drawingsList.value.splice(index + delta, 0, item)
+}
+function resetDrawings() {
+  drawingsList.value = DEFAULT_DRAWINGS.map(item => ({ ...item }))
+  props.toast('Стандартные рубрики подставлены — нажмите «Сохранить блок», чтобы применить их на сайте')
+}
+async function saveDrawings() {
+  const list = drawingsList.value.map(item => ({ title: item.title.trim(), text: (item.text || '').trim() }))
+  const untitled = list.findIndex(item => !item.title)
+  if (untitled >= 0) { props.toast(`У рубрики ${untitled + 1} нет названия — заполните его или удалите рубрику`, 'error'); return }
+  try {
+    await api.settings.update(DRAWINGS_KEY, JSON.stringify(list))
+    for (const key of ['ready_drawings_title', 'ready_drawings_text', 'ready_drawings_note']) await api.settings.update(key, form[key].trim())
+    props.toast('Блок «Что входит в комплект чертежей» сохранён')
+  } catch (e) { props.toast(e.message, 'error') }
 }
 
 async function saveSettings() {
@@ -431,6 +487,13 @@ onMounted(load)
 </script>
 
 <style scoped>
+.dr-list { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+.dr-row { display: flex; gap: 10px; align-items: center; }
+.dr-row__num { flex: 0 0 24px; height: 24px; border-radius: 50%; background: #f3f4f6; color: #6b7280; font-size: 0.78rem; font-weight: 600; display: flex; align-items: center; justify-content: center; }
+.dr-row__fields { flex: 1; display: grid; grid-template-columns: 220px 1fr; gap: 6px; }
+.dr-row__fields input { border: 1px solid #d9d9d9; border-radius: 6px; padding: 7px 10px; font-size: 0.88rem; font-family: inherit; outline: none; }
+.dr-row__fields input:focus { border-color: #c0392b; }
+.dr-row__actions { display: flex; gap: 4px; }
 .rd-prices { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
 .rd-list { display: flex; flex-direction: column; gap: 8px; }
 .rd-item { display: flex; align-items: center; gap: 14px; padding: 8px 12px 8px 8px; border: 1px solid #e8eaed; border-radius: 10px; background: #fff; cursor: grab; }
