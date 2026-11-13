@@ -12,6 +12,7 @@
 """
 
 from html.parser import HTMLParser
+import io
 import ipaddress
 import json
 import os
@@ -407,6 +408,34 @@ def image_extension(body: bytes) -> str:
     return ""
 
 
+def browser_image(body: bytes) -> tuple[bytes, str]:
+    """Фото в формате, который откроет любой браузер, и его расширение. Пусто — файл не картинка.
+
+    Некоторые серверы картинок отдают AVIF, что бы у них ни просили: такое фото пересохраняется в JPEG.
+    """
+    extension = image_extension(body)
+    if extension:
+        return body, extension
+    if body[4:8] != b"ftyp" or body[8:12] not in (b"avif", b"avis"):
+        return b"", ""
+    try:
+        from PIL import Image
+
+        image = Image.open(io.BytesIO(body))
+        if image.mode in ("RGBA", "LA", "P"):
+            # Прозрачный фон в JPEG стал бы чёрным — подкладываем белый
+            image = image.convert("RGBA")
+            canvas = Image.new("RGB", image.size, (255, 255, 255))
+            canvas.paste(image, mask=image.split()[-1])
+            image = canvas
+        output = io.BytesIO()
+        image.convert("RGB").save(output, "JPEG", quality=88)
+        return output.getvalue(), ".jpg"
+    except Exception:
+        # Библиотека без поддержки AVIF: сохраняем как есть — современные браузеры его показывают
+        return body, ".avif"
+
+
 def _download(url: str, max_bytes: int, accept: Optional[str] = None) -> tuple[bytes, str, str, str]:
     """Скачивает адрес с проверкой каждого шага переадресации. Возвращает тело, тип, кодировку и итоговый адрес."""
     current = url
@@ -437,7 +466,7 @@ def _download(url: str, max_bytes: int, accept: Optional[str] = None) -> tuple[b
             return body, response.headers.get("Content-Type", "").split(";")[0].strip().lower(), encoding or "", current
         finally:
             response.close()
-    raise ProductImportError("Слишком много переадресаций")
+    raise ProductImportError("Сайт бесконечно переадресует запрос — так он закрывается от автоматических запросов. Заполните поля вручную")
 
 
 def _decode(body: bytes, declared: str) -> str:
@@ -457,7 +486,7 @@ def save_remote_image(url: str, uploads_dir: str) -> str:
         body, _, _, _ = _download(url, MAX_IMAGE_BYTES, accept=IMAGE_ACCEPT)
     except ProductImportError:
         return ""
-    extension = image_extension(body)
+    body, extension = browser_image(body)
     if not extension:
         return ""
     os.makedirs(uploads_dir, exist_ok=True)

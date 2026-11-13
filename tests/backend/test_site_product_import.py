@@ -215,3 +215,28 @@ class TestProductImage:
         fake_download.body = b"<html>not an image</html>"
         assert imp.save_remote_image("https://cdn.shop.example/a.jpg", str(tmp_path)) == ""
         assert len(list(tmp_path.iterdir())) == 1
+
+    def test_avif_is_kept_when_it_cannot_be_converted(self, monkeypatch, tmp_path):
+        # Заголовок AVIF без настоящих данных: пересохранить нельзя, но и отбрасывать фото не нужно
+        body = b"\x00\x00\x00\x1cftypavif" + b"0" * 20
+        assert imp.browser_image(body) == (body, ".avif")
+        monkeypatch.setattr(imp, "_download", lambda url, max_bytes, accept=None: (body, "image/avif", "", url))
+        assert imp.save_remote_image("https://cdn.shop.example/a.jpg", str(tmp_path)).endswith(".avif")
+
+    def test_avif_is_converted_to_jpeg_when_possible(self):
+        image_module = pytest.importorskip("PIL.Image")
+        features = pytest.importorskip("PIL.features")
+        if not features.check("avif"):
+            pytest.skip("Pillow собран без поддержки AVIF")
+        import io
+
+        source = io.BytesIO()
+        image_module.new("RGBA", (8, 8), (255, 0, 0, 0)).save(source, "AVIF")
+        body, extension = imp.browser_image(source.getvalue())
+        assert extension == ".jpg" and imp.image_extension(body) == ".jpg"
+        # Прозрачный фон становится белым, а не чёрным
+        assert image_module.open(io.BytesIO(body)).getpixel((4, 4))[0] > 240
+
+    @pytest.mark.parametrize("body", [b"<html>ftyp</html>", b"\x00\x00\x00\x18ftypmp42" + b"0" * 20, b""])
+    def test_other_files_are_not_images(self, body):
+        assert imp.browser_image(body) == (b"", "")
