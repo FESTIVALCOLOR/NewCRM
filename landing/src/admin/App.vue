@@ -521,6 +521,83 @@
         </div>
       </section>
 
+      <!-- ── Карта объектов ── -->
+      <section v-if="currentTab === 'map'" class="tab-body">
+        <div class="card-info">
+          Блок с картой в конце сайта. Объекты берутся из договоров CRM автоматически (все, кроме расторгнутых): новые договоры появляются на карте в течение шести часов или сразу по кнопке «Обновить карту».
+          Адреса клиентов на сайт не передаются: каждая точка сдвинута на 60–150 метров в случайную сторону, а карта не приближается до отдельного дома. Показать, скрыть или переместить блок можно во вкладке «Секции меню».
+        </div>
+        <div class="card">
+          <h3>Состояние карты</h3>
+          <div class="map-stats">
+            <div><strong>{{ mapInfo.total }}</strong><span>объектов в CRM</span></div>
+            <div><strong>{{ mapInfo.shown }}</strong><span>показано на карте</span></div>
+            <div><strong>{{ mapInfo.not_found }}</strong><span>адрес не найден</span></div>
+            <div><strong>{{ mapInfo.hidden }}</strong><span>скрыто вручную</span></div>
+            <div><strong>{{ mapInfo.pending }}</strong><span>ждут обработки</span></div>
+          </div>
+          <p v-if="mapInfo.approximate" class="hint">Из показанных {{ mapInfo.approximate }} найдены с точностью до улицы, остальные — до дома. На карте это незаметно: точки всё равно сдвинуты.</p>
+          <div class="list-toolbar">
+            <button class="btn-primary" :disabled="mapInfo.running" @click="syncMap">{{ mapInfo.running ? 'Идёт обновление…' : 'Обновить карту' }}</button>
+            <span v-if="mapInfo.running" class="hint" style="margin:0">Поиск идёт по одному адресу в секунду, страницу можно не закрывать.</span>
+            <span v-else-if="mapInfo.last_error" class="alert-err">{{ mapInfo.last_error }}</span>
+          </div>
+        </div>
+        <div v-if="mapFailed.length" class="card">
+          <h3>Адреса, которые не удалось найти</h3>
+          <p class="hint">Этих объектов на карте нет. Чаще всего мешает название ЖК вместо улицы, опечатка или лишние пометки. Исправьте адрес в договоре CRM до вида «город, улица, дом» — объект появится при следующем обновлении карты.</p>
+          <table class="map-failed">
+            <thead><tr><th>Договор</th><th>Город</th><th>Адрес в CRM</th></tr></thead>
+            <tbody>
+              <tr v-for="row in mapFailed" :key="row.contract_id">
+                <td>{{ row.contract_number }}</td><td>{{ row.city }}</td><td>{{ row.address }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div v-if="mapInfo.objects.length" class="card">
+          <h3>Объекты на карте</h3>
+          <p class="hint">Снимите переключатель, чтобы убрать объект с сайта — например, тестовый договор или объект клиента, который просил его не показывать. Адреса видны только здесь, в панели.</p>
+          <input v-model="mapFilter" class="map-filter" placeholder="Поиск по номеру договора, городу или адресу" />
+          <div class="map-objects">
+            <table class="map-failed">
+              <thead><tr><th>Договор</th><th>Город</th><th>Адрес в CRM</th><th>Состояние</th><th>Показывать</th></tr></thead>
+              <tbody>
+                <tr v-for="row in mapObjectsFiltered" :key="row.contract_id" :class="{ muted: row.state !== 'shown' }">
+                  <td>{{ row.contract_number }}</td><td>{{ row.city }}</td><td>{{ row.address }}</td>
+                  <td>{{ mapStateLabels[row.state] }}</td>
+                  <td>
+                    <label v-if="row.can_toggle" class="toggle">
+                      <input type="checkbox" :checked="row.state === 'shown'" @change="toggleMapObject(row, $event.target.checked)" />
+                      <span class="toggle-track"></span>
+                    </label>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Оформление блока</h3>
+          <label>Заголовок<input v-model="mf.map_title" placeholder="ГЕОГРАФИЯ НАШИХ ПРОЕКТОВ" /></label>
+          <label style="margin-top:12px">Подзаголовок (необязательно)<input v-model="mf.map_subtitle" placeholder="Работаем в Москве, Санкт-Петербурге и других городах" /></label>
+          <label class="cb-row" style="margin-top:14px">
+            <input type="checkbox" v-model="mf.map_show_counts" true-value="1" false-value="0" />
+            Показывать количество объектов рядом с названиями городов
+          </label>
+          <p class="hint" style="margin:6px 0 14px">По умолчанию выключено: на карте только объекты из CRM, и их число может расходиться с цифрами в блоке «Цифры».</p>
+          <div class="form-grid">
+            <label v-for="c in mapColors" :key="c.key">Цвет кружков — {{ c.label }}
+              <div class="color-row">
+                <input type="color" v-model="mf[c.key]" />
+                <input v-model="mf[c.key]" maxlength="7" placeholder="#000000" />
+              </div>
+            </label>
+          </div>
+          <button class="btn-primary" @click="saveMapSettings">Сохранить оформление</button>
+        </div>
+      </section>
+
       <!-- ── Аналитика / SEO ── -->
       <section v-if="currentTab === 'analytics'" class="tab-body">
         <div class="card-info">
@@ -660,6 +737,7 @@ const tabs = [
   { id: 'reviews',   icon: '★',  label: 'Отзывы' },
   { id: 'team',      icon: '◎',  label: 'О нас / команда' },
   { id: 'stats',     icon: '#',  label: 'Цифры' },
+  { id: 'map',       icon: '◍',  label: 'Карта объектов' },
   { id: 'analytics', icon: '📈', label: 'Аналитика / SEO' },
 ]
 const currentTab = ref('settings')
@@ -739,6 +817,7 @@ async function loadSettings() {
       if (r.key === 'cta_method') ctaMethod.value = r.value || 'whatsapp'
     })
     loadStyle(rows)
+    loadMapSettings(rows)
   } catch (e) { loadError(e) }
 }
 async function saveSettings() {
@@ -775,12 +854,17 @@ const sectionLabels = {
   pricing: 'Цены',
   reviews: 'Отзывы',
   contacts: 'Контакты',
+  objects_map: 'Карта объектов',
+}
+const sectionsWithoutMenu = {
+  stats: 'Блок с цифрами — показывается на странице, в меню пункта нет',
+  objects_map: 'Карта с объектами из CRM — показывается на странице, в меню пункта нет',
 }
 function sectionLabel(sec) {
   return sectionLabels[sec.key] || sec.label || sec.key
 }
 function sectionHint(sec) {
-  return sec.key === 'stats' ? 'Блок с цифрами — показывается на странице, в меню пункта нет' : 'Пункт меню и блок на странице'
+  return sectionsWithoutMenu[sec.key] || 'Пункт меню и блок на странице'
 }
 
 async function loadSections() {
@@ -1074,6 +1158,58 @@ function resetStyle() {
   toast('Исходный стиль выставлен в форме — нажмите «Сохранить стиль», чтобы применить его на сайте')
 }
 
+// ══ Objects map ══
+const mapInfo = reactive({ total: 0, shown: 0, approximate: 0, not_found: 0, pending: 0, hidden: 0, running: false, last_error: null, objects: [] })
+const mapStateLabels = { shown: 'на карте', hidden: 'скрыт вручную', not_found: 'адрес не найден', pending: 'ждёт обработки' }
+const mapFilter = ref('')
+const mapFailed = computed(() => mapInfo.objects.filter(o => o.state === 'not_found'))
+const mapObjectsFiltered = computed(() => {
+  const query = mapFilter.value.trim().toLowerCase()
+  if (!query) return mapInfo.objects
+  return mapInfo.objects.filter(o => `${o.contract_number} ${o.city} ${o.address}`.toLowerCase().includes(query))
+})
+async function toggleMapObject(row, show) {
+  try {
+    await api.map.setHidden(row.contract_id, !show)
+    await loadMap()
+  } catch (e) { toast(e.message, 'error'); loadMap() }
+}
+const mf = reactive({ map_title: '', map_subtitle: '', map_show_counts: '0', map_color_done: '', map_color_work: '', map_color_supervision: '' })
+// Цвет сданных проектов по умолчанию совпадает с акцентным цветом сайта и меняется вместе с ним
+const mapColors = [
+  { key: 'map_color_done', label: 'сданные проекты', fallback: () => stf.style_accent },
+  { key: 'map_color_work', label: 'в работе', fallback: () => '#2b6cb0' },
+  { key: 'map_color_supervision', label: 'авторский надзор', fallback: () => '#2f9e6b' },
+]
+let mapPollTimer = null
+
+function loadMapSettings(rows) {
+  rows.forEach(r => { if (r.key in mf && r.value) mf[r.key] = r.value })
+  for (const c of mapColors) if (!mf[c.key]) mf[c.key] = c.fallback()
+}
+async function saveMapSettings() {
+  const bad = mapColors.find(c => !/^#[0-9a-f]{6}$/i.test(mf[c.key]))
+  if (bad) { toast(`Цвет «${bad.label}» должен быть в виде #RRGGBB, например #2b6cb0`, 'error'); return }
+  try {
+    for (const key of ['map_title', 'map_subtitle', 'map_show_counts']) await api.settings.update(key, mf[key])
+    // Незаданный цвет хранится пустым, чтобы он и дальше следовал значению по умолчанию
+    for (const c of mapColors) await api.settings.update(c.key, mf[c.key].toLowerCase() === c.fallback().toLowerCase() ? '' : mf[c.key])
+    toast('Оформление карты сохранено')
+  } catch (e) { toast(e.message, 'error') }
+}
+function applyMapInfo(info) {
+  Object.assign(mapInfo, info)
+  clearTimeout(mapPollTimer)
+  // Пока идёт поиск координат, состояние обновляется само
+  if (mapInfo.running) mapPollTimer = setTimeout(loadMap, 3000)
+}
+async function loadMap() {
+  try { applyMapInfo(await api.map.status()) } catch (e) { loadError(e) }
+}
+async function syncMap() {
+  try { applyMapInfo(await api.map.sync()) } catch (e) { toast(e.message, 'error') }
+}
+
 // ══ Stats ══
 const statsData = ref([])
 const editingStat = ref(null)
@@ -1140,7 +1276,7 @@ async function saveAnalytics() {
 // ══ Init ══
 function loadAll() {
   loadSettings(); loadSections(); loadServices(); loadPricing()
-  loadPortfolio(); loadReviews(); loadTeam(); loadStats(); loadAnalytics()
+  loadPortfolio(); loadReviews(); loadTeam(); loadStats(); loadMap(); loadAnalytics()
 }
 onMounted(() => { if (authed.value) loadAll() })
 </script>
@@ -1256,6 +1392,20 @@ label input.warn, label textarea.warn { border-color: #faad14; background: #fffb
 .preview-og { max-width: 100%; max-height: 150px; border-radius: 6px; object-fit: contain; border: 1px solid #e8eaed; }
 
 .field { display: flex; flex-direction: column; gap: 5px; font-size: 0.85rem; color: #374151; }
+
+.map-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 14px; }
+.map-stats div { background: #f7f8fa; border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px; }
+.map-stats strong { font-size: 1.5rem; font-weight: 700; color: #1a1a1a; }
+.map-stats span { font-size: 0.8rem; color: #6b7280; }
+.map-failed { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.map-failed th { text-align: left; font-weight: 600; color: #6b7280; padding: 6px 10px; border-bottom: 1px solid #e8eaed; }
+.map-failed td { padding: 6px 10px; border-bottom: 1px solid #f0f1f3; vertical-align: top; }
+.map-failed td:first-child { white-space: nowrap; }
+.map-failed tr.muted td { color: #9ca3af; }
+.map-filter { width: 100%; border: 1px solid #d9d9d9; border-radius: 6px; padding: 8px 12px; font-size: 0.9rem; margin-bottom: 10px; outline: none; }
+.map-filter:focus { border-color: #c0392b; }
+.map-objects { max-height: 460px; overflow: auto; border: 1px solid #f0f1f3; border-radius: 8px; }
+.map-objects thead th { position: sticky; top: 0; background: #fff; }
 
 .style-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 420px); gap: 20px; align-items: start; }
 .style-form { display: flex; flex-direction: column; gap: 20px; }

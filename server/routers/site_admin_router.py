@@ -521,3 +521,39 @@ def update_analytics(data: SiteAnalyticsUpdate, db: Session = Depends(get_db), _
     db.commit()
     db.refresh(obj)
     return obj
+
+
+# ──────────────────────────────────────────────
+# КАРТА ОБЪЕКТОВ
+# ──────────────────────────────────────────────
+
+
+@router.get("/map/status")
+def get_map_status(db: Session = Depends(get_db), _: Employee = Depends(require_site_admin)):
+    """Сколько объектов на карте, сколько адресов не найдено и какие именно."""
+    from services.site_map_service import map_status
+
+    return map_status(db)
+
+
+@router.post("/map/sync")
+def start_map_sync(db: Session = Depends(get_db), _: Employee = Depends(require_site_admin)):
+    """Запускает поиск координат для новых и изменённых адресов (в фоне)."""
+    from services.site_map_service import map_status, start_sync_in_background
+
+    started = start_sync_in_background()
+    return {"started": started, **map_status(db)}
+
+
+class MapPointVisibility(BaseModel):
+    hidden: bool
+
+
+@router.put("/map/points/{contract_id}")
+def set_map_point_visibility(contract_id: int, data: MapPointVisibility, db: Session = Depends(get_db), _: Employee = Depends(require_site_admin)):
+    """Скрывает объект договора с публичной карты или возвращает его."""
+    from services.site_map_service import set_point_hidden
+
+    if not set_point_hidden(db, contract_id, data.hidden):
+        raise HTTPException(404, "Для этого договора на карте ещё нет точки")
+    return {"ok": True}

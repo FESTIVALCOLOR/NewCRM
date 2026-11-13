@@ -1716,6 +1716,21 @@ class SiteAnalytics(Base):
     updated_at = Column(DateTime, default=datetime.utcnow)
 
 
+class SiteMapPoint(Base):
+    """Координаты объекта договора для карты на сайте (кэш геокодирования)"""
+
+    __tablename__ = "site_map_points"
+    id = Column(Integer, primary_key=True)
+    contract_id = Column(Integer, ForeignKey("contracts.id", ondelete="CASCADE"), unique=True, nullable=False, index=True)
+    address_hash = Column(String(40), nullable=False)  # отпечаток адреса: изменился — ищем координаты заново
+    lat = Column(Float)
+    lon = Column(Float)
+    precision = Column(String(10))  # 'house' — найден дом, 'street' — только улица
+    status = Column(String(20), nullable=False, default="ok")  # 'ok' | 'not_found'
+    hidden = Column(Boolean, nullable=False, default=False)  # скрыт с карты вручную в панели управления
+    geocoded_at = Column(DateTime, default=datetime.utcnow)
+
+
 def init_db():
     """Инициализация базы данных"""
     try:

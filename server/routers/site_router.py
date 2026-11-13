@@ -56,6 +56,14 @@ def get_public_site(db: Session = Depends(get_db)):
     )
 
 
+@router.get("/map-points")
+def get_map_points(db: Session = Depends(get_db)):
+    """Точки для карты объектов: сдвинутые координаты, состояние и город — без адресов."""
+    from services.site_map_service import public_points
+
+    return public_points(db)
+
+
 @router.get("/media/{filename}", include_in_schema=False)
 def serve_media_public(filename: str):
     """Публичный доступ к загруженным изображениям сайта"""

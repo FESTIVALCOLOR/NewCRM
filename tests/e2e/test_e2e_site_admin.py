@@ -111,3 +111,33 @@ class TestSiteAdminAccess:
         resp = api_put(api_base, f"{BASE}/settings/{key}", admin_headers, json={"value": "79991234567"})
         assert resp.status_code == 200, resp.text
         assert resp.json()["value"] == "79991234567"
+
+
+@pytest.mark.e2e
+class TestSiteObjectsMap:
+    """Карта объектов: публичная выдача не должна содержать адресов и номеров договоров."""
+
+    def test_public_points_have_no_private_fields(self, api_base):
+        resp = api_get(api_base, "/api/v1/site/map-points", {})
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        assert set(data) == {"points", "cities", "total"}
+        assert data["total"] == len(data["points"])
+        for point in data["points"]:
+            assert set(point) == {"lat", "lon", "kind", "city"}
+            assert point["kind"] in {"done", "work", "supervision"}
+
+    def test_status_requires_site_admin(self, api_base, admin_headers, role_tokens):
+        assert api_get(api_base, f"{BASE}/map/status", {}).status_code == 401
+        designer = role_tokens.get("designer")
+        if designer:
+            assert api_get(api_base, f"{BASE}/map/status", designer).status_code == 403
+        resp = api_get(api_base, f"{BASE}/map/status", admin_headers)
+        assert resp.status_code == 200, resp.text
+        status = resp.json()
+        assert status["total"] == len(status["objects"])
+        assert status["total"] == status["shown"] + status["hidden"] + status["not_found"] + status["pending"]
+
+    def test_hiding_unknown_point_returns_404(self, api_base, admin_headers):
+        resp = api_put(api_base, f"{BASE}/map/points/999999999", admin_headers, json={"hidden": True})
+        assert resp.status_code == 404

@@ -116,6 +116,13 @@ export const portfolio = {
   },
 }
 
+// ── Карта объектов ──────────────────────────
+export const map = {
+  status: () => req('GET', '/site/admin/map/status'),
+  sync: () => req('POST', '/site/admin/map/sync'),
+  setHidden: (contractId, hidden) => req('PUT', `/site/admin/map/points/${contractId}`, { hidden }),
+}
+
 // ── Analytics / SEO ─────────────────────────
 export const analytics = {
   get: () => req('GET', '/site/admin/analytics'),

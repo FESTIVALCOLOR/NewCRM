@@ -11,6 +11,7 @@
         <PricingSection   v-else-if="key === 'pricing'" :style="sectionStyles[key]" :pricing="data.pricing" :settings="data.settings" />
         <ReviewsSection   v-else-if="key === 'reviews'" :style="sectionStyles[key]" :reviews="data.reviews" />
         <ContactsSection  v-else-if="key === 'contacts'" :style="sectionStyles[key]" :settings="data.settings" />
+        <ObjectsMapSection v-else-if="key === 'objects_map'" :style="sectionStyles[key]" :settings="data.settings" />
       </template>
     </main>
     <FooterSection :settings="data.settings" />
@@ -33,6 +34,7 @@ import PortfolioSection from './sections/PortfolioSection.vue'
 import PricingSection  from './sections/PricingSection.vue'
 import ReviewsSection  from './sections/ReviewsSection.vue'
 import ContactsSection from './sections/ContactsSection.vue'
+import ObjectsMapSection from './sections/ObjectsMapSection.vue'
 import FooterSection   from './sections/FooterSection.vue'
 import { whatsappUrl } from './contact.js'
 import { applyAnalytics } from './analytics.js'
@@ -40,7 +42,7 @@ import { applyTheme, applyCachedTheme, cacheTheme, allSectionStyles } from './th
 
 const cachedStyle = applyCachedTheme()
 
-const DEFAULT_SECTIONS = ['hero', 'about', 'stats', 'services', 'portfolio', 'pricing', 'reviews', 'contacts']
+const DEFAULT_SECTIONS = ['hero', 'about', 'stats', 'services', 'portfolio', 'pricing', 'reviews', 'contacts', 'objects_map']
 
 const data = reactive({
   settings: cachedStyle,

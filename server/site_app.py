@@ -1,9 +1,11 @@
 """
 FastAPI приложение для сайта (лендинг) — отдельный сервис.
 Содержит только site_router, site_admin_router и auth (для входа в CMS).
-Не запускает фоновые задачи CRM (deadline_checker, kpi_snapshot и т.д.).
+Не запускает фоновые задачи CRM (deadline_checker, kpi_snapshot и т.д.);
+единственная фоновая задача — обновление карты объектов сайта.
 """
 
+import asyncio
 import logging
 import os
 
@@ -14,7 +16,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 from config import get_settings
-from database import init_db
+from database import SessionLocal, init_db
 
 settings = get_settings()
 
@@ -61,6 +63,31 @@ async def startup_event():
     logger.info(f"Site API запуск v{settings.app_version}")
     init_db()
     logger.info("База данных инициализирована (site)")
+
+    from services.site_map_service import ensure_map_section
+
+    db = SessionLocal()
+    try:
+        ensure_map_section(db)
+    except Exception as exc:
+        db.rollback()
+        logger.warning(f"Карта объектов: не удалось добавить секцию: {exc}")
+    finally:
+        db.close()
+    asyncio.create_task(_map_sync_loop())
+
+
+async def _map_sync_loop():
+    """Раз в шесть часов ищет координаты для новых и изменённых адресов договоров."""
+    from services.site_map_service import sync_map_points
+
+    await asyncio.sleep(30)
+    while True:
+        try:
+            await asyncio.to_thread(sync_map_points)
+        except Exception as exc:
+            logger.warning(f"Карта объектов: ошибка фоновой синхронизации: {exc}")
+        await asyncio.sleep(6 * 3600)
 
 
 @app.get("/health")

@@ -58,6 +58,7 @@ def seed():
         ("pricing", "Цены", True, 5),
         ("reviews", "Отзывы", True, 6),
         ("contacts", "Контакты", True, 7),
+        ("objects_map", "Карта объектов", True, 8),
     ]
     for key, label, vis, order in sections:
         if not db.query(SiteSection).filter_by(key=key).first():
