@@ -29,8 +29,10 @@ function initials(name) {
 </script>
 
 <style scoped>
-.reviews__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 24px; }
-.review-card { background: #fff; border-radius: 12px; padding: 28px; box-shadow: 0 2px 16px rgba(0,0,0,0.06); display: flex; flex-direction: column; gap: 16px; }
+/* Карточки в ряду одинаковой ширины; неполный последний ряд растягивается на всю ширину,
+   поэтому одинокий последний отзыв не оставляет пустого места справа */
+.reviews__grid { display: flex; flex-wrap: wrap; gap: 24px; }
+.review-card { flex: 1 1 340px; min-width: 0; background: #fff; border-radius: 12px; padding: 28px; box-shadow: 0 2px 16px rgba(0,0,0,0.06); display: flex; flex-direction: column; gap: 16px; }
 .review-card__header { display: flex; align-items: center; gap: 14px; }
 .review-card__avatar { width: 56px; height: 56px; border-radius: 50%; overflow: hidden; flex-shrink: 0; background: var(--accent); display: flex; align-items: center; justify-content: center; }
 .review-card__avatar img { width: 100%; height: 100%; object-fit: cover; }

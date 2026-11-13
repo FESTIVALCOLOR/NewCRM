@@ -1,7 +1,7 @@
 <template>
   <section id="stats" class="section stats-bg">
     <div class="container">
-      <p class="stats__lead">Обращаясь к нам, вы помогаете улучшить эту статистику:</p>
+      <p v-if="lead" class="stats__lead">{{ lead }}</p>
       <div class="stats__grid">
         <div v-for="item in stats" :key="item.id" class="stats__item reveal">
           <strong>{{ item.value }}</strong>
@@ -13,7 +13,11 @@
 </template>
 
 <script setup>
-defineProps({ stats: Array })
+import { computed } from 'vue'
+
+const props = defineProps({ stats: Array, settings: Object })
+// Пустая строка в настройке скрывает заголовок; если настройки нет вовсе — текст по умолчанию
+const lead = computed(() => props.settings?.stats_title ?? 'Обращаясь к нам, вы помогаете улучшить эту статистику:')
 </script>
 
 <style scoped>

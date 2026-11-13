@@ -95,6 +95,14 @@
               <input ref="logoInput" type="file" accept="image/jpeg,image/png,image/webp" style="display:none" @change="uploadImg($event, v => hf.logo_url = v)" />
             </div>
           </label>
+          <label>Логотип в подвале (на тёмном фоне — удобно загрузить белый или монохромный вариант; пусто — текстовый логотип)
+            <div class="upload-row">
+              <input v-model="hf.footer_logo_url" placeholder="https://... или загрузите PNG с прозрачным фоном" />
+              <button class="btn-sm" @click.prevent="$refs.footerLogoInput.click()">Загрузить</button>
+              <input ref="footerLogoInput" type="file" accept="image/png,image/webp" style="display:none" @change="uploadImg($event, v => hf.footer_logo_url = v)" />
+            </div>
+            <div v-if="hf.footer_logo_url" class="footer-logo-preview"><img :src="hf.footer_logo_url" alt="" /></div>
+          </label>
           <label>Текст в подвале сайта (копирайт)<input v-model="hf.copyright" /></label>
           <button class="btn-primary mt" @click="saveHero">Сохранить оформление</button>
         </div>
@@ -495,6 +503,14 @@
       <!-- ── Цифры ── -->
       <section v-if="currentTab === 'stats'" class="tab-body">
         <div class="card-info">Блок с цифрами на сайте («1000+ проектов реализовано»). Порядок меняется перетаскиванием.</div>
+        <div class="card">
+          <h3>Заголовок блока</h3>
+          <p class="hint">Строка над цифрами. Оставьте поле пустым, чтобы блок шёл без заголовка.</p>
+          <div class="upload-row">
+            <input v-model="statsTitle" maxlength="200" placeholder="Обращаясь к нам, вы помогаете улучшить эту статистику:" class="stats-title-input" />
+            <button class="btn-primary" @click="saveStatsTitle">Сохранить</button>
+          </div>
+        </div>
         <div class="list-toolbar">
           <button class="btn-primary" @click="openStatEdit({})">+ Добавить цифру</button>
         </div>
@@ -839,7 +855,14 @@ const sf = reactive({
   phone: '', whatsapp_phone: '', telegram: '', vk_url: '', instagram_url: '', email: '', address: '',
   office_coords: '', yandex_maps_api_key: '',
 })
-const hf = reactive({ hero_title: '', hero_subtitle: '', hero_cta: '', hero_bg_url: '', logo_url: '', copyright: '' })
+const hf = reactive({ hero_title: '', hero_subtitle: '', hero_cta: '', hero_bg_url: '', logo_url: '', footer_logo_url: '', copyright: '' })
+// Заголовок блока «Цифры»: null — настройки ещё нет, на сайте стоит текст по умолчанию
+const STATS_TITLE_DEFAULT = 'Обращаясь к нам, вы помогаете улучшить эту статистику:'
+const statsTitle = ref(STATS_TITLE_DEFAULT)
+async function saveStatsTitle() {
+  try { await api.settings.update('stats_title', statsTitle.value.trim()); toast('Заголовок сохранён') }
+  catch (e) { toast(e.message, 'error') }
+}
 const ctaMethod = ref('whatsapp')
 const contactMethods = [
   { value: 'whatsapp', label: 'WhatsApp' },
@@ -855,6 +878,7 @@ async function loadSettings() {
       if (r.key in sf) sf[r.key] = r.value || ''
       if (r.key in hf) hf[r.key] = r.value || ''
       if (r.key === 'cta_method') ctaMethod.value = r.value || 'whatsapp'
+      if (r.key === 'stats_title') statsTitle.value = r.value ?? ''
     })
     // Пока координаты не заданы, сайт берёт их из старой ссылки на карту — показываем их же
     if (!sf.office_coords) {
@@ -1472,6 +1496,10 @@ label input.warn, label textarea.warn { border-color: #faad14; background: #fffb
 .upload-row { display: flex; gap: 8px; }
 .upload-row input { flex: 1; }
 
+.footer-logo-preview { margin-top: 6px; background: #1a1a1a; border-radius: 8px; padding: 14px 18px; display: inline-flex; align-self: flex-start; }
+.footer-logo-preview img { height: 40px; width: auto; max-width: 220px; object-fit: contain; display: block; }
+.stats-title-input { flex: 1; border: 1px solid #d9d9d9; border-radius: 6px; padding: 8px 12px; font-size: 0.9rem; font-family: inherit; outline: none; }
+.stats-title-input:focus { border-color: #c0392b; }
 .preview-img { max-width: 100%; max-height: 200px; border-radius: 8px; object-fit: contain; border: 1px solid #e8eaed; }
 .preview-avatar { width: 80px; height: 80px; border-radius: 50%; object-fit: cover; }
 .preview-og { max-width: 100%; max-height: 150px; border-radius: 6px; object-fit: contain; border: 1px solid #e8eaed; }

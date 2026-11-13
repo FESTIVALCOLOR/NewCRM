@@ -2,7 +2,8 @@
   <footer class="footer">
     <div class="container footer__inner">
       <router-link :to="{ path: '/' }" class="footer__logo">
-        <span class="logo-festival">FESTIVAL</span><span class="logo-color">COLOR</span>
+        <img v-if="settings.footer_logo_url" :src="settings.footer_logo_url" alt="FESTIVAL COLOR" class="footer__logo-img" />
+        <template v-else><span class="logo-festival">FESTIVAL</span><span class="logo-color">COLOR</span></template>
       </router-link>
       <p class="footer__copy">{{ settings.copyright || `Copyright © FESTIVAL COLOR ${new Date().getFullYear()}. Все права защищены.` }}</p>
       <div class="footer__socials">
@@ -25,6 +26,7 @@ defineProps({ settings: Object })
 .footer { background: var(--dark); color: rgba(255,255,255,0.7); padding: 28px 0; }
 .footer__inner { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
 .footer__logo { text-decoration: none; font-family: var(--font-head); font-weight: 800; font-size: calc(1rem * var(--ts, 1)); letter-spacing: 0.08em; display: flex; align-items: center; }
+.footer__logo-img { height: 40px; width: auto; max-width: 220px; object-fit: contain; display: block; }
 .logo-festival { color: #fff; }
 .logo-color { color: var(--accent); }
 .footer__copy { font-size: calc(0.82rem * var(--ts, 1)); flex: 1; text-align: center; color: rgba(255,255,255,0.5); }

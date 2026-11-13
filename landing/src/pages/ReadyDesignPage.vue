@@ -11,8 +11,13 @@
     <section v-if="design" class="section">
       <div class="container design">
         <div class="design__gallery">
-          <div v-if="current" class="photo" @click="active = -1">
-            <img :key="current.id" :src="current.url" :alt="current.alt || design.title" />
+          <div v-if="current" :ref="observeStage" class="stage" @click="active = -1" @touchstart.passive="swipeStart" @touchend="swipeEnd">
+            <div class="stage__bg" aria-hidden="true">
+              <span :style="{ backgroundImage: `url('${neighbours.prev.url}')` }" />
+              <span :style="{ backgroundImage: `url('${neighbours.next.url}')` }" />
+            </div>
+          <div class="photo" :class="{ 'photo--ready': photoBox }" :style="photoBox || null">
+            <img :key="current.id" :src="current.url" :alt="current.alt || design.title" @load="remember(current.url, $event.target)" />
             <template v-if="showMarkers">
               <button
                 v-for="(marker, index) in current.markers" :key="index" type="button"
@@ -37,14 +42,16 @@
                 <a v-if="activeMarker.url" :href="activeMarker.url" target="_blank" rel="noopener nofollow">Подробнее о предмете →</a>
               </div>
             </template>
+          </div>
             <template v-if="design.images.length > 1">
               <button type="button" class="photo__nav photo__nav--prev" aria-label="Предыдущее фото" @click.stop="step(-1)">‹</button>
               <button type="button" class="photo__nav photo__nav--next" aria-label="Следующее фото" @click.stop="step(1)">›</button>
+              <span class="stage__count">{{ currentIndex + 1 }} / {{ design.images.length }}</span>
             </template>
           </div>
-          <div v-else class="photo photo--empty">Фото этого дизайна скоро появятся</div>
+          <div v-else class="stage stage--empty">Фото этого дизайна скоро появятся</div>
 
-          <div v-if="design.images.length > 1" class="thumbs">
+          <div v-if="design.images.length > 1" ref="thumbsEl" class="thumbs">
             <button v-for="(image, index) in design.images" :key="image.id" type="button" :class="{ active: index === currentIndex }" @click="select(index)">
               <img :src="image.url" :alt="image.alt || `Фото ${index + 1}`" loading="lazy" />
               <span v-if="image.markers.length" class="thumbs__dot" title="На фото отмечена мебель" />
@@ -92,7 +99,7 @@
 </template>
 
 <script setup>
-import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
+import { computed, nextTick, reactive, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute } from 'vue-router'
 import ReadyCalculator from '../components/ReadyCalculator.vue'
 import { site, ready, loadReadyDesigns } from '../store.js'
@@ -112,6 +119,61 @@ const tipSide = computed(() => {
   if (!marker) return ''
   return `${marker.x > 55 ? 'tip--left' : 'tip--right'} ${marker.y > 60 ? 'tip--up' : 'tip--down'}`
 })
+
+// ── Сцена галереи ──
+// Высота сцены постоянная, поэтому страница не скачет при смене фото. Фото вписывается в сцену целиком,
+// а рамка с отметками получает ровно его размер: отметки хранятся в процентах от самого фото
+const stage = reactive({ w: 0, h: 0 })
+const sizes = reactive({})
+let stageEl = null
+let resizeObserver = null
+
+function observeStage(el) {
+  if (el === stageEl) return
+  resizeObserver?.disconnect()
+  stageEl = el
+  if (!el) return
+  resizeObserver = new ResizeObserver(([entry]) => {
+    stage.w = entry.contentRect.width
+    stage.h = entry.contentRect.height
+  })
+  resizeObserver.observe(el)
+}
+function remember(url, img) {
+  if (img?.naturalWidth && !sizes[url]) sizes[url] = [img.naturalWidth, img.naturalHeight]
+}
+// Размеры всех фото дизайна узнаём заранее: при переключении фото сразу встаёт на место
+function measure(images) {
+  for (const image of images) {
+    if (sizes[image.url]) continue
+    const probe = new Image()
+    probe.onload = () => remember(image.url, probe)
+    probe.src = image.url
+  }
+}
+const photoBox = computed(() => {
+  const size = current.value && sizes[current.value.url]
+  if (!size || !stage.w || !stage.h) return null
+  const scale = Math.min(stage.w / size[0], stage.h / size[1])
+  return { width: `${Math.round(size[0] * scale)}px`, height: `${Math.round(size[1] * scale)}px` }
+})
+// Слева — предыдущее фото, справа — следующее; если фото одно, по бокам оно же
+const neighbours = computed(() => {
+  const images = design.value?.images || []
+  const count = images.length
+  if (!count) return { prev: {}, next: {} }
+  return { prev: images[(currentIndex.value - 1 + count) % count], next: images[(currentIndex.value + 1) % count] }
+})
+
+// Пролистывание пальцем на телефоне
+let touchX = null
+function swipeStart(e) { touchX = e.changedTouches[0].clientX }
+function swipeEnd(e) {
+  if (touchX === null) return
+  const dx = e.changedTouches[0].clientX - touchX
+  touchX = null
+  if (Math.abs(dx) > 50) step(dx < 0 ? 1 : -1)
+}
 
 // Характеристики товара: показываются только заполненные
 const SPEC_LABELS = [['color', 'Цвет'], ['shape', 'Форма'], ['size', 'Размеры']]
@@ -138,21 +200,46 @@ function onKey(e) {
 }
 
 watch(() => route.params.id, () => select(0))
-watch(design, (value) => { if (value) setPageTitle(`${value.title} — готовый дизайн`) }, { immediate: true })
+
+// Лента миниатюр сама прокручивается к активному фото (прокручивается только лента, не страница)
+const thumbsEl = ref(null)
+watch(currentIndex, (index) => nextTick(() => {
+  const strip = thumbsEl.value
+  const thumb = strip?.children[index]
+  if (!thumb) return
+  const left = thumb.offsetLeft - (strip.clientWidth - thumb.offsetWidth) / 2
+  strip.scrollTo({ left: Math.max(0, left), behavior: 'smooth' })
+}))
+watch(design, (value) => {
+  if (!value) return
+  setPageTitle(`${value.title} — готовый дизайн`)
+  measure(value.images)
+}, { immediate: true })
 
 onMounted(() => {
   loadReadyDesigns()
   window.addEventListener('keydown', onKey)
 })
-onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKey)
+  resizeObserver?.disconnect()
+})
 </script>
 
 <style scoped>
 .design { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 400px); gap: 36px; align-items: start; }
 .design__gallery { min-width: 0; }
-.photo { position: relative; border-radius: 12px; background: #ececec; line-height: 0; }
-.photo > img { width: 100%; height: auto; display: block; border-radius: 12px; }
-.photo--empty { aspect-ratio: 4 / 3; display: flex; align-items: center; justify-content: center; color: var(--text-light); line-height: 1.6; }
+/* Сцена: постоянная высота, фото по центру. Подсказки товаров могут выходить за край фото, поэтому обрезается только фон */
+.stage { position: relative; height: clamp(340px, 68vh, 620px); display: flex; align-items: center; justify-content: center; border-radius: 12px; background: #2a2a2a; touch-action: pan-y; }
+.stage--empty { background: #ececec; color: var(--text-light); }
+.stage__bg { position: absolute; inset: 0; display: flex; overflow: hidden; border-radius: 12px; }
+.stage__bg span { flex: 1; background: center / cover no-repeat; filter: blur(26px) brightness(0.85) saturate(1.1); transform: scale(1.25); }
+.stage__bg span:first-child { background-position: right center; }
+.stage__bg span:last-child { background-position: left center; }
+.stage__count { position: absolute; right: 12px; bottom: 12px; z-index: 2; background: rgba(0, 0, 0, 0.5); color: #fff; font-size: 0.78rem; line-height: 1; padding: 5px 10px; border-radius: 12px; pointer-events: none; }
+.photo { position: relative; line-height: 0; visibility: hidden; }
+.photo--ready { visibility: visible; }
+.photo > img { width: 100%; height: 100%; display: block; border-radius: 4px; box-shadow: 0 6px 30px rgba(0, 0, 0, 0.25); }
 
 .marker {
   position: absolute; width: 28px; height: 28px; margin: -14px 0 0 -14px; border-radius: 50%; cursor: pointer; z-index: 2;
@@ -170,7 +257,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   position: absolute; z-index: 3; width: min(260px, 70vw); background: #fff; color: var(--text); border-radius: 10px; padding: 12px 14px;
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28); line-height: 1.45; font-size: calc(0.85rem * var(--ts, 1)); display: flex; flex-direction: column; gap: 4px;
 }
-.tip__photo { width: 100%; height: 130px; object-fit: contain; background: #f6f6f6; border-radius: 6px; margin-bottom: 4px; }
+.tip__photo { width: 100%; height: 130px; object-fit: contain; background: #fff; border-radius: 6px; margin-bottom: 4px; }
 .tip__sku { font-size: calc(0.76rem * var(--ts, 1)); color: var(--text-light); }
 .tip__specs { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 2px 0; font-size: calc(0.8rem * var(--ts, 1)); }
 .tip__specs dt { color: var(--text-light); }
@@ -187,14 +274,14 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .tip--up.tip--left { transform: translate(calc(-100% - 22px), -100%); margin-top: 14px; }
 
 .photo__nav {
-  position: absolute; top: 50%; transform: translateY(-50%); z-index: 1; width: 40px; height: 40px; border-radius: 50%; border: none; cursor: pointer;
+  position: absolute; top: 50%; transform: translateY(-50%); z-index: 2; width: 40px; height: 40px; border-radius: 50%; border: none; cursor: pointer;
   background: rgba(0, 0, 0, 0.45); color: #fff; font-size: 1.5rem; line-height: 1; display: flex; align-items: center; justify-content: center; padding: 0 0 3px;
 }
 .photo__nav:hover { background: rgba(0, 0, 0, 0.7); }
 .photo__nav--prev { left: 12px; }
 .photo__nav--next { right: 12px; }
 
-.thumbs { display: flex; gap: 8px; margin-top: 10px; overflow-x: auto; padding-bottom: 4px; }
+.thumbs { position: relative; display: flex; gap: 8px; margin-top: 10px; overflow-x: auto; padding-bottom: 4px; }
 .thumbs button { position: relative; flex: 0 0 96px; height: 72px; padding: 0; border: 2px solid transparent; border-radius: 8px; overflow: hidden; cursor: pointer; background: #e4e4e4; opacity: 0.75; transition: opacity 0.2s, border-color 0.2s; }
 .thumbs button:hover { opacity: 1; }
 .thumbs button.active { border-color: var(--accent); opacity: 1; }
@@ -207,7 +294,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .items__toggle { background: none; border: none; color: var(--accent); cursor: pointer; font-family: inherit; font-size: calc(0.85rem * var(--ts, 1)); padding: 0; }
 .items__toggle:hover { text-decoration: underline; }
 .items ol { list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 6px 20px; }
-.items__photo { flex: 0 0 64px; width: 64px; height: 64px; object-fit: contain; background: #f6f6f6; border-radius: 6px; }
+.items__photo { flex: 0 0 64px; width: 64px; height: 64px; object-fit: contain; background: #fff; border: 1px solid var(--border); border-radius: 6px; }
 .items__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .items__meta { font-size: calc(0.8rem * var(--ts, 1)); color: var(--text-light); }
 .items__desc { font-size: calc(0.84rem * var(--ts, 1)); color: var(--text-light); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
@@ -224,7 +311,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .missing { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 20px; }
 /* На узком экране сбоку от отметки места нет: карточка встаёт по центру фото, под отметкой или над ней */
 @media (max-width: 700px) {
-  .tip { left: 50% !important; width: min(280px, calc(100% - 16px)); }
+  .stage { height: clamp(280px, 100vw, 460px); }
+  .tip { left: 50% !important; width: min(280px, 86vw); }
   .tip--right, .tip--left { transform: translateX(-50%); }
   .tip--down { margin-top: 22px; }
   .tip--up.tip--right, .tip--up.tip--left { transform: translate(-50%, -100%); margin-top: -22px; }
