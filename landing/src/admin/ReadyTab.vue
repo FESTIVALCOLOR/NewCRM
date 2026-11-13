@@ -79,8 +79,9 @@
           <label>Короткая подпись для карточки каталога<input v-model="editing.tagline" maxlength="300" placeholder="Светлый интерьер для семьи с ребёнком" /></label>
         </div>
         <label>Описание
-          <textarea v-model="editing.description" rows="5" maxlength="5000" placeholder="Что входит в дизайн, для каких квартир подходит, стиль и материалы"></textarea>
+          <textarea v-model="editing.description" rows="8" maxlength="5000" placeholder="Гамма: …&#10;Прихожая: …&#10;Кухня-гостиная: …"></textarea>
         </label>
+        <p class="hint" style="margin:-4px 0 0">На сайте описание показывается под галереей карточками по комнатам. Строки вида «Прихожая: …» становятся карточками с заголовком, строка «Гамма: …» — вводным абзацем. Можно писать и обычными абзацами через пустую строку — заголовок карточки возьмётся из названия комнаты в первой фразе.</p>
         <div class="modal-footer" style="justify-content:flex-start">
           <button class="btn-primary" @click="saveDesign">{{ editing.id ? 'Сохранить описание' : 'Создать и перейти к фото' }}</button>
         </div>

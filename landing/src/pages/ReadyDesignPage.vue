@@ -79,14 +79,26 @@
               </li>
             </ol>
           </div>
+          <!-- Описание дизайна: по комнатам. Калькулятор справа остаётся рядом, пока читаешь -->
+          <div v-if="about.cards.length || about.lead" class="design-about">
+            <h2 class="design-about__title">О дизайне</h2>
+            <p v-if="about.lead" class="design-about__lead"><strong>{{ about.lead.title }}.</strong> {{ about.lead.text }}</p>
+            <div class="design-about__body" :class="[`design-about__body--${about.mode}`, { 'is-collapsed': collapsible && !expanded }]">
+              <article v-for="(card, index) in about.cards" :key="index" class="design-about__card">
+                <h3 v-if="card.title">{{ card.title }}</h3>
+                <p>{{ card.text }}</p>
+              </article>
+            </div>
+            <button v-if="collapsible" type="button" class="design-about__more" @click="expanded = !expanded">{{ expanded ? 'Свернуть' : 'Читать полностью' }}</button>
+          </div>
         </div>
 
         <aside class="design__side">
-          <p v-if="design.description" class="design__text">{{ design.description }}</p>
           <ReadyCalculator :settings="site.settings" :design="design" />
           <router-link to="/ready" class="design__back">← Все готовые дизайны</router-link>
         </aside>
       </div>
+
     </section>
 
     <section v-else-if="ready.loaded" class="section">
@@ -104,6 +116,7 @@ import { useRoute } from 'vue-router'
 import ReadyCalculator from '../components/ReadyCalculator.vue'
 import { site, ready, loadReadyDesigns } from '../store.js'
 import { setPageTitle } from '../router.js'
+import { parseDescription } from '../designDescription.js'
 
 const route = useRoute()
 const currentIndex = ref(0)
@@ -199,7 +212,13 @@ function onKey(e) {
   else if (e.key === 'Escape') active.value = -1
 }
 
-watch(() => route.params.id, () => select(0))
+// Описание дизайна по комнатам; длинное сначала показывается свёрнутым
+const COLLAPSE_FROM = 1600
+const about = computed(() => parseDescription(design.value?.description))
+const collapsible = computed(() => about.value.length > COLLAPSE_FROM)
+const expanded = ref(false)
+
+watch(() => route.params.id, () => { select(0); expanded.value = false })
 
 // Лента миниатюр сама прокручивается к активному фото (прокручивается только лента, не страница)
 const thumbsEl = ref(null)
@@ -307,7 +326,27 @@ onBeforeUnmount(() => {
 .items__num { flex: 0 0 22px; height: 22px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 0.72rem; font-weight: 700; display: flex; align-items: center; justify-content: center; margin-top: 1px; }
 
 .design__side { display: flex; flex-direction: column; gap: 20px; position: sticky; top: 88px; }
-.design__text { white-space: pre-line; color: var(--text); font-size: calc(0.95rem * var(--ts, 1)); }
+.design-about { margin-top: 40px; }
+.design-about__title { font-size: calc(1.4rem * var(--head-scale, 1)); margin-bottom: 14px; }
+.design-about__lead { font-size: calc(1.02rem * var(--ts, 1)); line-height: 1.65; color: var(--text); margin-bottom: 20px; }
+.design-about__lead strong { color: var(--accent); font-weight: 600; }
+.design-about__body { position: relative; }
+/* Короткие карточки по комнатам — в две колонки: разная длина не оставляет дыр, как в сетке с рядами */
+.design-about__body--labeled { column-count: 2; column-gap: 16px; }
+/* Длинные абзацы — одной колонкой, как статья: так их удобно читать */
+.design-about__body--paragraphs { display: flex; flex-direction: column; gap: 14px; }
+.design-about__card { break-inside: avoid; margin-bottom: 16px; padding: 20px 22px; background: var(--bg-alt); border-radius: 12px; }
+.design-about__body--paragraphs .design-about__card { margin-bottom: 0; }
+.design-about__card h3 { font-size: calc(1rem * var(--head-scale, 1)); margin-bottom: 8px; color: var(--dark); }
+.design-about__card p { font-size: calc(0.92rem * var(--ts, 1)); line-height: 1.7; color: var(--text-light); }
+/* Свёрнутое длинное описание: видно начало, низ плавно растворяется */
+.design-about__body.is-collapsed { max-height: 560px; overflow: hidden; }
+.design-about__body.is-collapsed::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 160px; background: linear-gradient(rgba(255, 255, 255, 0), var(--bg)); pointer-events: none; }
+.design-about__more { margin-top: 14px; background: none; border: 1px solid var(--accent); color: var(--accent); border-radius: 8px; padding: 10px 22px; cursor: pointer; font-family: inherit; font-size: calc(0.9rem * var(--ts, 1)); font-weight: 600; }
+.design-about__more:hover { background: var(--accent); color: #fff; }
+@media (max-width: 600px) {
+  .design-about__body--labeled { column-count: 1; }
+}
 .design__back { color: var(--text-light); text-decoration: none; font-size: calc(0.9rem * var(--ts, 1)); }
 .design__back:hover { color: var(--accent); }
 .missing { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 20px; }
