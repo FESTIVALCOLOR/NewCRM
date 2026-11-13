@@ -7,6 +7,10 @@
       </router-link>
       <p class="footer__copy">{{ settings.copyright || `Copyright © FESTIVAL COLOR ${new Date().getFullYear()}. Все права защищены.` }}</p>
       <div class="footer__socials">
+        <!-- Канал связи: у подвала плавающая кнопка прячется (её место занимает браузерная «наверх»), поэтому дублируем её здесь -->
+        <a :href="ctaHref" :target="linkTarget(ctaHref)" rel="noopener" class="footer__social-btn footer__social-btn--cta" :style="{ '--cta-color': channel.color }" :aria-label="channel.label" :title="channel.label">
+          <svg viewBox="0 0 24 24"><path :d="channel.icon" /></svg>
+        </a>
         <a v-if="settings.vk_url" :href="settings.vk_url" target="_blank" rel="noopener" class="footer__social-btn" aria-label="ВКонтакте">
           <svg viewBox="0 0 24 24"><path d="M15.07 2H8.93C3.33 2 2 3.33 2 8.93v6.14C2 20.67 3.33 22 8.93 22h6.14C20.67 22 22 20.67 22 15.07V8.93C22 3.33 20.67 2 15.07 2zm3.08 13.35h-1.57c-.59 0-.77-.47-1.83-1.54-.92-.9-1.33-.9-1.33 0v1.42c0 .11-.09.12-.38.12-1.47 0-3.1-.89-4.25-2.55-1.72-2.42-2.19-4.23-2.19-4.6 0-.19.07-.37.26-.37h1.57c.19 0 .26.09.33.3.36 1.03.96 1.93 1.21 1.93.09 0 .14-.04.14-.26V8.63c-.03-.73-.43-.79-.43-.79 0-.19.06-.27.19-.27h2.47c.16 0 .22.09.22.28v2.68c0 .16.07.22.12.22.09 0 .18-.06.37-.25 1.14-1.28 1.95-3.24 1.95-3.24.05-.11.16-.22.35-.22h1.57c.47 0 .57.24.47.56-.8 1.86-1.74 2.9-1.74 2.9-.09.14-.12.21 0 .37.09.11.38.37.57.59.56.59.99 1.09 1.1 1.44.14.47-.09.69-.38.69z"/></svg>
         </a>
@@ -19,7 +23,12 @@
 </template>
 
 <script setup>
-defineProps({ settings: Object })
+import { computed } from 'vue'
+import { CHANNELS, ctaChannel, ctaUrl, linkTarget } from '../contact.js'
+
+const props = defineProps({ settings: Object })
+const channel = computed(() => CHANNELS[ctaChannel(props.settings)])
+const ctaHref = computed(() => ctaUrl(props.settings))
 </script>
 
 <style scoped>
@@ -37,12 +46,12 @@ defineProps({ settings: Object })
   transition: background 0.2s, transform 0.2s; text-decoration: none;
 }
 .footer__social-btn:hover { background: var(--accent); transform: translateY(-2px); }
+.footer__social-btn--cta { background: var(--cta-color); }
+.footer__social-btn--cta:hover { background: var(--cta-color); filter: brightness(1.1); }
 .footer__social-btn--ig:hover { background: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888); }
 .footer__social-btn svg { width: 18px; height: 18px; fill: #fff; }
 /* Телефон: первая строка — логотип слева и соцсети справа, вторая — копирайт */
 @media (max-width: 600px) {
-  /* Нижний отступ — чтобы плавающая кнопка связи не закрывала соцсети и копирайт в самом низу страницы */
-  .footer { padding-bottom: 96px; }
   .footer__inner { row-gap: 16px; }
   .footer__logo { order: 1; }
   .footer__socials { order: 2; margin-left: auto; }
