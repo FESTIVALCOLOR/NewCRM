@@ -88,7 +88,26 @@ export const choice = reactive({
   region: ['msk', 'spb', 'region'].includes(saved.region) ? saved.region : 'msk',
   city: typeof saved.city === 'string' ? saved.city : '',
   area: typeof saved.area === 'string' || typeof saved.area === 'number' ? saved.area : '',
+  // Откуда город: 'user' — выбрал сам, 'auto' — определили по местоположению, '' — ещё не известно.
+  // Сохранённый раньше выбор без этой пометки считается выбором посетителя
+  source: 'source' in saved ? (['user', 'auto'].includes(saved.source) ? saved.source : '') : (saved.region ? 'user' : ''),
 })
+
+// Город посетителя определяется один раз — и только если он ещё ничего не выбирал сам
+let detecting = null
+export function detectVisitorRegion() {
+  if (choice.source || detecting) return detecting
+  detecting = fetch('/api/v1/site/visitor-region')
+    .then(res => (res.ok ? res.json() : {}))
+    .then((found) => {
+      if (choice.source || !['msk', 'spb', 'region'].includes(found?.region)) return
+      choice.region = found.region
+      choice.city = found.region === 'region' && typeof found.city === 'string' ? found.city : ''
+      choice.source = 'auto'
+    })
+    .catch(() => { /* не определили — остаётся город по умолчанию */ })
+  return detecting
+}
 watch(choice, (value) => {
   try { localStorage.setItem(CHOICE_KEY, JSON.stringify(value)) } catch { /* хранилище недоступно */ }
 })

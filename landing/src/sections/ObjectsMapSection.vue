@@ -4,13 +4,26 @@
       <h2 class="section-title">{{ title }}</h2>
       <p v-if="subtitle" class="objects-map__sub">{{ subtitle }}</p>
       <div class="objects-map__bar">
-        <div v-if="cities.length > 1" class="objects-map__cities">
-          <button type="button" :class="{ active: activeCity === '' }" @click="showCity('')">
-            Все города<span v-if="showCounts"> · {{ points.length }}</span>
-          </button>
-          <button v-for="city in cities" :key="city.name" type="button" :class="{ active: activeCity === city.name }" @click="showCity(city.name)">
-            {{ city.name }}<span v-if="showCounts"> · {{ city.count }}</span>
-          </button>
+        <div v-if="countries.length > 1 || cities.length > 1" class="objects-map__cities">
+          <!-- Сначала страны, затем города выбранной страны -->
+          <template v-if="countries.length > 1">
+            <button type="button" :class="{ active: activeCountry === '' }" @click="showCountry('')">
+              Все страны<span v-if="showCounts"> · {{ points.length }}</span>
+            </button>
+            <button v-for="country in countries" :key="country.code" type="button" class="is-country"
+              :class="{ active: activeCountry === country.code && activeCity === '' }" @click="showCountry(country.code)">
+              {{ country.name }}<span v-if="showCounts"> · {{ country.count }}</span>
+            </button>
+            <span v-if="cities.length > 1" class="objects-map__sep" aria-hidden="true" />
+          </template>
+          <template v-if="cities.length > 1">
+            <button v-if="countries.length < 2" type="button" :class="{ active: activeCity === '' }" @click="showCity('')">
+              Все города<span v-if="showCounts"> · {{ points.length }}</span>
+            </button>
+            <button v-for="city in cities" :key="city.name" type="button" :class="{ active: activeCity === city.name }" @click="showCity(city.name)">
+              {{ city.name }}<span v-if="showCounts"> · {{ city.count }}</span>
+            </button>
+          </template>
         </div>
         <div class="objects-map__legend">
           <span v-for="item in legend" :key="item.kind"><i :style="{ background: item.color }" />{{ item.label }}</span>
@@ -38,8 +51,31 @@ const KINDS = [
 ]
 
 const points = ref([])
-const cities = ref([])
 const activeCity = ref('')
+// Страна, чьи города показаны в ряду кнопок; '' — все страны
+const activeCountry = ref(null)
+
+// Названия стран по-русски по их кодам: «it» → «Италия»
+let countryNames = null
+function countryName(code) {
+  try {
+    countryNames ||= new Intl.DisplayNames(['ru'], { type: 'region' })
+    return countryNames.of(code.toUpperCase()) || code.toUpperCase()
+  } catch {
+    return code.toUpperCase()
+  }
+}
+function countOf(list) {
+  const counts = new Map()
+  for (const value of list) counts.set(value, (counts.get(value) || 0) + 1)
+  return [...counts].sort((a, b) => b[1] - a[1])
+}
+const countryOf = p => p.country || 'ru'
+const countries = computed(() => countOf(points.value.map(countryOf)).map(([code, count]) => ({ code, count, name: countryName(code) })))
+// Основная страна — где больше всего объектов; с неё карта и открывается
+const mainCountry = computed(() => countries.value[0]?.code || 'ru')
+const cityCountry = computed(() => activeCountry.value || mainCountry.value)
+const cities = computed(() => countOf(points.value.filter(p => countryOf(p) === cityCountry.value).map(p => p.city)).map(([name, count]) => ({ name, count })))
 const root = ref(null)
 const mapEl = ref(null)
 
@@ -80,11 +116,20 @@ function draw() {
   }
 }
 
-function showCity(name, animate = true) {
-  activeCity.value = name
+function fit(list, animate) {
   if (!map) return
-  const coords = points.value.filter(p => !name || p.city === name).map(p => [p.lat, p.lon])
+  const coords = list.map(p => [p.lat, p.lon])
   if (coords.length) map.fitBounds(L.latLngBounds(coords), { padding: [50, 50], maxZoom: 11, animate })
+}
+function showCountry(code, animate = true) {
+  activeCountry.value = code
+  activeCity.value = ''
+  fit(code ? points.value.filter(p => countryOf(p) === code) : points.value, animate)
+}
+function showCity(name, animate = true) {
+  if (!name) { showCountry(countries.value.length > 1 ? cityCountry.value : '', animate); return }
+  activeCity.value = name
+  fit(points.value.filter(p => countryOf(p) === cityCountry.value && p.city === name), animate)
 }
 
 async function initMap() {
@@ -105,7 +150,9 @@ async function initMap() {
   map.on('click', () => map.scrollWheelZoom.enable())
   mapEl.value.addEventListener('mouseleave', () => map.scrollWheelZoom.disable())
   draw()
-  showCity(activeCity.value, false)
+  if (activeCity.value) showCity(activeCity.value, false)
+  // Несколько стран — открываемся на основной, иначе вся Европа уместилась бы в один экран
+  else showCountry(activeCountry.value ?? (countries.value.length > 1 ? mainCountry.value : ''), false)
 }
 
 async function loadPoints() {
@@ -113,7 +160,6 @@ async function loadPoints() {
     const res = await fetch('/api/v1/site/map-points')
     if (!res.ok) return
     const data = await res.json()
-    cities.value = data.cities || []
     points.value = data.points || []
   } catch (e) {
     console.warn('Не удалось загрузить карту объектов:', e)
@@ -153,6 +199,9 @@ onBeforeUnmount(() => {
 }
 .objects-map__cities button:hover { border-color: var(--accent); color: var(--accent); }
 .objects-map__cities button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.objects-map__cities button.is-country { font-weight: 600; }
+/* Разделитель между странами и городами */
+.objects-map__sep { width: 1px; align-self: stretch; margin: 4px 6px; background: var(--border); }
 .objects-map__legend { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-left: auto; color: var(--text-light); font-size: calc(0.85rem * var(--ts, 1)); }
 .objects-map__legend i { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; vertical-align: -1px; box-shadow: 0 0 0 2px #fff, 0 0 0 3px var(--border); }
 /* z-index создаёт свой слой наложения: иначе панели карты перекрывают шапку сайта и кнопку WhatsApp */

@@ -126,7 +126,8 @@ class TestSiteObjectsMap:
         assert data["total"] == len(data["points"])
         for point in data["points"]:
             # Подпись (адрес без квартиры) — по настройке; номера договоров и имена не передаются никогда
-            assert {"lat", "lon", "kind", "city"} <= set(point) <= {"lat", "lon", "kind", "city", "label"}
+            assert {"lat", "lon", "kind", "city", "country"} <= set(point) <= {"lat", "lon", "kind", "city", "country", "label"}
+            assert len(point["country"]) == 2
             assert point["kind"] in {"done", "work", "supervision"}
             assert "кв" not in point.get("label", "").lower().split()
 

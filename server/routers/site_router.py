@@ -6,7 +6,7 @@ GET /api/v1/site/media/{filename} — публичный доступ к заг�
 
 import os
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import FileResponse
 from schemas import SitePublicResponse
 from sqlalchemy.orm import Session
@@ -62,6 +62,21 @@ def get_map_points(db: Session = Depends(get_db)):
     from services.site_map_service import public_points
 
     return public_points(db)
+
+
+@router.get("/visitor-region")
+def get_visitor_region(request: Request, response: Response, db: Session = Depends(get_db)):
+    """Регион цены готового дизайна для посетителя: по IP через локальную базу, без внешних сервисов.
+
+    IP-адрес никуда не передаётся и не сохраняется; в ответе только регион цены и название города.
+    """
+    from services.site_visitor_region import visitor_region
+
+    # Настоящий адрес посетителя передаёт nginx (он получает его по proxy_protocol)
+    ip = (request.headers.get("x-real-ip") or (request.client.host if request.client else "")).strip()
+    row = db.query(SiteSetting).filter(SiteSetting.key == "ready_region_cities").first()
+    response.headers["Cache-Control"] = "no-store"
+    return visitor_region(ip, row.value if row else "")
 
 
 @router.get("/media/{filename}", include_in_schema=False)

@@ -116,9 +116,10 @@ def sync_map_points() -> bool:
             if found:
                 point.lat, point.lon, point.precision, point.status = found.lat, found.lon, found.precision, "ok"
                 point.place, point.street, point.house = found.place, found.street, found.house
+                point.country = found.country or (centers[city].country if centers[city] else "ru")
             else:
                 point.lat, point.lon, point.precision, point.status = None, None, None, "not_found"
-                point.place, point.street, point.house = None, None, None
+                point.place, point.street, point.house, point.country = None, None, None, None
             db.commit()
         if postponed and not _state["last_error"]:
             _state["last_error"] = f"Быстрый геокодер временно недоступен — {postponed} адресов ждут его возвращения, поиск повторится автоматически"
@@ -170,7 +171,11 @@ def public_points(db: Session) -> dict:
         return (round(lat, 5), round(lon, 5)) if mode == "house" else privacy_offset(key, lat, lon, secret)
 
     def item(lat, lon, kind, name, found):
-        point = {"lat": lat, "lon": lon, "kind": kind, "city": name}
+        country = (found.country or "ru").lower()
+        # За рубежом поле «Город» в CRM часто содержит страну («Италия») — город берём из найденного адреса
+        if country != "ru" and found.place:
+            name = found.place
+        point = {"lat": lat, "lon": lon, "kind": kind, "city": name, "country": country}
         label = point_label(found.place, found.street, found.house, mode)
         if label:
             point["label"] = label
@@ -190,7 +195,7 @@ def public_points(db: Session) -> dict:
         lat, lon = place(point.contract_id, point.lat, point.lon)
         name = city_name(city) or "Другие города"
         points.append(item(lat, lon, point_kind(contract_status), name, point))
-        city_counts[name] = city_counts.get(name, 0) + 1
+        city_counts[points[-1]["city"]] = city_counts.get(points[-1]["city"], 0) + 1
     extras = (
         db.query(SiteMapExtraObject)
         .filter(SiteMapExtraObject.status == "ok", SiteMapExtraObject.lat.isnot(None), SiteMapExtraObject.lon.isnot(None))
@@ -202,7 +207,7 @@ def public_points(db: Session) -> dict:
         lat, lon = place(f"extra-{extra.id}", extra.lat, extra.lon)
         name = city_name(extra.city) or "Другие города"
         points.append(item(lat, lon, "done", name, extra))
-        city_counts[name] = city_counts.get(name, 0) + 1
+        city_counts[points[-1]["city"]] = city_counts.get(points[-1]["city"], 0) + 1
     cities = [{"name": name, "count": count} for name, count in sorted(city_counts.items(), key=lambda item: -item[1])]
     return {"points": points, "cities": cities, "total": len(points)}
 

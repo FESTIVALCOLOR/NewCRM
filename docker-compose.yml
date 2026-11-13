@@ -119,9 +119,12 @@ services:
       MAX_FILE_SIZE_MB: 50
       FILE_STORAGE_PATH: /app/uploads
       BASE_URL: https://crm.festivalcolor.ru
+      SITE_GEOIP_DB: /app/geoip/dbip-city-lite.mmdb
     volumes:
       - uploads_data:/app/uploads
       - ./resources:/app/resources:ro
+      # База DB-IP «IP to City Lite» для определения города посетителя (обновляется вручную, раз в несколько месяцев)
+      - ./geoip:/app/geoip:ro
     ports:
       - "127.0.0.1:8001:8001"
     healthcheck:

@@ -42,14 +42,28 @@
         <div class="card">
           <h3>Способ связи — кнопки «Написать нам»</h3>
           <p class="hint">Выберите основной мессенджер для кнопок на сайте</p>
-          <div class="radio-group">
-            <label v-for="m in contactMethods" :key="m.value">
-              <input type="radio" v-model="ctaMethod" :value="m.value" @change="saveCta" />
-              {{ m.label }}
-            </label>
+          <div class="cta-device">
+            <strong>На компьютере</strong>
+            <div class="radio-group">
+              <label v-for="m in contactMethods" :key="m.value">
+                <input type="radio" v-model="ctaMethod" :value="m.value" @change="saveCta('cta_method', ctaMethod, ctaMissing)" />
+                {{ m.label }}
+              </label>
+            </div>
+            <p v-if="ctaMissing" class="alert-err" style="margin-top:8px">Для этого способа {{ ctaMissing }} — пока кнопки ведут в WhatsApp. Заполните поле в «Контактных данных» ниже и нажмите «Сохранить контакты».</p>
           </div>
-          <p v-if="ctaMissing" class="alert-err" style="margin-top:10px">Для этого способа {{ ctaMissing }} — пока кнопки ведут в WhatsApp. Заполните поле в «Контактных данных» ниже и нажмите «Сохранить контакты».</p>
-          <p class="hint" style="margin:8px 0 0">Способ связи действует на кнопки «Написать нам», «Заказать» и на круглую кнопку в углу экрана — у неё меняется и значок.<template v-if="ctaMethod === 'email' && !sf.email"> Почта не указана — используется festivalcolor@mail.ru.</template></p>
+          <div class="cta-device">
+            <strong>На телефоне и планшете</strong>
+            <div class="radio-group">
+              <label><input type="radio" v-model="ctaMethodMobile" value="" @change="saveCta('cta_method_mobile', ctaMethodMobile, ctaMissingMobile)" /> Как на компьютере</label>
+              <label v-for="m in contactMethods" :key="m.value">
+                <input type="radio" v-model="ctaMethodMobile" :value="m.value" @change="saveCta('cta_method_mobile', ctaMethodMobile, ctaMissingMobile)" />
+                {{ m.label }}
+              </label>
+            </div>
+            <p v-if="ctaMissingMobile" class="alert-err" style="margin-top:8px">Для этого способа {{ ctaMissingMobile }} — пока кнопки на телефонах ведут в WhatsApp.</p>
+          </div>
+          <p class="hint" style="margin:8px 0 0">Способ связи действует на кнопки «Написать нам», «Заказать» и на круглую кнопку в углу экрана — у неё меняется значок. Надпись на кнопке меняется вместе с каналом: «Написать нам» для мессенджеров, «Позвонить нам» для телефона, «Написать на почту» для почты. Телефоном и планшетом считается устройство с сенсорным экраном.<template v-if="(ctaMethod === 'email' || ctaMethodMobile === 'email') && !sf.email"> Почта не указана — используется festivalcolor@mail.ru.</template></p>
         </div>
         <div class="card">
           <h3>Контактные данные</h3>
@@ -875,6 +889,8 @@ async function saveStatsTitle() {
   catch (e) { toast(e.message, 'error') }
 }
 const ctaMethod = ref('whatsapp')
+// Пусто — на телефоне тот же канал, что на компьютере
+const ctaMethodMobile = ref('')
 const contactMethods = [
   { value: 'whatsapp', label: 'WhatsApp' },
   { value: 'telegram', label: 'Telegram' },
@@ -889,6 +905,7 @@ async function loadSettings() {
       if (r.key in sf) sf[r.key] = r.value || ''
       if (r.key in hf) hf[r.key] = r.value || ''
       if (r.key === 'cta_method') ctaMethod.value = r.value || 'whatsapp'
+      if (r.key === 'cta_method_mobile') ctaMethodMobile.value = r.value || ''
       if (r.key === 'stats_title') statsTitle.value = r.value ?? ''
     })
     // Пока координаты не заданы, сайт берёт их из старой ссылки на карту — показываем их же
@@ -925,11 +942,12 @@ async function saveHero() {
 }
 // Канал выбран, но для него нет данных — кнопки на сайте ведут в WhatsApp, об этом нужно сказать сразу
 const ctaMissing = computed(() => missingFor(ctaMethod.value, { telegram: sf.telegram, phone: sf.phone }))
-async function saveCta() {
+const ctaMissingMobile = computed(() => missingFor(ctaMethodMobile.value, { telegram: sf.telegram, phone: sf.phone }))
+async function saveCta(key, value, missing) {
   try {
-    await api.settings.update('cta_method', ctaMethod.value)
-    if (ctaMissing.value) toast(`Сохранено, но ${ctaMissing.value} — пока кнопки ведут в WhatsApp`, 'error')
-    else toast('Метод связи обновлён')
+    await api.settings.update(key, value)
+    if (missing) toast(`Сохранено, но ${missing} — пока кнопки ведут в WhatsApp`, 'error')
+    else toast('Способ связи сохранён')
   }
   catch (e) { toast(e.message, 'error') }
 }
@@ -1513,6 +1531,9 @@ label input.warn, label textarea.warn { border-color: #faad14; background: #fffb
 .upload-row { display: flex; gap: 8px; }
 .upload-row input { flex: 1; }
 
+.cta-device { padding: 10px 0; border-top: 1px solid #f0f1f3; }
+.cta-device:first-of-type { border-top: none; padding-top: 0; }
+.cta-device > strong { display: block; font-size: 0.85rem; color: #374151; margin-bottom: 6px; }
 .footer-logo-preview { margin-top: 6px; background: #1a1a1a; border-radius: 8px; padding: 14px 18px; display: inline-flex; align-self: flex-start; }
 .footer-logo-preview img { height: 40px; width: auto; max-width: 220px; object-fit: contain; display: block; }
 .stats-title-input { flex: 1; border: 1px solid #d9d9d9; border-radius: 6px; padding: 8px 12px; font-size: 0.9rem; font-family: inherit; outline: none; }

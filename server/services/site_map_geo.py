@@ -116,6 +116,7 @@ class GeoResult:
     place: str = ""
     street: str = ""
     house: str = ""  # только если найден именно этот дом
+    country: str = ""  # код страны: ru, it…
 
 
 @dataclass(frozen=True)
@@ -409,7 +410,7 @@ def _strict_result(found: dict, precision: str) -> GeoResult:
     place = next((address[key] for key in _PLACE_KEYS if address.get(key)), "")
     street = next((address[key] for key in _STREET_KEYS if address.get(key)), "")
     house = address.get("house_number", "") if precision == "house" else ""
-    return GeoResult(float(found["lat"]), float(found["lon"]), precision, _clip(place, 120), _clip(street, 200), _clip(house, 30))
+    return GeoResult(float(found["lat"]), float(found["lon"]), precision, _clip(place, 120), _clip(street, 200), _clip(house, 30), _country_code(found))
 
 
 def _pick_fuzzy(features: list[dict], tokens: list[str], house: Optional[str]) -> Optional[GeoResult]:
@@ -434,6 +435,7 @@ def _pick_fuzzy(features: list[dict], tokens: list[str], house: Optional[str]) -
             _clip(props.get("city") or props.get("town") or props.get("village") or props.get("locality"), 120),
             _clip(street, 200),
             _clip(props.get("housenumber"), 30) if same_house else "",
+            str(props.get("countrycode") or "").lower()[:2],
         )
     return None
 
@@ -559,7 +561,7 @@ def _is_place(found: Optional[dict]) -> bool:
 def _place_result(found: dict) -> GeoResult:
     address = found.get("address") or {}
     name = found.get("name") or next((address[key] for key in _PLACE_KEYS if address.get(key)), "")
-    return GeoResult(float(found["lat"]), float(found["lon"]), "place", _clip(name, 120))
+    return GeoResult(float(found["lat"]), float(found["lon"]), "place", _clip(name, 120), country=_country_code(found))
 
 
 def _search_place(address: str, area: Area, strict: StrictSearch) -> Optional[GeoResult]:

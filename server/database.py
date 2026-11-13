@@ -1733,6 +1733,7 @@ class SiteMapPoint(Base):
     place = Column(String(120))
     street = Column(String(200))
     house = Column(String(30))
+    country = Column(String(2))  # код страны найденного места; пусто — Россия (точки до появления поля)
 
 
 class SiteMapExtraObject(Base):
@@ -1753,6 +1754,7 @@ class SiteMapExtraObject(Base):
     place = Column(String(120))
     street = Column(String(200))
     house = Column(String(30))
+    country = Column(String(2))
 
 
 class ReadyDesign(Base):

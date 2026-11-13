@@ -30,7 +30,7 @@
           <p>Расскажите о квартире — рассчитаем стоимость и сроки.</p>
         </div>
         <div class="next__actions">
-          <a :href="contactUrl" :target="linkTarget(contactUrl)" rel="noopener" class="btn btn--accent">Написать нам</a>
+          <a :href="contactUrl" :target="linkTarget(contactUrl)" rel="noopener" class="btn btn--accent">{{ contactLabel }}</a>
           <router-link to="/ready" class="btn btn--outline">Готовые дизайны — от {{ formatPrice(minReadyPrice(site.settings)) }}</router-link>
         </div>
       </div>
@@ -43,13 +43,14 @@ import { computed, watch } from 'vue'
 import PortfolioSection from '../sections/PortfolioSection.vue'
 import PricingSection from '../sections/PricingSection.vue'
 import { site, sectionStyles, sectionVisible } from '../store.js'
-import { ctaUrl, linkTarget } from '../contact.js'
+import { ctaUrl, ctaLabel, linkTarget } from '../contact.js'
 import { minReadyPrice, formatPrice } from '../readyPricing.js'
 import { parseAdvantages } from '../advantages.js'
 import { scheduleReveal } from '../reveal.js'
 
 const advantages = computed(() => parseAdvantages(site.settings))
 const contactUrl = computed(() => ctaUrl(site.settings, 'Здравствуйте! Интересует индивидуальный дизайн-проект.'))
+const contactLabel = computed(() => ctaLabel(site.settings))
 
 // Портфолио и цены приходят с сервера уже после появления страницы
 watch(() => site.loaded, () => scheduleReveal())

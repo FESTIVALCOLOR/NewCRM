@@ -2,7 +2,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { ctaChannel, ctaUrl, linkTarget, missingFor, DEFAULT_EMAIL } from '../src/contact.js'
+import { ctaChannel, ctaLabel, ctaUrl, linkTarget, missingFor, DEFAULT_EMAIL } from '../src/contact.js'
 
 const full = { whatsapp_phone: '79992800700', telegram: '@festivalcolor', phone: '+7 (999) 2 800 700', email: 'info@example.ru' }
 
@@ -41,3 +41,20 @@ test('звонок и письмо открываются без новой вк
   assert.equal(linkTarget('tel:+7999'), null)
   assert.equal(linkTarget('mailto:a@b.ru'), null)
 })
+
+test('на телефоне — свой канал, без своего — как на компьютере', () => {
+  const settings = { ...full, cta_method: 'whatsapp', cta_method_mobile: 'phone' }
+  assert.equal(ctaUrl(settings, '', false), 'https://wa.clck.bar/79992800700')
+  assert.equal(ctaUrl(settings, '', true), 'tel:+79992800700')
+  assert.equal(ctaChannel({ ...full, cta_method: 'telegram', cta_method_mobile: '' }, true), 'telegram')
+  assert.equal(ctaChannel({ ...full, cta_method: 'telegram', cta_method_mobile: 'pigeon' }, true), 'telegram')
+})
+
+test('надпись на кнопке соответствует каналу', () => {
+  assert.equal(ctaLabel({ ...full, cta_method: 'whatsapp' }, false), 'Написать нам')
+  assert.equal(ctaLabel({ ...full, cta_method: 'whatsapp', cta_method_mobile: 'phone' }, true), 'Позвонить нам')
+  assert.equal(ctaLabel({ ...full, cta_method: 'email' }, false), 'Написать на почту')
+  // Телефон не указан — кнопка ведёт в WhatsApp и называется соответственно
+  assert.equal(ctaLabel({ ...full, phone: '', cta_method_mobile: 'phone' }, true), 'Написать нам')
+})
+

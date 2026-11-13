@@ -1,5 +1,6 @@
 // Каналы связи для кнопок «Написать нам», «Заказать» и плавающей кнопки.
-// Канал выбирается в панели («Настройки» → «Способ связи»).
+// Канал выбирается в панели («Настройки» → «Способ связи») отдельно для компьютера и для телефона.
+import { device } from './device.js'
 
 const DEFAULT_WHATSAPP = '79062003365'
 // Та же почта, что показана в блоке «Контакты», если своя не указана
@@ -45,16 +46,30 @@ export function missingFor(method, settings) {
   return ''
 }
 
+// Надпись на кнопке под канал: «Написать нам» при выбранном телефоне выглядела бы странно
+export const CTA_LABELS = { whatsapp: 'Написать нам', telegram: 'Написать нам', phone: 'Позвонить нам', email: 'Написать на почту' }
+
+// Канал, выбранный в панели для этого устройства; для телефона без своего выбора — как на компьютере
+export function chosenChannel(settings, mobile = device.mobile) {
+  const s = settings || {}
+  const chosen = (mobile && CHANNELS[s.cta_method_mobile] ? s.cta_method_mobile : '') || s.cta_method
+  return CHANNELS[chosen] ? chosen : 'whatsapp'
+}
+
 // Канал, который реально используется: выбранный, а если для него нет данных — WhatsApp
-export function ctaChannel(settings) {
-  const chosen = CHANNELS[settings?.cta_method] ? settings.cta_method : 'whatsapp'
+export function ctaChannel(settings, mobile = device.mobile) {
+  const chosen = chosenChannel(settings, mobile)
   return missingFor(chosen, settings) ? 'whatsapp' : chosen
 }
 
+export function ctaLabel(settings, mobile = device.mobile) {
+  return CTA_LABELS[ctaChannel(settings, mobile)]
+}
+
 // Ссылка для кнопок «Написать нам» — зависит от способа связи, выбранного в админке
-export function ctaUrl(settings, text) {
+export function ctaUrl(settings, text, mobile = device.mobile) {
   const s = settings || {}
-  const method = ctaChannel(s)
+  const method = ctaChannel(s, mobile)
   if (method === 'telegram') return `https://t.me/${telegramName(s)}`
   if (method === 'phone') return `tel:${s.phone.replace(/[^\d+]/g, '')}`
   if (method === 'email') return `mailto:${s.email || DEFAULT_EMAIL}${text ? `?subject=${encodeURIComponent(text)}` : ''}`

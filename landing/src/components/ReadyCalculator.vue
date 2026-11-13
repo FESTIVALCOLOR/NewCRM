@@ -3,14 +3,19 @@
     <div class="calc__field">
       <span class="calc__label">Город</span>
       <div class="calc__regions">
-        <button v-for="region in REGIONS" :key="region.key" type="button" :class="{ active: choice.region === region.key }" @click="choice.region = region.key">
+        <button v-for="region in REGIONS" :key="region.key" type="button" :class="{ active: choice.region === region.key }" @click="pickRegion(region.key)">
           {{ region.label }}
         </button>
       </div>
-      <select v-if="choice.region === 'region'" v-model="choice.city" class="calc__input" aria-label="Город">
+      <select v-if="choice.region === 'region'" v-model="choice.city" class="calc__input" aria-label="Город" @change="choice.source = 'user'">
         <option value="">Выберите город</option>
         <option v-for="city in cities" :key="city" :value="city">{{ city }}</option>
       </select>
+      <!-- Ссылка на DB-IP обязательна по лицензии базы (CC BY 4.0) -->
+      <p v-if="choice.source === 'auto'" class="calc__auto">
+        Город определён автоматически — если не так, выберите свой.
+        <a href="https://db-ip.com" target="_blank" rel="noopener">IP Geolocation by DB-IP</a>
+      </p>
     </div>
     <label class="calc__field">
       <span class="calc__label">Площадь объекта, м²</span>
@@ -39,14 +44,21 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { ctaUrl, linkTarget } from '../contact.js'
-import { choice } from '../store.js'
+import { choice, detectVisitorRegion } from '../store.js'
 import { REGIONS, calcReady, readyConfig, regionCities, formatPrice, formatDays } from '../readyPricing.js'
 
 const props = defineProps({ settings: Object, design: { type: Object, default: null } })
 
 const config = computed(() => readyConfig(props.settings))
+
+function pickRegion(key) {
+  choice.region = key
+  choice.source = 'user'
+}
+// Цена сразу для города посетителя: по местоположению, если он ещё ничего не выбирал
+onMounted(detectVisitorRegion)
 const cities = computed(() => regionCities(props.settings))
 const result = computed(() => calcReady(choice.region, choice.area, props.settings))
 const hasArea = computed(() => Number(choice.area) > 0)
@@ -67,6 +79,8 @@ const orderUrl = computed(() => {
 </script>
 
 <style scoped>
+.calc__auto { font-size: calc(0.78rem * var(--ts, 1)); color: var(--text-light); line-height: 1.45; }
+.calc__auto a { color: inherit; opacity: 0.75; white-space: nowrap; }
 .calc { background: #fff; border: 1px solid var(--border); border-radius: 14px; padding: 28px; display: flex; flex-direction: column; gap: 18px; color: var(--text); }
 .calc__field { display: flex; flex-direction: column; gap: 8px; }
 .calc__label { font-size: calc(0.78rem * var(--ts, 1)); text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-light); }
