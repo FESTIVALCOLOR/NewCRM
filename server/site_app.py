@@ -64,14 +64,16 @@ async def startup_event():
     init_db()
     logger.info("База данных инициализирована (site)")
 
+    from routers.site_ready_router import ensure_directions_section
     from services.site_map_service import ensure_map_section
 
     db = SessionLocal()
     try:
         ensure_map_section(db)
+        ensure_directions_section(db)
     except Exception as exc:
         db.rollback()
-        logger.warning(f"Карта объектов: не удалось добавить секцию: {exc}")
+        logger.warning(f"Секции сайта: не удалось добавить новую секцию: {exc}")
     finally:
         db.close()
     asyncio.create_task(_map_sync_loop())
@@ -106,3 +108,9 @@ from routers.site_router import router as site_router
 
 app.include_router(site_router, prefix="/api/v1")
 app.include_router(site_admin_router, prefix="/api/v1")
+
+from routers.site_ready_router import admin_router as site_ready_admin_router
+from routers.site_ready_router import public_router as site_ready_public_router
+
+app.include_router(site_ready_public_router, prefix="/api/v1")
+app.include_router(site_ready_admin_router, prefix="/api/v1")

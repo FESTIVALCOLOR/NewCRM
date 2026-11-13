@@ -102,7 +102,7 @@
 
       <!-- ── Секции ── -->
       <section v-if="currentTab === 'sections'" class="tab-body">
-        <p class="hint">Перетащите секцию мышью, чтобы изменить порядок в меню и на странице — порядок сохраняется сразу. Переключатель скрывает секцию с сайта и из меню.</p>
+        <p class="hint">Перетащите секцию мышью, чтобы изменить порядок в меню и на главной странице — порядок сохраняется сразу. Переключатель скрывает секцию с сайта и из меню. Портфолио и цены показываются на странице «Индивидуальный дизайн».</p>
         <div class="drag-list" @dragover.prevent>
           <div v-for="(sec, i) in sectionsData" :key="sec.key"
             class="drag-item"
@@ -629,6 +629,10 @@
         </div>
       </section>
 
+      <!-- ── Индивидуальный и готовый дизайн ── -->
+      <IndividualTab v-if="currentTab === 'individual'" :toast="toast" />
+      <ReadyTab v-if="currentTab === 'ready'" :toast="toast" />
+
       <!-- ── Аналитика / SEO ── -->
       <section v-if="currentTab === 'analytics'" class="tab-body">
         <div class="card-info">
@@ -729,6 +733,8 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
+import IndividualTab from './IndividualTab.vue'
+import ReadyTab from './ReadyTab.vue'
 import * as api from './api.js'
 import { SERVICE_ICONS, serviceIconPath } from '../serviceIcons.js'
 import {
@@ -763,8 +769,10 @@ const tabs = [
   { id: 'style',     icon: '✎',  label: 'Стиль' },
   { id: 'sections',  icon: '☰',  label: 'Секции меню' },
   { id: 'services',  icon: '◈',  label: 'Услуги' },
-  { id: 'pricing',   icon: '₽',  label: 'Цены' },
-  { id: 'portfolio', icon: '◉',  label: 'Портфолио' },
+  { id: 'individual', icon: '✦', label: 'Индивидуальный дизайн' },
+  { id: 'pricing',   icon: '₽',  label: 'Цены (индивидуальный)' },
+  { id: 'portfolio', icon: '◉',  label: 'Портфолио (индивидуальный)' },
+  { id: 'ready',     icon: '▦',  label: 'Готовый дизайн' },
   { id: 'reviews',   icon: '★',  label: 'Отзывы' },
   { id: 'team',      icon: '◎',  label: 'О нас / команда' },
   { id: 'stats',     icon: '#',  label: 'Цифры' },
@@ -893,6 +901,7 @@ const sectionLabels = {
   about: 'О нас',
   services: 'Услуги',
   stats: 'Цифры',
+  directions: 'Направления',
   portfolio: 'Портфолио',
   pricing: 'Цены',
   reviews: 'Отзывы',
@@ -900,6 +909,9 @@ const sectionLabels = {
   objects_map: 'Карта объектов',
 }
 const sectionsWithoutMenu = {
+  directions: 'Две карточки на главной: «Индивидуальный дизайн» и «Готовый дизайн». В меню на этом месте стоят ссылки на обе страницы',
+  portfolio: 'Блок страницы «Индивидуальный дизайн» (на главной не показывается, порядок на него не влияет)',
+  pricing: 'Блок страницы «Индивидуальный дизайн» (на главной не показывается, порядок на него не влияет)',
   stats: 'Блок с цифрами — показывается на странице, в меню пункта нет',
   objects_map: 'Карта с объектами из CRM — показывается на странице, в меню пункта нет',
 }
@@ -1139,7 +1151,7 @@ const sectionFields = [
 // У главного экрана фон — фотография, поэтому цвет фона для него не предлагается
 const scopeFields = computed(() => sectionFields.filter(f => !(styleScope.value === 'hero' && f.key === 'bg')))
 // Фон блоков на сайте до настройки — чтобы предпросмотр был похож на реальный блок
-const defaultSectionBg = { about: '#f8f8f8', portfolio: '#f8f8f8', reviews: '#f8f8f8', stats: '#1a1a1a' }
+const defaultSectionBg = { about: '#f8f8f8', directions: '#f8f8f8', portfolio: '#f8f8f8', reviews: '#f8f8f8', stats: '#1a1a1a' }
 
 function toggleSecField(field, checked) {
   if (!checked) { delete curSec.value[field.key]; return }
@@ -1352,7 +1364,8 @@ function loadAll() {
 onMounted(() => { if (authed.value) loadAll() })
 </script>
 
-<style scoped>
+<!-- Без scoped: классы панели используют и вкладки-компоненты. Панель собирается отдельно от сайта, на его страницы эти стили не попадают -->
+<style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 .login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #f0f2f5; font-family: Inter, sans-serif; }
@@ -1453,6 +1466,7 @@ label input.warn, label textarea.warn { border-color: #faad14; background: #fffb
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.5); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
 .modal { background: #fff; border-radius: 12px; padding: 28px; width: 100%; max-width: 560px; max-height: 90vh; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
 .modal h3 { font-size: 1.1rem; font-weight: 600; }
+.modal--wide { max-width: 1180px; }
 .modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 6px; }
 
 .upload-row { display: flex; gap: 8px; }

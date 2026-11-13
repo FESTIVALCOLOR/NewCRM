@@ -98,7 +98,7 @@ export function themeVars(settings) {
 // Хранится одной настройкой style_sections в виде JSON: { about: { accent: '#...', head_size: '120' }, ... }.
 // В блоке задаётся только то, что отличается от общего стиля.
 export const SECTION_STYLE_KEY = 'style_sections'
-export const SECTION_KEYS = ['hero', 'about', 'stats', 'services', 'portfolio', 'pricing', 'reviews', 'contacts', 'objects_map']
+export const SECTION_KEYS = ['hero', 'about', 'stats', 'services', 'directions', 'portfolio', 'pricing', 'reviews', 'contacts', 'objects_map']
 
 export function parseSectionStyles(settings) {
   try {

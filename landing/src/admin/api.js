@@ -116,6 +116,19 @@ export const portfolio = {
   },
 }
 
+// ── Готовые дизайны ─────────────────────────
+export const ready = {
+  list: () => req('GET', '/site/admin/ready-designs'),
+  create: (d) => req('POST', '/site/admin/ready-designs', d),
+  update: (id, d) => req('PUT', `/site/admin/ready-designs/${id}`, d),
+  delete: (id) => req('DELETE', `/site/admin/ready-designs/${id}`),
+  reorder: (items) => req('PUT', '/site/admin/ready-designs/reorder', items),
+  addImage: (designId, d) => req('POST', `/site/admin/ready-designs/${designId}/images`, d),
+  updateImage: (imageId, d) => req('PUT', `/site/admin/ready-designs/images/${imageId}`, d),
+  deleteImage: (imageId) => req('DELETE', `/site/admin/ready-designs/images/${imageId}`),
+  reorderImages: (items) => req('PUT', '/site/admin/ready-designs/images/reorder', items),
+}
+
 // ── Карта объектов ──────────────────────────
 export const map = {
   status: () => req('GET', '/site/admin/map/status'),

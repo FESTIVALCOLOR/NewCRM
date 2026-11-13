@@ -167,3 +167,100 @@ class TestSiteObjectsMap:
     def test_unknown_extra_object_returns_404(self, api_base, admin_headers):
         assert api_put(api_base, f"{BASE}/map/extra/999999999", admin_headers, json={"hidden": True}).status_code == 404
         assert api_delete(api_base, f"{BASE}/map/extra/999999999", admin_headers).status_code == 404
+
+
+READY = f"{BASE}/ready-designs"
+
+
+@pytest.fixture
+def ready_design(api_base, admin_headers):
+    resp = api_post(api_base, READY, admin_headers, json={"title": f"{TEST_PREFIX}готовый дизайн", "tagline": "подпись", "description": "описание"})
+    assert resp.status_code == 200, resp.text
+    design = resp.json()
+    yield design
+    api_delete(api_base, f"{READY}/{design['id']}", admin_headers)
+
+
+def _public_design(api_base, design_id):
+    resp = api_get(api_base, "/api/v1/site/ready-designs", {})
+    assert resp.status_code == 200, resp.text
+    return next((item for item in resp.json() if item["id"] == design_id), None)
+
+
+class TestSiteReadyDesigns:
+    """Каталог готовых дизайнов: галерея, отметки мебели на фото, публичная выдача."""
+
+    def test_requires_site_admin(self, api_base, role_tokens):
+        assert api_get(api_base, READY, {}).status_code == 401
+        assert api_post(api_base, READY, {}, json={"title": "x"}).status_code == 401
+        designer = role_tokens.get("designer")
+        if designer:
+            assert api_get(api_base, READY, designer).status_code == 403
+
+    def test_public_list_needs_no_auth(self, api_base):
+        resp = api_get(api_base, "/api/v1/site/ready-designs", {})
+        assert resp.status_code == 200, resp.text
+        assert isinstance(resp.json(), list)
+
+    def test_gallery_and_markers_reach_public_site(self, api_base, admin_headers, ready_design):
+        design_id = ready_design["id"]
+        image = api_post(api_base, f"{READY}/{design_id}/images", admin_headers, json={"url": "/api/v1/site/media/test.jpg"}).json()
+        assert image["markers"] == []
+
+        markers = [
+            {"x": 12.5, "y": 80, "title": " Диван ", "description": "угловой", "url": "https://example.com/sofa"},
+            {"x": 100, "y": 0, "title": "Торшер"},
+        ]
+        resp = api_put(api_base, f"{READY}/images/{image['id']}", admin_headers, json={"markers": markers})
+        assert resp.status_code == 200, resp.text
+        assert [m["title"] for m in resp.json()["markers"]] == ["Диван", "Торшер"]
+
+        public = _public_design(api_base, design_id)
+        assert public is not None
+        assert public["title"] == ready_design["title"]
+        assert len(public["images"]) == 1
+        assert public["images"][0]["markers"][0] == {"x": 12.5, "y": 80.0, "title": "Диван", "description": "угловой", "url": "https://example.com/sofa"}
+
+    @pytest.mark.parametrize(
+        "marker",
+        [
+            {"x": 10, "y": 10, "title": "Диван", "url": "javascript:alert(1)"},
+            {"x": 101, "y": 10, "title": "Диван"},
+            {"x": 10, "y": -1, "title": "Диван"},
+            {"x": 10, "y": 10, "title": "   "},
+        ],
+    )
+    def test_bad_marker_is_rejected_and_nothing_saved(self, api_base, admin_headers, ready_design, marker):
+        image = api_post(api_base, f"{READY}/{ready_design['id']}/images", admin_headers, json={"url": "/api/v1/site/media/test.jpg"}).json()
+        resp = api_put(api_base, f"{READY}/images/{image['id']}", admin_headers, json={"markers": [marker]})
+        assert resp.status_code == 422, resp.text
+        assert _public_design(api_base, ready_design["id"])["images"][0]["markers"] == []
+
+    def test_hidden_design_is_not_public(self, api_base, admin_headers, ready_design):
+        resp = api_put(api_base, f"{READY}/{ready_design['id']}", admin_headers, json={"is_visible": False})
+        assert resp.status_code == 200, resp.text
+        # Частичное обновление не затирает остальные поля
+        assert resp.json()["title"] == ready_design["title"]
+        assert resp.json()["description"] == "описание"
+        assert _public_design(api_base, ready_design["id"]) is None
+
+    def test_cover_can_be_set_and_cleared(self, api_base, admin_headers, ready_design):
+        url = f"{READY}/{ready_design['id']}"
+        assert api_put(api_base, url, admin_headers, json={"cover_url": "/api/v1/site/media/cover.jpg"}).json()["cover_url"] == "/api/v1/site/media/cover.jpg"
+        assert api_put(api_base, url, admin_headers, json={"cover_url": None}).json()["cover_url"] is None
+
+    def test_reorder_routes_not_shadowed_by_id_routes(self, api_base, admin_headers, ready_design):
+        resp = api_put(api_base, f"{READY}/reorder", admin_headers, json=[{"id": ready_design["id"], "sort_order": 3}])
+        assert resp.status_code == 200, resp.text
+        image = api_post(api_base, f"{READY}/{ready_design['id']}/images", admin_headers, json={"url": "/api/v1/site/media/test.jpg"}).json()
+        resp = api_put(api_base, f"{READY}/images/reorder", admin_headers, json=[{"id": image["id"], "sort_order": 5}])
+        assert resp.status_code == 200, resp.text
+        saved = next(item for item in api_get(api_base, READY, admin_headers).json() if item["id"] == ready_design["id"])
+        assert saved["sort_order"] == 3
+        assert saved["images"][0]["sort_order"] == 5
+
+    def test_deleting_design_removes_its_images(self, api_base, admin_headers, ready_design):
+        image = api_post(api_base, f"{READY}/{ready_design['id']}/images", admin_headers, json={"url": "/api/v1/site/media/test.jpg"}).json()
+        assert api_delete(api_base, f"{READY}/{ready_design['id']}", admin_headers).status_code == 200
+        assert api_put(api_base, f"{READY}/images/{image['id']}", admin_headers, json={"alt": "x"}).status_code == 404
+        assert api_delete(api_base, f"{READY}/{ready_design['id']}", admin_headers).status_code == 404

@@ -1,9 +1,9 @@
 <template>
   <footer class="footer">
     <div class="container footer__inner">
-      <a href="#hero" class="footer__logo">
+      <router-link :to="{ path: '/' }" class="footer__logo">
         <span class="logo-festival">FESTIVAL</span><span class="logo-color">COLOR</span>
-      </a>
+      </router-link>
       <p class="footer__copy">{{ settings.copyright || `Copyright © FESTIVAL COLOR ${new Date().getFullYear()}. Все права защищены.` }}</p>
       <div class="footer__socials">
         <a v-if="settings.vk_url" :href="settings.vk_url" target="_blank" rel="noopener" class="footer__social-btn" aria-label="ВКонтакте">

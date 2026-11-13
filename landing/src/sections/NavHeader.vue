@@ -1,14 +1,14 @@
 <template>
   <header class="header" :class="{ scrolled }">
     <div class="container header__inner">
-      <a href="#hero" class="header__logo">
+      <router-link :to="{ path: '/' }" class="header__logo" @click="onNav({ to: { path: '/' } })">
         <img v-if="logoSrc" :src="logoSrc" alt="FESTIVAL COLOR" class="header__logo-img" />
         <template v-else>
           <span class="logo-festival">FESTIVAL</span><span class="logo-color">COLOR</span>
         </template>
-      </a>
+      </router-link>
       <nav class="header__nav">
-        <a v-for="item in menu" :key="item.key" :href="`#${item.key}`">{{ item.label }}</a>
+        <router-link v-for="item in menu" :key="item.key" :to="item.to" :class="{ 'is-page': item.page }" @click="onNav(item)">{{ item.label }}</router-link>
       </nav>
       <a :href="contactUrl" target="_blank" rel="noopener" class="btn btn--accent header__cta">Написать нам</a>
       <button class="header__burger" @click="menuOpen = !menuOpen" aria-label="Меню">
@@ -16,7 +16,7 @@
       </button>
     </div>
     <div class="header__mobile-nav" :class="{ open: menuOpen }" @click="menuOpen = false">
-      <a v-for="item in menu" :key="item.key" :href="`#${item.key}`">{{ item.label }}</a>
+      <router-link v-for="item in menu" :key="item.key" :to="item.to" :class="{ 'is-page': item.page }" @click="onNav(item)">{{ item.label }}</router-link>
     </div>
   </header>
 </template>
@@ -24,16 +24,43 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 
+import { useRoute, useRouter } from 'vue-router'
 import { ctaUrl } from '../contact.js'
+import { HEADER_HEIGHT } from '../router.js'
 
-const MENU_LABELS = { hero: 'Главная', about: 'О нас', services: 'Услуги', pricing: 'Цены', portfolio: 'Портфолио', reviews: 'Отзывы', contacts: 'Контакты' }
+const MENU_LABELS = { hero: 'Главная', about: 'О нас', services: 'Услуги', reviews: 'Отзывы', contacts: 'Контакты' }
+// Отдельные страницы сайта; в меню стоят на месте блока «Направления» главной
+const PAGES = [
+  { key: 'individual', label: 'Индивидуальный дизайн', to: { path: '/individual' }, page: true },
+  { key: 'ready', label: 'Готовый дизайн', to: { path: '/ready' }, page: true },
+]
 
 const props = defineProps({ settings: Object, sectionKeys: { type: Array, default: () => [] } })
 const scrolled = ref(false)
 const menuOpen = ref(false)
 
 // Пункты меню идут в том же порядке, что и секции на странице; скрытые секции в меню не попадают
-const menu = computed(() => props.sectionKeys.filter(k => MENU_LABELS[k]).map(k => ({ key: k, label: MENU_LABELS[k] })))
+const route = useRoute()
+const router = useRouter()
+const menu = computed(() => {
+  const items = []
+  let pagesAt = -1
+  for (const key of props.sectionKeys) {
+    if (key === 'directions') pagesAt = items.length
+    else if (MENU_LABELS[key]) items.push({ key, label: MENU_LABELS[key], to: key === 'hero' ? { path: '/' } : { path: '/', hash: `#${key}` } })
+  }
+  // Если блок направлений на главной скрыт, страницы всё равно остаются в меню — после «Услуг»
+  if (pagesAt < 0) pagesAt = items.findIndex(item => item.key === 'services') + 1 || items.length
+  items.splice(pagesAt, 0, ...PAGES)
+  return items
+})
+
+// Повторный клик по пункту, который уже открыт, маршрутизатор пропускает — прокручиваем сами
+function onNav(item) {
+  if (router.resolve(item.to).fullPath !== route.fullPath) return
+  const el = item.to.hash ? document.querySelector(item.to.hash) : null
+  window.scrollTo({ top: el ? el.getBoundingClientRect().top + window.scrollY - HEADER_HEIGHT + 1 : 0, behavior: 'smooth' })
+}
 const contactUrl = computed(() => ctaUrl(props.settings))
 const logoSrc = computed(() => {
   if (props.settings?.logo_url) return props.settings.logo_url
@@ -60,16 +87,18 @@ onUnmounted(() => window.removeEventListener('scroll', onScroll))
 .header__logo-img { height: 40px; width: auto; object-fit: contain; }
 .logo-festival { color: var(--dark); }
 .logo-color { color: var(--accent); }
-.header__nav { display: flex; gap: 24px; margin: 0 auto; }
+.header__nav { display: flex; gap: 22px; margin: 0 auto; white-space: nowrap; }
 .header__nav a { text-decoration: none; color: var(--text); font-size: calc(0.9rem * var(--ts, 1)); font-weight: 500; transition: color 0.2s; }
-.header__nav a:hover { color: var(--accent); }
+.header__nav a:hover, .header__nav a.is-page.router-link-active { color: var(--accent); }
 .header__cta { padding: 10px 22px; font-size: calc(0.85rem * var(--ts, 1)); }
 .header__burger { display: none; flex-direction: column; gap: 5px; background: none; border: none; cursor: pointer; padding: 4px; }
 .header__burger span { display: block; width: 24px; height: 2px; background: var(--dark); border-radius: 2px; }
 .header__mobile-nav { display: none; flex-direction: column; background: #fff; padding: 16px 20px; border-top: 1px solid var(--border); }
 .header__mobile-nav a { padding: 12px 0; text-decoration: none; color: var(--text); font-weight: 500; border-bottom: 1px solid var(--border); }
+.header__mobile-nav a.is-page.router-link-active { color: var(--accent); }
 .header__mobile-nav.open { display: flex; }
-@media (max-width: 768px) {
+/* Пунктов в меню семь, поэтому на планшетах оно сворачивается раньше */
+@media (max-width: 1100px) {
   .header__nav, .header__cta { display: none; }
   .header__burger { display: flex; margin-left: auto; }
 }

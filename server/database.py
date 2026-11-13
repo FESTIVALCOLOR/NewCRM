@@ -1748,6 +1748,35 @@ class SiteMapExtraObject(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
+class ReadyDesign(Base):
+    """Готовый (шаблонный) дизайн — позиция каталога на сайте"""
+
+    __tablename__ = "site_ready_designs"
+    id = Column(Integer, primary_key=True)
+    title = Column(String(200), nullable=False)
+    tagline = Column(String(300), default="")  # короткая подпись на карточке каталога
+    description = Column(Text, default="")
+    cover_url = Column(Text)  # обложка; если пусто — первое фото галереи
+    is_visible = Column(Boolean, nullable=False, default=True)
+    sort_order = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    images = relationship("ReadyDesignImage", back_populates="design", order_by="ReadyDesignImage.sort_order", cascade="all, delete-orphan")
+
+
+class ReadyDesignImage(Base):
+    """Фото галереи готового дизайна с отметками предметов мебели"""
+
+    __tablename__ = "site_ready_design_images"
+    id = Column(Integer, primary_key=True)
+    design_id = Column(Integer, ForeignKey("site_ready_designs.id", ondelete="CASCADE"), nullable=False, index=True)
+    url = Column(Text, nullable=False)
+    alt = Column(String(300), default="")
+    sort_order = Column(Integer, default=0)
+    # Отметки: [{"x": 42.5, "y": 61.0, "title": "Диван", "description": "...", "url": "https://..."}], x и y — проценты от размеров фото
+    markers = Column(JSON, nullable=False, default=list)
+    design = relationship("ReadyDesign", back_populates="images")
+
+
 def init_db():
     """Инициализация базы данных"""
     try:

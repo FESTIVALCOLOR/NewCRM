@@ -1,20 +1,10 @@
 <template>
   <div>
-    <NavHeader :settings="data.settings" :section-keys="sectionKeys" />
+    <NavHeader :settings="site.settings" :section-keys="homeSectionKeys" />
     <main>
-      <template v-for="key in sectionKeys" :key="key">
-        <HeroSection      v-if="key === 'hero'" :style="sectionStyles[key]" :settings="data.settings" />
-        <AboutSection     v-else-if="key === 'about'" :style="sectionStyles[key]" :team="data.team" />
-        <StatsSection     v-else-if="key === 'stats'" :style="sectionStyles[key]" :stats="data.stats" />
-        <ServicesSection  v-else-if="key === 'services'" :style="sectionStyles[key]" :services="data.services" />
-        <PortfolioSection v-else-if="key === 'portfolio'" :style="sectionStyles[key]" :portfolio="data.portfolio" />
-        <PricingSection   v-else-if="key === 'pricing'" :style="sectionStyles[key]" :pricing="data.pricing" :settings="data.settings" />
-        <ReviewsSection   v-else-if="key === 'reviews'" :style="sectionStyles[key]" :reviews="data.reviews" />
-        <ContactsSection  v-else-if="key === 'contacts'" :style="sectionStyles[key]" :settings="data.settings" />
-        <ObjectsMapSection v-else-if="key === 'objects_map'" :style="sectionStyles[key]" :settings="data.settings" />
-      </template>
+      <router-view />
     </main>
-    <FooterSection :settings="data.settings" />
+    <FooterSection :settings="site.settings" />
 
     <!-- Плавающая кнопка WhatsApp -->
     <a :href="waUrl" target="_blank" rel="noopener" class="wa-fab" aria-label="WhatsApp">
@@ -24,72 +14,28 @@
 </template>
 
 <script setup>
-import { reactive, computed, onMounted } from 'vue'
+import { computed, onMounted, nextTick } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import NavHeader      from './sections/NavHeader.vue'
-import HeroSection    from './sections/HeroSection.vue'
-import AboutSection   from './sections/AboutSection.vue'
-import StatsSection   from './sections/StatsSection.vue'
-import ServicesSection from './sections/ServicesSection.vue'
-import PortfolioSection from './sections/PortfolioSection.vue'
-import PricingSection  from './sections/PricingSection.vue'
-import ReviewsSection  from './sections/ReviewsSection.vue'
-import ContactsSection from './sections/ContactsSection.vue'
-import ObjectsMapSection from './sections/ObjectsMapSection.vue'
 import FooterSection   from './sections/FooterSection.vue'
 import { whatsappUrl } from './contact.js'
-import { applyAnalytics } from './analytics.js'
-import { applyTheme, applyCachedTheme, cacheTheme, allSectionStyles } from './theme.js'
+import { site, homeSectionKeys, loadSite } from './store.js'
+import { rememberHomeTitle, setPageTitle } from './router.js'
+import { scheduleReveal } from './reveal.js'
 
-const cachedStyle = applyCachedTheme()
+const route = useRoute()
+const router = useRouter()
+const waUrl = computed(() => whatsappUrl(site.settings))
 
-const DEFAULT_SECTIONS = ['hero', 'about', 'stats', 'services', 'portfolio', 'pricing', 'reviews', 'contacts', 'objects_map']
-
-const data = reactive({
-  settings: cachedStyle,
-  sections: [],
-  team: [],
-  stats: [],
-  services: [],
-  pricing: [],
-  reviews: [],
-  portfolio: [],
-})
-
-const waUrl = computed(() => whatsappUrl(data.settings))
-
-// Порядок и видимость секций задаются в админке (вкладка «Секции меню»)
-// Свои шрифты, цвета и размеры отдельных блоков (вкладка «Стиль» → блок)
-const sectionStyles = computed(() => allSectionStyles(data.settings))
-
-const sectionKeys = computed(() => {
-  if (!data.sections.length) return DEFAULT_SECTIONS
-  return data.sections.filter(s => s.is_visible && DEFAULT_SECTIONS.includes(s.key)).map(s => s.key)
-})
-
-async function loadSiteData() {
-  try {
-    const res = await fetch('/api/v1/site/public')
-    if (!res.ok) return
-    const json = await res.json()
-    Object.assign(data, json)
-    applyTheme(json.settings)
-    cacheTheme(json.settings)
-    applyAnalytics(json.analytics)
-  } catch (e) {
-    console.warn('Не удалось загрузить данные сайта:', e)
-  }
-}
-
-function initReveal() {
-  const io = new IntersectionObserver((entries) => {
-    entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); io.unobserve(e.target) } })
-  }, { threshold: 0.1 })
-  document.querySelectorAll('.reveal').forEach(el => io.observe(el))
-}
+// Блоки новой страницы появляются плавно так же, как блоки главной
+router.afterEach(() => nextTick(() => scheduleReveal()))
 
 onMounted(async () => {
-  await loadSiteData()
-  setTimeout(initReveal, 100)
+  await loadSite()
+  // Заголовок из настроек SEO относится к главной; у внутренних страниц он свой
+  rememberHomeTitle()
+  setPageTitle(route.meta.title)
+  scheduleReveal()
 })
 </script>
 
