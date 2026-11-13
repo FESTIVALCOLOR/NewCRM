@@ -80,7 +80,11 @@ async def startup_event():
 
 
 async def _map_sync_loop():
-    """Раз в шесть часов ищет координаты для новых и изменённых адресов договоров."""
+    """Каждые 15 минут ищет координаты для новых и изменённых адресов.
+
+    Если искать нечего, запуск занимает доли секунды; если поиск прервался из-за сбоя сети,
+    он продолжится не позже чем через 15 минут, а не через несколько часов.
+    """
     from services.site_map_service import sync_map_points
 
     await asyncio.sleep(30)
@@ -89,7 +93,7 @@ async def _map_sync_loop():
             await asyncio.to_thread(sync_map_points)
         except Exception as exc:
             logger.warning(f"Карта объектов: ошибка фоновой синхронизации: {exc}")
-        await asyncio.sleep(6 * 3600)
+        await asyncio.sleep(15 * 60)
 
 
 @app.get("/health")

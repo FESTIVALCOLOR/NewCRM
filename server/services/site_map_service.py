@@ -23,6 +23,8 @@ logger = logging.getLogger(__name__)
 MAP_SECTION_KEY = "objects_map"
 # Ненайденный адрес проверяется заново раз в неделю: данные геокодера пополняются
 RETRY_NOT_FOUND_AFTER = timedelta(days=7)
+# Подряд столько адресов не удалось проверить из-за сети — геокодер, видимо, недоступен: прекращаем до следующего запуска
+MAX_NETWORK_FAILURES = 5
 
 _sync_lock = threading.Lock()
 _state: dict = {"running": False, "last_sync": None, "last_error": None}
@@ -78,6 +80,7 @@ def sync_map_points() -> bool:
         jobs = [(contract.id, None, contract.address, contract.city) for contract in contracts]
         jobs += [(None, extra, extra.address, extra.city) for extra in db.query(SiteMapExtraObject).order_by(SiteMapExtraObject.id).all()]
         centers: dict = {}
+        failures = 0
         for contract_id, extra, address, raw_city in jobs:
             now = datetime.utcnow()
             current_hash = address_hash(address, raw_city)
@@ -90,10 +93,15 @@ def sync_map_points() -> bool:
                     centers[city] = resolve_city_center(city)
                 found = geocode_address(address, city, centers[city])
             except Exception as exc:
-                # Сбой сети — не «адрес не найден»: точку не трогаем, попробуем при следующем запуске
-                _state["last_error"] = f"Геокодер недоступен: {type(exc).__name__}"
-                logger.warning("Карта объектов: сбой геокодера: %s", type(exc).__name__)
-                break
+                # Сбой сети — не «адрес не найден»: точку не трогаем, адрес проверим при следующем запуске.
+                # Один сбой не останавливает обновление — остальные адреса ищутся дальше
+                failures += 1
+                logger.warning("Карта объектов: сбой геокодера (%s подряд): %s", failures, type(exc).__name__)
+                if failures >= MAX_NETWORK_FAILURES:
+                    _state["last_error"] = f"Геокодер недоступен ({type(exc).__name__}) — поиск продолжится автоматически через несколько минут"
+                    break
+                continue
+            failures = 0
             if point is None:
                 point = SiteMapPoint(contract_id=contract_id)
                 db.add(point)

@@ -28,8 +28,15 @@ NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 PHOTON_URL = "https://photon.komoot.io/api/"
 # Сервисы требуют, чтобы клиент представлялся; название намеренно обезличенное
 GEOCODER_HEADERS = {"User-Agent": "site-objects-map/1.0", "Accept-Language": "ru"}
-# Правила сервисов: не чаще одного запроса в секунду
+# Nominatim по своим правилам принимает не больше одного запроса в секунду
 GEOCODER_PAUSE = 1.1
+# Photon жёсткого ограничения не задаёт и просит лишь не перегружать сервис — короткой паузы достаточно
+PHOTON_PAUSE = 0.35
+# Сбой сети на одном запросе не должен останавливать поиск: запрос повторяется после паузы
+RETRY_ATTEMPTS = 3
+RETRY_PAUSE = 3.0
+# Сколько быстрых запросов к нестрогому геокодеру делается до строгого
+QUICK_QUERIES = 2
 
 # Коды городов из справочника CRM: название и центр города
 CITIES = {
@@ -237,6 +244,28 @@ def city_viewbox(lat: float, lon: float, size: tuple[float, float] = NEAR_BOX) -
     return lon - d_lon, lat - d_lat, lon + d_lon, lat + d_lat
 
 
+def _get_json(url: str, params: dict, pause: float):
+    """Запрос к геокодеру с повтором при сбое сети или перегрузке сервиса. После запроса — пауза по правилам сервиса."""
+    for attempt in range(1, RETRY_ATTEMPTS + 1):
+        try:
+            response = requests.get(url, params=params, headers=GEOCODER_HEADERS, timeout=15)
+            # 429 и 5xx — сервис временно перегружен, адрес тут ни при чём
+            if response.status_code == 429 or response.status_code >= 500:
+                response.raise_for_status()
+            response.raise_for_status()
+            return response.json()
+        except (requests.ConnectionError, requests.Timeout, requests.HTTPError) as exc:
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+            retryable = status is None or status == 429 or status >= 500
+            if not retryable or attempt == RETRY_ATTEMPTS:
+                raise
+            logger.info("Геокодер: повтор запроса после сбоя (%s), попытка %s", type(exc).__name__, attempt + 1)
+            time.sleep(RETRY_PAUSE * attempt)
+        finally:
+            time.sleep(pause)
+    return None
+
+
 def nominatim_search(query: str, box: Optional[tuple[float, float, float, float]] = None) -> Optional[dict]:
     """Строгий геокодер: находит адрес, только если распознал каждое слово запроса."""
     params: dict = {"q": query, "format": "jsonv2", "limit": 1, "countrycodes": "ru"}
@@ -244,12 +273,7 @@ def nominatim_search(query: str, box: Optional[tuple[float, float, float, float]
         west, south, east, north = box
         params["viewbox"] = f"{west},{north},{east},{south}"
         params["bounded"] = 1
-    try:
-        response = requests.get(NOMINATIM_URL, params=params, headers=GEOCODER_HEADERS, timeout=15)
-        response.raise_for_status()
-        results = response.json()
-    finally:
-        time.sleep(GEOCODER_PAUSE)
+    results = _get_json(NOMINATIM_URL, params, GEOCODER_PAUSE)
     return results[0] if results else None
 
 
@@ -257,13 +281,8 @@ def photon_search(query: str, box: tuple[float, float, float, float]) -> list[di
     """Нестрогий геокодер: возвращает похожие адреса, даже если часть слов не совпала."""
     west, south, east, north = box
     params = {"q": query, "limit": 5, "bbox": f"{west},{south},{east},{north}", "lat": (south + north) / 2, "lon": (west + east) / 2}
-    try:
-        response = requests.get(PHOTON_URL, params=params, headers=GEOCODER_HEADERS, timeout=15)
-        response.raise_for_status()
-        features = response.json().get("features", [])
-    finally:
-        time.sleep(GEOCODER_PAUSE)
-    return features
+    data = _get_json(PHOTON_URL, params, PHOTON_PAUSE)
+    return (data or {}).get("features", [])
 
 
 StrictSearch = Callable[[str, Optional[tuple[float, float, float, float]]], Optional[dict]]
@@ -342,7 +361,27 @@ def _search(
     tokens: list[str],
     house: Optional[str],
 ) -> Optional[GeoResult]:
-    """Поиск в одной области: сначала строгим геокодером, затем нестрогим."""
+    """Поиск в одной области.
+
+    Сначала один быстрый запрос к нестрогому геокодеру: если он нашёл именно этот дом на этой улице,
+    ответ проверен и дальше искать незачем. Иначе — строгий геокодер (не чаще раза в секунду),
+    и только потом остальные запросы к нестрогому.
+    """
+    answers: dict[str, list[dict]] = {}
+
+    def ask_fuzzy(query: Query) -> Optional[GeoResult]:
+        if query.text not in answers:
+            answers[query.text] = fuzzy(query.text, box)
+        return _pick_fuzzy(answers[query.text], tokens, house if query.with_house else None)
+
+    can_fuzzy = fuzzy is not None and bool(tokens)
+    if can_fuzzy and house:
+        # Сначала вариант без корпуса: «13к1» нестрогий геокодер часто не узнаёт, а номер дома сверяется и так
+        for query in sorted((q for q in queries if q.with_house), key=lambda q: len(q.text))[:QUICK_QUERIES]:
+            quick = ask_fuzzy(query)
+            if quick and quick.precision == "house":
+                return quick
+
     street_level: Optional[GeoResult] = None
     for query in queries:
         found = strict(query.text, box)
@@ -355,10 +394,10 @@ def _search(
             street_level = GeoResult(float(found["lat"]), float(found["lon"]), "street")
     # Точки на карте всё равно сдвигаются на десятки метров, поэтому улицы достаточно.
     # Без названия улицы ответ нестрогого геокодера нечем проверить — его не спрашиваем.
-    if street_level is not None or fuzzy is None or not tokens:
+    if street_level is not None or not can_fuzzy:
         return street_level
     for query in queries:
-        picked = _pick_fuzzy(fuzzy(query.text, box), tokens, house if query.with_house else None)
+        picked = ask_fuzzy(query)
         if picked:
             return picked
     return None

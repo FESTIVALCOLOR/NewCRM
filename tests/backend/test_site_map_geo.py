@@ -135,11 +135,31 @@ class TestGeocodeAddress:
         result = geo.geocode_address("ул. Ленина 5", "МСК", MOSCOW, strict=lambda q, b: {"lat": "55.7", "lon": "37.6", "place_rank": 16}, fuzzy=None)
         assert result is None
 
-    def test_street_level_is_enough_without_fuzzy_call(self):
+    def test_street_level_is_enough_after_quick_fuzzy_calls(self):
         fuzzy_calls = []
         result = geo.geocode_address("ул. Ленина 5", "МСК", MOSCOW, strict=lambda q, b: street(), fuzzy=lambda q, b: fuzzy_calls.append(q) or [])
         assert result.precision == "street"
-        assert fuzzy_calls == []
+        # Быстрых запросов не больше двух, сначала самый короткий вариант адреса
+        assert fuzzy_calls == ["улица Ленина 5", "улица Ленина 5, Москва"]
+
+    def test_quick_fuzzy_house_match_skips_slow_strict_geocoder(self):
+        # Строгий геокодер разрешает только запрос в секунду — если нестрогий нашёл тот же дом, его не спрашиваем
+        strict_calls = []
+        feature = photon_feature("house", street_name="улица Ленина", housenumber="5")
+        result = geo.geocode_address("ул. Ленина 5", "МСК", MOSCOW, strict=lambda q, b: strict_calls.append(q), fuzzy=lambda q, b: [feature])
+        assert (result.lat, result.lon, result.precision) == (55.9, 37.5, "house")
+        assert strict_calls == []
+
+    def test_quick_fuzzy_answer_is_not_requested_twice(self):
+        fuzzy_calls = []
+
+        def fuzzy(query, box):
+            fuzzy_calls.append(query)
+            return [photon_feature("house", street_name="улица Ленина", housenumber="17")]
+
+        result = geo.geocode_address("ул. Ленина 5", "МСК", MOSCOW, strict=lambda q, b: None, fuzzy=fuzzy)
+        assert result.precision == "street"
+        assert len(fuzzy_calls) == len(set(fuzzy_calls))
 
     def test_fuzzy_used_when_strict_finds_nothing(self):
         feature = photon_feature("house", street_name="улица Ленина", housenumber="5 к1")
@@ -217,3 +237,50 @@ class TestPrivacy:
         base = geo.address_hash("ул. Ленина 5", "МСК")
         monkeypatch.setattr(geo, "ALGORITHM_VERSION", "next")
         assert base != geo.address_hash("ул. Ленина 5", "МСК")
+
+
+@pytest.mark.backend
+class TestNetworkFailures:
+    class _Response:
+        def __init__(self, status, data=None):
+            self.status_code = status
+            self._data = data
+
+        def json(self):
+            return self._data
+
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                error = geo.requests.HTTPError(f"HTTP {self.status_code}")
+                error.response = self
+                raise error
+
+    @pytest.fixture(autouse=True)
+    def _no_sleep(self, monkeypatch):
+        monkeypatch.setattr(geo.time, "sleep", lambda seconds: None)
+
+    def test_timeout_is_retried(self, monkeypatch):
+        answers = [geo.requests.Timeout("read timeout"), self._Response(200, [house()])]
+
+        def fake_get(*args, **kwargs):
+            answer = answers.pop(0)
+            if isinstance(answer, Exception):
+                raise answer
+            return answer
+
+        monkeypatch.setattr(geo.requests, "get", fake_get)
+        assert geo.nominatim_search("улица Ленина 5", None)["place_rank"] == 30
+
+    def test_overloaded_service_is_retried_then_gives_up(self, monkeypatch):
+        calls = []
+        monkeypatch.setattr(geo.requests, "get", lambda *a, **k: calls.append(1) or self._Response(503))
+        with pytest.raises(geo.requests.HTTPError):
+            geo.photon_search("улица Ленина 5", geo.city_viewbox(*MOSCOW))
+        assert len(calls) == geo.RETRY_ATTEMPTS
+
+    def test_client_error_is_not_retried(self, monkeypatch):
+        calls = []
+        monkeypatch.setattr(geo.requests, "get", lambda *a, **k: calls.append(1) or self._Response(400))
+        with pytest.raises(geo.requests.HTTPError):
+            geo.nominatim_search("улица Ленина 5", None)
+        assert len(calls) == 1
