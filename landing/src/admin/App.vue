@@ -672,6 +672,7 @@
       <!-- ── Индивидуальный и готовый дизайн ── -->
       <IndividualTab v-if="currentTab === 'individual'" :toast="toast" />
       <ReadyTab v-if="currentTab === 'ready'" :toast="toast" />
+      <ExampleTab v-if="currentTab === 'example'" :toast="toast" />
 
       <!-- ── Аналитика / SEO ── -->
       <section v-if="currentTab === 'analytics'" class="tab-body">
@@ -776,6 +777,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import IndividualTab from './IndividualTab.vue'
 import { missingFor } from '../contact.js'
 import ReadyTab from './ReadyTab.vue'
+import ExampleTab from './ExampleTab.vue'
 import * as api from './api.js'
 import { SERVICE_ICONS, serviceIconPath } from '../serviceIcons.js'
 import {
@@ -810,6 +812,7 @@ const tabs = [
   { id: 'style',     icon: '✎',  label: 'Стиль' },
   { id: 'sections',  icon: '☰',  label: 'Секции меню' },
   { id: 'services',  icon: '◈',  label: 'Услуги' },
+  { id: 'example',   icon: '▤',  label: 'Пример проекта' },
   { id: 'individual', icon: '✦', label: 'Индивидуальный дизайн' },
   { id: 'pricing',   icon: '₽',  label: '↳ Цены' },
   { id: 'portfolio', icon: '◉',  label: '↳ Портфолио' },
@@ -960,6 +963,7 @@ const sectionLabels = {
   about: 'О нас',
   services: 'Услуги',
   stats: 'Цифры',
+  project_example: 'Пример проекта',
   directions: 'Направления',
   portfolio: 'Портфолио',
   pricing: 'Цены',
@@ -968,6 +972,7 @@ const sectionLabels = {
   objects_map: 'Карта объектов',
 }
 const sectionsWithoutMenu = {
+  project_example: 'Кнопка «Посмотреть пример проекта» и книга из PDF. Файл загружается во вкладке «Пример проекта»; пока его нет, блок не показывается',
   directions: 'Две карточки на главной: «Индивидуальный дизайн» и «Готовый дизайн». В меню на этом месте стоят ссылки на обе страницы',
   portfolio: 'Блок страницы «Индивидуальный дизайн» (на главной не показывается, порядок на него не влияет)',
   pricing: 'Блок страницы «Индивидуальный дизайн» (на главной не показывается, порядок на него не влияет)',

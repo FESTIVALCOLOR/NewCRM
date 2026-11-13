@@ -4,7 +4,7 @@ import { applyAnalytics } from './analytics.js'
 import { applyTheme, applyCachedTheme, cacheTheme, allSectionStyles } from './theme.js'
 
 // Секции главной страницы. Портфолио и цены живут на странице «Индивидуальный дизайн»
-export const HOME_SECTIONS = ['hero', 'about', 'stats', 'services', 'directions', 'reviews', 'contacts', 'objects_map']
+export const HOME_SECTIONS = ['hero', 'about', 'stats', 'services', 'project_example', 'directions', 'reviews', 'contacts', 'objects_map']
 
 export const site = reactive({
   settings: applyCachedTheme(),

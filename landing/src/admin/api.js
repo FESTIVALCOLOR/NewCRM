@@ -130,6 +130,30 @@ export const ready = {
   productPreview: (url) => req('POST', '/site/admin/ready-designs/product-preview', { url }),
 }
 
+// ── Пример проекта (книга из PDF) ───────────
+export const example = {
+  get: () => req('GET', '/site/admin/example-project'),
+  delete: () => req('DELETE', '/site/admin/example-project'),
+  // Большой PDF отправляется долго — через XMLHttpRequest, чтобы показывать ход отправки
+  upload: (file, onProgress) => new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', `${BASE}/site/admin/example-project`)
+    xhr.setRequestHeader('Authorization', `Bearer ${token()}`)
+    xhr.upload.onprogress = (event) => { if (event.lengthComputable) onProgress?.(Math.round((event.loaded / event.total) * 100)) }
+    xhr.onload = () => {
+      let data = {}
+      try { data = JSON.parse(xhr.responseText || '{}') } catch { /* ответ не JSON */ }
+      if (xhr.status === 401) { logout(); reject(new Error('401')); return }
+      if (xhr.status >= 200 && xhr.status < 300) resolve(data)
+      else reject(new Error(data.detail || `HTTP ${xhr.status}`))
+    }
+    xhr.onerror = () => reject(new Error('Не удалось отправить файл — проверьте соединение'))
+    const fd = new FormData()
+    fd.append('file', file)
+    xhr.send(fd)
+  }),
+}
+
 // ── Карта объектов ──────────────────────────
 export const map = {
   status: () => req('GET', '/site/admin/map/status'),
