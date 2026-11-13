@@ -125,8 +125,10 @@ class TestSiteObjectsMap:
         assert set(data) == {"points", "cities", "total"}
         assert data["total"] == len(data["points"])
         for point in data["points"]:
-            assert set(point) == {"lat", "lon", "kind", "city"}
+            # Подпись (адрес без квартиры) — по настройке; номера договоров и имена не передаются никогда
+            assert {"lat", "lon", "kind", "city"} <= set(point) <= {"lat", "lon", "kind", "city", "label"}
             assert point["kind"] in {"done", "work", "supervision"}
+            assert "кв" not in point.get("label", "").lower().split()
 
     def test_status_requires_site_admin(self, api_base, admin_headers, role_tokens):
         assert api_get(api_base, f"{BASE}/map/status", {}).status_code == 401

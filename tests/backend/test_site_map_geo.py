@@ -284,3 +284,78 @@ class TestNetworkFailures:
         with pytest.raises(geo.requests.HTTPError):
             geo.nominatim_search("улица Ленина 5", None)
         assert len(calls) == 1
+
+
+@pytest.mark.backend
+class TestPointLabel:
+    """Подпись на сайте строится из адреса картографической базы, а не из текста CRM."""
+
+    def test_strict_geocoder_address_parts(self):
+        found = {**house(), "address": {"house_number": "18 к3", "road": "Екатерининская улица", "town": "Мурино", "state": "Ленинградская область"}}
+        result = geo.geocode_address("Мурино, ул. Екатерининская, 18к3кв447", "СПБ", MOSCOW, strict=lambda q, b: found, fuzzy=None)
+        assert (result.place, result.street, result.house) == ("Мурино", "Екатерининская улица", "18 к3")
+        assert geo.point_label(result.place, result.street, result.house, "house") == "Мурино, Екатерининская улица, 18 к3"
+        assert geo.point_label(result.place, result.street, result.house, "street") == "Мурино, Екатерининская улица"
+
+    def test_street_level_result_has_no_house_number(self):
+        found = {**street(), "address": {"road": "улица Ленина", "city": "Москва", "house_number": "7"}}
+        result = geo.geocode_address("ул. Ленина 5", "МСК", MOSCOW, strict=lambda q, b: found, fuzzy=None)
+        assert result.house == ""
+        assert geo.point_label(result.place, result.street, result.house, "house") == "Москва, улица Ленина"
+
+    def test_fuzzy_geocoder_address_parts(self):
+        feature = photon_feature("house", street_name="улица Ленина", housenumber="5 к1")
+        feature["properties"]["city"] = "Москва"
+        result = geo.geocode_address("ул. Ленина 5", "МСК", MOSCOW, strict=lambda q, b: None, fuzzy=lambda q, b: [feature])
+        assert (result.place, result.street, result.house) == ("Москва", "улица Ленина", "5 к1")
+
+    def test_other_house_on_street_gives_street_only(self):
+        feature = photon_feature("house", street_name="улица Ленина", housenumber="17")
+        result = geo.geocode_address("ул. Ленина 5", "МСК", MOSCOW, strict=lambda q, b: None, fuzzy=lambda q, b: [feature])
+        assert (result.street, result.house) == ("улица Ленина", "")
+
+    def test_modes_and_missing_street(self):
+        assert geo.point_label("Москва", "улица Ленина", "5", "none") == ""
+        assert geo.point_label("Москва", "", "5", "house") == ""
+        assert geo.point_label("", "улица Ленина", "5", "house") == "улица Ленина, 5"
+        assert geo.point_label("Москва", "улица Ленина", "5", "unknown") == ""
+
+
+@pytest.mark.backend
+class TestGluedApartment:
+    """Квартира без пробела после номера дома не должна уходить геокодеру."""
+
+    @pytest.mark.parametrize(
+        "address",
+        [
+            "Мурино,ул. Екатерининская, 18к3кв447,",
+            "Белоостровская улица, 10кв447",
+            "ул.Бутлерова д.9к.2кв.447",
+            "Вазаский пер. 3 кв447",
+            "СПБ Энгельса 63.к2.кв447",
+            "Дунайский пр. д.53,к2 кв447",
+            "Кокколевская 14к1 кв447",
+            "Ленсовета, 62к1, кв447,",
+        ],
+    )
+    def test_apartment_is_removed(self, address):
+        for query in geo.build_queries(address, "СПБ"):
+            assert "447" not in query.text
+
+    @pytest.mark.parametrize(
+        "address, full",
+        [
+            ("Мурино, Петровский бульвар 2 к1, 415", "Мурино, Петровский бульвар 2 к1"),
+            ("Коммунарка, ул Эдварда Грига, д 7, 267,", "Коммунарка, улица Эдварда Грига 7"),
+            ("Двинская улица, 8 кв.80, 49м2,", "Двинская улица 8"),
+            ("Ильменский проезд, 14к3 кв 1403 14 эт", "Ильменский проезд 14 к3"),
+            ("Чирикова 5 (Никита), 3", "Чирикова 5"),
+        ],
+    )
+    def test_second_number_after_house_is_dropped(self, address, full):
+        # Квартира, этаж или площадь, записанные числом после дома, в поиск не уходят
+        assert geo.clean_address(address)[0] == full
+
+    def test_house_and_building_survive(self):
+        assert geo.clean_address("Мурино,ул. Екатерининская, 18к3кв447,")[0] == "Мурино, улица Екатерининская 18 к3"
+        assert geo.clean_address("Белоостровская улица, 10кв826")[0] == "Белоостровская улица 10"

@@ -1729,6 +1729,10 @@ class SiteMapPoint(Base):
     status = Column(String(20), nullable=False, default="ok")  # 'ok' | 'not_found'
     hidden = Column(Boolean, nullable=False, default=False)  # скрыт с карты вручную в панели управления
     geocoded_at = Column(DateTime, default=datetime.utcnow)
+    # Адрес найденного места по данным картографической базы (без квартир) — подпись на сайте
+    place = Column(String(120))
+    street = Column(String(200))
+    house = Column(String(30))
 
 
 class SiteMapExtraObject(Base):
@@ -1746,6 +1750,9 @@ class SiteMapExtraObject(Base):
     hidden = Column(Boolean, nullable=False, default=False)
     geocoded_at = Column(DateTime)
     created_at = Column(DateTime, default=datetime.utcnow)
+    place = Column(String(120))
+    street = Column(String(200))
+    house = Column(String(30))
 
 
 class ReadyDesign(Base):

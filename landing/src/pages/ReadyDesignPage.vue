@@ -230,16 +230,18 @@ onBeforeUnmount(() => {
 .design { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 400px); gap: 36px; align-items: start; }
 .design__gallery { min-width: 0; }
 /* Сцена: постоянная высота, фото по центру. Подсказки товаров могут выходить за край фото, поэтому обрезается только фон */
-.stage { position: relative; height: clamp(340px, 68vh, 620px); display: flex; align-items: center; justify-content: center; border-radius: 12px; background: #2a2a2a; touch-action: pan-y; }
+.stage { position: relative; height: clamp(340px, 68vh, 620px); display: flex; align-items: center; justify-content: center; border-radius: 12px; background: #f4f4f4; touch-action: pan-y; }
 .stage--empty { background: #ececec; color: var(--text-light); }
 .stage__bg { position: absolute; inset: 0; display: flex; overflow: hidden; border-radius: 12px; }
-.stage__bg span { flex: 1; background: center / cover no-repeat; filter: blur(26px) brightness(0.85) saturate(1.1); transform: scale(1.25); }
+.stage__bg span { flex: 1; background: center / cover no-repeat; filter: blur(26px) brightness(1.08) saturate(0.95); transform: scale(1.25); }
+/* Светлая вуаль поверх размытых соседних фото: фон остаётся живым, но не спорит с самим фото */
+.stage__bg::after { content: ''; position: absolute; inset: 0; background: rgba(255, 255, 255, 0.45); }
 .stage__bg span:first-child { background-position: right center; }
 .stage__bg span:last-child { background-position: left center; }
 .stage__count { position: absolute; right: 12px; bottom: 12px; z-index: 2; background: rgba(0, 0, 0, 0.5); color: #fff; font-size: 0.78rem; line-height: 1; padding: 5px 10px; border-radius: 12px; pointer-events: none; }
 .photo { position: relative; line-height: 0; visibility: hidden; }
 .photo--ready { visibility: visible; }
-.photo > img { width: 100%; height: 100%; display: block; border-radius: 4px; box-shadow: 0 6px 30px rgba(0, 0, 0, 0.25); }
+.photo > img { width: 100%; height: 100%; display: block; border-radius: 4px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.14); }
 
 .marker {
   position: absolute; width: 28px; height: 28px; margin: -14px 0 0 -14px; border-radius: 50%; cursor: pointer; z-index: 2;

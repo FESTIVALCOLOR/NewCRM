@@ -53,7 +53,7 @@ NEAR_BOX = (0.5, 0.9)  # градусы широты и долготы в каж
 FAR_BOX = (1.3, 2.2)
 
 # Меняется при изменении правил поиска: входит в отпечаток адреса, поэтому все точки пересчитываются
-ALGORITHM_VERSION = "2"
+ALGORITHM_VERSION = "3"
 
 # Ранг результата Nominatim: 30 — дом, 26–27 — улица, меньше — район или город (слишком грубо)
 RANK_HOUSE = 28
@@ -62,10 +62,12 @@ RANK_STREET = 26
 _PAREN_RE = re.compile(r"\([^)]*\)?|[«»\"]")
 _POSTCODE_RE = re.compile(r"\b\d{6}\b")
 _UNIT_RE = re.compile(
-    r"[,;]?\s*\b(?:квартира|кв|офис|оф|помещение|пом|апартаменты|апарт|ап|подъезд|этаж|эт|секция|комната|комн)\b(?!-)\.?\s*№?\s*[\w/-]*",
+    r"[,;]?\s*\b(?:квартира|кв|офис|оф|помещение|пом|апартаменты|апарт|ап|подъезд|этаж|эт|секция|комната|комн)(?=\.|\s|№|\d|$)(?!-)\.?\s*№?\s*[\w/-]*",
     re.IGNORECASE,
 )
-_FLOOR_RE = re.compile(r"[,;]?\s*\b\d+\s*(?:-?(?:й|ый|ой|ий)\s+)?этаж\w*", re.IGNORECASE)
+# Квартира или офис, приписанные к номеру дома без пробела: «18к3кв447», «10кв826», «д.9к.2кв.660»
+_GLUED_UNIT_RE = re.compile(r"(?<=[\d.,)])\s*(?=(?:квартира|кв|офис|оф|пом)\.?\s*№?\s*\d)", re.IGNORECASE)
+_FLOOR_RE = re.compile(r"[,;]?\s*\b\d+\s*(?:-?(?:й|ый|ой|ий)\s+)?(?:этаж\w*|эт\b\.?)", re.IGNORECASE)
 _LITER_RE = re.compile(r"[,;]?\s*\bлит(?:ера|ер)?\b\.?\s*[А-ЯЁа-яё]?(?![\wа-яё])", re.IGNORECASE)
 # Обозначения дома, корпуса и строения бывают написаны слитно с номером: «д9», «корп.2», «ст1»
 _HOUSE_WORD_RE = re.compile(r"\b(?:дом|д)\.?\s*(?=\d)", re.IGNORECASE)
@@ -96,6 +98,8 @@ _HOUSE_PART_RE = re.compile(r"^\d+[\w/-]*(?:\s+[кс]\d+\w*)*$", re.IGNORECASE)
 # Служебное слово, оставшееся без номера после очистки («дом» от «дом 2 этажа»)
 _ORPHAN_WORD_RE = re.compile(r"^(?:дом|д|корпус|корп|к|строение|стр|с|владение|вл)\.?$", re.IGNORECASE)
 _CORPUS_PART_RE = re.compile(r"^[кс]\d+\w*$", re.IGNORECASE)
+# Часть адреса уже заканчивается номером дома (с корпусом или строением)
+_ENDS_WITH_HOUSE_RE = re.compile(r"\s\d[\w/-]*(?:\s+[кс]\d+\w*)*$", re.IGNORECASE)
 _TRAILING_CORPUS_RE = re.compile(r"(\d[\w/-]*?)(?:\s+[кс]\d+\w*)+", re.IGNORECASE)
 _FRACTION_RE = re.compile(r"\b(\d+[а-яё]?)/\d+\w*", re.IGNORECASE)
 _TRAILING_HOUSE_RE = re.compile(r"\s+\d+[\w/-]*(?:\s+[кс]\d+\w*)*\s*$", re.IGNORECASE)
@@ -106,6 +110,10 @@ class GeoResult:
     lat: float
     lon: float
     precision: str  # 'house' или 'street'
+    # Адрес найденного места по данным картографической базы — из него строится подпись на сайте
+    place: str = ""
+    street: str = ""
+    house: str = ""  # только если найден именно этот дом
 
 
 @dataclass(frozen=True)
@@ -158,6 +166,7 @@ def _normalize_parts(address: str) -> list[str]:
     text = _POSTCODE_RE.sub(" ", text)
     # «12 этаж» убирается раньше общего правила, иначе от него останется число
     text = _FLOOR_RE.sub("", text)
+    text = _GLUED_UNIT_RE.sub(" ", text)
     text = _UNIT_RE.sub("", text)
     text = _LITER_RE.sub("", text)
     text = _HOUSE_WORD_RE.sub("", text)
@@ -177,6 +186,9 @@ def _normalize_parts(address: str) -> list[str]:
             continue
         # Номер дома и корпус, записанные через запятую, приклеиваются к улице: «улица Ларина 5 к2»
         if parts and (_HOUSE_PART_RE.match(part) or _CORPUS_PART_RE.match(part)):
+            # Второе число после номера дома — квартира («2 к1, 415») или площадь («49м2»), не дом: в поиск не идёт
+            if _HOUSE_PART_RE.match(part) and _ENDS_WITH_HOUSE_RE.search(parts[-1]):
+                continue
             parts[-1] = f"{parts[-1]} {part}"
         else:
             parts.append(part)
@@ -268,7 +280,7 @@ def _get_json(url: str, params: dict, pause: float):
 
 def nominatim_search(query: str, box: Optional[tuple[float, float, float, float]] = None) -> Optional[dict]:
     """Строгий геокодер: находит адрес, только если распознал каждое слово запроса."""
-    params: dict = {"q": query, "format": "jsonv2", "limit": 1, "countrycodes": "ru"}
+    params: dict = {"q": query, "format": "jsonv2", "limit": 1, "countrycodes": "ru", "addressdetails": 1}
     if box:
         west, south, east, north = box
         params["viewbox"] = f"{west},{north},{east},{south}"
@@ -304,6 +316,18 @@ def resolve_city_center(city_code: Optional[str], search: StrictSearch = nominat
     return None
 
 
+def _clip(value, limit: int) -> str:
+    return str(value or "").strip()[:limit]
+
+
+def _strict_result(found: dict, precision: str) -> GeoResult:
+    address = found.get("address") or {}
+    place = next((address[key] for key in _PLACE_KEYS if address.get(key)), "")
+    street = next((address[key] for key in _STREET_KEYS if address.get(key)), "")
+    house = address.get("house_number", "") if precision == "house" else ""
+    return GeoResult(float(found["lat"]), float(found["lon"]), precision, _clip(place, 120), _clip(street, 200), _clip(house, 30))
+
+
 def _pick_fuzzy(features: list[dict], tokens: list[str], house: Optional[str]) -> Optional[GeoResult]:
     """Из ответа нестрогого геокодера берётся только дом или улица с совпадающим названием."""
     for feature in features:
@@ -318,7 +342,15 @@ def _pick_fuzzy(features: list[dict], tokens: list[str], house: Optional[str]) -
         # Дом засчитывается, только если совпал номер; иначе это просто точка на нужной улице
         found_number = re.match(r"\d+", str(props.get("housenumber") or ""))
         same_house = kind == "house" and house is not None and found_number is not None and found_number.group(0) == house
-        return GeoResult(float(lat), float(lon), "house" if same_house else "street")
+        street = props.get("street") if kind == "house" else props.get("name")
+        return GeoResult(
+            float(lat),
+            float(lon),
+            "house" if same_house else "street",
+            _clip(props.get("city") or props.get("town") or props.get("village") or props.get("locality"), 120),
+            _clip(street, 200),
+            _clip(props.get("housenumber"), 30) if same_house else "",
+        )
     return None
 
 
@@ -389,9 +421,9 @@ def _search(
             continue
         rank = int(found.get("place_rank", 0))
         if rank >= RANK_HOUSE:
-            return GeoResult(float(found["lat"]), float(found["lon"]), "house")
+            return _strict_result(found, "house")
         if rank >= RANK_STREET and street_level is None:
-            street_level = GeoResult(float(found["lat"]), float(found["lon"]), "street")
+            street_level = _strict_result(found, "street")
     # Точки на карте всё равно сдвигаются на десятки метров, поэтому улицы достаточно.
     # Без названия улицы ответ нестрогого геокодера нечем проверить — его не спрашиваем.
     if street_level is not None or not can_fuzzy:
@@ -401,6 +433,24 @@ def _search(
         if picked:
             return picked
     return None
+
+
+# Подпись точки на публичной карте: «house» — улица и дом, «street» — только улица, «none» — без подписи
+ADDRESS_MODES = ("house", "street", "none")
+_PLACE_KEYS = ("city", "town", "village", "hamlet", "municipality")
+_STREET_KEYS = ("road", "pedestrian", "residential", "square", "footway")
+
+
+def point_label(place: Optional[str], street: Optional[str], house: Optional[str], mode: str = "house") -> str:
+    """Подпись точки на сайте из адреса, который вернула картографическая база.
+
+    Подпись не собирается из текста CRM: там бывают квартиры, записанные слитно («18к3кв447»),
+    имена и пометки. В базе OpenStreetMap квартир и имён нет — только населённый пункт, улица и дом.
+    """
+    if mode not in ("house", "street") or not street:
+        return ""
+    street_part = f"{street}, {house}" if mode == "house" and house else street
+    return f"{place}, {street_part}" if place else street_part
 
 
 def address_hash(address: Optional[str], city: Optional[str]) -> str:

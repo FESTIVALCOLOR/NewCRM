@@ -552,7 +552,7 @@
       <section v-if="currentTab === 'map'" class="tab-body">
         <div class="card-info">
           Блок с картой в конце сайта. Объекты берутся из договоров CRM автоматически (все, кроме расторгнутых): новые договоры появляются на карте в течение шести часов или сразу по кнопке «Обновить карту». Объекты, которых в CRM нет, можно догрузить из файла Excel.
-          Адреса клиентов на сайт не передаются: каждая точка сдвинута на 60–150 метров в случайную сторону, а карта не приближается до отдельного дома. Показать, скрыть или переместить блок можно во вкладке «Секции меню».
+          При наведении на кружок показывается подпись — её можно выбрать ниже в «Оформлении блока». Номера договоров, имена клиентов и номера квартир на сайт не передаются никогда. Показать, скрыть или переместить блок можно во вкладке «Секции меню».
         </div>
         <div class="card">
           <h3>Состояние карты</h3>
@@ -632,6 +632,14 @@
             <input type="checkbox" v-model="mf.map_show_counts" true-value="1" false-value="0" />
             Показывать количество объектов рядом с названиями городов
           </label>
+          <label style="margin-top:4px">Подпись при наведении на кружок
+            <select v-model="mf.map_address_mode">
+              <option value="house">Улица и дом (без квартиры) — кружок стоит точно на доме</option>
+              <option value="street">Только улица — кружок сдвинут на 60–150 м</option>
+              <option value="none">Без подписи — кружок сдвинут на 60–150 м</option>
+            </select>
+          </label>
+          <p class="hint" style="margin:6px 0 14px">Адрес берётся из картографической базы (OpenStreetMap), а не из текста договора: квартиры, имена и пометки из CRM на сайт не попадают. Если найдена только улица, номер дома не показывается. У частных домов и коттеджей адрес «улица и дом» указывает на конкретную семью — если клиенты не давали согласия на публикацию, надёжнее вариант «Только улица».</p>
           <p class="hint" style="margin:6px 0 14px">По умолчанию выключено: на карте только объекты из CRM и загруженных файлов, и их число может расходиться с цифрами в блоке «Цифры».</p>
           <div class="form-grid">
             <label v-for="c in mapColors" :key="c.key">Цвет кружков — {{ c.label }}
@@ -1281,7 +1289,7 @@ async function deleteAllMapExtra() {
   if (!confirm(`Удалить все объекты, загруженные из файлов (${mapInfo.extra_total})? Объекты из договоров CRM останутся.`)) return
   try { await api.map.deleteAllExtra(); mapImportResult.value = null; await loadMap(); toast('Загруженные объекты удалены') } catch (e) { toast(e.message, 'error') }
 }
-const mf = reactive({ map_title: '', map_subtitle: '', map_show_counts: '0', map_color_done: '', map_color_work: '', map_color_supervision: '' })
+const mf = reactive({ map_title: '', map_subtitle: '', map_show_counts: '0', map_address_mode: 'house', map_color_done: '', map_color_work: '', map_color_supervision: '' })
 // Цвет сданных проектов по умолчанию совпадает с акцентным цветом сайта и меняется вместе с ним
 const mapColors = [
   { key: 'map_color_done', label: 'сданные проекты', fallback: () => stf.style_accent },
@@ -1298,7 +1306,7 @@ async function saveMapSettings() {
   const bad = mapColors.find(c => !/^#[0-9a-f]{6}$/i.test(mf[c.key]))
   if (bad) { toast(`Цвет «${bad.label}» должен быть в виде #RRGGBB, например #2b6cb0`, 'error'); return }
   try {
-    for (const key of ['map_title', 'map_subtitle', 'map_show_counts']) await api.settings.update(key, mf[key])
+    for (const key of ['map_title', 'map_subtitle', 'map_show_counts', 'map_address_mode']) await api.settings.update(key, mf[key])
     // Незаданный цвет хранится пустым, чтобы он и дальше следовал значению по умолчанию
     for (const c of mapColors) await api.settings.update(c.key, mf[c.key].toLowerCase() === c.fallback().toLowerCase() ? '' : mf[c.key])
     toast('Оформление карты сохранено')

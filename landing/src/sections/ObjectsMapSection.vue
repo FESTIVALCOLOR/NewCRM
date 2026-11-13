@@ -72,9 +72,11 @@ function draw() {
   layer.clearLayers()
   const colors = resolvedColors()
   for (const p of points.value) {
-    L.circleMarker([p.lat, p.lon], {
-      radius: 7, weight: 2, color: '#ffffff', fillColor: colors[p.kind] || colors.work, fillOpacity: 0.92, interactive: false,
+    const marker = L.circleMarker([p.lat, p.lon], {
+      radius: 7, weight: 2, color: '#ffffff', fillColor: colors[p.kind] || colors.work, fillOpacity: 0.92, interactive: Boolean(p.label),
     }).addTo(layer)
+    // Адрес без квартиры — при наведении мышью, на телефоне — по касанию. Текст вставляется как текст, не как разметка
+    if (p.label) marker.bindTooltip(Object.assign(document.createElement('span'), { textContent: p.label }), { direction: 'top', offset: [0, -8], className: 'objects-map__tip' })
   }
 }
 
@@ -158,6 +160,11 @@ onBeforeUnmount(() => {
 /* Монохромной делается только подложка — кружки объектов остаются цветными */
 .objects-map__map :deep(.leaflet-tile-pane) { filter: grayscale(1) contrast(0.9) brightness(1.07); }
 .objects-map__map :deep(.leaflet-container) { font-family: inherit; }
+.objects-map__map :deep(.objects-map__tip) {
+  background: #fff; color: var(--text); border: none; border-radius: 8px; padding: 6px 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18); font-size: calc(0.85rem * var(--ts, 1)); line-height: 1.35; white-space: nowrap;
+}
+.objects-map__map :deep(.objects-map__tip::before) { border-top-color: #fff; }
 @media (max-width: 700px) {
   .objects-map__legend { margin-left: 0; }
   .objects-map__map { height: 420px; }

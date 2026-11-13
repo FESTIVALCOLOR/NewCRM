@@ -11,12 +11,12 @@ import threading
 from typing import Optional
 
 from constants import STATUS_COMPLETED, STATUS_SUPERVISION, STATUS_TERMINATED
-from services.site_map_geo import address_hash, address_key, city_name, geocode_address, privacy_offset, resolve_city_center
+from services.site_map_geo import ADDRESS_MODES, address_hash, address_key, city_name, geocode_address, point_label, privacy_offset, resolve_city_center
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from config import get_settings
-from database import Contract, SessionLocal, SiteMapExtraObject, SiteMapPoint, SiteSection
+from database import Contract, SessionLocal, SiteMapExtraObject, SiteMapPoint, SiteSection, SiteSetting
 
 logger = logging.getLogger(__name__)
 
@@ -109,8 +109,10 @@ def sync_map_points() -> bool:
             point.geocoded_at = now
             if found:
                 point.lat, point.lon, point.precision, point.status = found.lat, found.lon, found.precision, "ok"
+                point.place, point.street, point.house = found.place, found.street, found.house
             else:
                 point.lat, point.lon, point.precision, point.status = None, None, None, "not_found"
+                point.place, point.street, point.house = None, None, None
             db.commit()
         _state["last_sync"] = datetime.utcnow()
         return True
@@ -135,9 +137,37 @@ def start_sync_in_background() -> bool:
     return True
 
 
+ADDRESS_MODE_KEY = "map_address_mode"
+
+
+def address_mode(db: Session) -> str:
+    """Что показывать при наведении на точку; по умолчанию — улицу и дом."""
+    row = db.query(SiteSetting).filter(SiteSetting.key == ADDRESS_MODE_KEY).first()
+    value = (row.value or "").strip() if row else ""
+    return value if value in ADDRESS_MODES else "house"
+
+
 def public_points(db: Session) -> dict:
-    """Точки для публичной карты: без адресов, со сдвигом координат."""
+    """Точки для публичной карты.
+
+    Номера договоров, имена и квартиры на сайт не попадают никогда: подпись строится из адреса,
+    который вернула картографическая база, а не из текста CRM. Подпись — по настройке:
+    улица и дом (тогда точка стоит точно на доме — сдвиг потерял бы смысл), только улица или ничего
+    (тогда точка сдвинута на 60–150 м, чтобы по ней нельзя было найти дом).
+    """
     secret = get_settings().secret_key
+    mode = address_mode(db)
+
+    def place(key, lat, lon):
+        return (round(lat, 5), round(lon, 5)) if mode == "house" else privacy_offset(key, lat, lon, secret)
+
+    def item(lat, lon, kind, name, found):
+        point = {"lat": lat, "lon": lon, "kind": kind, "city": name}
+        label = point_label(found.place, found.street, found.house, mode)
+        if label:
+            point["label"] = label
+        return point
+
     rows = (
         db.query(SiteMapPoint, Contract.status, Contract.city)
         .join(Contract, Contract.id == SiteMapPoint.contract_id)
@@ -149,9 +179,9 @@ def public_points(db: Session) -> dict:
     points = []
     city_counts: dict = {}
     for point, contract_status, city in rows:
-        lat, lon = privacy_offset(point.contract_id, point.lat, point.lon, secret)
+        lat, lon = place(point.contract_id, point.lat, point.lon)
         name = city_name(city) or "Другие города"
-        points.append({"lat": lat, "lon": lon, "kind": point_kind(contract_status), "city": name})
+        points.append(item(lat, lon, point_kind(contract_status), name, point))
         city_counts[name] = city_counts.get(name, 0) + 1
     extras = (
         db.query(SiteMapExtraObject)
@@ -160,10 +190,10 @@ def public_points(db: Session) -> dict:
         .all()
     )
     for extra in extras:
-        # Объекты из файла — выполненные проекты прошлых лет; сдвигаются так же, как объекты договоров
-        lat, lon = privacy_offset(f"extra-{extra.id}", extra.lat, extra.lon, secret)
+        # Объекты из файла — выполненные проекты прошлых лет; правила те же, что у объектов договоров
+        lat, lon = place(f"extra-{extra.id}", extra.lat, extra.lon)
         name = city_name(extra.city) or "Другие города"
-        points.append({"lat": lat, "lon": lon, "kind": "done", "city": name})
+        points.append(item(lat, lon, "done", name, extra))
         city_counts[name] = city_counts.get(name, 0) + 1
     cities = [{"name": name, "count": count} for name, count in sorted(city_counts.items(), key=lambda item: -item[1])]
     return {"points": points, "cities": cities, "total": len(points)}
