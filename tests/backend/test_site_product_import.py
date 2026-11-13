@@ -240,3 +240,27 @@ class TestProductImage:
     @pytest.mark.parametrize("body", [b"<html>ftyp</html>", b"\x00\x00\x00\x18ftypmp42" + b"0" * 20, b""])
     def test_other_files_are_not_images(self, body):
         assert imp.browser_image(body) == (b"", "")
+
+
+@pytest.mark.backend
+class TestSalesTextIsNotADescription:
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "⭐ кресло Осман по низкой цене в интернет-магазине. Доставка в Москве. ⚡ можно купить в кредит без переплаты.",
+            "Купить Лампа настольная 22-89270 по цене 20 800 руб. в интернет-магазине",
+            "Диван Осло — скидки до 30%, отзывы покупателей, в наличии",
+        ],
+    )
+    def test_shop_advertising_is_dropped(self, text):
+        html = f'<meta property="og:description" content="{text}"><h1>Кресло</h1>'
+        assert imp.parse_product_html(html)["description"] == ""
+
+    def test_next_source_is_used_when_first_is_advertising(self):
+        html = """<script type="application/ld+json">{"@type": "Product", "name": "Кресло", "description": "Купить кресло недорого"}</script>
+        <meta name="description" content="Кресло с каркасом из дуба и обивкой из шерсти.">"""
+        assert imp.parse_product_html(html)["description"] == "Кресло с каркасом из дуба и обивкой из шерсти."
+
+    def test_plain_description_survives_and_loses_leading_symbols(self):
+        html = '<meta name="description" content="★ Мягкое кресло на металлических ножках, обивка — букле.">'
+        assert imp.parse_product_html(html)["description"] == "Мягкое кресло на металлических ножках, обивка — букле."

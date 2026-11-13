@@ -48,6 +48,12 @@ _SIZE_KEY = re.compile(r"^(?:размеры?|габариты|габаритны
 _DIMENSION_KEY = re.compile(r"^(ширина|высота|глубина|длина|диаметр)(?:\s+(?:товара|изделия|общая))?(?:\s*\(.*\))?(?:,\s*(мм|см|м))?$", re.IGNORECASE)
 _DIMENSION_ORDER = ["ширина", "глубина", "длина", "высота", "диаметр"]
 
+# Описание в разметке магазина часто написано для поисковиков («купить по низкой цене с доставкой»).
+# Такой текст на сайте студии выглядел бы рекламой магазина, поэтому он отбрасывается
+_SALES_TEXT = re.compile(
+    r"купить|купите|заказать|цен[аеыу]\b|\bруб\b|₽|интернет[- ]магазин|доставк|в кредит|рассрочк|скидк|акци[яи]\b|распродаж|в наличии|отзыв",
+    re.IGNORECASE,
+)
 _SPACE = re.compile(r"\s+")
 _TAGS = re.compile(r"<[^>]+>")
 
@@ -308,6 +314,16 @@ def _first(*values) -> str:
     return ""
 
 
+def _plain_description(*values) -> str:
+    """Первое описание, которое рассказывает о предмете, а не о покупке."""
+    for value in values:
+        # Значки в начале («⭐», «⚡») — тоже примета рекламного текста
+        text = re.sub(r"^[^\w«\"(]+", "", _clean(value))
+        if text and not _SALES_TEXT.search(text):
+            return text
+    return ""
+
+
 def _fill(result: dict, field: str, *values) -> None:
     """Заполняет поле, если оно ещё пустое: источники перебираются от надёжного к грубому."""
     if not result[field]:
@@ -317,7 +333,7 @@ def _fill(result: dict, field: str, *values) -> None:
 def _from_json_ld(parser: _PageParser, result: dict, dimensions: dict) -> None:
     for product in _json_ld_products(parser.json_ld):
         _fill(result, "title", product.get("name"))
-        _fill(result, "description", product.get("description"))
+        _fill(result, "description", _plain_description(product.get("description")))
         _fill(result, "image_url", _first_image(product.get("image")))
         _fill(result, "sku", product.get("sku"), product.get("mpn"), product.get("productID"))
         _fill(result, "color", product.get("color"))
@@ -334,7 +350,7 @@ def _from_markup(parser: _PageParser, result: dict, dimensions: dict) -> None:
     props = parser.itemprops
     meta = parser.meta
     _fill(result, "title", props.get("name"), meta.get("og:title"), parser.h1, parser.title)
-    _fill(result, "description", props.get("description"), meta.get("og:description"), meta.get("description"))
+    _fill(result, "description", _plain_description(props.get("description"), meta.get("og:description"), meta.get("description")))
     _fill(result, "image_url", props.get("image"), meta.get("og:image"), meta.get("twitter:image"))
     _fill(result, "sku", props.get("sku"), props.get("mpn"), meta.get("product:retailer_item_id"))
     _fill(result, "color", props.get("color"), meta.get("product:color"))

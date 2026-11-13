@@ -168,13 +168,14 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   position: absolute; z-index: 3; width: min(260px, 70vw); background: #fff; color: var(--text); border-radius: 10px; padding: 12px 14px;
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28); line-height: 1.45; font-size: calc(0.85rem * var(--ts, 1)); display: flex; flex-direction: column; gap: 4px;
 }
-.tip__photo { width: 100%; height: 150px; object-fit: contain; background: #f6f6f6; border-radius: 6px; margin-bottom: 4px; }
+.tip__photo { width: 100%; height: 130px; object-fit: contain; background: #f6f6f6; border-radius: 6px; margin-bottom: 4px; }
 .tip__sku { font-size: calc(0.76rem * var(--ts, 1)); color: var(--text-light); }
 .tip__specs { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 2px 0; font-size: calc(0.8rem * var(--ts, 1)); }
 .tip__specs dt { color: var(--text-light); }
 .tip__specs dd { color: var(--text); }
 .tip strong { font-family: var(--font-head); font-size: calc(0.92rem * var(--ts, 1)); color: var(--dark); }
-.tip p { color: var(--text-light); }
+/* Длинное описание не должно раздувать карточку: полный текст есть в списке под фото */
+.tip p { color: var(--text-light); display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
 .tip a { color: var(--accent); text-decoration: none; font-weight: 600; }
 .tip a:hover { text-decoration: underline; }
 .tip--right { transform: translateX(22px); }
