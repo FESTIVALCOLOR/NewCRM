@@ -11,7 +11,7 @@ import threading
 from typing import Optional
 
 from constants import STATUS_COMPLETED, STATUS_SUPERVISION, STATUS_TERMINATED
-from services.site_map_geo import ADDRESS_MODES, FuzzyGuard, address_hash, address_key, city_name, geocode_address, point_label, privacy_offset, resolve_city_center
+from services.site_map_geo import ADDRESS_MODES, FuzzyGuard, address_hash, address_key, city_name, geocode_address, point_label, privacy_offset, resolve_area
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -92,7 +92,7 @@ def sync_map_points() -> bool:
             try:
                 city = (raw_city or "").strip()
                 if city not in centers:
-                    centers[city] = resolve_city_center(city)
+                    centers[city] = resolve_area(city)
                 found = geocode_address(address, city, centers[city], fuzzy=fuzzy)
             except Exception as exc:
                 # Сбой сети — не «адрес не найден»: точку не трогаем, адрес проверим при следующем запуске.
@@ -223,7 +223,7 @@ def map_status(db: Session) -> dict:
             state = "hidden"
         else:
             state = "shown"
-            if point.precision == "street":
+            if point.precision in ("street", "place"):
                 counts["approximate"] += 1
         counts[state] += 1
         objects.append(
@@ -250,7 +250,7 @@ def map_status(db: Session) -> dict:
             state = "hidden"
         else:
             state = "shown"
-            if extra.precision == "street":
+            if extra.precision in ("street", "place"):
                 counts["approximate"] += 1
         counts[state] += 1
         objects.append(

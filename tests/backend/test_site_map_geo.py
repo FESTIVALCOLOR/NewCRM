@@ -316,7 +316,9 @@ class TestPointLabel:
 
     def test_modes_and_missing_street(self):
         assert geo.point_label("Москва", "улица Ленина", "5", "none") == ""
-        assert geo.point_label("Москва", "", "5", "house") == ""
+        # Без улицы (деревня, коттеджный посёлок) подписью служит название населённого пункта
+        assert geo.point_label("Глебово", "", "", "house") == "Глебово"
+        assert geo.point_label("", "", "", "house") == ""
         assert geo.point_label("", "улица Ленина", "5", "house") == "улица Ленина, 5"
         assert geo.point_label("Москва", "улица Ленина", "5", "unknown") == ""
 
@@ -382,3 +384,136 @@ class TestFuzzyGuard:
         guard = geo.FuzzyGuard(lambda q, b: [feature])
         result = geo.geocode_address("ул. Ленина 5", "МСК", MOSCOW, strict=lambda q, b: None, fuzzy=guard)
         assert result.precision == "house" and not guard.down
+
+
+def place(name, lat=58.6, lon=31.3, rank=19, kind="village", state="Новгородская область"):
+    return {"lat": str(lat), "lon": str(lon), "place_rank": rank, "addresstype": kind, "name": name, "address": {"state": state}}
+
+
+@pytest.mark.backend
+class TestPlaceWithoutStreet:
+    NOVGOROD = geo.Area.around(58.522, 31.275)
+
+    def test_village_near_city(self):
+        calls = []
+
+        def strict(query, box):
+            calls.append((query, box))
+            return place("Глебово") if query == "Глебово" else None
+
+        result = geo.geocode_address("деревня Глебово, Новгородский муниципальный округ", "Великий Новгород", self.NOVGOROD, strict=strict, fuzzy=None)
+        assert (result.precision, result.place) == ("place", "Глебово")
+        # Без названной области деревню ищем только рядом с городом
+        assert calls[-1] == ("Глебово", self.NOVGOROD.near)
+
+    def test_named_region_allows_far_settlement_only_in_that_region(self):
+        def strict(query, box):
+            if query == "Пестово, Новгородская область":
+                return place("Пестово", lat=58.6, lon=35.8, rank=16, kind="town")
+            return None
+
+        result = geo.geocode_address("Пестово, Новгородская область", "Великий Новгород", self.NOVGOROD, strict=strict, fuzzy=None)
+        assert (result.precision, result.place, result.lon) == ("place", "Пестово", 35.8)
+
+    def test_settlement_in_another_region_is_rejected(self):
+        def strict(query, box):
+            return place("Пестово", state="Тверская область") if box is None else None
+
+        assert geo.geocode_address("Пестово, Новгородская область", "Великий Новгород", self.NOVGOROD, strict=strict, fuzzy=None) is None
+
+    def test_cottage_settlement_name(self):
+        assert geo.place_names("Московская обл., Истринский район, КП «Миллениум парк»") == ["Миллениум парк"]
+        assert geo.place_names("посёлок Гузятино, Бологовский муниципальный округ, Тверская область") == ["Гузятино"]
+        assert geo.place_names("Рязаново дер., д.28А, Щербинка р-н") == ["Рязаново"]
+
+    def test_residential_complex_name_is_never_a_place(self):
+        assert geo.place_names("ЖК «Солнечный» (ванная)") == []
+
+    def test_address_with_street_never_falls_back_to_settlement(self):
+        # Улицу не нашли — центр посёлка на её место не ставим
+        calls = []
+        result = geo.geocode_address("Анапа, улица Шевченко", "Анапа", geo.Area.around(44.89, 37.31), strict=lambda q, b: calls.append(q), fuzzy=None)
+        assert result is None
+        assert not any("Шевченко" not in query for query in calls)
+
+    def test_region_is_not_a_place(self):
+        # Регион или область — слишком грубо для точки на карте
+        region_result = place("Новгородская область", rank=8, kind="state")
+        assert geo.geocode_address("деревня Глебово", "Великий Новгород", self.NOVGOROD, strict=lambda q, b: region_result, fuzzy=None) is None
+
+
+@pytest.mark.backend
+class TestSearchArea:
+    def test_small_town_center_is_resolved(self):
+        anapa = {"lat": "44.89", "lon": "37.31", "place_rank": 18, "addresstype": "town", "address": {"country_code": "ru"}}
+        area = geo.resolve_area("Анапа", search=lambda q, b: anapa)
+        assert area.center == (44.89, 37.31) and area.country == "ru"
+
+    def test_country_name_gives_whole_country(self):
+        italy = {"lat": "42.6", "lon": "12.6", "place_rank": 4, "addresstype": "country", "boundingbox": ["35.2", "47.1", "6.6", "18.8"], "address": {"country_code": "it"}}
+        area = geo.resolve_area("Италия", search=lambda q, b: italy)
+        assert area.country == "it"
+        assert area.near == area.far == (6.6, 35.2, 18.8, 47.1)
+
+    def test_foreign_street_is_searched_in_its_country(self, monkeypatch):
+        seen = []
+
+        def fake(query, box=None, country="ru"):
+            seen.append(country)
+            return {"lat": "45.48", "lon": "9.22", "place_rank": 26, "address": {"road": "Via Carlo Hajech", "city": "Милан"}}
+
+        monkeypatch.setattr(geo, "nominatim_search", fake)
+        area = geo.Area((42.6, 12.6), (6.6, 35.2, 18.8, 47.1), (6.6, 35.2, 18.8, 47.1), "it")
+        result = geo.geocode_address("Via C. Hajech, Милан, Ломбардия", "Италия", area, strict=geo.nominatim_search, fuzzy=None)
+        assert result is not None and (result.place, result.street) == ("Милан", "Via Carlo Hajech")
+        assert set(seen) == {"it"}
+
+    def test_unknown_place_is_not_resolved(self):
+        assert geo.resolve_area("Нигдешино", search=lambda q, b: None) is None
+
+
+@pytest.mark.backend
+class TestLooseStreetSearch:
+    ITALY = geo.Area((42.6, 12.6), (6.6, 35.2, 18.8, 47.1), (6.6, 35.2, 18.8, 47.1), "it")
+
+    @staticmethod
+    def candidate(display, road, city, rank=26):
+        return {"lat": "43.9", "lon": "10.2", "place_rank": rank, "display_name": display, "address": {"road": road, "city": city}}
+
+    def test_initials_and_other_transcription(self):
+        asked = []
+
+        def loose(query, box):
+            asked.append(query)
+            return [
+                self.candidate("Via Ugo Foscolo, Чивитавеккья, Лацио", "Via Ugo Foscolo", "Чивитавеккья"),
+                self.candidate("Via Ugo Foscolo, Marina di Pietrasanta, Пьетрасанта, Лукка, Тоскана", "Via Ugo Foscolo", "Пьетрасанта"),
+            ]
+
+        result = geo.geocode_address("Via U. Foscolo, Пьетразанта, провинция Лукка, Тоскана", "Италия", self.ITALY, strict=lambda q, b: None, fuzzy=None, loose=loose)
+        # Улица из другого города пропущена, принята та, где совпал населённый пункт
+        assert (result.place, result.street, result.precision) == ("Пьетрасанта", "Via Ugo Foscolo", "street")
+        assert asked == ["Via Foscolo"]
+
+    def test_street_with_province_when_street_alone_is_ambiguous(self):
+        def loose(query, box):
+            if query == "Via Foscolo, Лукка":
+                return [self.candidate("Via Ugo Foscolo, Пьетрасанта, Лукка, Тоскана", "Via Ugo Foscolo", "Пьетрасанта")]
+            return [self.candidate("Via Ugo Foscolo, Чивитавеккья, Лацио", "Via Ugo Foscolo", "Чивитавеккья")]
+
+        result = geo.geocode_address("Via U. Foscolo, Пьетразанта, Лукка, Тоскана", "Италия", self.ITALY, strict=lambda q, b: None, fuzzy=None, loose=loose)
+        assert result.place == "Пьетрасанта"
+
+    def test_no_matching_place_means_not_found(self):
+        loose = lambda q, b: [self.candidate("Via Hajech, Рим, Лацио", "Via Hajech", "Рим")]  # noqa: E731
+        assert geo.geocode_address("Via C. Hajech, Милан, Ломбардия", "Италия", self.ITALY, strict=lambda q, b: None, fuzzy=None, loose=loose) is None
+
+    def test_house_number_and_apartment_are_not_sent(self):
+        asked = []
+        geo.geocode_address("Мурино, ул. Екатерининская, 18к3кв447", "СПБ", MOSCOW, strict=lambda q, b: None, fuzzy=None, loose=lambda q, b: asked.append(q) or [])
+        assert asked[0] == "ул. Екатерининская"
+        assert not any("447" in query or "18" in query for query in asked)
+
+    def test_settlement_level_candidate_is_ignored(self):
+        loose = lambda q, b: [self.candidate("Милан, Ломбардия", "", "Милан", rank=16)]  # noqa: E731
+        assert geo.geocode_address("Via C. Hajech, Милан, Ломбардия", "Италия", self.ITALY, strict=lambda q, b: None, fuzzy=None, loose=loose) is None

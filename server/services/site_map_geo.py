@@ -12,6 +12,7 @@
 """
 
 from dataclasses import dataclass
+from functools import partial
 import hashlib
 import hmac
 import logging
@@ -110,7 +111,7 @@ _TRAILING_HOUSE_RE = re.compile(r"\s+\d+[\w/-]*(?:\s+[кс]\d+\w*)*\s*$", re.IGN
 class GeoResult:
     lat: float
     lon: float
-    precision: str  # 'house' или 'street'
+    precision: str  # 'house', 'street' или 'place' (населённый пункт — для адресов без улицы)
     # Адрес найденного места по данным картографической базы — из него строится подпись на сайте
     place: str = ""
     street: str = ""
@@ -226,7 +227,7 @@ def build_queries(address: str, city_code: Optional[str]) -> list[Query]:
 
 
 def _word_stems(text: str) -> list[str]:
-    return [w[:5] for w in re.findall(r"[а-яё]{4,}", text.lower().replace("ё", "е"))]
+    return [w[:5] for w in re.findall(r"[a-zа-яё]{4,}", text.lower().replace("ё", "е"))]
 
 
 def street_tokens(address: str, city_code: Optional[str] = None) -> list[str]:
@@ -279,15 +280,29 @@ def _get_json(url: str, params: dict, pause: float):
     return None
 
 
-def nominatim_search(query: str, box: Optional[tuple[float, float, float, float]] = None) -> Optional[dict]:
+def nominatim_search(query: str, box: Optional[tuple[float, float, float, float]] = None, country: str = "ru") -> Optional[dict]:
     """Строгий геокодер: находит адрес, только если распознал каждое слово запроса."""
-    params: dict = {"q": query, "format": "jsonv2", "limit": 1, "countrycodes": "ru", "addressdetails": 1}
+    params: dict = {"q": query, "format": "jsonv2", "limit": 1, "addressdetails": 1}
+    if country:
+        params["countrycodes"] = country
     if box:
         west, south, east, north = box
         params["viewbox"] = f"{west},{north},{east},{south}"
         params["bounded"] = 1
     results = _get_json(NOMINATIM_URL, params, GEOCODER_PAUSE)
     return results[0] if results else None
+
+
+def nominatim_candidates(query: str, box: Optional[tuple[float, float, float, float]] = None, country: str = "ru", limit: int = 10) -> list[dict]:
+    """Несколько вариантов от строгого геокодера — для запасного поиска с проверкой населённого пункта."""
+    params: dict = {"q": query, "format": "jsonv2", "limit": limit, "addressdetails": 1}
+    if country:
+        params["countrycodes"] = country
+    if box:
+        west, south, east, north = box
+        params["viewbox"] = f"{west},{north},{east},{south}"
+        params["bounded"] = 1
+    return _get_json(NOMINATIM_URL, params, GEOCODER_PAUSE) or []
 
 
 def photon_search(query: str, box: tuple[float, float, float, float]) -> list[dict]:
@@ -325,19 +340,64 @@ class FuzzyGuard:
             return []
 
 
-def resolve_city_center(city_code: Optional[str], search: StrictSearch = nominatim_search) -> Optional[tuple[float, float]]:
-    """Центр города: из справочника или, для незнакомого названия, от геокодера."""
+@dataclass(frozen=True)
+class Area:
+    """Где искать адрес: вокруг города (ближняя и дальняя области) или в пределах целой страны."""
+
+    center: tuple[float, float]
+    near: tuple[float, float, float, float]
+    far: tuple[float, float, float, float]
+    country: str = "ru"
+
+    @classmethod
+    def around(cls, lat: float, lon: float, country: str = "ru") -> "Area":
+        return cls((lat, lon), city_viewbox(lat, lon, NEAR_BOX), city_viewbox(lat, lon, FAR_BOX), country or "ru")
+
+
+# Ранг Nominatim: 4 — страна, 8–12 — регион, 16 — город, 18 — посёлок городского типа, 19–20 — деревня
+RANK_COUNTRY_MAX = 12
+RANK_SETTLEMENT_MAX = 20
+
+
+def _country_code(found: dict) -> str:
+    return str((found.get("address") or {}).get("country_code") or "").lower()
+
+
+def _area_from(found: Optional[dict]) -> Optional["Area"]:
+    if not found:
+        return None
+    rank = int(found.get("place_rank", 0))
+    lat, lon = float(found["lat"]), float(found["lon"])
+    if rank <= RANK_COUNTRY_MAX and found.get("boundingbox"):
+        # В поле «Город» указана страна или регион («Италия») — ищем в его границах
+        south, north, west, east = (float(value) for value in found["boundingbox"])
+        box = (west, south, east, north)
+        return Area((lat, lon), box, box, _country_code(found) or "ru")
+    if rank <= RANK_SETTLEMENT_MAX:
+        return Area.around(lat, lon, _country_code(found) or "ru")
+    return None
+
+
+def resolve_area(city_code: Optional[str], search: StrictSearch = nominatim_search) -> Optional[Area]:
+    """Область поиска по значению поля «Город»: город из справочника, любой населённый пункт или страна."""
     code = (city_code or "").strip()
     known = _known_city(code)
     if known:
-        return known[1], known[2]
+        return Area.around(known[1], known[2])
     if len(code) < 4:
         # Короткое незнакомое значение — это неизвестный код, а не название города
         return None
-    found = search(code, None)
-    if found and int(found.get("place_rank", 0)) <= 16:
-        return float(found["lat"]), float(found["lon"])
-    return None
+    area = _area_from(search(code, None))
+    if area is None and search is nominatim_search:
+        # Не нашлось в России — возможно, это другая страна или зарубежный город
+        area = _area_from(nominatim_search(code, None, country=""))
+    return area
+
+
+def resolve_city_center(city_code: Optional[str], search: StrictSearch = nominatim_search) -> Optional[tuple[float, float]]:
+    """Центр города: из справочника или, для незнакомого названия, от геокодера."""
+    area = resolve_area(city_code, search)
+    return area.center if area else None
 
 
 def _clip(value, limit: int) -> str:
@@ -384,29 +444,144 @@ def geocode_address(
     center: Optional[tuple[float, float]],
     strict: StrictSearch = nominatim_search,
     fuzzy: Optional[FuzzySearch] = photon_search,
+    loose: Optional[Callable[[str, tuple[float, float, float, float]], list[dict]]] = None,
 ) -> Optional[GeoResult]:
     """Координаты адреса с точностью до дома или улицы; None — если найти не удалось.
 
     Без центра города поиск не ограничить областью, а значит точке нельзя доверять —
     такие адреса считаются ненайденными.
     """
-    if not center:
+    area = center if isinstance(center, Area) else (Area.around(*center) if center else None)
+    if area is None:
         return None
+    if loose is None and strict is nominatim_search:
+        loose = partial(nominatim_candidates, country=area.country)
+    if area.country != "ru" and strict is nominatim_search:
+        strict = partial(nominatim_search, country=area.country)
     queries = build_queries(address, city_code)
-    if not queries:
-        return None
-    tokens = street_tokens(address, city_code)
-    house = house_number(address)
+    if queries:
+        tokens = street_tokens(address, city_code)
+        house = house_number(address)
+        near = _search(queries, area.near, strict, fuzzy, tokens, house)
+        if near:
+            return near
+        # Одиночное название («Заречная 5», «Рязаново 28А») вдали от города почти наверняка совпадёт
+        # с чужой улицей или деревней, поэтому дальний поиск — только для адресов с населённым пунктом
+        far_queries = [q for q in queries if q.names_place]
+        if far_queries and area.far != area.near:
+            far = _search(far_queries, area.far, strict, fuzzy, tokens, house)
+            if far:
+                return far
+    # Улицу, которую не нашли, нельзя заменять центром посёлка — точка встала бы не на месте.
+    # Населённым пунктом ограничиваемся, только если улицы в адресе нет вовсе
+    if _STREET_WORD_RE.search(address or ""):
+        return _loose_search(address, area, loose) if loose else None
+    return _search_place(address, area, strict)
 
-    near = _search(queries, city_viewbox(*center, NEAR_BOX), strict, fuzzy, tokens, house)
-    if near:
-        return near
-    # Одиночное название («Заречная 5», «Рязаново 28А») вдали от города почти наверняка совпадёт
-    # с чужой улицей или деревней, поэтому дальний поиск — только для адресов с населённым пунктом
-    far_queries = [q for q in queries if q.names_place]
-    if not far_queries:
+
+# Инициалы в названии улицы («Via C. Hajech», «ул. А. Невского») — в базе имя записано полностью или без него
+_INITIAL_RE = re.compile(r"\b[A-ZА-ЯЁ]\.\s*")
+_GENERIC_STEMS = {w[:5] for w in ("провинция", "область", "регион", "район", "округ", "муниципальный", "province", "provincia", "region", "regione")}
+
+
+def _loose_search(address: str, area: Area, loose) -> Optional[GeoResult]:
+    """Запасной поиск: только улица (без инициалов и номеров) в области поиска.
+
+    Строгий геокодер не находит адрес, если хоть одно слово записано иначе: «Via C. Hajech» вместо
+    «Via Camillo Hajech», «Пьетразанта» вместо «Пьетрасанта». Здесь ищется одна улица, а результат
+    принимается, только если в его адресе есть населённый пункт из записи — по совпадению начала слова.
+    """
+    parts = [part.strip() for part in re.split(r"[,;]", _PAREN_RE.sub(" ", address or "")) if part.strip()]
+    street_index = next((i for i, part in enumerate(parts) if _STREET_WORD_RE.search(" " + part)), None)
+    if street_index is None or len(parts) < 2:
         return None
-    return _search(far_queries, city_viewbox(*center, FAR_BOX), strict, fuzzy, tokens, house)
+    street = _INITIAL_RE.sub("", parts[street_index])
+    # Номер дома, корпус и квартира в запрос не идут
+    street = re.sub(r"\s+\d.*$", "", street).strip(" .")
+    context = [stem for i, part in enumerate(parts) if i != street_index for stem in _word_stems(part) if stem not in _GENERIC_STEMS]
+    if len(street) < 3 or not context:
+        return None
+    # Одноимённых улиц много («Via Foscolo» есть почти в каждом городе Италии), поэтому кроме одной улицы
+    # пробуем улицу вместе с каждой другой частью адреса: провинция или регион обычно пишутся одинаково
+    others = [_INITIAL_RE.sub("", part).strip(" .") for i, part in enumerate(parts) if i != street_index]
+    queries = [street] + [f"{street}, {other}" for other in others if other and not re.search(r"\d", other)]
+    for query in queries:
+        for candidate in loose(query, area.near):
+            if int(candidate.get("place_rank", 0)) < RANK_STREET:
+                continue
+            haystack = str(candidate.get("display_name", "")).lower().replace("ё", "е")
+            if any(stem in haystack for stem in context):
+                return _strict_result(candidate, "street")
+    return None
+
+
+# Слово-тип улицы в адресе — значит, адрес указывает на улицу, а не на населённый пункт
+_STREET_WORD_RE = re.compile(
+    r"(?:^|[\s,.])(?:ул|улица|пр-?к?т|просп|проспект|пер|переулок|ш-се|шоссе|б-р|бул|бульвар|наб|набережная|пр-д|проезд"
+    r"|аллея|линия|тупик|пл|площадь|тракт|via|viale|piazza|corso|largo|vicolo|strada|street|avenue|road|rue)(?=[\s.,]|$)",
+    re.IGNORECASE,
+)
+# Вид населённого пункта перед названием или после него
+_PLACE_MARK_RE = re.compile(
+    r"^(?:коттеджный\s+пос[её]лок|рабочий\s+пос[её]лок|городской\s+пос[её]лок|деревня|дер|д|село|с|пос[её]лок|пос|п|пгт|рп|гп|кп|снт|дп|город|г)\.?\s+",
+    re.IGNORECASE,
+)
+_PLACE_SUFFIX_RE = re.compile(r"\s+(?:деревня|дер|д|пос|с|село)\.?$", re.IGNORECASE)
+_REGION_NAME_RE = re.compile(r"([А-ЯЁ][а-яё-]+)\s+(?:обл\b\.?|область)")
+_PLACE_TYPES = {"city", "town", "village", "hamlet", "isolated_dwelling", "locality", "suburb", "quarter", "neighbourhood", "residential", "allotments", "farm", "croft"}
+RANK_PLACE_MIN = 13
+
+
+def place_names(address: str) -> list[str]:
+    """Названия населённых пунктов и коттеджных посёлков из адреса без улицы.
+
+    Названия ЖК не берутся: «Солнечный» или «Мечта» найдутся где угодно рядом с городом.
+    """
+    names: list[str] = []
+    for raw in re.split(r"[,;]", _PAREN_RE.sub(" ", address or "")):
+        part = re.sub(r"\s+", " ", raw).strip(" .")
+        if not part or re.search(r"\d", part) or _NOISE_PART_RE.search(part) or re.search(r"\b(?:ЖК|МО|ЛО)\b", part):
+            continue
+        name = _PLACE_SUFFIX_RE.sub("", _PLACE_MARK_RE.sub("", part)).strip(" .")
+        if len(name) >= 3 and name not in names:
+            names.append(name)
+    return names
+
+
+def _is_place(found: Optional[dict]) -> bool:
+    if not found:
+        return False
+    rank = int(found.get("place_rank", 0))
+    kind_ok = found.get("addresstype") in _PLACE_TYPES or found.get("category") == "place"
+    return kind_ok and RANK_PLACE_MIN <= rank < RANK_STREET
+
+
+def _place_result(found: dict) -> GeoResult:
+    address = found.get("address") or {}
+    name = found.get("name") or next((address[key] for key in _PLACE_KEYS if address.get(key)), "")
+    return GeoResult(float(found["lat"]), float(found["lon"]), "place", _clip(name, 120))
+
+
+def _search_place(address: str, area: Area, strict: StrictSearch) -> Optional[GeoResult]:
+    """Точка на населённом пункте: для деревень и коттеджных посёлков без улицы."""
+    names = place_names(address)
+    if not names:
+        return None
+    region = _REGION_NAME_RE.search(address or "")
+    if region and area.country == "ru":
+        # Названа область: ищем по всей стране, но принимаем только населённый пункт в этой области
+        stem = region.group(1).lower().replace("ё", "е")[:5]
+        for name in names:
+            found = strict(f"{name}, {region.group(0)}", None)
+            state = str((found or {}).get("address", {}).get("state", "")).lower().replace("ё", "е")
+            if _is_place(found) and stem in state:
+                return _place_result(found)
+    # Иначе — только рядом с городом: одноимённых деревень по стране много
+    for name in names:
+        found = strict(name, area.near)
+        if _is_place(found):
+            return _place_result(found)
+    return None
 
 
 def _search(
@@ -471,8 +646,11 @@ def point_label(place: Optional[str], street: Optional[str], house: Optional[str
     Подпись не собирается из текста CRM: там бывают квартиры, записанные слитно («18к3кв447»),
     имена и пометки. В базе OpenStreetMap квартир и имён нет — только населённый пункт, улица и дом.
     """
-    if mode not in ("house", "street") or not street:
+    if mode not in ("house", "street"):
         return ""
+    if not street:
+        # Точка на населённом пункте (деревня, коттеджный посёлок) — подписывается его названием
+        return place or ""
     street_part = f"{street}, {house}" if mode == "house" and house else street
     return f"{place}, {street_part}" if place else street_part
 
