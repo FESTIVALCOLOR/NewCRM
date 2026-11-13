@@ -22,6 +22,7 @@ import { ctaUrl, ctaChannel, linkTarget, CHANNELS } from './contact.js'
 import { site, homeSectionKeys, loadSite } from './store.js'
 import { rememberHomeTitle, setPageTitle } from './router.js'
 import { scheduleReveal } from './reveal.js'
+import { watchDecor } from './decor.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -32,6 +33,7 @@ const fabUrl = computed(() => ctaUrl(site.settings))
 router.afterEach(() => nextTick(() => scheduleReveal()))
 
 onMounted(async () => {
+  watchDecor(document.querySelector('main'))
   await loadSite()
   // Заголовок из настроек SEO относится к главной; у внутренних страниц он свой
   rememberHomeTitle()
