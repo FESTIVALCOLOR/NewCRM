@@ -52,10 +52,4 @@ onMounted(async () => {
   transition: transform 0.2s;
 }
 .wa-fab:hover { transform: scale(1.1); }
-.wa-fab svg { width: 30px; height: 30px; fill: #fff; }
-/* Телефоны и планшеты: мобильные браузеры (Яндекс, Samsung) рисуют свою кнопку «наверх»
-   в правом нижнем углу — поднимаем кнопку связи над ней, чтобы они не накладывались */
-@media (hover: none) and (pointer: coarse) {
-  .wa-fab { bottom: calc(84px + env(safe-area-inset-bottom, 0px)); right: 20px; }
-}
-</style>
+.wa-fab svg { width: 30px; height: 30px; fill: #fff; }</style>

@@ -42,7 +42,7 @@ defineProps({ settings: Object })
 /* Телефон: первая строка — логотип слева и соцсети справа, вторая — копирайт */
 @media (max-width: 600px) {
   /* Нижний отступ — чтобы плавающая кнопка связи не закрывала соцсети и копирайт в самом низу страницы */
-  .footer { padding-bottom: 150px; }
+  .footer { padding-bottom: 96px; }
   .footer__inner { row-gap: 16px; }
   .footer__logo { order: 1; }
   .footer__socials { order: 2; margin-left: auto; }
