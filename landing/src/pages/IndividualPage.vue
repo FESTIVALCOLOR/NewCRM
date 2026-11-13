@@ -30,7 +30,7 @@
           <p>Расскажите о квартире — рассчитаем стоимость и сроки.</p>
         </div>
         <div class="next__actions">
-          <a :href="contactUrl" target="_blank" rel="noopener" class="btn btn--accent">Написать нам</a>
+          <a :href="contactUrl" :target="linkTarget(contactUrl)" rel="noopener" class="btn btn--accent">Написать нам</a>
           <router-link to="/ready" class="btn btn--outline">Готовые дизайны — от {{ formatPrice(minReadyPrice(site.settings)) }}</router-link>
         </div>
       </div>
@@ -43,7 +43,7 @@ import { computed, watch } from 'vue'
 import PortfolioSection from '../sections/PortfolioSection.vue'
 import PricingSection from '../sections/PricingSection.vue'
 import { site, sectionStyles, sectionVisible } from '../store.js'
-import { ctaUrl } from '../contact.js'
+import { ctaUrl, linkTarget } from '../contact.js'
 import { minReadyPrice, formatPrice } from '../readyPricing.js'
 import { parseAdvantages } from '../advantages.js'
 import { scheduleReveal } from '../reveal.js'

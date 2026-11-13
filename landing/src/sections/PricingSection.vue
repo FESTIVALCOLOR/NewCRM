@@ -23,7 +23,7 @@
               </ul>
             </li>
           </ul>
-          <a :href="buildWhatsApp(plan)" target="_blank" rel="noopener" class="btn" :class="plan.is_featured ? 'btn--accent' : 'btn--outline'">
+          <a :href="buildWhatsApp(plan)" :target="linkTarget(buildWhatsApp(plan))" rel="noopener" class="btn" :class="plan.is_featured ? 'btn--accent' : 'btn--outline'">
             Заказать
           </a>
         </div>
@@ -34,7 +34,7 @@
 
 <script setup>
 import { ref } from 'vue'
-import { ctaUrl } from '../contact.js'
+import { ctaUrl, linkTarget } from '../contact.js'
 const props = defineProps({ pricing: Array, settings: Object })
 const expanded = ref({})
 

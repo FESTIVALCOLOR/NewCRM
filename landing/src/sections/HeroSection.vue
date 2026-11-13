@@ -4,7 +4,7 @@
     <div class="container hero__content">
       <h1 class="hero__title reveal">{{ settings.hero_title || 'Дизайн интерьеров вашей мечты' }}</h1>
       <p class="hero__sub reveal">{{ settings.hero_subtitle || 'Создаём уникальные пространства для жизни и работы' }}</p>
-      <a :href="whatsappUrl" target="_blank" rel="noopener" class="btn btn--accent reveal">
+      <a :href="whatsappUrl" :target="linkTarget(whatsappUrl)" rel="noopener" class="btn btn--accent reveal">
         {{ settings.hero_cta || 'Свяжитесь с нами' }}
       </a>
     </div>
@@ -13,7 +13,7 @@
 
 <script setup>
 import { computed } from 'vue'
-import { ctaUrl } from '../contact.js'
+import { ctaUrl, linkTarget } from '../contact.js'
 const props = defineProps({ settings: Object })
 const whatsappUrl = computed(() => ctaUrl(props.settings))
 const heroBg = computed(() => {

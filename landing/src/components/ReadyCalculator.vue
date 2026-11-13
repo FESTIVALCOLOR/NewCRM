@@ -34,13 +34,13 @@
       <template v-else-if="hasArea">Площадь до {{ config.ready_area_base }} м² входит в базовую цену.</template>
       <template v-else>Цена для объекта до {{ config.ready_area_base }} м². Укажите площадь, чтобы увидеть точную стоимость и срок.</template>
     </p>
-    <a :href="orderUrl" target="_blank" rel="noopener" class="btn btn--accent calc__order">{{ design ? 'Заказать этот дизайн' : 'Заказать готовый дизайн' }}</a>
+    <a :href="orderUrl" :target="linkTarget(orderUrl)" rel="noopener" class="btn btn--accent calc__order">{{ design ? 'Заказать этот дизайн' : 'Заказать готовый дизайн' }}</a>
   </div>
 </template>
 
 <script setup>
 import { computed } from 'vue'
-import { ctaUrl } from '../contact.js'
+import { ctaUrl, linkTarget } from '../contact.js'
 import { choice } from '../store.js'
 import { REGIONS, calcReady, readyConfig, regionCities, formatPrice, formatDays } from '../readyPricing.js'
 

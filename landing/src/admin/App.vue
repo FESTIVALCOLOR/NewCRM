@@ -48,6 +48,8 @@
               {{ m.label }}
             </label>
           </div>
+          <p v-if="ctaMissing" class="alert-err" style="margin-top:10px">Для этого способа {{ ctaMissing }} — пока кнопки ведут в WhatsApp. Заполните поле в «Контактных данных» ниже и нажмите «Сохранить контакты».</p>
+          <p class="hint" style="margin:8px 0 0">Способ связи действует на кнопки «Написать нам», «Заказать» и на круглую кнопку в углу экрана — у неё меняется и значок.<template v-if="ctaMethod === 'email' && !sf.email"> Почта не указана — используется festivalcolor@mail.ru.</template></p>
         </div>
         <div class="card">
           <h3>Контактные данные</h3>
@@ -758,6 +760,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import IndividualTab from './IndividualTab.vue'
+import { missingFor } from '../contact.js'
 import ReadyTab from './ReadyTab.vue'
 import * as api from './api.js'
 import { SERVICE_ICONS, serviceIconPath } from '../serviceIcons.js'
@@ -920,8 +923,14 @@ async function saveHero() {
     toast('Оформление сохранено')
   } catch (e) { toast(e.message, 'error') }
 }
+// Канал выбран, но для него нет данных — кнопки на сайте ведут в WhatsApp, об этом нужно сказать сразу
+const ctaMissing = computed(() => missingFor(ctaMethod.value, { telegram: sf.telegram, phone: sf.phone }))
 async function saveCta() {
-  try { await api.settings.update('cta_method', ctaMethod.value); toast('Метод связи обновлён') }
+  try {
+    await api.settings.update('cta_method', ctaMethod.value)
+    if (ctaMissing.value) toast(`Сохранено, но ${ctaMissing.value} — пока кнопки ведут в WhatsApp`, 'error')
+    else toast('Метод связи обновлён')
+  }
   catch (e) { toast(e.message, 'error') }
 }
 

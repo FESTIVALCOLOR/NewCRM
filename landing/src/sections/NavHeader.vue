@@ -10,7 +10,7 @@
       <nav class="header__nav">
         <router-link v-for="item in menu" :key="item.key" :to="item.to" :class="{ 'is-page': item.page }" @click="onNav(item)">{{ item.label }}</router-link>
       </nav>
-      <a :href="contactUrl" target="_blank" rel="noopener" class="btn btn--accent header__cta">Написать нам</a>
+      <a :href="contactUrl" :target="linkTarget(contactUrl)" rel="noopener" class="btn btn--accent header__cta">Написать нам</a>
       <button class="header__burger" @click="menuOpen = !menuOpen" aria-label="Меню">
         <span /><span /><span />
       </button>
@@ -25,7 +25,7 @@
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 
 import { useRoute, useRouter } from 'vue-router'
-import { ctaUrl } from '../contact.js'
+import { ctaUrl, linkTarget } from '../contact.js'
 import { HEADER_HEIGHT } from '../router.js'
 
 const MENU_LABELS = { hero: 'Главная', about: 'О нас', services: 'Услуги', reviews: 'Отзывы', contacts: 'Контакты' }

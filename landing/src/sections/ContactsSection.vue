@@ -63,10 +63,10 @@
 
 <script setup>
 import { computed, ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
-import { whatsappUrl as buildWhatsappUrl } from '../contact.js'
+import { whatsappUrl as buildWhatsappUrl, DEFAULT_EMAIL } from '../contact.js'
 const props = defineProps({ settings: Object })
 const whatsappUrl = computed(() => buildWhatsappUrl(props.settings))
-const email = computed(() => props.settings?.email || 'festivalcolor@mail.ru')
+const email = computed(() => props.settings?.email || DEFAULT_EMAIL)
 
 const OFFICE_ZOOM = 16
 const YANDEX_TIMEOUT = 8000

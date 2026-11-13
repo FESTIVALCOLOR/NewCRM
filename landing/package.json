@@ -6,7 +6,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test tests/readyPricing.test.mjs"
+    "test": "node --test tests/readyPricing.test.mjs tests/contact.test.mjs"
   },
   "dependencies": {
     "leaflet": "^1.9.4",
