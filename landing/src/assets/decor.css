@@ -1,0 +1,79 @@
+/*
+  Декор в боковых полях блоков с фиксированной шириной (только на широких экранах).
+  Что и с какой стороны стоит, выбирает src/decor.js: он ставит блоку атрибуты data-decor-left/right
+  («floor» — напольный предмет, «ceiling» — светильник) и переменные с приставками --dl- и --dr- (рисунок, ширина, сдвиг).
+  Рисунок задаётся маской, цвет — переменной --decor-color из настроек стиля.
+
+  Слои рисуются на всю ширину блока: так линия пола проходит через всю страницу,
+  а сам предмет ставится маской в своё место в боковом поле.
+*/
+.section { position: relative; }
+
+@media (min-width: 1600px) {
+  html:not(.no-decor) main section[data-decor-left]::before,
+  html:not(.no-decor) main section[data-decor-right]::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    pointer-events: none;
+    background: var(--decor-color, #cfc8c0);
+    /* Ширина поля между краем окна и содержимым и участок, в котором стоит предмет */
+    --gutter: calc((100vw - var(--max-w)) / 2 - 8px);
+    --lw: min(calc(var(--gutter) - 40px), 420px);
+    /* Расстояние от края страницы до левого края рисунка: середина участка плюс сдвиг */
+    --x: calc(var(--gutter) - 20px - var(--lw) / 2 + var(--shift) - var(--iw) / 2);
+    /* Начало короткой линии потолка над светильником */
+    --seg: calc(var(--gutter) - 20px - var(--lw));
+    height: calc(var(--iw) / (var(--ratio)));
+  }
+  html:not(.no-decor) main section[data-decor-left]::before {
+    --iw: min(var(--dl-w), calc(var(--gutter) - 56px));
+    --ratio: var(--dl-ratio);
+    --shift: var(--dl-shift);
+    --img: var(--dl-img);
+  }
+  html:not(.no-decor) main section[data-decor-right]::after {
+    --iw: min(var(--dr-w), calc(var(--gutter) - 56px));
+    --ratio: var(--dr-ratio);
+    --shift: var(--dr-shift);
+    --img: var(--dr-img);
+  }
+
+  /* Напольный предмет: стоит на линии пола, которая идёт во всю ширину страницы */
+  html:not(.no-decor) main section[data-decor-left="floor"]::before {
+    bottom: 0;
+    -webkit-mask: var(--img) left var(--x) bottom / var(--iw) auto no-repeat, linear-gradient(#000 0 0) left 0 bottom / 100% 1.5px no-repeat;
+    mask: var(--img) left var(--x) bottom / var(--iw) auto no-repeat, linear-gradient(#000 0 0) left 0 bottom / 100% 1.5px no-repeat;
+  }
+  html:not(.no-decor) main section[data-decor-right="floor"]::after {
+    bottom: 0;
+    -webkit-mask: var(--img) right var(--x) bottom / var(--iw) auto no-repeat, linear-gradient(#000 0 0) left 0 bottom / 100% 1.5px no-repeat;
+    mask: var(--img) right var(--x) bottom / var(--iw) auto no-repeat, linear-gradient(#000 0 0) left 0 bottom / 100% 1.5px no-repeat;
+  }
+
+  /* Светильник: свисает с короткой линии потолка в боковом поле */
+  html:not(.no-decor) main section[data-decor-left="ceiling"]::before {
+    top: 0;
+    -webkit-mask: var(--img) left var(--x) top / var(--iw) auto no-repeat, linear-gradient(#000 0 0) left var(--seg) top / var(--lw) 1.5px no-repeat;
+    mask: var(--img) left var(--x) top / var(--iw) auto no-repeat, linear-gradient(#000 0 0) left var(--seg) top / var(--lw) 1.5px no-repeat;
+  }
+  html:not(.no-decor) main section[data-decor-right="ceiling"]::after {
+    top: 0;
+    -webkit-mask: var(--img) right var(--x) top / var(--iw) auto no-repeat, linear-gradient(#000 0 0) right var(--seg) top / var(--lw) 1.5px no-repeat;
+    mask: var(--img) right var(--x) top / var(--iw) auto no-repeat, linear-gradient(#000 0 0) right var(--seg) top / var(--lw) 1.5px no-repeat;
+  }
+  /* Над блоком уже проходит линия пола предыдущего блока — своя линия потолка не нужна */
+  html:not(.no-decor) main section[data-decor-ceiling-line="0"][data-decor-left="ceiling"]::before {
+    -webkit-mask: var(--img) left var(--x) top / var(--iw) auto no-repeat;
+    mask: var(--img) left var(--x) top / var(--iw) auto no-repeat;
+  }
+  html:not(.no-decor) main section[data-decor-ceiling-line="0"][data-decor-right="ceiling"]::after {
+    -webkit-mask: var(--img) right var(--x) top / var(--iw) auto no-repeat;
+    mask: var(--img) right var(--x) top / var(--iw) auto no-repeat;
+  }
+
+  /* Внизу «Контактов» карта во всю ширину — напольный предмет стоит на её верхнем крае */
+  html:not(.no-decor) main section#contacts:has(.contacts__map)[data-decor-left="floor"]::before,
+  html:not(.no-decor) main section#contacts:has(.contacts__map)[data-decor-right="floor"]::after { bottom: 420px; }
+}

@@ -42,10 +42,18 @@ GATE CHECK REQUEST:
 ```bash
 # Маппинг файлов → тестов:
 # server/        → tests/e2e/, tests/backend/
-# ui/            → tests/ui/
+# ui/            → tests/ui/, tests/anti_pattern/test_ui_regression_guards.py
 # database/      → tests/db/
 # utils/api_*    → tests/api_client/, tests/client/
+# utils/         → tests/property/ (Hypothesis)
+# ui/ + utils/data_access.py → tests/ui_real/ (если сервер доступен)
 # ВСЕГДА         → tests/ -m critical
+# ВСЕГДА при ui/ → tests/anti_pattern/test_ui_regression_guards.py tests/ui/test_widget_config_regression.py
+# НЕ запускать tests/integration/ в Gate Check (только ручной)
+# НЕ запускать tests/fuzz/ в Gate Check (долго, по запросу)
+
+# ОБЯЗАТЕЛЬНО при изменении ui/*.py:
+.venv\Scripts\python.exe -m pytest tests/anti_pattern/test_ui_regression_guards.py tests/ui/test_widget_config_regression.py -v --timeout=30
 
 .venv\Scripts\python.exe -m pytest <категория> -v --timeout=60
 ```
@@ -91,6 +99,24 @@ Grep по изменённым файлам:
 ```
 - **PASS:** 0 нарушений
 - **FAIL:** Любое CRITICAL/HIGH нарушение → блокировка
+
+### Проверка 6: Защита от UI регрессий (ОБЯЗАТЕЛЬНО при ui/*.py)
+```
+При изменении файлов ui/*.py — проверить что НЕ потеряны:
+1. searchable combo: setEditable(True), MatchContains, NoInsert, _searchable, eventFilter
+2. file filters: *.png во всех getOpenFileName
+3. address filter: substring match (НЕ exact match)
+4. truncate_filename: max_length <= 25
+5. CRM card: CRMCard() в contracts_router + _ensure_crm_card_exists в client
+
+Автоматическая проверка:
+.venv\Scripts\python.exe -m pytest tests/anti_pattern/test_ui_regression_guards.py tests/ui/test_widget_config_regression.py -v --timeout=30
+
+Если изменён ui/salaries_tab.py — дополнительно:
+.venv\Scripts\python.exe -m pytest tests/ui/test_salaries_tab_logic.py -v --timeout=30
+```
+- **PASS:** Все регрессионные тесты зелёные
+- **FAIL:** Любой FAILED → блокировка. Значит агент сломал существующую фичу.
 
 ## Формат выхода
 

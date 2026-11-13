@@ -1,13 +1,19 @@
 import logging
+
+from auth import get_current_user
 from fastapi import APIRouter, Depends, HTTPException
+from permissions import require_permission
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from database import get_db, City, Contract, Employee
-from auth import get_current_user
-from permissions import require_permission
+
+from database import City, Contract, Employee, Rate, get_db
 
 
 class CityCreate(BaseModel):
+    name: str
+
+
+class CityUpdate(BaseModel):
     name: str
 
 
@@ -16,32 +22,24 @@ router = APIRouter(tags=["cities"])
 
 
 @router.get("/")
-async def get_all_cities(
-    include_deleted: bool = False,
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def get_all_cities(include_deleted: bool = False, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Получить список всех городов"""
     query = db.query(City).order_by(City.name)
     if not include_deleted:
-        query = query.filter(City.status == 'активный')
+        query = query.filter(City.status == "активный")
     cities = query.all()
     return [{"id": c.id, "name": c.name, "status": c.status} for c in cities]
 
 
 @router.post("/")
-async def add_city(
-    data: CityCreate,
-    current_user: Employee = Depends(require_permission("cities.create")),
-    db: Session = Depends(get_db)
-):
+async def add_city(data: CityCreate, current_user: Employee = Depends(require_permission("cities.create")), db: Session = Depends(get_db)):
     """Добавить новый город"""
     try:
         # Проверить удалённый город — восстановить
         existing = db.query(City).filter(City.name == data.name).first()
         if existing:
-            if existing.status == 'удалён':
-                existing.status = 'активный'
+            if existing.status == "удалён":
+                existing.status = "активный"
                 db.commit()
                 return {"status": "success", "id": existing.id, "name": existing.name}
             raise HTTPException(status_code=400, detail="Город с таким названием уже существует")
@@ -59,12 +57,26 @@ async def add_city(
         raise HTTPException(status_code=500, detail="Внутренняя ошибка сервера")
 
 
+@router.patch("/{city_id}")
+async def update_city(city_id: int, data: CityUpdate, current_user: Employee = Depends(require_permission("cities.create")), db: Session = Depends(get_db)):
+    """Переименовать город (каскадно обновляет contracts и rates)"""
+    city = db.query(City).filter(City.id == city_id).first()
+    if not city:
+        raise HTTPException(status_code=404, detail="Город не найден")
+    existing = db.query(City).filter(City.name == data.name, City.id != city_id, City.status == "активный").first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Город с таким названием уже существует")
+    old_name = city.name
+    new_name = data.name.strip()
+    city.name = new_name
+    db.query(Contract).filter(Contract.city == old_name).update({"city": new_name})
+    db.query(Rate).filter(Rate.city == old_name).update({"city": new_name})
+    db.commit()
+    return {"status": "success", "id": city.id, "name": city.name}
+
+
 @router.delete("/{city_id}")
-async def delete_city(
-    city_id: int,
-    current_user: Employee = Depends(require_permission("cities.delete")),
-    db: Session = Depends(get_db)
-):
+async def delete_city(city_id: int, current_user: Employee = Depends(require_permission("cities.delete")), db: Session = Depends(get_db)):
     """Мягкое удаление города"""
     try:
         city = db.query(City).filter(City.id == city_id).first()
@@ -72,17 +84,11 @@ async def delete_city(
             raise HTTPException(status_code=404, detail="Город не найден")
 
         # Проверить активные договоры
-        active_contracts = db.query(Contract).filter(
-            Contract.city == city.name,
-            Contract.status.notin_(['СДАН', 'РАСТОРГНУТ'])
-        ).count()
+        active_contracts = db.query(Contract).filter(Contract.city == city.name, Contract.status.notin_(["СДАН", "РАСТОРГНУТ"])).count()
         if active_contracts > 0:
-            raise HTTPException(
-                status_code=409,
-                detail=f"Невозможно удалить город: {active_contracts} активных договоров"
-            )
+            raise HTTPException(status_code=409, detail=f"Невозможно удалить город: {active_contracts} активных договоров")
 
-        city.status = 'удалён'
+        city.status = "удалён"
         db.commit()
         return {"status": "success", "message": f"Город '{city.name}' удалён"}
     except HTTPException:

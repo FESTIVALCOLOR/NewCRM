@@ -74,6 +74,40 @@ except Exception as e:
 
     if echo "${UPLOAD_RESULT}" | grep -q "OK"; then
         echo "[OK] Загружено на Яндекс.Диск"
+
+        # Ротация старых бэкапов на Яндекс.Диске (старше KEEP_DAYS)
+        echo "[...] Ротация бэкапов на Яндекс.Диске (старше ${KEEP_DAYS} дней)..."
+        CUTOFF_DATE=$(date -d "-${KEEP_DAYS} days" +%Y%m%d 2>/dev/null || date -v-${KEEP_DAYS}d +%Y%m%d 2>/dev/null || echo "")
+        if [ -n "${CUTOFF_DATE}" ]; then
+            YD_CLEANUP=$(docker exec "${API_CONTAINER}" python3 -c "
+import sys
+try:
+    from yandex_disk_service import get_yandex_disk_service
+    yd = get_yandex_disk_service()
+    items = yd.list_files('${YADISK_BACKUP_PATH}')
+    deleted = 0
+    for item in items:
+        name = item.get('name', '')
+        if not name.startswith('crm_postgres_') or not name.endswith('.sql.gz'):
+            continue
+        # crm_postgres_YYYYMMDD_HHMMSS.sql.gz
+        date_part = name.split('_')[2]  # YYYYMMDD
+        if date_part < '${CUTOFF_DATE}':
+            path = '${YADISK_BACKUP_PATH}/' + name
+            yd.delete_file(path)
+            deleted += 1
+    print(f'OK:{deleted}')
+except Exception as e:
+    print(f'FAIL:{e}', file=sys.stderr)
+    print('FAIL')
+" 2>&1)
+            if echo "${YD_CLEANUP}" | grep -q "OK:"; then
+                YD_DEL_COUNT=$(echo "${YD_CLEANUP}" | grep -oP 'OK:\K[0-9]+')
+                echo "[OK] Удалено старых бэкапов с Яндекс.Диска: ${YD_DEL_COUNT}"
+            else
+                echo "[WARN] Ротация на Яндекс.Диске: ${YD_CLEANUP}"
+            fi
+        fi
     else
         echo "[WARN] Не удалось загрузить на Яндекс.Диск: ${UPLOAD_RESULT}"
     fi

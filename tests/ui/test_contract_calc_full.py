@@ -121,8 +121,8 @@ class TestCalcTemplateContractTerm:
 
     def test_standard_2_floors_large(self):
         _, calc = _get_calc_methods()
-        # 141м² × 2 этажа → base=40, + floor2: 10+20=30 → 70
-        assert calc('Стандарт', 141, floors=2) == 70
+        # 141м² × 2 этажа → base=40, + 1 доп. этаж × 10 = 50
+        assert calc('Стандарт', 141, floors=2) == 50
 
     def test_standard_with_viz_small(self):
         _, calc = _get_calc_methods()

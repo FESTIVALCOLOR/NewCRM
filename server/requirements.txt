@@ -13,12 +13,23 @@ pydantic-settings==2.6.1
 slowapi==0.1.9
 alembic==1.14.0
 openpyxl==3.1.5
+# Определение города посетителя сайта по IP (локальная база DB-IP)
+maxminddb==2.8.2
 reportlab==4.2.5
 # Telegram мессенджер-чаты
 aiogram==3.25.0
+aiohttp-socks==0.9.1
 pyrogram==2.0.106
 tgcrypto==1.2.5
 # Email для invite-ссылок
 aiosmtplib==3.0.2
 # Склонение имён (дательный падеж для скриптов)
 pymorphy3==2.0.2
+# Web Push уведомления
+pywebpush==2.0.1
+py-vapid==1.9.2
+# Рендеринг PDF в превью (чистый Python, без системных зависимостей)
+pypdfium2==4.30.0
+# Генерация договоров из DOCX-шаблонов
+python-docx==1.1.2
+num2words==0.5.14

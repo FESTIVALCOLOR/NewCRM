@@ -24,11 +24,15 @@ haiku
 | `server/main.py`, `server/schemas.py` | `tests/e2e/`, `tests/backend/` |
 | `server/database.py` | `tests/e2e/`, `tests/backend/` |
 | `server/permissions.py` | `tests/e2e/test_e2e_auth_roles.py` |
-| `ui/*.py` | `tests/ui/`, `tests/frontend/` |
+| `ui/*.py` | `tests/ui/`, `tests/frontend/`, `tests/anti_pattern/test_ui_regression_guards.py` |
 | `database/db_manager.py` | `tests/db/` |
 | `utils/api_client.py` | `tests/api_client/`, `tests/client/` |
 | `utils/data_access.py` | `tests/client/test_data_access.py` |
 | `utils/sync_manager.py` | `tests/e2e/test_e2e_sync_data.py` |
+| `server/` (API валидация) | `tests/fuzz/` (если сервер доступен) |
+| `utils/` (расчёты) | `tests/property/` |
+| `ui/` + `utils/data_access.py` | `tests/ui_real/` (если сервер доступен) |
+| `ui/` (визуальные изменения) | `tests/visual/` |
 | Любые изменения | `tests/ -m critical` (всегда) |
 | Любые API endpoints | `tests/e2e/` |
 
@@ -61,6 +65,21 @@ haiku
 
 # Smoke тесты (после деплоя)
 .venv\Scripts\python.exe -m pytest tests/smoke/ -v
+
+# Fuzz тесты (Schemathesis, Python 3.11, нужен сервер)
+FUZZ_BASE_URL=https://crm.festivalcolor.ru .venv\Scripts\python.exe -m pytest tests/fuzz/ -v -m fuzz
+
+# Реальные UI тесты (pytest-qt + DataAccess, нужен сервер)
+QT_QPA_PLATFORM=offscreen .venv\Scripts\python.exe -m pytest tests/ui_real/ -v -m ui_real
+
+# Property-based тесты (Hypothesis, без сервера)
+.venv\Scripts\python.exe -m pytest tests/property/ -v -m property
+
+# Visual regression тесты (offscreen)
+QT_QPA_PLATFORM=offscreen .venv\Scripts\python.exe -m pytest tests/visual/ -v -m visual
+
+# Integration тесты (pywinauto, Windows GUI, < 10 мин, ТОЛЬКО ручной)
+.venv\Scripts\python.exe -m pytest tests/integration/ -v --timeout=600
 
 # Регрессионные
 .venv\Scripts\python.exe -m pytest tests/regression/ -v
@@ -142,12 +161,24 @@ tests/
   ├── backend/      # Тесты бэкенда
   ├── frontend/     # Тесты фронтенда
   ├── edge_cases/   # Граничные случаи
-  ├── integration/  # Интеграционные
+  ├── fuzz/         # API fuzzing (Schemathesis, Python 3.11, нужен сервер)
+  ├── property/     # Property-based (Hypothesis, без сервера)
+  ├── ui_real/      # Реальные UI тесты (pytest-qt + DataAccess, нужен сервер)
+  ├── visual/       # Visual regression (QWidget.grab, offscreen)
+  ├── integration/  # pywinauto (< 10 мин, ТОЛЬКО ручной, НЕ CI)
   ├── regression/   # Регрессионные
-  ├── smoke/        # Smoke (после деплоя)
+  ├── smoke/        # Smoke (включая умные test_data_validation, test_orphan_records)
   ├── load/         # Нагрузочные (locust)
-  └── visual/       # Визуальные (pywinauto)
+  └── contract/     # Contract-тесты (ключи API ↔ клиент)
 ```
+
+## Правила новых слоёв
+
+- `tests/fuzz/` — требует Python 3.11 и работающий сервер. Маркер `@pytest.mark.fuzz`
+- `tests/integration/` — ТОЛЬКО ручной запуск, НЕ CI, лимит < 10 мин. Маркер `--timeout=600`
+- `tests/ui_real/` — требует `QT_QPA_PLATFORM=offscreen` и работающий сервер. Маркер `@pytest.mark.ui_real`
+- `tests/visual/` — требует `QT_QPA_PLATFORM=offscreen`. Маркер `@pytest.mark.visual`
+- `tests/property/` — Hypothesis, работает без сервера. Маркер `@pytest.mark.property`
 
 ## CI интеграция (GitHub Actions)
 

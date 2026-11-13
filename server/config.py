@@ -26,7 +26,7 @@ class Settings(BaseSettings):
 
     # Приложение
     app_name: str = "Interior Studio CRM API"
-    app_version: str = "1.0.0"
+    app_version: str = "1.0.2"
     debug: bool = False
 
     # Файлы
@@ -36,6 +36,11 @@ class Settings(BaseSettings):
 
     # Синхронизация
     sync_interval_seconds: int = 5  # Интервал обновления для клиентов
+
+    # Web Push (VAPID ключи — генерируются через: openssl ecparam -genkey -name prime256v1 | openssl ec)
+    vapid_public_key: str = ""
+    vapid_private_key: str = ""
+    vapid_claims_email: str = "mailto:admin@festivalcolor.ru"
 
     class Config:
         env_file = ".env"
