@@ -61,8 +61,10 @@
                 <span class="items__num">{{ index + 1 }}</span>
                 <img v-if="marker.image_url" :src="marker.image_url" alt="" class="items__photo" loading="lazy" />
                 <span class="items__text">
-                  <strong>{{ marker.title }}</strong>
-                  <a v-if="marker.url" :href="marker.url" target="_blank" rel="noopener nofollow" title="Открыть страницу товара" @click.stop> ↗</a>
+                  <span>
+                    <strong>{{ marker.title }}</strong>
+                    <a v-if="marker.url" :href="marker.url" target="_blank" rel="noopener nofollow" title="Открыть страницу товара" @click.stop> ↗</a>
+                  </span>
                   <span v-if="marker.sku" class="items__meta">Артикул: {{ marker.sku }}</span>
                   <span v-if="specs(marker).length" class="items__meta">{{ specs(marker).map(spec => `${spec.label.toLowerCase()}: ${spec.value}`).join(' · ') }}</span>
                   <span v-if="marker.description" class="items__desc">{{ marker.description }}</span>
@@ -207,7 +209,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .items ol { list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 6px 20px; }
 .items__photo { flex: 0 0 64px; width: 64px; height: 64px; object-fit: contain; background: #f6f6f6; border-radius: 6px; }
 .items__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.items__text > strong, .items__text > a { display: inline; }
 .items__meta { font-size: calc(0.8rem * var(--ts, 1)); color: var(--text-light); }
 .items__desc { font-size: calc(0.84rem * var(--ts, 1)); color: var(--text-light); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .items li { display: flex; gap: 10px; align-items: flex-start; padding: 6px 8px; border-radius: 8px; cursor: pointer; font-size: calc(0.9rem * var(--ts, 1)); color: var(--text-light); }
@@ -221,6 +222,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .design__back { color: var(--text-light); text-decoration: none; font-size: calc(0.9rem * var(--ts, 1)); }
 .design__back:hover { color: var(--accent); }
 .missing { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 20px; }
+/* На узком экране сбоку от отметки места нет: карточка встаёт по центру фото, под отметкой или над ней */
+@media (max-width: 700px) {
+  .tip { left: 50% !important; width: min(280px, calc(100% - 16px)); }
+  .tip--right, .tip--left { transform: translateX(-50%); }
+  .tip--down { margin-top: 22px; }
+  .tip--up.tip--right, .tip--up.tip--left { transform: translate(-50%, -100%); margin-top: -22px; }
+}
 @media (max-width: 1000px) {
   .design { grid-template-columns: 1fr; }
   .design__side { position: static; }
