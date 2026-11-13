@@ -29,7 +29,7 @@
     </div>
     <p class="calc__note">
       <template v-if="result.steps">
-        {{ formatPrice(result.base) }} за площадь до {{ config.ready_area_base }} м² + {{ formatPrice(result.extra) }} за {{ overArea }} м² сверх неё.
+        {{ formatPrice(result.base) }} за первые {{ config.ready_area_base }} м² + {{ result.steps }} × {{ formatPrice(config.ready_area_step_price) }} за остальные {{ overArea }} м² (доплата за каждые {{ config.ready_area_step }} м²).
       </template>
       <template v-else-if="hasArea">Площадь до {{ config.ready_area_base }} м² входит в базовую цену.</template>
       <template v-else>Цена для объекта до {{ config.ready_area_base }} м². Укажите площадь, чтобы увидеть точную стоимость и срок.</template>
@@ -82,15 +82,14 @@ const orderUrl = computed(() => {
   font-family: inherit; font-size: calc(0.95rem * var(--ts, 1)); outline: none;
 }
 .calc__input:focus { border-color: var(--accent); }
-.calc__result { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 18px 20px; border-radius: 10px; background: color-mix(in srgb, var(--accent) 7%, #fff); }
+.calc__result { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px 20px; padding: 18px 20px; border-radius: 10px; background: color-mix(in srgb, var(--accent) 7%, #fff); }
 .calc__result > div { display: flex; flex-direction: column; gap: 2px; }
 .calc__caption { font-size: calc(0.78rem * var(--ts, 1)); color: var(--text-light); }
 .calc__price { font-family: var(--font-head); font-size: calc(1.7rem * var(--ts, 1)); color: var(--accent); line-height: 1.2; white-space: nowrap; }
-.calc__days { font-family: var(--font-head); font-size: calc(1.1rem * var(--ts, 1)); color: var(--dark); line-height: 1.7; }
+.calc__days { font-family: var(--font-head); font-size: calc(1.05rem * var(--ts, 1)); color: var(--dark); line-height: 1.9; white-space: nowrap; }
 .calc__note { font-size: calc(0.85rem * var(--ts, 1)); color: var(--text-light); }
 .calc__order { text-align: center; }
 @media (max-width: 480px) {
   .calc { padding: 20px; }
-  .calc__result { grid-template-columns: 1fr; }
 }
 </style>

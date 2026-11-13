@@ -119,10 +119,12 @@
         <h3>Отметки мебели на фото</h3>
         <p class="hint" style="margin:0">Нажмите на предмет на фото, чтобы поставить отметку, затем впишите название. Отметку можно перетащить. На сайте посетитель видит номер на фото и подпись при наведении или касании.</p>
         <div class="mk">
-          <div class="mk__photo" ref="photoEl" @click="addMarker" @pointermove="dragMove" @pointerup="dragEnd" @pointerleave="dragEnd">
-            <img :src="marking.url" alt="" draggable="false" />
-            <button v-for="(marker, index) in marking.markers" :key="index" type="button" class="mk__dot" :class="{ active: selected === index }"
-              :style="{ left: marker.x + '%', top: marker.y + '%' }" @click.stop="selected = index" @pointerdown.stop.prevent="dragBegin(index)">{{ index + 1 }}</button>
+          <div class="mk__stage">
+            <div class="mk__photo" ref="photoEl" @click="addMarker" @pointermove="dragMove" @pointerup="dragEnd" @pointerleave="dragEnd">
+              <img :src="marking.url" alt="" draggable="false" />
+              <button v-for="(marker, index) in marking.markers" :key="index" type="button" class="mk__dot" :class="{ active: selected === index }"
+                :style="{ left: marker.x + '%', top: marker.y + '%' }" @click.stop="selected = index" @pointerdown.stop.prevent="dragBegin(index)">{{ index + 1 }}</button>
+            </div>
           </div>
           <div class="mk__list">
             <div v-if="!marking.markers.length" class="hint">Отметок пока нет</div>
@@ -383,8 +385,10 @@ onMounted(load)
 .rd-image__actions { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px; background: #fff; }
 
 .mk { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 18px; align-items: start; }
-.mk__photo { position: relative; line-height: 0; cursor: crosshair; user-select: none; touch-action: none; border-radius: 8px; overflow: hidden; background: #f3f4f6; }
-.mk__photo img { width: 100%; height: auto; display: block; max-height: 68vh; object-fit: contain; }
+.mk__stage { display: flex; justify-content: center; background: #f3f4f6; border-radius: 8px; min-width: 0; }
+/* Рамка сжимается точно до размеров снимка: координаты отметок — проценты от самого фото, а не от поля вокруг него */
+.mk__photo { position: relative; width: fit-content; max-width: 100%; line-height: 0; cursor: crosshair; user-select: none; touch-action: none; }
+.mk__photo img { display: block; width: auto; height: auto; max-width: 100%; max-height: 68vh; }
 .mk__dot {
   position: absolute; width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50%; border: 2px solid #fff; background: #c0392b; color: #fff;
   font-size: 0.75rem; font-weight: 700; line-height: 1; padding: 0; cursor: grab; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);

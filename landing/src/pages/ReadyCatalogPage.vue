@@ -44,7 +44,7 @@
             <ul class="pricing__rules">
               <li>Цена действует для объекта площадью до {{ config.ready_area_base }} м².</li>
               <li>Свыше {{ config.ready_area_base }} м² — плюс {{ formatPrice(config.ready_area_step_price) }} за каждые {{ config.ready_area_step }} м².</li>
-              <li>Срок — {{ formatDays(config.ready_days_base) }}, плюс {{ config.ready_days_step }} за каждые {{ config.ready_area_step }} м² свыше {{ config.ready_area_base }} м².</li>
+              <li>Срок — {{ formatDays(config.ready_days_base) }}, плюс {{ config.ready_days_step }} дней за каждые {{ config.ready_area_step }} м² свыше {{ config.ready_area_base }} м².</li>
             </ul>
           </div>
           <ReadyCalculator :settings="site.settings" />
