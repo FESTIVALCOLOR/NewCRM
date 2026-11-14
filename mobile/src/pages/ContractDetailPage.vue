@@ -1974,8 +1974,12 @@ async function exportTimelineExcel() {
     wsData.push([e.stage_name, e.executor_role || '', norm, fact, date, status, note])
   })
   wsData.push([])
-  wsData.push(['Итого по договору', '', timelineTotalInScope.value, '', '', '', ''])
+  const factTotal = timelineActualTotal.value
+  wsData.push(['Итого по договору', '', timelineTotalInScope.value, factTotal > 0 ? factTotal : '', '', '', ''])
   wsData.push(['Итого с учётом вне объёма', '', timelineTotalAll.value, '', '', '', ''])
+  if (timelineCalendarOverdue.value > 0) {
+    wsData.push(['Просрочка, р.д.', '', '', timelineCalendarOverdue.value, '', '', ''])
+  }
   const ws = utils.aoa_to_sheet(wsData)
   ws['!cols'] = [{ wch: 42 }, { wch: 20 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 14 }]
   const wb = utils.book_new()
@@ -2016,16 +2020,26 @@ function exportTimelinePdf() {
       <td>${status}</td>
     </tr>`
   })
+  const factTotal = timelineActualTotal.value
   rows += `<tr class="total-row">
     <td colspan="2"><b>Итого по договору</b></td>
     <td class="num"><b>${timelineTotalInScope.value} дн.</b></td>
-    <td colspan="3"></td>
+    <td class="num"><b>${factTotal > 0 ? `${factTotal} дн.` : '—'}</b></td>
+    <td colspan="2"></td>
   </tr>
   <tr class="total-sub">
     <td colspan="2">Итого с учётом вне объёма</td>
     <td class="num">${timelineTotalAll.value} дн.</td>
     <td colspan="3"></td>
   </tr>`
+  if (timelineCalendarOverdue.value > 0) {
+    rows += `<tr class="total-sub">
+    <td colspan="2" style="color:#E53935"><b>Просрочка</b></td>
+    <td></td>
+    <td class="num" style="color:#E53935"><b>${timelineCalendarOverdue.value} р.д.</b></td>
+    <td colspan="2"></td>
+  </tr>`
+  }
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
   <title>Таблица сроков — №${num}</title>
   <style>
