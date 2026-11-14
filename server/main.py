@@ -632,6 +632,20 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"Preview cleanup: {e}")
 
+    async def _run_bot_polling(dp, bot):
+        # start_polling падает целиком при сбое прокси на старте — без цикла бот молчит до рестарта контейнера
+        delay = 5
+        while True:
+            try:
+                await dp.start_polling(bot, handle_signals=False)
+                return
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                logger.warning(f"Telegram Bot polling упал: {e}; повтор через {delay} с")
+                await asyncio.sleep(delay)
+                delay = min(delay * 2, 300)
+
     # Запуск Telegram Bot polling для обработки /start (привязка аккаунтов)
     # Используем file-lock чтобы только ОДИН воркер Uvicorn запускал polling
     # (иначе TelegramConflictError при --workers > 1)
@@ -655,7 +669,7 @@ async def startup_event():
                 if tg.bot_available:
                     dp = BotDispatcher()
                     dp.include_router(bot_router)
-                    asyncio.create_task(dp.start_polling(tg._bot, handle_signals=False))
+                    asyncio.create_task(_run_bot_polling(dp, tg._bot))
                     logger.info("Telegram Bot polling запущен (этот воркер — primary)")
             except (IOError, OSError):
                 # Другой воркер уже держит блокировку — пропускаем
