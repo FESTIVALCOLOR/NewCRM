@@ -109,7 +109,7 @@
             no-caps
             label="Сдать работу"
             icon="check"
-            style="background: #58D68D; color: white; font-size: 11px; font-weight: bold; padding: 4px 12px; height: 32px; border-radius: 4px; width: 100%"
+            style="background: #58D68D; color: white; font-size: 11px; font-weight: bold; padding: 4px 12px; min-height: 32px; line-height: 1.15; border-radius: 4px; width: 100%"
             @click.stop="emit('submit-work')"
           />
         </div>
@@ -122,7 +122,7 @@
             dense
             no-caps
             label="Клиенту"
-            style="background: #58D68D; color: white; font-size: 11px; font-weight: bold; height: 32px; border-radius: 4px; flex: 1"
+            style="background: #58D68D; color: white; font-size: 11px; font-weight: bold; min-height: 32px; line-height: 1.15; border-radius: 4px; flex: 1"
             @click.stop="emit('client-send')"
           />
           <q-btn
@@ -130,7 +130,7 @@
             dense
             no-caps
             label="Исправление"
-            style="background: #F1948A; color: white; font-size: 11px; font-weight: bold; height: 32px; border-radius: 4px; flex: 1"
+            style="background: #F1948A; color: white; font-size: 11px; font-weight: bold; min-height: 32px; line-height: 1.15; border-radius: 4px; flex: 1"
             @click.stop="emit('reject')"
           />
         </div>
@@ -140,7 +140,7 @@
             dense
             no-caps
             label="Получен ответ от клиента"
-            style="background: #27AE60; color: white; font-size: 11px; font-weight: bold; height: 32px; border-radius: 4px; width: 100%"
+            style="background: #27AE60; color: white; font-size: 11px; font-weight: bold; min-height: 32px; line-height: 1.15; border-radius: 4px; width: 100%"
             @click.stop="emit('client-approved')"
           />
         </div>
@@ -156,7 +156,7 @@
               no-caps
               icon="skip_next"
               label="Следующий подэтап"
-              style="background: #5DADE2; color: white; font-size: 10px; font-weight: bold; height: 30px; border-radius: 4px; flex: 1"
+              style="background: #5DADE2; color: white; font-size: 10px; font-weight: bold; min-height: 30px; line-height: 1.15; border-radius: 4px; flex: 1"
               @click.stop="emit('advance-round')"
             />
             <q-btn
@@ -165,7 +165,7 @@
               no-caps
               icon="done_all"
               label="Закрыть этап"
-              style="background: #27AE60; color: white; font-size: 10px; font-weight: bold; height: 30px; border-radius: 4px; flex: 1"
+              style="background: #27AE60; color: white; font-size: 10px; font-weight: bold; min-height: 30px; line-height: 1.15; border-radius: 4px; flex: 1"
               @click.stop="emit('close-stage')"
             />
           </div>
@@ -175,7 +175,7 @@
             no-caps
             icon="add_circle_outline"
             label="Доп. круг"
-            style="background: #D5D8DC; color: var(--fc-text); font-size: 10px; font-weight: bold; height: 28px; border-radius: 4px; width: 100%"
+            style="background: #D5D8DC; color: var(--fc-text); font-size: 10px; font-weight: bold; min-height: 28px; line-height: 1.15; border-radius: 4px; width: 100%"
             @click.stop="emit('add-extra-round')"
           />
         </div>
@@ -185,7 +185,7 @@
             dense
             no-caps
             label="Отправить акт"
-            style="background: #58D68D; color: white; font-size: 11px; font-weight: bold; height: 32px; border-radius: 4px; flex: 1"
+            style="background: #58D68D; color: white; font-size: 11px; font-weight: bold; min-height: 32px; line-height: 1.15; border-radius: 4px; flex: 1"
             @click.stop="emit('send-act')"
           />
           <q-btn
@@ -193,7 +193,7 @@
             dense
             no-caps
             label="Акт подписан"
-            style="background: #85C1E9; color: white; font-size: 11px; font-weight: bold; height: 32px; border-radius: 4px; flex: 1"
+            style="background: #85C1E9; color: white; font-size: 11px; font-weight: bold; min-height: 32px; line-height: 1.15; border-radius: 4px; flex: 1"
             @click.stop="emit('sign-act')"
           />
         </div>
