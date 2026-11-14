@@ -7,7 +7,7 @@
       </router-link>
       <p class="footer__copy">{{ settings.copyright || `Copyright © FESTIVAL COLOR ${new Date().getFullYear()}. Все права защищены.` }}</p>
       <div class="footer__socials">
-        <!-- Канал связи: у подвала плавающая кнопка прячется (её место занимает браузерная «наверх»), поэтому дублируем её здесь -->
+        <!-- Канал связи, выбранный в панели (телефон, WhatsApp, Telegram или почта) -->
         <a :href="ctaHref" :target="linkTarget(ctaHref)" rel="noopener" class="footer__social-btn footer__social-btn--cta" :style="{ '--cta-color': channel.color }" :aria-label="channel.label" :title="channel.label">
           <svg viewBox="0 0 24 24"><path :d="channel.icon" /></svg>
         </a>
