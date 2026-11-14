@@ -22,8 +22,22 @@
         <q-card-section style="background: var(--fc-bg-info); border-radius: 8px 8px 0 0">
           <div class="row items-start justify-between q-mb-xs">
             <div style="flex: 1">
-              <div class="text-subtitle1 text-weight-bold" style="color: var(--fc-text)">
-                {{ card.contract_number }}
+              <div class="row items-center no-wrap" style="gap: 4px">
+                <div class="text-subtitle1 text-weight-bold" style="color: var(--fc-text)">
+                  {{ card.contract_number }}
+                </div>
+                <q-btn
+                  flat
+                  dense
+                  round
+                  size="sm"
+                  icon="content_copy"
+                  color="grey-6"
+                  aria-label="Копировать ссылку на заказ"
+                  @click="copyCardLink"
+                >
+                  <q-tooltip>Копировать ссылку на заказ</q-tooltip>
+                </q-btn>
               </div>
               <div class="text-body2 q-mt-xs" style="color: var(--fc-text)">
                 <a v-if="card.address" :href="'https://yandex.ru/maps/?text=' + encodeURIComponent(card.address)" target="_blank" style="color: var(--fc-text); text-decoration: none"><q-icon name="location_on" size="14px" color="red" class="q-mr-xs" />{{ card.address }}</a>
@@ -2597,7 +2611,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useQuasar } from 'quasar'
+import { useQuasar, copyToClipboard } from 'quasar'
 import { useCrmStore } from 'src/stores/crm'
 import { useAuthStore } from 'src/stores/auth'
 import { useReferencesStore } from 'src/stores/references'
@@ -2788,12 +2802,23 @@ async function createTzSurvey() {
   }
 }
 
+// copyToClipboard из Quasar: Clipboard API, а где его нет (старый iOS Safari,
+// WebView Android, страница без фокуса) — запасной вариант через выделение текста
+function copyLink(link, okMessage) {
+  copyToClipboard(link)
+    .then(() => $q.notify({ type: 'positive', message: okMessage, timeout: 1500 }))
+    .catch(() => $q.notify({ type: 'negative', message: 'Не удалось скопировать ссылку' }))
+}
+
+function copyCardLink() {
+  if (!card.value?.id) return
+  const { href } = router.resolve({ name: 'crm-card', params: { id: card.value.id } })
+  copyLink(`${window.location.origin}${href}`, 'Ссылка на заказ скопирована')
+}
+
 function copyTzLink() {
   if (!tzSurvey.value?.access_token) return
-  const link = `${window.location.origin}/survey/${tzSurvey.value.access_token}`
-  navigator.clipboard.writeText(link).then(() => {
-    $q.notify({ type: 'positive', message: 'Ссылка скопирована' })
-  })
+  copyLink(`${window.location.origin}/survey/${tzSurvey.value.access_token}`, 'Ссылка скопирована')
 }
 
 function openTzSurveyView() {
