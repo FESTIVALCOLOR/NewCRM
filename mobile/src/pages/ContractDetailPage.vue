@@ -2040,33 +2040,35 @@ function exportTimelinePdf() {
     <td colspan="2"></td>
   </tr>`
   }
+  // Окно печати не видит CSS-переменные темы CRM — поэтому цвета в стилях заданы явно
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
   <title>Таблица сроков — №${num}</title>
   <style>
     body { font-family: Arial, sans-serif; font-size: 10px; color: #222; margin: 16px; }
     h2 { font-size: 13px; margin: 0 0 2px; }
-    .sub { color: var(--fc-text-secondary); margin-bottom: 12px; font-size: 10px; }
+    .sub { color: #666; margin-bottom: 12px; font-size: 10px; }
     table { border-collapse: collapse; width: 100%; }
-    th { background: var(--fc-accent); color: var(--fc-text); font-weight: bold; padding: 4px 6px; text-align: left; border: 1px solid var(--fc-border); font-size: 10px; }
-    td { padding: 3px 6px; border: 1px solid var(--fc-border-light); vertical-align: middle; }
-    .num { text-align: right; white-space: nowrap; }
-    .grp-hdr td { background: var(--fc-border-light); font-weight: bold; font-size: 10px; }
-    .sub-hdr td { background: var(--fc-bg-alt); font-weight: 600; font-size: 10px; }
+    th { background: #ffd93b; color: #222; font-weight: bold; padding: 4px 6px; text-align: left; border: 1px solid #ccc; font-size: 10px; }
+    td { padding: 3px 6px; border: 1px solid #e0e0e0; vertical-align: middle; }
+    th.num, .num { text-align: right; white-space: nowrap; }
+    .grp-hdr td { background: #e0e0e0; font-weight: bold; font-size: 10px; }
+    .sub-hdr td { background: #f5f5f5; font-weight: 600; font-size: 10px; }
     .ontime td { background: #f0fff4; }
     .overdue td { background: #fff5f5; }
     .skipped td { opacity: 0.55; }
-    .out-tag { color: var(--fc-text-muted); font-style: italic; font-size: 9px; }
+    .out-tag { color: #e74c3c; font-style: italic; font-size: 9px; }
     .tag-ok { color: #27ae60; font-weight: bold; }
     .tag-over { color: #e74c3c; font-weight: bold; }
-    .tag-skip { color: var(--fc-text-disabled); }
-    .total-row td { border-top: 2px solid var(--fc-text); font-size: 11px; }
-    .total-sub td { color: var(--fc-text-light); }
+    .tag-skip { color: #aaa; }
+    .total-row td { border-top: 2px solid #222; font-size: 11px; }
+    .total-sub td { color: #666; }
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     @media print { @page { margin: 12mm; size: A4; } }
   </style></head><body>
   <h2>Таблица сроков — Договор №${num}</h2>
   <div class="sub">${addr}</div>
   <table>
-    <thead><tr><th>Этап</th><th>Роль</th><th>Норма</th><th>Факт</th><th>Дата</th><th>Статус</th></tr></thead>
+    <thead><tr><th>Этап</th><th>Роль</th><th class="num">Норма</th><th class="num">Факт</th><th class="num">Дата</th><th>Статус</th></tr></thead>
     <tbody>${rows}</tbody>
   </table>
   <script>window.onload = () => { window.print() }<\/script>
