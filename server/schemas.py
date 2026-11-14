@@ -1229,6 +1229,7 @@ class TimelineExportRequest(BaseModel):
     total_in_scope: Optional[float] = None
     total_all: Optional[float] = None
     total_fact: Optional[float] = None
+    total_fact_all: Optional[float] = None
     overdue_days: Optional[float] = None
 
 

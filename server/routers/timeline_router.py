@@ -461,7 +461,7 @@ async def export_timeline_excel(contract_id: int, current_user: Employee = Depen
 
 
 _XL_COLORS = {
-    "header": "FFD93B",
+    "header": "FFF4C7",
     "group": "E0E0E0",
     "sub": "F5F5F5",
     "ontime": "F0FFF4",
@@ -515,10 +515,10 @@ def _xl_write_entry(ws, row_idx, r, border):
 def _xl_write_totals(ws, row_idx, req, thin):
     from openpyxl.styles import Alignment, Border, Font, Side
 
-    top = Border(top=Side(style="medium", color="222222"), left=thin.left, right=thin.right, bottom=thin.bottom)
+    top = Border(top=Side(style="thin", color="999999"), left=thin.left, right=thin.right, bottom=thin.bottom)
     _xl_write_row(ws, row_idx, ["Итого по договору", "", req.total_in_scope, req.total_fact or None, "", "", ""], top, font=Font(bold=True))
     row_idx += 1
-    _xl_write_row(ws, row_idx, ["Итого с учётом вне объёма", "", req.total_all, None, "", "", ""], thin, font=Font(color="666666"))
+    _xl_write_row(ws, row_idx, ["Итого с учётом вне объёма", "", req.total_all, req.total_fact_all or None, "", "", ""], thin, font=Font(color="666666"))
     if req.overdue_days:
         row_idx += 1
         _xl_write_row(ws, row_idx, ["Просрочка, р.д.", "", None, req.overdue_days, "", "", ""], thin, font=Font(bold=True, color=_XL_COLORS["red"]))
@@ -552,8 +552,9 @@ def export_timeline_excel_styled(contract_id: int, req: TimelineExportRequest, c
     border = Border(left=side, right=side, top=side, bottom=side)
     headers = ["Этап", "Роль", "Норма, дн.", "Факт, дн.", "Дата", "Статус", "Примечание"]
     _xl_write_row(ws, 4, headers, border, _xl_fill(_XL_COLORS["header"]), Font(bold=True))
-    for col_idx in (3, 4, 5):
-        ws.cell(row=4, column=col_idx).alignment = Alignment(horizontal="right")
+    for col_idx in range(1, 8):
+        ws.cell(row=4, column=col_idx).alignment = Alignment(horizontal="right" if col_idx in (3, 4, 5) else "left", vertical="center")
+    ws.row_dimensions[4].height = 24
 
     row_idx = 5
     for r in req.rows:

@@ -1267,9 +1267,17 @@
               </div>
               <div v-if="timelineActualTotal > 0" class="row items-center justify-between q-mb-xs">
                 <div class="text-caption" style="color: var(--fc-text-medium)">
-                  Факт
+                  Факт по договору
                 </div>
                 <div class="text-caption text-weight-bold" style="color: var(--fc-text-medium)">
+                  {{ timelineFactInScope }} дн.
+                </div>
+              </div>
+              <div v-if="timelineFactOutScope > 0" class="row items-center justify-between q-mb-xs">
+                <div class="text-caption" style="color: var(--fc-text-light)">
+                  Факт с учётом вне объёма
+                </div>
+                <div class="text-caption text-weight-bold" style="color: var(--fc-text-light)">
                   {{ timelineActualTotal }} дн.
                 </div>
               </div>
@@ -1875,6 +1883,11 @@ const timelineActualTotal = computed(() => {
   }
   return timeline.value.filter(isTimelineEntry).reduce((s, e) => s + (e.actual_days || 0), 0)
 })
+// timelineActualTotal — факт с учётом этапов вне объёма; «по договору» их не включает
+const timelineFactOutScope = computed(() => timeline.value
+  .filter(e => isTimelineEntry(e) && e.is_in_contract_scope === false)
+  .reduce((s, e) => s + (e.actual_days || 0), 0))
+const timelineFactInScope = computed(() => Math.max(0, timelineActualTotal.value - timelineFactOutScope.value))
 
 const timelineOverdueTotal = computed(() => {
   // Та же формула что в дедлайн popup CrmCardPage (per-stage in-scope, единая система)
@@ -1980,7 +1993,8 @@ async function exportTimelineExcel() {
       rows: timeline.value.map(timelineExportRow),
       total_in_scope: timelineTotalInScope.value,
       total_all: timelineTotalAll.value,
-      total_fact: timelineActualTotal.value || null,
+      total_fact: timelineFactInScope.value || null,
+      total_fact_all: timelineActualTotal.value || null,
       overdue_days: timelineCalendarOverdue.value || null,
     })
     const url = URL.createObjectURL(data)
@@ -2031,17 +2045,18 @@ function exportTimelinePdf() {
       <td>${status}</td>
     </tr>`
   })
-  const factTotal = timelineActualTotal.value
+  const days = v => (v > 0 ? `${v} дн.` : '—')
   rows += `<tr class="total-row">
     <td colspan="2"><b>Итого по договору</b></td>
-    <td class="num"><b>${timelineTotalInScope.value} дн.</b></td>
-    <td class="num"><b>${factTotal > 0 ? `${factTotal} дн.` : '—'}</b></td>
+    <td class="num"><b>${days(timelineTotalInScope.value)}</b></td>
+    <td class="num"><b>${days(timelineFactInScope.value)}</b></td>
     <td colspan="2"></td>
   </tr>
   <tr class="total-sub">
     <td colspan="2">Итого с учётом вне объёма</td>
-    <td class="num">${timelineTotalAll.value} дн.</td>
-    <td colspan="3"></td>
+    <td class="num">${days(timelineTotalAll.value)}</td>
+    <td class="num">${days(timelineActualTotal.value)}</td>
+    <td colspan="2"></td>
   </tr>`
   if (timelineCalendarOverdue.value > 0) {
     rows += `<tr class="total-sub">
@@ -2051,18 +2066,27 @@ function exportTimelinePdf() {
     <td colspan="2"></td>
   </tr>`
   }
-  // Окно печати не видит CSS-переменные темы CRM — поэтому цвета в стилях заданы явно
+  const printedAt = new Date().toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+  // Окно печати не видит CSS-переменные темы CRM — поэтому цвета в стилях заданы явно.
+  // @page margin:0 убирает колонтитулы браузера (about:blank, дата, заголовок) — свой
+  // верхний колонтитул фиксирован, а место под него резервирует повторяющийся thead обёртки.
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
   <title>Таблица сроков — №${num}</title>
   <style>
-    body { font-family: Arial, sans-serif; font-size: 10px; color: #222; margin: 16px; }
+    @page { size: A4; margin: 0; }
+    body { font-family: Arial, sans-serif; font-size: 10px; color: #222; margin: 0 12mm; }
+    .page { width: 100%; border-collapse: collapse; }
+    .page > thead > tr > td, .page > tbody > tr > td, .page > tfoot > tr > td { padding: 0; border: none; }
+    .page-hdr-space { height: 16mm; }
+    .page-ftr-space { height: 10mm; }
+    .page-hdr { position: fixed; top: 7mm; left: 12mm; right: 12mm; display: flex; justify-content: space-between; font-size: 9px; color: #777; }
     h2 { font-size: 13px; margin: 0 0 2px; }
     .sub { color: #666; margin-bottom: 12px; font-size: 10px; }
-    table { border-collapse: collapse; width: 100%; }
-    th { background: #ffd93b; color: #222; font-weight: bold; padding: 4px 6px; text-align: left; border: 1px solid #ccc; font-size: 10px; }
-    td { padding: 3px 6px; border: 1px solid #e0e0e0; vertical-align: middle; }
-    th.num, .num { text-align: right; white-space: nowrap; }
-    .grp-hdr td { background: #e0e0e0; font-weight: bold; font-size: 10px; }
+    .tl { border-collapse: collapse; width: 100%; }
+    .tl th { background: #fff4c7; color: #222; font-weight: bold; padding: 8px 6px; text-align: left; border: 0.5pt solid #d6d6d6; font-size: 10px; }
+    .tl td { padding: 3px 6px; border: 0.5pt solid #e0e0e0; vertical-align: middle; }
+    .tl th.num, .tl .num { text-align: right; white-space: nowrap; }
+    .grp-hdr td { background: #e8e8e8; font-weight: bold; font-size: 10px; }
     .sub-hdr td { background: #f5f5f5; font-weight: 600; font-size: 10px; }
     .ontime td { background: #f0fff4; }
     .overdue td { background: #fff5f5; }
@@ -2071,16 +2095,22 @@ function exportTimelinePdf() {
     .tag-ok { color: #27ae60; font-weight: bold; }
     .tag-over { color: #e74c3c; font-weight: bold; }
     .tag-skip { color: #aaa; }
-    .total-row td { border-top: 2px solid #222; font-size: 11px; }
+    .tl .total-row td { border-top: 1pt solid #999; font-size: 11px; }
     .total-sub td { color: #666; }
     * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    @media print { @page { margin: 12mm; size: A4; } }
   </style></head><body>
-  <h2>Таблица сроков — Договор №${num}</h2>
-  <div class="sub">${addr}</div>
-  <table>
-    <thead><tr><th>Этап</th><th>Роль</th><th class="num">Норма</th><th class="num">Факт</th><th class="num">Дата</th><th>Статус</th></tr></thead>
-    <tbody>${rows}</tbody>
+  <div class="page-hdr"><span>${printedAt}</span><span>Таблица сроков — №${num}</span></div>
+  <table class="page">
+    <thead><tr><td><div class="page-hdr-space"></div></td></tr></thead>
+    <tbody><tr><td>
+      <h2>Таблица сроков — Договор №${num}</h2>
+      <div class="sub">${addr}</div>
+      <table class="tl">
+        <thead><tr><th>Этап</th><th>Роль</th><th class="num">Норма</th><th class="num">Факт</th><th class="num">Дата</th><th>Статус</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </td></tr></tbody>
+    <tfoot><tr><td><div class="page-ftr-space"></div></td></tr></tfoot>
   </table>
   <script>window.onload = () => { window.print() }<\/script>
   </body></html>`

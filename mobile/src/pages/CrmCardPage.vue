@@ -598,6 +598,7 @@
                 <span class="text-caption" style="color: var(--fc-text-medium)">
                   Норма: {{ timelineTotals.normTotal }} дн.
                   <span v-if="timelineTotals.actualTotal > 0"> | Факт: {{ timelineTotals.actualTotal }} дн.</span>
+                  <span v-if="timelineTotals.actualAll > timelineTotals.actualTotal"> (с учётом вне объёма: {{ timelineTotals.actualAll }} дн.)</span>
                 </span>
               </div>
               <div v-if="calendarOverdueDays > 0 || timelineTotals.overdueTotal > 0 || timelineTotals.aheadTotal > 0" class="q-mt-xs">
@@ -2875,12 +2876,13 @@ const hasCustomNormDays = computed(() =>
   ),
 )
 const timelineTotals = computed(() => {
-  let normFallback = 0, storedActual = 0
+  let normFallback = 0, storedActual = 0, outScopeActual = 0
   const contractPeriod = contractData.value?.contract_period || 0
   for (const e of timelineEntries.value) {
     if (e.executor_role === 'header') continue
     if (e.is_in_contract_scope !== false) normFallback += (e.norm_days || 0)
     if (e.status !== 'skipped') storedActual += (e.actual_days || 0)
+    if (e.status !== 'skipped' && e.is_in_contract_scope === false) outScopeActual += (e.actual_days || 0)
   }
   const normTotal = contractPeriod > 0 ? contractPeriod : normFallback
   // Факт: для открытого проекта — р.д. от START до сегодня минус дни паузы; для закрытого — сумма
@@ -2894,7 +2896,9 @@ const timelineTotals = computed(() => {
   const netDiff = netDeadlineDiff.value
   const overdueTotal = Math.max(0, netDiff)
   const aheadTotal = Math.max(0, -netDiff)
-  return { normTotal, actualTotal, overdueTotal, aheadTotal }
+  // Норма — по объёму договора, значит и факт рядом с ней без этапов вне объёма
+  const actualInScope = Math.max(0, actualTotal - outScopeActual)
+  return { normTotal, actualTotal: actualInScope, actualAll: actualTotal, overdueTotal, aheadTotal }
 })
 const workflowStates = ref([])
 const showRejectDialog = ref(false)
