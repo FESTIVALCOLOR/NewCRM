@@ -1964,6 +1964,22 @@ const timelineCalendarOverdue = computed(() => {
   return d < 0 ? Math.abs(d) : 0
 })
 
+// Строки под итогами — те же, что на экране договора (для PDF и Excel)
+function timelineSummaryLines() {
+  const date = d => new Date(d).toLocaleDateString('ru-RU')
+  const lines = []
+  if (contractDeadline.value) lines.push({ label: 'Дедлайн', value: date(contractDeadline.value), tone: 'muted' })
+  if (contractClosureDate.value) lines.push({ label: 'Закрыт', value: date(contractClosureDate.value), tone: 'green' })
+  else if (contractDeadline.value) lines.push({ label: 'Статус', value: 'В работе', tone: 'orange' })
+  if (timelineCalendarOverdue.value > 0) lines.push({ label: 'Просрочка', value: `${timelineCalendarOverdue.value} р.д.`, tone: 'red' })
+  if (timelineOverdueTotal.value > 0) lines.push({ label: 'Отклонение по этапам', value: `+${timelineOverdueTotal.value} дн.`, tone: 'redsoft' })
+  if (timelineAheadTotal.value > 0) lines.push({ label: 'Раньше срока', value: `-${timelineAheadTotal.value} дн.`, tone: 'green' })
+  const pause = contractPauseInfo.value
+  if (pause.postStart > 0) lines.push({ label: 'Дни ожидания (добавлены к дедлайну)', value: `+${pause.postStart} дн.`, tone: 'muted' })
+  if (pause.preStart > 0) lines.push({ label: 'Дни ожидания (до начала разработки)', value: `+${pause.preStart} дн.`, tone: 'muted' })
+  return lines
+}
+
 function timelineExportRow(e) {
   if (e.executor_role === 'header') return { kind: 'group', stage: e.stage_name || '' }
   if (e.stage_code?.endsWith('_HDR')) return { kind: 'sub', stage: e.stage_name || '' }
@@ -1995,7 +2011,7 @@ async function exportTimelineExcel() {
       total_all: timelineTotalAll.value,
       total_fact: timelineFactInScope.value || null,
       total_fact_all: timelineActualTotal.value || null,
-      overdue_days: timelineCalendarOverdue.value || null,
+      summary: timelineSummaryLines(),
     })
     const url = URL.createObjectURL(data)
     const a = document.createElement('a')
@@ -2058,14 +2074,9 @@ function exportTimelinePdf() {
     <td class="num">${days(timelineActualTotal.value)}</td>
     <td colspan="2"></td>
   </tr>`
-  if (timelineCalendarOverdue.value > 0) {
-    rows += `<tr class="total-sub">
-    <td colspan="2" style="color:#E53935"><b>Просрочка</b></td>
-    <td></td>
-    <td class="num" style="color:#E53935"><b>${timelineCalendarOverdue.value} р.д.</b></td>
-    <td colspan="2"></td>
-  </tr>`
-  }
+  const summaryRows = timelineSummaryLines()
+    .map(l => `<tr class="tone-${l.tone}"><td>${l.label}</td><td class="num">${l.value}</td></tr>`)
+    .join('')
   const printedAt = new Date().toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
   // Окно печати не видит CSS-переменные темы CRM — поэтому цвета в стилях заданы явно.
   // @page margin:0 убирает колонтитулы браузера (about:blank, дата, заголовок) — свой
@@ -2097,6 +2108,14 @@ function exportTimelinePdf() {
     .tag-skip { color: #aaa; }
     .tl .total-row td { border-top: 1pt solid #999; font-size: 11px; }
     .total-sub td { color: #666; }
+    .summary { border-collapse: collapse; margin-top: 10px; min-width: 300px; }
+    .summary td { padding: 2px 6px 2px 0; font-size: 10px; }
+    .summary .num { text-align: right; font-weight: bold; padding-left: 24px; }
+    .tone-muted td { color: #666; }
+    .tone-green td { color: #27ae60; }
+    .tone-orange td { color: #f39c12; }
+    .tone-red td { color: #e53935; font-weight: bold; }
+    .tone-redsoft td { color: #c07070; }
     * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   </style></head><body>
   <div class="page-hdr"><span>${printedAt}</span><span>Таблица сроков — №${num}</span></div>
@@ -2109,6 +2128,7 @@ function exportTimelinePdf() {
         <thead><tr><th>Этап</th><th>Роль</th><th class="num">Норма</th><th class="num">Факт</th><th class="num">Дата</th><th>Статус</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
+      ${summaryRows ? `<table class="summary">${summaryRows}</table>` : ''}
     </td></tr></tbody>
     <tfoot><tr><td><div class="page-ftr-space"></div></td></tr></tfoot>
   </table>

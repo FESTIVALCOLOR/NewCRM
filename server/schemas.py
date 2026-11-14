@@ -1222,6 +1222,12 @@ class TimelineExportRow(BaseModel):
     out_of_scope: bool = False
 
 
+class TimelineExportSummaryLine(BaseModel):
+    label: str = Field(..., max_length=100)
+    value: str = Field("", max_length=50)
+    tone: str = Field("muted", pattern="^(muted|green|orange|red|redsoft)$")
+
+
 class TimelineExportRequest(BaseModel):
     """Строки и итоги считает клиент (те же, что на экране) — сервер только оформляет xlsx."""
 
@@ -1230,7 +1236,7 @@ class TimelineExportRequest(BaseModel):
     total_all: Optional[float] = None
     total_fact: Optional[float] = None
     total_fact_all: Optional[float] = None
-    overdue_days: Optional[float] = None
+    summary: list[TimelineExportSummaryLine] = Field(default_factory=list, max_length=20)
 
 
 # =========================

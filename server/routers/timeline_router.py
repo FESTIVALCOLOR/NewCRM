@@ -470,6 +470,13 @@ _XL_COLORS = {
     "green": "27AE60",
     "grey": "999999",
 }
+_XL_TONES = {
+    "muted": ("666666", False),
+    "green": ("27AE60", False),
+    "orange": ("F39C12", False),
+    "red": ("E53935", True),
+    "redsoft": ("C07070", False),
+}
 _XL_STATUS_TEXT = {"ontime": "В срок", "overdue": "Просрочен", "skipped": "Пропущено", "": "Ожидается"}
 
 
@@ -519,12 +526,15 @@ def _xl_write_totals(ws, row_idx, req, thin):
     _xl_write_row(ws, row_idx, ["Итого по договору", "", req.total_in_scope, req.total_fact or None, "", "", ""], top, font=Font(bold=True))
     row_idx += 1
     _xl_write_row(ws, row_idx, ["Итого с учётом вне объёма", "", req.total_all, req.total_fact_all or None, "", "", ""], thin, font=Font(color="666666"))
-    if req.overdue_days:
+    row_idx += 2
+    for line in req.summary:
+        color, bold = _XL_TONES[line.tone]
+        font = Font(color=color, bold=bold)
+        ws.cell(row=row_idx, column=1, value=line.label).font = font
+        value_cell = ws.cell(row=row_idx, column=4, value=line.value)
+        value_cell.font = Font(color=color, bold=True)
+        value_cell.alignment = Alignment(horizontal="right")
         row_idx += 1
-        _xl_write_row(ws, row_idx, ["Просрочка, р.д.", "", None, req.overdue_days, "", "", ""], thin, font=Font(bold=True, color=_XL_COLORS["red"]))
-    for r in range(row_idx - 2, row_idx + 1):
-        for c in (3, 4):
-            ws.cell(row=r, column=c).alignment = Alignment(horizontal="right")
 
 
 @router.post("/{contract_id}/export/excel-styled")
