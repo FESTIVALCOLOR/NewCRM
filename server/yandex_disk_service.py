@@ -286,27 +286,47 @@ class YandexDiskService:
         """
         import time as _time
 
-        # Публикуем файл
-        response = requests.put(f"{self.base_url}/resources/publish", headers=self.headers, params={"path": yandex_path}, timeout=15)
+        def _read_public_url():
+            r = requests.get(f"{self.base_url}/resources", headers=self.headers, params={"path": yandex_path, "fields": "public_url"}, timeout=10)
+            return r.status_code, (r.json().get("public_url") if r.status_code == 200 else None)
 
-        # 200 = опубликован, 409 = уже опубликован — оба OK
-        if response.status_code not in [200, 409]:
-            raise Exception(f"Ошибка публикации: {response.status_code} {response.text}")
+        # Сразу после PUT по upload-URL ЯД ещё обрабатывает файл (ответ 202):
+        # publish отвечает 404/423, поэтому повторяем с нарастающей паузой
+        retryable = {404, 409, 423, 429, 500, 502, 503, 504}
+        delays = [0, 0.7, 1.5, 2.5, 4.0]
+        last_error = ""
+        for delay in delays:
+            if delay:
+                _time.sleep(delay)
+            try:
+                status, public_url = _read_public_url()
+                if public_url:
+                    return public_url
+                response = requests.put(f"{self.base_url}/resources/publish", headers=self.headers, params={"path": yandex_path}, timeout=15)
+            except requests.RequestException as e:
+                last_error = str(e)
+                continue
+            if response.status_code in (200, 409):
+                for wait in (0, 0.5, 1.0):
+                    if wait:
+                        _time.sleep(wait)
+                    try:
+                        _, public_url = _read_public_url()
+                    except requests.RequestException:
+                        public_url = None
+                    if public_url:
+                        return public_url
+                last_error = "ссылка не появилась после публикации"
+                continue
+            last_error = f"{response.status_code} {response.text[:200]}"
+            if response.status_code not in retryable:
+                break
 
-        # Задержка для обработки на стороне ЯД
-        _time.sleep(1.0)
-
-        # Получаем информацию с публичной ссылкой
-        file_info = self.get_file_info(yandex_path)
-        public_url = file_info.get("public_url")
-
-        # Retry если ссылка ещё не готова
-        if not public_url:
-            _time.sleep(2.0)
-            file_info = self.get_file_info(yandex_path)
-            public_url = file_info.get("public_url")
-
-        return public_url or ""
+        if last_error == "ссылка не появилась после публикации":
+            return ""
+        if last_error.startswith("404"):
+            raise Exception(f"DiskNotFoundError: {last_error}")
+        raise Exception(f"Ошибка публикации: {last_error}")
 
     def list_files(self, yandex_path: str = "/", limit: int = 100) -> list:
         """

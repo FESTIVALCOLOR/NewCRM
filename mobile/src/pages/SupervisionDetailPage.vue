@@ -2891,7 +2891,7 @@ const { can } = usePermission()
 const refs = useReferencesStore()
 const authStore = useAuthStore()
 const { ensureLoaded: loadAvatars, getAvatarByName } = useEmployeeAvatars()
-const { uploadToYd } = useYdUpload()
+const { uploadToYd, uploadBatch, notifyBatchResult } = useYdUpload()
 const agentColor = computed(() => refs.agentByName(card.value?.agent_type)?.color || '#95A5A6')
 const isArchived = computed(() => {
   if (!card.value) return false
@@ -3636,19 +3636,20 @@ async function doUploadIntroFile() {
       stage3: '3 стадия - Чертежный проект',
     }
     const stageFolder = STAGE_FOLDERS[introUploadStage.value] || introUploadStage.value
-    for (const file of introUploadFiles.value) {
-      if (!contractFolder) { $q.notify({ type: 'negative', message: 'Папка проекта на ЯД не создана' }); break }
-      const yp = `disk:${contractFolder}/Вводные данные/${stageFolder}/${file.name}`
-      try {
-        const { public_link: publicLink, yandex_path: actualYp } = await uploadToYd(file, yp)
-        await ax.post('/api/v1/files/', {
-          contract_id: cid, stage: introUploadStage.value,
-          file_type: file.type?.includes('image') ? 'image' : 'pdf',
-          public_link: publicLink, yandex_path: actualYp, file_name: file.name, file_order: 0, variation: 1,
-        })
-      } catch (e) { console.warn('[IntroUpload]:', e) }
+    if (!contractFolder) { $q.notify({ type: 'negative', message: 'Папка проекта на ЯД не создана' }); return }
+    const stage = introUploadStage.value
+    const batch = await uploadBatch(introUploadFiles.value, {
+      buildPath: (file) => `disk:${contractFolder}/Вводные данные/${stageFolder}/${file.name}`,
+      saveRecord: (r) => ax.post('/api/v1/files/', {
+        contract_id: cid, stage,
+        file_type: r.file.type?.includes('image') ? 'image' : 'pdf',
+        public_link: r.public_link, yandex_path: r.yandex_path, file_name: r.file_name, file_order: 0, variation: 1,
+      }),
+    })
+    if (batch.noLink) {
+      try { await filesApi.fillLinks(cid, stage) } catch { /* дозаполнятся позже */ }
     }
-    $q.notify({ type: 'positive', message: `Загружено ${introUploadFiles.value.length} файл(ов)` })
+    notifyBatchResult(batch)
     showIntroUpload.value = false
     await loadIntroData()
   } catch { $q.notify({ type: 'negative', message: 'Ошибка загрузки' }) }
@@ -3724,25 +3725,27 @@ async function doUploadStageFiles() {
     const subFolder = `Авторский надзор/Закупки/${stageLabel}`
     const folder = contractFolder ? `${contractFolder}/${subFolder}` : `/CRM/Надзор/${card.value.contract_number || card.value.id}/${subFolder}`
 
-    for (const file of stageUploadFiles.value) {
-      const yp = `${folder}/${file.name}`
-      const { public_link: publicLink, yandex_path: actualYp } = await uploadToYd(file, yp)
-      if (cid) {
-        await ax.post('/api/v1/files/', {
+    const stageCode = uploadStageCode.value
+    const batch = await uploadBatch(stageUploadFiles.value, {
+      buildPath: (file) => `${folder}/${file.name}`,
+      saveRecord: cid
+        ? (r) => ax.post('/api/v1/files/', {
           contract_id: cid,
           stage: 'supervision_stage',
-          stage_code: uploadStageCode.value,
-          file_type: file.type?.includes('image') ? 'image' : 'pdf',
-          public_link: publicLink,
-          yandex_path: actualYp,
-          file_name: file.name,
+          stage_code: stageCode,
+          file_type: r.file.type?.includes('image') ? 'image' : 'pdf',
+          public_link: r.public_link,
+          yandex_path: r.yandex_path,
+          file_name: r.file_name,
           file_order: 0,
           variation: 1,
         })
-      }
+        : undefined,
+    })
+    if (cid && batch.noLink) {
+      try { await filesApi.fillLinks(cid, 'supervision_stage') } catch { /* дозаполнятся позже */ }
     }
-
-    $q.notify({ type: 'positive', message: `Загружено ${stageUploadFiles.value.length} файл(ов)` })
+    notifyBatchResult(batch)
     showStageFileUpload.value = false
     stageUploadFiles.value = null
     // Принудительное обновление файлов стадий

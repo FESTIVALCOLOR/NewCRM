@@ -624,6 +624,15 @@ export const filesApi = {
   // Получить временный URL для прямой загрузки файла с браузера на ЯД (без проксирования через сервер)
   getUploadUrl: (yandexPath) =>
     api.get('/api/v1/files/upload-url', { params: { yandex_path: yandexPath } }),
+
+  createRecord: (data) => api.post('/api/v1/files/', data),
+
+  // Дозаполнить пустые публичные ссылки у файлов договора (страховка после пакетной загрузки)
+  fillLinks: (contractId, stage) =>
+    api.post(`/api/v1/files/fill-links/${contractId}`, null, {
+      params: stage ? { stage } : {},
+      timeout: 180000,
+    }),
 }
 
 // === Surveys (опросы клиентов) ===

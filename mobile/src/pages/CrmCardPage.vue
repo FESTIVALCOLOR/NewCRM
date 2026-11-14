@@ -2610,6 +2610,7 @@ import InlineChatRoom from 'src/components/InlineChatRoom.vue'
 import ContractFormDialog from 'src/components/ContractFormDialog.vue'
 import { addToCalendar } from 'src/composables/useCalendar'
 import { useEmployeeAvatars } from 'src/composables/useEmployeeAvatars'
+import { useYdUpload } from 'src/composables/useYdUpload'
 import SurveyReadonlyView from 'src/components/survey/SurveyReadonlyView.vue'
 
 const { can, isSuperuser } = usePermission()
@@ -2681,6 +2682,7 @@ function canUploadForProjectStage(stageCode) {
 const route = useRoute()
 const router = useRouter()
 const $q = useQuasar()
+const { uploadBatch, notifyBatchResult } = useYdUpload()
 const crmStore = useCrmStore()
 const refs = useReferencesStore()
 const chatUnreadStore = useChatUnreadStore()
@@ -4698,88 +4700,30 @@ async function handleCrmFileUpload(event) {
       stage3: '3 стадия - Чертежный проект',                            // Стадия 3
     }
 
-    for (let i = 0; i < fileList.length; i++) {
-      const file = fileList[i]
-      const stageFolder = STAGE_FOLDERS[stage] || stage
-      // Вариации только для stage2_concept и stage2_3d (как в десктопе)
-      const stagesWithVariation = ['stage2_concept', 'stage2_3d']
-      const varSuffix = stagesWithVariation.includes(stage) ? `/Вариация ${variation}` : ''
-      if (!contractFolder) {
-        $q.notify({ type: 'negative', message: 'Папка проекта на ЯД не создана. Обратитесь к администратору.' })
-        break
-      }
-      const yp = `${contractFolder}/${stageFolder}${varSuffix}/${file.name}`
-
-      // Путь без disk: для upload API И для записи в БД (как десктоп)
-      const ypClean = yp.replace(/^disk:/, '')
-
-      // Шаг 1: получить upload URL от сервера и загрузить файл напрямую на ЯД из браузера
-      // (сервер→ЯД медленный ~120 KB/s, браузер→ЯД использует скорость домашнего интернета)
-      let publicLink = ''
-      let actualYpClean = ypClean
-      let actualFileName = file.name
-      try {
-        const urlRes = await filesApi.getUploadUrl(ypClean)
-        const uploadUrl = urlRes.data?.upload_url
-        if (urlRes.data?.yandex_path) actualYpClean = urlRes.data.yandex_path
-        if (urlRes.data?.file_name) actualFileName = urlRes.data.file_name
-
-        if (!uploadUrl) throw new Error('Нет URL загрузки')
-
-        // PUT напрямую на ЯД из браузера через XHR (поддерживает прогресс upload)
-        const sizeMB = (file.size / 1024 / 1024).toFixed(1)
-        await new Promise((resolve, reject) => {
-          const xhr = new XMLHttpRequest()
-          xhr.open('PUT', uploadUrl)
-          xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream')
-
-          xhr.upload.addEventListener('progress', (e) => {
-            if (e.lengthComputable) {
-              const pct = Math.round((e.loaded / e.total) * 100)
-              const loadedMB = (e.loaded / 1024 / 1024).toFixed(1)
-              $q.loading.show({
-                message: `${actualFileName}<br><b>${loadedMB} / ${sizeMB} МБ</b> (${pct}%)`,
-                html: true,
-                spinnerSize: 50,
-              })
-            }
-          })
-
-          xhr.addEventListener('load', () => {
-            if (xhr.status === 200 || xhr.status === 201) resolve()
-            else reject(new Error(`ЯД PUT: ${xhr.status}`))
-          })
-          xhr.addEventListener('error', () => reject(new Error('Сетевая ошибка')))
-          xhr.addEventListener('abort', () => reject(new Error('Загрузка отменена')))
-          xhr.send(file)
-        })
-
-        // Получить публичную ссылку после загрузки
-        $q.loading.show({ message: 'Получение ссылки...' })
-        try {
-          const linkRes = await filesApi.getPublicLink(actualYpClean)
-          publicLink = linkRes.data?.public_link || ''
-        } catch { /* ссылку получим при сканировании */ }
-      } catch (uploadErr) {
-        const msg = uploadErr.message || (uploadErr.response?.status ? `HTTP ${uploadErr.response.status}` : 'ошибка')
-        $q.notify({ type: 'warning', message: `ЯД: ${msg}` })
-      }
-
-      // Шаг 2: создание записи в БД
-      try {
-        const { api: ax } = await import('src/boot/axios')
-        await ax.post('/api/v1/files/', {
-          contract_id: contractId, stage, file_name: actualFileName,
-          file_type: file.type?.includes('image') ? 'image' : actualFileName.endsWith('.pdf') ? 'pdf' : 'other',
-          public_link: publicLink, yandex_path: actualYpClean,
-          file_order: projectFiles.value.length + i + 1, variation,
-        })
-      } catch (dbErr) {
-        const d = dbErr.response?.data?.detail
-        $q.notify({ type: 'negative', message: `Запись в БД: ${typeof d === 'string' ? d : JSON.stringify(d || dbErr.message)}` })
-      }
+    if (!contractFolder) {
+      $q.notify({ type: 'negative', message: 'Папка проекта на ЯД не создана. Обратитесь к администратору.' })
+      return
     }
-    $q.notify({ type: 'positive', message: `Загружено: ${fileList.length}` })
+    const stageFolder = STAGE_FOLDERS[stage] || stage
+    // Вариации только для stage2_concept и stage2_3d (как в десктопе)
+    const varSuffix = ['stage2_concept', 'stage2_3d'].includes(stage) ? `/Вариация ${variation}` : ''
+    const baseOrder = projectFiles.value.length
+
+    // Файлы идут браузер → ЯД напрямую (сервер→ЯД медленный); запись в БД — только для успешно залитых
+    const batch = await uploadBatch(fileList, {
+      buildPath: (file) => `${contractFolder}/${stageFolder}${varSuffix}/${file.name}`,
+      saveRecord: (r) => filesApi.createRecord({
+        contract_id: contractId, stage, file_name: r.file_name,
+        file_type: r.file.type?.includes('image') ? 'image' : r.file_name.endsWith('.pdf') ? 'pdf' : 'other',
+        public_link: r.public_link, yandex_path: r.yandex_path,
+        file_order: baseOrder + r.index + 1, variation,
+      }),
+    })
+    $q.loading.show({ message: 'Обновление списка файлов...' })
+    if (batch.noLink) {
+      try { await filesApi.fillLinks(contractId, stage) } catch { /* дозаполнятся при следующей загрузке */ }
+    }
+    notifyBatchResult(batch)
 
     // Обновляем публичные ссылки на папки (как десктоп — ВСЕ стадии включая stage1/2/3)
     const FOLDER_LINK_FIELDS = {

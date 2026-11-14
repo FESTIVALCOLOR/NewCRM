@@ -33,6 +33,8 @@ except ImportError:
     yandex_disk_available = False
     logger.warning("YandexDiskService not available")
 
+# Эндпоинты намеренно синхронные (def): вызовы ЯД блокирующие, и в async def они
+# останавливали бы event loop воркера для всех пользователей
 router = APIRouter()
 
 
@@ -42,7 +44,7 @@ router = APIRouter()
 
 
 @router.get("/all")
-async def get_all_project_files(current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_all_project_files(current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Получить все файлы проектов для синхронизации"""
     try:
         files = db.query(ProjectFile).all()
@@ -70,7 +72,7 @@ async def get_all_project_files(current_user: Employee = Depends(get_current_use
 
 
 @router.get("/updated")
-async def get_updated_files(since: str = None, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_updated_files(since: str = None, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Получить файлы, загруженные после указанного timestamp"""
     if not since:
         raise HTTPException(status_code=400, detail="Parameter 'since' is required")
@@ -99,7 +101,7 @@ async def get_updated_files(since: str = None, current_user: Employee = Depends(
 
 
 @router.get("/public-link")
-async def get_public_link(
+def get_public_link(
     yandex_path: str,
     current_user: Employee = Depends(get_current_user),
 ):
@@ -126,7 +128,7 @@ async def get_public_link(
 
 
 @router.get("/list")
-async def list_yandex_files(
+def list_yandex_files(
     folder_path: Optional[str] = None,
     path: Optional[str] = None,
     current_user: Employee = Depends(get_current_user),
@@ -173,7 +175,7 @@ def _calc_folder_size(yd_service, path: str, max_depth: int = 5, _depth: int = 0
 
 
 @router.get("/folder-size")
-async def get_folder_size(
+def get_folder_size(
     path: str,
     current_user: Employee = Depends(get_current_user),
 ):
@@ -191,7 +193,7 @@ async def get_folder_size(
 
 
 @router.get("/public-folder")
-async def list_public_folder(
+def list_public_folder(
     url: str,
     current_user: Employee = Depends(get_current_user),
 ):
@@ -232,7 +234,7 @@ async def list_public_folder(
 
 
 @router.post("/download-public")
-async def download_public_to_yd(
+def download_public_to_yd(
     public_url: str,
     file_path: str,
     dest_path: str,
@@ -298,7 +300,7 @@ async def download_public_to_yd(
 
 
 @router.post("/", response_model=ProjectFileResponse)
-async def create_file_record(file_data: ProjectFileCreate, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
+def create_file_record(file_data: ProjectFileCreate, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Создать запись о файле"""
     # Проверяем дубликат по (contract_id, yandex_path) перед вставкой
     data = file_data.model_dump()
@@ -326,7 +328,7 @@ async def create_file_record(file_data: ProjectFileCreate, current_user: Employe
 
 
 @router.get("/upload-url")
-async def get_yandex_upload_url(
+def get_yandex_upload_url(
     yandex_path: str,
     current_user: Employee = Depends(get_current_user),
 ):
@@ -472,7 +474,7 @@ async def get_yandex_upload_url(
 
 
 @router.post("/upload")
-async def upload_file_to_yandex(
+def upload_file_to_yandex(
     file: UploadFile = File(...),
     yandex_path: str = None,
     current_user: Employee = Depends(get_current_user),
@@ -548,7 +550,7 @@ async def upload_file_to_yandex(
         yd_service = get_yandex_disk_service()
         if not yd_service.token:
             raise HTTPException(status_code=503, detail="Yandex Disk token not configured")
-        file_bytes = await file.read()
+        file_bytes = file.file.read()
 
         # Проверка размера файла (по умолчанию 600 МБ — рендеры и видео обходов бывают большими)
         max_size = int(os.environ.get("MAX_FILE_SIZE_MB", 600)) * 1024 * 1024
@@ -595,7 +597,7 @@ async def upload_file_to_yandex(
 
 
 @router.post("/folder")
-async def create_yandex_folder(
+def create_yandex_folder(
     folder_path: str,
     current_user: Employee = Depends(get_current_user),
 ):
@@ -623,7 +625,7 @@ async def create_yandex_folder(
 
 
 @router.post("/move-folder")
-async def move_yandex_folder(
+def move_yandex_folder(
     from_path: str,
     to_path: str,
     current_user: Employee = Depends(get_current_user),
@@ -677,7 +679,7 @@ async def move_yandex_folder(
 
 
 @router.post("/validate")
-async def validate_files(request: dict, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
+def validate_files(request: dict, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Пакетная проверка существования файлов на Яндекс.Диске"""
     file_ids = request.get("file_ids", [])
     auto_clean = request.get("auto_clean", False)
@@ -735,7 +737,7 @@ async def validate_files(request: dict, current_user: Employee = Depends(get_cur
 
 
 @router.delete("/yandex")
-async def delete_yandex_file(
+def delete_yandex_file(
     yandex_path: str,
     current_user: Employee = Depends(get_current_user),
 ):
@@ -764,7 +766,7 @@ async def delete_yandex_file(
 
 
 @router.get("/contract/{contract_id}", response_model=list[ProjectFileResponse])
-async def get_contract_files(contract_id: int, stage: Optional[str] = None, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_contract_files(contract_id: int, stage: Optional[str] = None, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Получить файлы договора"""
     query = db.query(ProjectFile).filter(ProjectFile.contract_id == contract_id)
     if stage:
@@ -826,7 +828,7 @@ _FOLDER_KEYWORDS_TO_STAGE = [
 
 
 @router.post("/scan/{contract_id}")
-async def scan_contract_files_on_yandex(contract_id: int, scope: str = "all", current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
+def scan_contract_files_on_yandex(contract_id: int, scope: str = "all", current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Сканирование файлов на Яндекс.Диске для договора.
 
     Находит файлы, которые есть на ЯД но отсутствуют в БД, и создаёт записи.
@@ -1154,6 +1156,46 @@ async def scan_contract_files_on_yandex(contract_id: int, scope: str = "all", cu
             _scanning_contracts.discard(contract_id)
 
 
+@router.post("/fill-links/{contract_id}")
+def fill_missing_public_links(
+    contract_id: int,
+    stage: Optional[str] = None,
+    limit: int = 100,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Дозаполнить пустые public_link у файлов договора (публикует файлы на ЯД)."""
+    if not yandex_disk_available:
+        raise HTTPException(status_code=503, detail="Yandex Disk service not available")
+
+    query = db.query(ProjectFile).filter(
+        ProjectFile.contract_id == contract_id,
+        ProjectFile.yandex_path.isnot(None),
+        ProjectFile.yandex_path != "",
+        (ProjectFile.public_link.is_(None)) | (ProjectFile.public_link == ""),
+    )
+    if stage:
+        query = query.filter(ProjectFile.stage == stage)
+    records = query.order_by(ProjectFile.id).limit(max(1, min(limit, 200))).all()
+
+    yd_service = get_yandex_disk_service()
+    updated, failed = 0, []
+    for rec in records:
+        try:
+            link = yd_service.get_public_link(rec.yandex_path)
+        except Exception as e:
+            logger.warning(f"fill-links: {rec.yandex_path}: {e}")
+            link = ""
+        if link:
+            rec.public_link = link
+            updated += 1
+        else:
+            failed.append(rec.file_name)
+    if updated:
+        db.commit()
+    return {"checked": len(records), "updated": updated, "failed": failed}
+
+
 # =========================
 # ДИНАМИЧЕСКИЕ ПУТИ (ПОСЛЕ СТАТИЧЕСКИХ)
 # =========================
@@ -1193,7 +1235,7 @@ def _evict_stream_cache():
 
 # ВАЖНО: /stream ПЕРЕД /{file_id} — иначе FastAPI матчит "stream" как file_id
 @router.get("/stream")
-async def stream_file_from_yandex(
+def stream_file_from_yandex(
     yandex_path: str,
     token: str = None,
 ):
@@ -1274,7 +1316,7 @@ async def stream_file_from_yandex(
 
 
 @router.get("/{file_id}")
-async def get_file_record(file_id: int, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_file_record(file_id: int, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Получить информацию о файле"""
     file_record = db.query(ProjectFile).filter(ProjectFile.id == file_id).first()
     if not file_record:
@@ -1294,7 +1336,7 @@ async def get_file_record(file_id: int, current_user: Employee = Depends(get_cur
 
 
 @router.delete("/{file_id}")
-async def delete_file_record(file_id: int, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
+def delete_file_record(file_id: int, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Удалить запись о файле и файл с Яндекс.Диска"""
     file_record = db.query(ProjectFile).filter(ProjectFile.id == file_id).first()
     if not file_record:
@@ -1328,7 +1370,7 @@ async def delete_file_record(file_id: int, current_user: Employee = Depends(get_
 
 
 @router.patch("/{file_id}/order")
-async def update_file_order(file_id: int, file_order: int = Body(embed=True), current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
+def update_file_order(file_id: int, file_order: int = Body(embed=True), current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Обновить порядок файла в галерее"""
     file_record = db.query(ProjectFile).filter(ProjectFile.id == file_id).first()
     if not file_record:
