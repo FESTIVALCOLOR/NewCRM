@@ -11,7 +11,7 @@ import re
 from auth import get_current_user
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from schemas import TimelineEntryUpdate, TimelineInitRequest
+from schemas import TimelineEntryUpdate, TimelineExportRequest, TimelineInitRequest
 from services.timeline_service import (
     build_project_timeline_template,
     build_template_project_timeline,
@@ -458,6 +458,122 @@ async def export_timeline_excel(contract_id: int, current_user: Employee = Depen
 
     filename = f"timeline_{contract_id}.xlsx"
     return StreamingResponse(output, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f"attachment; filename={filename}"})
+
+
+_XL_COLORS = {
+    "header": "FFD93B",
+    "group": "E0E0E0",
+    "sub": "F5F5F5",
+    "ontime": "F0FFF4",
+    "overdue": "FFF5F5",
+    "red": "E74C3C",
+    "green": "27AE60",
+    "grey": "999999",
+}
+_XL_STATUS_TEXT = {"ontime": "В срок", "overdue": "Просрочен", "skipped": "Пропущено", "": "Ожидается"}
+
+
+def _xl_fill(color):
+    from openpyxl.styles import PatternFill
+
+    return PatternFill(start_color=color, end_color=color, fill_type="solid")
+
+
+def _xl_write_row(ws, row_idx, values, border, fill=None, font=None):
+    from openpyxl.styles import Alignment
+
+    for col_idx, value in enumerate(values, 1):
+        cell = ws.cell(row=row_idx, column=col_idx, value=value)
+        cell.border = border
+        if col_idx in (3, 4, 5):
+            cell.alignment = Alignment(horizontal="right")
+        if fill:
+            cell.fill = fill
+        if font:
+            cell.font = font
+
+
+def _xl_write_entry(ws, row_idx, r, border):
+    from openpyxl.styles import Font
+
+    if r.kind in ("group", "sub"):
+        _xl_write_row(ws, row_idx, [r.stage, "", "", "", "", "", ""], border, _xl_fill(_XL_COLORS[r.kind]), Font(bold=True))
+        return
+    values = [r.stage, r.role, r.norm, r.fact, r.date, _XL_STATUS_TEXT.get(r.status, ""), "вне объёма" if r.out_of_scope else ""]
+    fill = _xl_fill(_XL_COLORS[r.status]) if r.status in ("ontime", "overdue") else None
+    font = Font(color=_XL_COLORS["grey"], italic=True) if r.status == "skipped" else None
+    _xl_write_row(ws, row_idx, values, border, fill, font)
+    status_color = {"ontime": "green", "overdue": "red"}.get(r.status)
+    if status_color:
+        ws.cell(row=row_idx, column=6).font = Font(bold=True, color=_XL_COLORS[status_color])
+    if r.out_of_scope:
+        red_italic = Font(italic=True, color=_XL_COLORS["red"])
+        ws.cell(row=row_idx, column=1).font = red_italic
+        ws.cell(row=row_idx, column=7).font = red_italic
+
+
+def _xl_write_totals(ws, row_idx, req, thin):
+    from openpyxl.styles import Alignment, Border, Font, Side
+
+    top = Border(top=Side(style="medium", color="222222"), left=thin.left, right=thin.right, bottom=thin.bottom)
+    _xl_write_row(ws, row_idx, ["Итого по договору", "", req.total_in_scope, req.total_fact or None, "", "", ""], top, font=Font(bold=True))
+    row_idx += 1
+    _xl_write_row(ws, row_idx, ["Итого с учётом вне объёма", "", req.total_all, None, "", "", ""], thin, font=Font(color="666666"))
+    if req.overdue_days:
+        row_idx += 1
+        _xl_write_row(ws, row_idx, ["Просрочка, р.д.", "", None, req.overdue_days, "", "", ""], thin, font=Font(bold=True, color=_XL_COLORS["red"]))
+    for r in range(row_idx - 2, row_idx + 1):
+        for c in (3, 4):
+            ws.cell(row=r, column=c).alignment = Alignment(horizontal="right")
+
+
+@router.post("/{contract_id}/export/excel-styled")
+def export_timeline_excel_styled(contract_id: int, req: TimelineExportRequest, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Таблица сроков договора в Excel с оформлением как на экране (строки и итоги присылает клиент)."""
+    from urllib.parse import quote
+
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Border, Font, Side
+
+    contract = db.query(Contract).filter(Contract.id == contract_id).first()
+    if not contract:
+        raise HTTPException(status_code=404, detail="Договор не найден")
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Таблица сроков"
+    num = contract.contract_number or str(contract_id)
+    ws.append([f"Таблица сроков — Договор №{num}"])
+    ws["A1"].font = Font(bold=True, size=13)
+    ws.append([contract.address or ""])
+    ws.append([])
+
+    side = Side(style="thin", color="CCCCCC")
+    border = Border(left=side, right=side, top=side, bottom=side)
+    headers = ["Этап", "Роль", "Норма, дн.", "Факт, дн.", "Дата", "Статус", "Примечание"]
+    _xl_write_row(ws, 4, headers, border, _xl_fill(_XL_COLORS["header"]), Font(bold=True))
+    for col_idx in (3, 4, 5):
+        ws.cell(row=4, column=col_idx).alignment = Alignment(horizontal="right")
+
+    row_idx = 5
+    for r in req.rows:
+        _xl_write_entry(ws, row_idx, r, border)
+        row_idx += 1
+    _xl_write_totals(ws, row_idx + 1, req, border)
+
+    for col, width in zip("ABCDEFG", (42, 20, 12, 12, 12, 13, 14)):
+        ws.column_dimensions[col].width = width
+    ws.freeze_panes = "A5"
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    safe_num = re.sub(r'[/\\:*?"<>|]', "_", num)
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(f'timeline_{safe_num}.xlsx')}"},
+    )
 
 
 @router.get("/{contract_id}/export/pdf")

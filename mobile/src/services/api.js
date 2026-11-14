@@ -516,6 +516,10 @@ export const timelineApi = {
   exportExcel: (contractId) =>
     api.get(`/api/v1/timeline/${contractId}/export/excel`, { responseType: 'blob' }),
 
+  // Строки и итоги — как на экране договора; сервер только оформляет xlsx (цвета, выравнивание)
+  exportExcelStyled: (contractId, payload) =>
+    api.post(`/api/v1/timeline/${contractId}/export/excel-styled`, payload, { responseType: 'blob' }),
+
   exportPdf: (contractId) =>
     api.get(`/api/v1/timeline/${contractId}/export/pdf`, { responseType: 'blob' }),
 }

@@ -1951,40 +1951,51 @@ const timelineCalendarOverdue = computed(() => {
   return d < 0 ? Math.abs(d) : 0
 })
 
-async function exportTimelineExcel() {
-  const { utils, writeFile } = await import('xlsx')
-  const num = contract.value?.contract_number || ''
-  const wsData = [
-    [`Таблица сроков — Договор №${num}`],
-    [],
-    ['Этап', 'Роль', 'Норма, дн.', 'Факт, дн.', 'Дата', 'Статус', 'Примечание'],
-  ]
-  timeline.value.forEach(e => {
-    if (e.executor_role === 'header' || e.stage_code?.endsWith('_HDR')) {
-      wsData.push([e.stage_name, '', '', '', '', '', ''])
-      return
-    }
-    const norm = e.custom_norm_days || e.norm_days || ''
-    const fact = e.actual_days || ''
-    const date = e.actual_date ? new Date(e.actual_date).toLocaleDateString('ru-RU') : ''
-    let status = 'Ожидается'
-    if (e.status === 'skipped') status = 'Пропущено'
-    else if (e.actual_date) status = ((e.actual_days || 0) > (e.norm_days || 0) && (e.norm_days || 0) > 0) ? 'Просрочен' : 'В срок'
-    const note = !e.is_in_contract_scope ? 'вне объёма' : ''
-    wsData.push([e.stage_name, e.executor_role || '', norm, fact, date, status, note])
-  })
-  wsData.push([])
-  const factTotal = timelineActualTotal.value
-  wsData.push(['Итого по договору', '', timelineTotalInScope.value, factTotal > 0 ? factTotal : '', '', '', ''])
-  wsData.push(['Итого с учётом вне объёма', '', timelineTotalAll.value, '', '', '', ''])
-  if (timelineCalendarOverdue.value > 0) {
-    wsData.push(['Просрочка, р.д.', '', '', timelineCalendarOverdue.value, '', '', ''])
+function timelineExportRow(e) {
+  if (e.executor_role === 'header') return { kind: 'group', stage: e.stage_name || '' }
+  if (e.stage_code?.endsWith('_HDR')) return { kind: 'sub', stage: e.stage_name || '' }
+  let status = ''
+  if (e.status === 'skipped') status = 'skipped'
+  else if (e.actual_date) status = ((e.actual_days || 0) > (e.norm_days || 0) && (e.norm_days || 0) > 0) ? 'overdue' : 'ontime'
+  return {
+    kind: 'row',
+    stage: e.stage_name || '',
+    role: e.executor_role || '',
+    norm: e.custom_norm_days || e.norm_days || null,
+    fact: e.actual_days || null,
+    date: e.actual_date ? new Date(e.actual_date).toLocaleDateString('ru-RU') : '',
+    status,
+    out_of_scope: !e.is_in_contract_scope,
   }
-  const ws = utils.aoa_to_sheet(wsData)
-  ws['!cols'] = [{ wch: 42 }, { wch: 20 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 14 }]
-  const wb = utils.book_new()
-  utils.book_append_sheet(wb, ws, 'Таблица сроков')
-  writeFile(wb, `timeline_${num || 'contract'}.xlsx`.replace(/[/\\:*?"<>|]/g, '_'))
+}
+
+// Оформленный xlsx собирает сервер (openpyxl): клиентская библиотека xlsx не умеет цвета ячеек
+async function exportTimelineExcel() {
+  const cid = contract.value?.id
+  if (!cid) return
+  const num = contract.value?.contract_number || 'contract'
+  $q.loading.show({ message: 'Формирование Excel...' })
+  try {
+    const { data } = await timelineApi.exportExcelStyled(cid, {
+      rows: timeline.value.map(timelineExportRow),
+      total_in_scope: timelineTotalInScope.value,
+      total_all: timelineTotalAll.value,
+      total_fact: timelineActualTotal.value || null,
+      overdue_days: timelineCalendarOverdue.value || null,
+    })
+    const url = URL.createObjectURL(data)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `timeline_${num}.xlsx`.replace(/[/\\:*?"<>|]/g, '_')
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 10000)
+  } catch {
+    $q.notify({ type: 'negative', message: 'Не удалось сформировать Excel' })
+  } finally {
+    $q.loading.hide()
+  }
 }
 
 function exportTimelinePdf() {

@@ -1211,6 +1211,27 @@ class TimelineInitRequest(BaseModel):
     force: Optional[bool] = False  # K10: Принудительный reinit (удаляет actual_date)
 
 
+class TimelineExportRow(BaseModel):
+    kind: str = Field("row", pattern="^(group|sub|row)$")
+    stage: str = Field("", max_length=300)
+    role: str = Field("", max_length=100)
+    norm: Optional[float] = None
+    fact: Optional[float] = None
+    date: str = Field("", max_length=20)
+    status: str = Field("", pattern="^(|ontime|overdue|skipped)$")
+    out_of_scope: bool = False
+
+
+class TimelineExportRequest(BaseModel):
+    """Строки и итоги считает клиент (те же, что на экране) — сервер только оформляет xlsx."""
+
+    rows: list[TimelineExportRow] = Field(default_factory=list, max_length=500)
+    total_in_scope: Optional[float] = None
+    total_all: Optional[float] = None
+    total_fact: Optional[float] = None
+    overdue_days: Optional[float] = None
+
+
 # =========================
 # ТАБЛИЦА СРОКОВ НАДЗОРА
 # =========================
