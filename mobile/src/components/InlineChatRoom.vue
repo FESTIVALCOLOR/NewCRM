@@ -176,14 +176,6 @@
       {{ typingText }}
     </div>
 
-    <!-- Прогресс загрузки файла -->
-    <q-linear-progress
-      v-if="uploadProgress > 0 && uploadProgress < 100"
-      :value="uploadProgress / 100"
-      color="blue-5"
-      style="flex-shrink: 0"
-    />
-
     <!-- Закреплённые сообщения (до 10, Telegram-стиль) -->
     <div
       v-if="pinnedMsgs.length"
@@ -894,7 +886,6 @@
           size="sm"
           icon="attach_file"
           color="grey-6"
-          :loading="uploadProgress > 0 && uploadProgress < 100"
           @click="pickFile"
         >
           <q-tooltip>Прикрепить файл</q-tooltip>
@@ -1605,6 +1596,7 @@ import { useAuthStore } from 'src/stores/auth'
 import { usePermission } from 'src/composables/usePermission'
 import { useChatUnreadStore } from 'src/stores/chatUnread'
 import { useQuasar } from 'quasar'
+import { useYdUpload } from 'src/composables/useYdUpload'
 import ImageGalleryDialog from 'src/components/ImageGalleryDialog.vue'
 
 const props = defineProps({
@@ -1631,6 +1623,7 @@ const emit = defineEmits(['script-click'])
 const authStore = useAuthStore()
 const chatUnreadStore = useChatUnreadStore()
 const $q = useQuasar()
+const { uploadViaServer, notifyBatchResult } = useYdUpload()
 const { connectEmployee, disconnect, sendMessage, sendTypingStart, sendTypingStop, sendRead, typingUsers } = useChatWebSocket()
 
 const chatBgStyle = computed(() => {
@@ -1658,7 +1651,6 @@ function pdfBubbleStyle(msg) {
   const w = pdfImgWidths[msg.id]
   return w ? `width: ${w}px; min-width: 0` : 'width: fit-content; max-width: min(85vw, 440px); min-width: 0'
 }
-const uploadProgress = ref(0)
 
 // ── Invite link надзора ───────────────────────────────────────
 const supervisionLink = ref('')
@@ -3067,20 +3059,14 @@ async function sendWithAttachment() {
   pendingPreviews.value = []
   pendingCaption.value = ''
 
-  uploadProgress.value = 1
-  const errors = []
-  for (let i = 0; i < files.length; i++) {
-    try {
-      await _uploadSingleFile(files[i], groupId, i === files.length - 1 ? caption : null)
-    } catch {
-      errors.push(files[i].name)
-    }
-  }
-  uploadProgress.value = 0
-  if (errors.length) $q.notify({ type: 'negative', message: `Ошибка загрузки: ${errors.join(', ')}` })
+  const res = await uploadViaServer(files, {
+    title: 'Отправка файлов',
+    send: (file, onProgress, i) => _uploadSingleFile(file, groupId, i === files.length - 1 ? caption : null, onProgress),
+  })
+  if (res.failed.length) notifyBatchResult(res)
 }
 
-async function _uploadSingleFile(file, groupId = null, caption = null) {
+async function _uploadSingleFile(file, groupId = null, caption = null, onProgress = null) {
   if (!chat.value) return
   const ext = file.name.split('.').pop()?.toLowerCase() || ''
   const msgType = IMAGE_EXTS.includes(ext) ? 'image' : 'file'
@@ -3124,9 +3110,7 @@ async function _uploadSingleFile(file, groupId = null, caption = null) {
     if (caption) formData.append('caption', caption)
     const { data: savedMsg } = await api.post(`/api/v1/chats/${chat.value.id}/files`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
-      onUploadProgress: (e) => {
-        uploadProgress.value = e.total ? Math.round((e.loaded / e.total) * 100) : 50
-      },
+      onUploadProgress: (e) => onProgress?.(e),
     })
     const idx = messages.value.findIndex(m => m.id === tempId)
     if (idx !== -1) {
@@ -3134,9 +3118,9 @@ async function _uploadSingleFile(file, groupId = null, caption = null) {
       alreadyAdded ? messages.value.splice(idx, 1) : messages.value.splice(idx, 1, savedMsg)
       if (!alreadyAdded && isPdf(savedMsg)) loadPdfThumbnail(savedMsg)
     }
-  } catch {
+  } catch (err) {
     messages.value = messages.value.filter(m => m.id !== tempId)
-    throw new Error(file.name)
+    throw err
   } finally {
     if (previewUrl) URL.revokeObjectURL(previewUrl)
   }

@@ -506,14 +506,6 @@
       </template>
     </div>
 
-    <!-- Прогресс загрузки файла -->
-    <q-linear-progress
-      v-if="uploadProgress > 0 && uploadProgress < 100"
-      :value="uploadProgress / 100"
-      color="green-6"
-      style="flex-shrink: 0"
-    />
-
     <!-- Панель ответа -->
     <div
       v-if="replyingTo"
@@ -548,7 +540,6 @@
           round
           dense
           icon="attach_file"
-          :loading="uploadProgress > 0 && uploadProgress < 100"
           @click="pickFile"
         >
           <q-tooltip>Прикрепить файл</q-tooltip>
@@ -657,6 +648,7 @@ import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useChatWebSocket } from 'src/composables/useChatWebSocket'
 import { useQuasar } from 'quasar'
+import { useYdUpload } from 'src/composables/useYdUpload'
 import { getPdfThumbnail } from 'src/composables/usePdfThumbnail'
 import axios from 'axios'
 import PwaInstallBanner from 'src/components/PwaInstallBanner.vue'
@@ -694,6 +686,7 @@ async function _trySubscribeGuestPush(token) {
 const route = useRoute()
 const router = useRouter()
 const $q = useQuasar()
+const { uploadViaServer, notifyBatchResult } = useYdUpload()
 const mainToken = route.params.token  // UUID из URL /c/{token}
 // Персональный токен гостя (создаётся при регистрации, сохраняется в localStorage)
 const memberToken = localStorage.getItem(`chat_member_token_${mainToken}`) || null
@@ -749,7 +742,6 @@ const galleryImages = computed(() => messages.value.filter(m => m.message_type =
 const fileInput = ref(null)
 const clientName = localStorage.getItem('client_name') || 'Клиент'
 const chatPageH = ref('100dvh')
-const uploadProgress = ref(0)
 const editingClientMsgId = ref(null)
 const editClientContent = ref('')
 const savingClientEdit = ref(false)
@@ -1160,7 +1152,7 @@ async function deleteClientMsg(msg) {
   }
 }
 
-async function _uploadClientFile(file) {
+async function _uploadClientFile(file, onProgress = null) {
   const ext = file.name.split('.').pop()?.toLowerCase() || ''
   const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif']
   const msgType = imageExts.includes(ext) ? 'image' : 'file'
@@ -1198,18 +1190,16 @@ async function _uploadClientFile(file) {
     formData.append('file', file)
     formData.append('message_type', msgType)
     const { data: savedMsg } = await axios.post(`${baseURL}/api/v1/client-chat/${activeToken}/files`, formData, {
-      onUploadProgress: (e) => {
-        uploadProgress.value = e.total ? Math.round((e.loaded / e.total) * 100) : 50
-      },
+      onUploadProgress: (e) => onProgress?.(e),
     })
     const idx = messages.value.findIndex(m => m.id === tempId)
     if (idx !== -1) {
       const alreadyAdded = messages.value.some(m => m.id === savedMsg.id)
       alreadyAdded ? messages.value.splice(idx, 1) : messages.value.splice(idx, 1, savedMsg)
     }
-  } catch {
+  } catch (err) {
     messages.value = messages.value.filter(m => m.id !== tempId)
-    throw new Error(file.name)
+    throw err
   } finally {
     if (previewUrl) URL.revokeObjectURL(previewUrl)
   }
@@ -1218,14 +1208,12 @@ async function _uploadClientFile(file) {
 async function onFileSelected(event) {
   const files = [...(event.target.files || [])]
   if (!files.length) return
-  uploadProgress.value = 1
-  const errors = []
-  for (const file of files) {
-    try { await _uploadClientFile(file) } catch { errors.push(file.name) }
-  }
-  uploadProgress.value = 0
   event.target.value = ''
-  if (errors.length) $q.notify({ type: 'negative', message: `Ошибка загрузки: ${errors.join(', ')}` })
+  const res = await uploadViaServer(files, {
+    title: 'Отправка файлов',
+    send: (file, onProgress) => _uploadClientFile(file, onProgress),
+  })
+  if (res.failed.length) notifyBatchResult(res)
 }
 
 onMounted(async () => {

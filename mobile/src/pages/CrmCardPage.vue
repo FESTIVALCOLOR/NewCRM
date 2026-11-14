@@ -2682,7 +2682,7 @@ function canUploadForProjectStage(stageCode) {
 const route = useRoute()
 const router = useRouter()
 const $q = useQuasar()
-const { uploadBatch, notifyBatchResult } = useYdUpload()
+const { uploadToYd, uploadBatch, notifyBatchResult } = useYdUpload()
 const crmStore = useCrmStore()
 const refs = useReferencesStore()
 const chatUnreadStore = useChatUnreadStore()
@@ -4337,7 +4337,7 @@ async function submitReject() {
         corrPath = contractFolder ? `${contractFolder}/${ydStageName}/Правки` : `/CRM/Правки/${card.value.contract_number || card.value.id}`
       }
       const yp = `${corrPath}/${rejectFile.value.name}`
-      await filesApi.upload(rejectFile.value, yp)
+      await uploadToYd(rejectFile.value, yp)
       filePath = corrPath
     }
     await crmApi.rejectWork(card.value.id, { reason: rejectReason.value, revision_file_path: filePath })

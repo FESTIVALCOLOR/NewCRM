@@ -2,8 +2,9 @@ import { useQuasar } from 'quasar'
 import { filesApi } from 'src/services/api'
 
 /**
- * Прямая загрузка файлов в Яндекс.Диск из браузера.
- * Сервер только создаёт папку и выдаёт временный upload URL — файл идёт браузер → ЯД.
+ * Единая загрузка файлов с общим прогресс-баром.
+ * ЯД: файл идёт браузер → ЯД напрямую, сервер только выдаёт upload URL.
+ * Сервер: файл отправляется на эндпоинт CRM (чаты, визиты), прогресс — по onUploadProgress.
  */
 
 const MB = 1024 * 1024
@@ -110,81 +111,59 @@ async function fetchPublicLink(yandexPath) {
   return ''
 }
 
+const PHASES = {
+  prepare: () => 'подготовка…',
+  upload: (st) => `${fmtMB(st.loaded)} / ${fmtMB(st.size)} МБ`,
+  retry: () => 'повтор загрузки…',
+  link: () => 'получение ссылки…',
+  save: () => 'сохранение…',
+  server: () => 'обработка на сервере…',
+  copy: () => 'копирование на Яндекс.Диск…',
+}
+
 export function useYdUpload() {
   const $q = useQuasar()
 
   /**
-   * Загрузить один файл с прогрессом.
-   * @returns {{ yandex_path: string, public_link: string, file_name: string }}
+   * Общая очередь загрузки с единой панелью прогресса.
+   * task(item, index, ctx) выполняет загрузку одного элемента; ctx:
+   *   progress(loadedBytes) — отправлено байт, phase(key) — этап из PHASES, rename(name).
+   * @returns {Promise<{ ok: {item, index, value}[], failed: {item, index, name, error, err}[] }>}
    */
-  async function uploadToYd(file, yandexPath) {
-    try {
-      $q.loading.show({ message: 'Проверка папки на Яндекс.Диске...', html: true, spinnerSize: 50 })
-      const sizeMB = fmtMB(file.size)
-      const up = await uploadFileToYd(file, yandexPath, {
-        onProgress: (loaded, total) => {
-          const pct = Math.round((loaded / total) * 100)
-          $q.loading.show({
-            message: `${escapeHtml(file.name)}<br><b>${fmtMB(loaded)} / ${sizeMB} МБ</b> (${pct}%)`,
-            html: true,
-            spinnerSize: 50,
-          })
-        },
-        onRetry: (attempt) => {
-          $q.loading.show({ message: `Повтор загрузки (попытка ${attempt + 1}/3)...`, html: true, spinnerSize: 50 })
-        },
-      })
-      $q.loading.show({ message: 'Получение ссылки...', html: true, spinnerSize: 50 })
-      const publicLink = await fetchPublicLink(up.yandex_path)
-      return { yandex_path: up.yandex_path, public_link: publicLink, file_name: up.file_name }
-    } finally {
-      $q.loading.hide()
-    }
-  }
-
-  /**
-   * Пакетная загрузка с общим прогрессом.
-   * Запись в БД создаётся только для успешно залитых файлов.
-   *
-   * @param {File[]|FileList} files
-   * @param {object} opts
-   * @param {(file: File, index: number) => string} opts.buildPath — путь на ЯД для файла
-   * @param {(r: {file, index, yandex_path, file_name, public_link}) => Promise} [opts.saveRecord] — запись в БД
-   * @param {number} [opts.concurrency=3]
-   * @param {string} [opts.title]
-   * @returns {Promise<{ ok: object[], failed: {file: File, error: string}[], noLink: number }>}
-   */
-  async function uploadBatch(files, { buildPath, saveRecord, concurrency = 3, title = 'Загрузка файлов' } = {}) {
-    const list = Array.from(files || [])
+  async function runUploadQueue(items, {
+    task,
+    title = 'Загрузка файлов',
+    concurrency = 3,
+    nameOf = (x) => x?.name || 'файл',
+    sizeOf = (x) => x?.size || 0,
+  } = {}) {
+    const list = Array.from(items || [])
     const total = list.length
     const ok = []
     const failed = []
-    if (!total) return { ok, failed, noLink: 0 }
+    if (!total) return { ok, failed }
 
-    const totalBytes = list.reduce((s, f) => s + (f.size || 0), 0) || 1
+    const sizes = list.map((x) => sizeOf(x))
+    const totalBytes = sizes.reduce((s, v) => s + v, 0) || 1
     const loaded = new Array(total).fill(0)
     const active = new Map()
     let done = 0
     let renderTimer = null
 
-    const PHASES = {
-      prepare: () => 'подготовка…',
-      upload: (st) => `${fmtMB(st.loaded)} / ${fmtMB(st.size)} МБ`,
-      retry: () => 'повтор загрузки…',
-      link: () => 'получение ссылки…',
-      save: () => 'сохранение…',
-    }
-
     const render = () => {
       renderTimer = null
       const sent = loaded.reduce((s, v) => s + v, 0)
-      const pct = Math.min(100, Math.round((sent / totalBytes) * 100))
+      // Без размеров (например, копирование по ссылке) прогресс считаем по количеству
+      const pct = totalBytes > 1
+        ? Math.min(100, Math.round((sent / totalBytes) * 100))
+        : Math.round((done / total) * 100)
       const lines = [...active.values()]
         .map((st) => `<div style="font-size:13px;opacity:.9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(st.name)} — ${PHASES[st.phase](st)}</div>`)
         .join('')
       const errors = failed.length
         ? `<div style="font-size:13px;color:#ff8a80;margin-top:6px">Ошибок: ${failed.length}</div>`
         : ''
+      const bytesLine = totalBytes > 1 ? `${fmtMB(Math.min(sent, totalBytes))} / ${fmtMB(totalBytes)} МБ` : ''
       $q.loading.show({
         html: true,
         spinnerSize: 40,
@@ -195,7 +174,7 @@ export function useYdUpload() {
               <div style="height:100%;width:${pct}%;background:#f2c94c;transition:width .2s"></div>
             </div>
             <div style="display:flex;justify-content:space-between;font-size:13px;margin:4px 0 10px">
-              <span>${fmtMB(Math.min(sent, totalBytes))} / ${fmtMB(totalBytes)} МБ</span><span>${pct}%</span>
+              <span>${bytesLine}</span><span>${pct}%</span>
             </div>
             ${lines}${errors}
           </div>`,
@@ -209,34 +188,26 @@ export function useYdUpload() {
     async function worker() {
       while (next < total) {
         const index = next++
-        const file = list[index]
-        const st = { name: file.name, size: file.size || 0, loaded: 0, phase: 'prepare' }
+        const item = list[index]
+        const st = { name: nameOf(item), size: sizes[index], loaded: 0, phase: 'prepare' }
+        const ctx = {
+          progress: (l) => { st.phase = 'upload'; st.loaded = Math.min(l, st.size || l); loaded[index] = st.loaded; schedule() },
+          phase: (p) => {
+            st.phase = p
+            if (p === 'retry') { st.loaded = 0; loaded[index] = 0 }
+            schedule()
+          },
+          rename: (n) => { st.name = n; schedule() },
+        }
         active.set(index, st)
         schedule()
         try {
-          const up = await uploadFileToYd(file, buildPath(file, index), {
-            onProgress: (l) => { st.phase = 'upload'; st.loaded = l; loaded[index] = l; schedule() },
-            onRetry: () => { st.phase = 'retry'; st.loaded = 0; loaded[index] = 0; schedule() },
-          })
-          loaded[index] = st.size
-          st.name = up.file_name
-          st.phase = 'link'
-          schedule()
-          const result = { file, index, ...up, public_link: await fetchPublicLink(up.yandex_path) }
-          if (saveRecord) {
-            st.phase = 'save'
-            schedule()
-            try {
-              await withRetry(() => saveRecord(result))
-            } catch (err) {
-              throw new Error(`файл загружен, но не сохранён в CRM: ${errorText(err)}`)
-            }
-          }
-          ok.push(result)
+          const value = await task(item, index, ctx)
+          ok.push({ item, index, value })
         } catch (err) {
-          loaded[index] = st.size
-          failed.push({ file, index, error: errorText(err) })
+          failed.push({ item, index, name: st.name, error: errorText(err), err })
         } finally {
+          loaded[index] = st.size
           active.delete(index)
           done++
           schedule()
@@ -251,16 +222,82 @@ export function useYdUpload() {
       clearTimeout(renderTimer)
       $q.loading.hide()
     }
-    return { ok, failed, noLink: ok.filter((r) => !r.public_link).length }
+    return { ok, failed }
   }
 
-  /** Итоговое уведомление по результату uploadBatch */
+  /** Задача очереди: файл → ЯД → публичная ссылка → (опционально) запись в БД */
+  function ydTask(buildPath, saveRecord) {
+    return async (file, index, ctx) => {
+      const up = await uploadFileToYd(file, buildPath(file, index), {
+        onProgress: (l) => ctx.progress(l),
+        onRetry: () => ctx.phase('retry'),
+      })
+      ctx.rename(up.file_name)
+      ctx.phase('link')
+      const result = { file, index, ...up, public_link: await fetchPublicLink(up.yandex_path) }
+      if (saveRecord) {
+        ctx.phase('save')
+        try {
+          await withRetry(() => saveRecord(result))
+        } catch (err) {
+          throw new Error(`файл загружен, но не сохранён в CRM: ${errorText(err)}`)
+        }
+      }
+      return result
+    }
+  }
+
+  /**
+   * Загрузить один файл на ЯД (та же панель прогресса). Бросает исходную ошибку при неудаче.
+   * @returns {{ yandex_path: string, public_link: string, file_name: string }}
+   */
+  async function uploadToYd(file, yandexPath) {
+    const { ok, failed } = await runUploadQueue([file], {
+      title: 'Загрузка файла',
+      concurrency: 1,
+      task: ydTask(() => yandexPath),
+    })
+    if (failed.length) throw failed[0].err
+    const r = ok[0].value
+    return { yandex_path: r.yandex_path, public_link: r.public_link, file_name: r.file_name }
+  }
+
+  /**
+   * Пакетная загрузка на ЯД. Запись в БД создаётся только для успешно залитых файлов.
+   * @param {(file: File, index: number) => string} opts.buildPath — путь на ЯД
+   * @param {(r: {file, index, yandex_path, file_name, public_link}) => Promise} [opts.saveRecord]
+   * @returns {Promise<{ ok: object[], failed: object[], noLink: number }>}
+   */
+  async function uploadBatch(files, { buildPath, saveRecord, concurrency = 3, title = 'Загрузка файлов' } = {}) {
+    const res = await runUploadQueue(files, { title, concurrency, task: ydTask(buildPath, saveRecord) })
+    const ok = res.ok.map((o) => o.value)
+    return { ok, failed: res.failed, noLink: ok.filter((r) => !r.public_link).length }
+  }
+
+  /**
+   * Загрузка через эндпоинт CRM. send(file, onUploadProgress, index) должен вернуть Promise
+   * (axios-запрос с переданным onUploadProgress). Без повторов: такие запросы не идемпотентны.
+   * concurrency=1 по умолчанию — сохраняет порядок (важно для сообщений чата).
+   */
+  async function uploadViaServer(files, { send, title = 'Загрузка файлов', concurrency = 1 } = {}) {
+    const res = await runUploadQueue(files, {
+      title,
+      concurrency,
+      task: async (file, index, ctx) => send(file, (e) => {
+        ctx.progress(e.loaded || 0)
+        if (e.total && e.loaded >= e.total) ctx.phase('server')
+      }, index),
+    })
+    return { ok: res.ok.map((o) => ({ file: o.item, index: o.index, data: o.value })), failed: res.failed }
+  }
+
+  /** Итоговое уведомление по результату uploadBatch / uploadViaServer / runUploadQueue */
   function notifyBatchResult({ ok, failed }) {
     if (!failed.length) {
       $q.notify({ type: 'positive', message: `Загружено файлов: ${ok.length}` })
       return
     }
-    const names = failed.slice(0, 5).map((f) => `${f.file.name} (${f.error})`).join('; ')
+    const names = failed.slice(0, 5).map((f) => `${f.name} (${f.error})`).join('; ')
     const more = failed.length > 5 ? ` и ещё ${failed.length - 5}` : ''
     $q.notify({
       type: ok.length ? 'warning' : 'negative',
@@ -271,5 +308,5 @@ export function useYdUpload() {
     })
   }
 
-  return { uploadToYd, uploadBatch, notifyBatchResult }
+  return { uploadToYd, uploadBatch, uploadViaServer, runUploadQueue, notifyBatchResult }
 }

@@ -784,14 +784,6 @@
       </template>
     </div>
 
-    <!-- Прогресс загрузки файла -->
-    <q-linear-progress
-      v-if="uploadProgress > 0 && uploadProgress < 100"
-      :value="uploadProgress / 100"
-      color="green-6"
-      style="flex-shrink: 0"
-    />
-
     <!-- Превью прикреплённых файлов -->
     <div
       v-if="pendingFiles.length"
@@ -867,7 +859,6 @@
           dense
           icon="attach_file"
           color="grey-6"
-          :loading="uploadProgress > 0 && uploadProgress < 100"
           @click="pickFile"
         >
           <q-tooltip>Прикрепить файл</q-tooltip>
@@ -1640,6 +1631,7 @@ import { usePermission } from 'src/composables/usePermission'
 import { useAuthStore } from 'src/stores/auth'
 import { useChatUnreadStore } from 'src/stores/chatUnread'
 import { useQuasar } from 'quasar'
+import { useYdUpload } from 'src/composables/useYdUpload'
 import ImageGalleryDialog from 'src/components/ImageGalleryDialog.vue'
 
 const route = useRoute()
@@ -1647,6 +1639,7 @@ const authStore = useAuthStore()
 const chatUnreadStore = useChatUnreadStore()
 const { can } = usePermission()
 const $q = useQuasar()
+const { uploadViaServer, notifyBatchResult } = useYdUpload()
 let chatId = Number(route.params.chatId)
 
 const { isConnected, connectEmployee, disconnect, sendMessage, sendTypingStart, sendTypingStop, sendRead, typingUsers } = useChatWebSocket()
@@ -1704,7 +1697,6 @@ const searchResults = ref([])
 const searchLoading = ref(false)
 const scriptText = ref('')
 const chatPageH = ref('100dvh')
-const uploadProgress = ref(0)
 const availableEmployees = ref(null)
 const loadingAvailableEmps = ref(false)
 const addingMemberId = ref(null)
@@ -2785,17 +2777,11 @@ async function sendWithAttachment() {
   pendingPreviews.value = []
   pendingCaption.value = ''
 
-  uploadProgress.value = 1
-  const errors = []
-  for (let i = 0; i < files.length; i++) {
-    try {
-      await _uploadSingleFile(files[i], groupId, i === files.length - 1 ? caption : null)
-    } catch {
-      errors.push(files[i].name)
-    }
-  }
-  uploadProgress.value = 0
-  if (errors.length) $q.notify({ type: 'negative', message: `Ошибка загрузки: ${errors.join(', ')}` })
+  const res = await uploadViaServer(files, {
+    title: 'Отправка файлов',
+    send: (file, onProgress, i) => _uploadSingleFile(file, groupId, i === files.length - 1 ? caption : null, onProgress),
+  })
+  if (res.failed.length) notifyBatchResult(res)
 }
 
 // Drag & Drop
@@ -2828,7 +2814,7 @@ function onPaste(e) {
   addFilesToPending(files)
 }
 
-async function _uploadSingleFile(file, groupId = null, caption = null) {
+async function _uploadSingleFile(file, groupId = null, caption = null, onProgress = null) {
   const ext = file.name.split('.').pop()?.toLowerCase() || ''
   const msgType = IMAGE_EXTS.includes(ext) ? 'image' : 'file'
   const isPdfUpload = ext === 'pdf'
@@ -2869,12 +2855,9 @@ async function _uploadSingleFile(file, groupId = null, caption = null) {
     formData.append('message_type', msgType)
     if (groupId) formData.append('group_id', groupId)
     if (caption) formData.append('caption', caption)
-    uploadProgress.value = 1
     const { data: savedMsg } = await api.post(`/api/v1/chats/${chatId}/files`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
-      onUploadProgress: (e) => {
-        uploadProgress.value = e.total ? Math.round((e.loaded / e.total) * 100) : 50
-      },
+      onUploadProgress: (e) => onProgress?.(e),
     })
     const idx = messages.value.findIndex(m => m.id === tempId)
     if (idx !== -1) {
@@ -2884,11 +2867,9 @@ async function _uploadSingleFile(file, groupId = null, caption = null) {
     }
   } catch (e) {
     messages.value = messages.value.filter(m => m.id !== tempId)
-    $q.notify({ type: 'negative', message: 'Ошибка загрузки файла' })
     throw e
   } finally {
     if (previewUrl) URL.revokeObjectURL(previewUrl)
-    uploadProgress.value = 0
   }
 }
 

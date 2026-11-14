@@ -138,7 +138,6 @@
               :loading="uploading"
               @click="uploadFromLink"
             />
-            <q-linear-progress v-if="uploading" :value="uploadProgress" color="primary" class="q-mt-xs" />
           </div>
         </template>
 
@@ -203,12 +202,11 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue', 'saved'])
 
 const $q = useQuasar()
-const { uploadToYd } = useYdUpload()
+const { uploadToYd, runUploadQueue, notifyBatchResult } = useYdUpload()
 const show = ref(false)
 const saving = ref(false)
 const fetching = ref(false)
 const uploading = ref(false)
-const uploadProgress = ref(0)
 const uploadMode = ref('file')
 const surveyorId = ref(null)
 const measurementDate = ref(new Date().toISOString().slice(0, 10))
@@ -245,7 +243,6 @@ function resetFields() {
   fetchedFiles.value = []
   uploadedMeasLink.value = ''
   uploadedPhotoLink.value = ''
-  uploadProgress.value = 0
   uploadMode.value = 'file'
 }
 
@@ -284,7 +281,6 @@ async function fetchFiles() {
 async function uploadFromLink() {
   if (fetchedFiles.value.length === 0) return
   uploading.value = true
-  uploadProgress.value = 0
   try {
     const { api: ax } = await import('src/boot/axios')
     const contractFolder = props.contractData?.yandex_folder_path || ''
@@ -292,27 +288,26 @@ async function uploadFromLink() {
       $q.notify({ type: 'warning', message: 'Папка договора не создана на ЯД' }); return
     }
     const cfClean = contractFolder.replace(/^disk:/, '')
-    const total = fetchedFiles.value.length
     let measLink = ''
     let photoLink = ''
 
-    for (let i = 0; i < total; i++) {
-      const f = fetchedFiles.value[i]
-      const dest = f.destination === 'Замер' ? 'Замер' : 'Фотофиксация'
-      const destPath = `${cfClean}/${dest}/${f.name}`
-
-      try {
+    // Копирование идёт сервер ↔ ЯД, байты браузером не отправляются — прогресс по завершённым файлам
+    const batch = await runUploadQueue(fetchedFiles.value, {
+      title: 'Копирование на Яндекс.Диск',
+      concurrency: 2,
+      task: async (f, _i, ctx) => {
+        ctx.phase('copy')
+        const dest = f.destination === 'Замер' ? 'Замер' : 'Фотофиксация'
         const res = await ax.post('/api/v1/files/download-public', null, {
-          params: { public_url: publicLink.value, file_path: f.path || `/${f.name}`, dest_path: destPath },
+          params: { public_url: publicLink.value, file_path: f.path || `/${f.name}`, dest_path: `${cfClean}/${dest}/${f.name}` },
           timeout: 120000,
         })
         if (res.data?.public_link) {
           if (dest === 'Замер') measLink = res.data.public_link
           else photoLink = res.data.public_link
         }
-      } catch (e) { console.warn(`Ошибка загрузки ${f.name}:`, e) }
-      uploadProgress.value = (i + 1) / total
-    }
+      },
+    })
 
     // Получаем публичные ссылки на папки Замер и Фотофиксация
     const hasMeas = fetchedFiles.value.some(f => f.destination === 'Замер')
@@ -349,7 +344,7 @@ async function uploadFromLink() {
       try { await ax.post(`/api/v1/files/scan/${props.contractId}`) } catch {}
     }
 
-    $q.notify({ type: 'positive', message: `Загружено ${total} файл(ов) на ЯД` })
+    notifyBatchResult(batch)
   } catch (err) {
     $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка загрузки' })
   } finally { uploading.value = false }

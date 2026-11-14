@@ -2891,7 +2891,7 @@ const { can } = usePermission()
 const refs = useReferencesStore()
 const authStore = useAuthStore()
 const { ensureLoaded: loadAvatars, getAvatarByName } = useEmployeeAvatars()
-const { uploadToYd, uploadBatch, notifyBatchResult } = useYdUpload()
+const { uploadToYd, uploadBatch, uploadViaServer, notifyBatchResult } = useYdUpload()
 const agentColor = computed(() => refs.agentByName(card.value?.agent_type)?.color || '#95A5A6')
 const isArchived = computed(() => {
   if (!card.value) return false
@@ -4068,21 +4068,29 @@ async function uploadVisitReport(visit) {
   input.type = 'file'
   input.multiple = true
   input.accept = '.pdf,.doc,.docx,.xls,.xlsx'
-  input.onchange = async (e) => {
-    for (const file of e.target.files) {
-      try {
-        const fd = new FormData()
-        fd.append('file', file)
-        fd.append('visit_id', visit.id)
-        fd.append('file_type', 'report')
-        const { api: ax } = await import('src/boot/axios')
-        await ax.post('/api/v1/supervision-visits/upload-file', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
-      } catch (err) { $q.notify({ type: 'negative', message: 'Ошибка загрузки: ' + (err.response?.data?.detail || err.message) }) }
-    }
-    $q.notify({ type: 'positive', message: 'Файлы загружены' })
-    await reloadData()
-  }
+  input.onchange = (e) => uploadVisitFiles(visit, e.target.files, 'report', 'Загрузка отчётов')
   input.click()
+}
+
+async function uploadVisitFiles(visit, files, fileType, title) {
+  const { api: ax } = await import('src/boot/axios')
+  const res = await uploadViaServer(files, {
+    title,
+    concurrency: 2,
+    send: (file, onProgress) => {
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('visit_id', visit.id)
+      fd.append('file_type', fileType)
+      return ax.post('/api/v1/supervision-visits/upload-file', fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        onUploadProgress: onProgress,
+        timeout: 600000,
+      })
+    },
+  })
+  notifyBatchResult(res)
+  await reloadData()
 }
 
 async function uploadVisitPhoto(visit) {
@@ -4090,20 +4098,7 @@ async function uploadVisitPhoto(visit) {
   input.type = 'file'
   input.multiple = true
   input.accept = 'image/*'
-  input.onchange = async (e) => {
-    for (const file of e.target.files) {
-      try {
-        const fd = new FormData()
-        fd.append('file', file)
-        fd.append('visit_id', visit.id)
-        fd.append('file_type', 'photo')
-        const { api: ax } = await import('src/boot/axios')
-        await ax.post('/api/v1/supervision-visits/upload-file', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
-      } catch (err) { $q.notify({ type: 'negative', message: 'Ошибка загрузки: ' + (err.response?.data?.detail || err.message) }) }
-    }
-    $q.notify({ type: 'positive', message: 'Фото загружены' })
-    await reloadData()
-  }
+  input.onchange = (e) => uploadVisitFiles(visit, e.target.files, 'photo', 'Загрузка фото')
   input.click()
 }
 
