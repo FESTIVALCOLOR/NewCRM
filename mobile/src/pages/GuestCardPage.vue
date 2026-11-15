@@ -122,9 +122,9 @@
           <q-list dense separator>
             <q-item v-for="(t, i) in data.team" :key="i">
               <q-item-section avatar style="min-width: 36px">
-                <q-avatar size="28px" style="background: #EEEEEE; color: #424242; font-size: 12px">
+                <div class="guest-avatar">
                   {{ initials(t.name) }}
-                </q-avatar>
+                </div>
               </q-item-section>
               <q-item-section>
                 <q-item-label style="font-size: 13px; color: var(--fc-text)">
@@ -274,10 +274,16 @@
 
       <q-dialog v-model="surveyOpen" maximized>
         <q-card style="display: flex; flex-direction: column; overflow: hidden">
-          <q-bar style="background: #444; color: white; flex-shrink: 0">
+          <q-bar class="guest-dialog-bar">
             <span style="font-weight: 600">Анкета ТЗ</span>
             <q-space />
-            <q-btn dense flat icon="close" @click="surveyOpen = false" />
+            <q-btn
+              dense
+              flat
+              icon="close"
+              aria-label="Закрыть"
+              @click="surveyOpen = false"
+            />
           </q-bar>
           <div v-if="data.survey" style="overflow-y: auto; flex: 1">
             <SurveyReadonlyView
@@ -430,6 +436,29 @@ onMounted(async () => {
   color: var(--fc-text);
   font-size: 12px;
   white-space: nowrap;
+}
+.guest-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #eeeeee;
+  color: #424242;
+  font-size: 11px;
+  font-weight: 600;
+}
+/* Общая тема красит текст кнопок в тёмный — на тёмной полосе диалога возвращаем белый */
+.guest-dialog-bar {
+  flex-shrink: 0;
+  background: #444;
+  color: #fff;
+}
+.guest-dialog-bar span,
+.guest-dialog-bar :deep(.q-btn__content),
+.guest-dialog-bar :deep(.q-icon) {
+  color: #fff !important;
 }
 .guest-pill {
   min-width: 100px;
