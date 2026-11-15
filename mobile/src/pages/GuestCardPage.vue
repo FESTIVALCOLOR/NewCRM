@@ -14,9 +14,9 @@
           Попросите менеджера прислать актуальную ссылку на заказ или войдите в CRM.
         </div>
         <q-btn
-          unelevated
+          flat
           no-caps
-          color="primary"
+          class="guest-btn"
           label="Войти в CRM"
           to="/login"
         />
@@ -28,12 +28,12 @@
           <span class="col">Просмотр без входа. Чтобы работать с карточкой — войдите.</span>
           <q-btn
             unelevated
+            flat
             dense
             no-caps
-            color="primary"
             label="Войти"
             :to="loginLink"
-            class="q-px-sm"
+            class="guest-btn"
           />
         </div>
 
@@ -55,7 +55,9 @@
             <div class="text-caption q-mt-xs" style="color: var(--fc-text-light)">
               {{ [data.project_type, data.project_subtype, data.area ? `${data.area} м²` : '', data.city].filter(Boolean).join(' | ') }}
             </div>
-            <q-badge v-if="data.column_name" class="q-mt-sm" color="primary" :label="data.column_name" />
+            <div v-if="data.column_name" class="guest-stage">
+              {{ data.column_name }}
+            </div>
           </q-card-section>
 
           <q-card-section v-if="m" class="q-pa-sm">
@@ -243,6 +245,27 @@ onMounted(async () => {
   background: var(--fc-bg-alt);
   color: var(--fc-text-secondary);
   font-size: 13px;
+}
+.guest-btn {
+  height: 28px;
+  padding: 0 14px;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  background: var(--fc-bg-card, #fff);
+  color: var(--fc-text);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.guest-stage {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 2px 8px;
+  border: 1px solid var(--fc-border, #d9d9d9);
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fc-text);
+  background: var(--fc-bg-card, #fff);
 }
 .guest-address {
   display: inline-flex;
