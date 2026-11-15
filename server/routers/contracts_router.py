@@ -12,6 +12,7 @@ from constants import ARCHIVE_STATUSES
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from permissions import require_permission
 from schemas import ContractCreate, ContractFilesUpdate, ContractResponse, ContractUpdate, StatusResponse
+from services.project_deadline import load_project_metrics
 from sqlalchemy import func, nullslast, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -163,6 +164,7 @@ async def get_contract(contract_id: int, current_user: Employee = Depends(get_cu
     data = ContractResponse.model_validate(contract).model_dump()
     data["crm_card_total_pause_days"] = crm_card.total_pause_days if crm_card else 0
     data["crm_card_deadline"] = str(crm_card.deadline) if crm_card and crm_card.deadline else None
+    data["timeline_metrics"] = load_project_metrics(db, crm_card, contract) if crm_card else None
     data["supervision_card_id"] = sv_card.id if sv_card else None
     if contract.project_type == "Авторский надзор" or contract.status == "АВТОРСКИЙ НАДЗОР":
         sums = _get_supervision_payments_sums(db, [contract_id])

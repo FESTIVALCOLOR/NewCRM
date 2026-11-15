@@ -48,6 +48,7 @@ from constants import (
     STATUS_TERMINATED,
 )
 from fastapi import APIRouter, Depends, HTTPException
+from services.project_deadline import compute_project_metrics
 from services.timeline_service import build_project_timeline_template, build_template_project_timeline
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -73,6 +74,27 @@ from database import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["dashboard"])
+
+
+def _count_projects_on_time(db, cards):
+    """(в срок, с просрочкой) по единым правилам services/project_deadline.py."""
+    if not cards:
+        return 0, 0
+    contract_ids = list({c.contract_id for c in cards})
+    entries_by_contract = defaultdict(list)
+    for e in db.query(ProjectTimelineEntry).filter(ProjectTimelineEntry.contract_id.in_(contract_ids)).all():
+        entries_by_contract[e.contract_id].append(e)
+    contracts = {c.id: c for c in db.query(Contract).filter(Contract.id.in_(contract_ids)).all()}
+    on_time = overdue = 0
+    for card in cards:
+        m = compute_project_metrics(card, contracts.get(card.contract_id), entries_by_contract.get(card.contract_id, []))
+        if not m["deadline"]:
+            continue
+        if m["overdue_days"] > 0:
+            overdue += 1
+        else:
+            on_time += 1
+    return on_time, overdue
 
 
 @router.get("/clients")
@@ -1128,15 +1150,7 @@ async def get_reports_summary(
         if filtered_contract_ids:
             completed_cards = db.query(CRMCard).filter(CRMCard.contract_id.in_(filtered_contract_ids), CRMCard.column_name == "Выполненный проект").all()
             if completed_cards:
-                on_time_count = 0
-                for card in completed_cards:
-                    if card.deadline and card.updated_at:
-                        try:
-                            deadline_dt = datetime.strptime(str(card.deadline).strip(), "%Y-%m-%d")
-                            if card.updated_at <= deadline_dt:
-                                on_time_count += 1
-                        except ValueError:
-                            pass
+                on_time_count, _ = _count_projects_on_time(db, completed_cards)
                 contracts_on_time_pct = round(on_time_count / len(completed_cards) * 100, 1)
 
         # % стадий выполненных в срок (через StageExecutor)
@@ -1626,19 +1640,7 @@ async def get_crm_analytics(
         # --- On-time статистика ---
         # Проекты: column_name='Выполненный проект', сравниваем deadline с updated_at
         completed_cards = [c for c in crm_cards if c.column_name == "Выполненный проект"]
-        projects_on_time = 0
-        projects_overdue = 0
-
-        for card in completed_cards:
-            if card.deadline and card.updated_at:
-                try:
-                    deadline_dt = datetime.strptime(str(card.deadline).strip(), "%Y-%m-%d")
-                    if card.updated_at <= deadline_dt:
-                        projects_on_time += 1
-                    else:
-                        projects_overdue += 1
-                except ValueError:
-                    pass
+        projects_on_time, projects_overdue = _count_projects_on_time(db, completed_cards)
 
         projects_total = projects_on_time + projects_overdue
         projects_pct = round(projects_on_time / projects_total * 100, 1) if projects_total else 0.0

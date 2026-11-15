@@ -601,36 +601,23 @@
                   <span v-if="timelineTotals.actualAll > timelineTotals.actualTotal"> (с учётом вне объёма: {{ timelineTotals.actualAll }} дн.)</span>
                 </span>
               </div>
-              <div v-if="calendarOverdueDays > 0 || timelineTotals.overdueTotal > 0 || timelineTotals.aheadTotal > 0" class="q-mt-xs">
-                <!-- Фактическая просрочка по дате — PRIMARY -->
-                <div v-if="calendarOverdueDays > 0" class="row items-center justify-end">
-                  <span class="text-caption text-weight-bold" style="color: #E53935; font-size: 13px">
-                    Просрочка: {{ calendarOverdueDays }} р.д.
-                  </span>
-                </div>
-                <!-- Отклонение по этапам — SECONDARY -->
-                <div class="row items-center justify-end q-mt-xs" style="gap: 8px">
-                  <span v-if="timelineTotals.overdueTotal > 0" class="text-caption" style="color: #C07070">
-                    откл. по этапам: +{{ timelineTotals.overdueTotal }} дн.
-                  </span>
-                  <span v-if="timelineTotals.aheadTotal > 0" class="text-caption text-weight-bold" style="color: #27AE60">
-                    раньше срока: -{{ timelineTotals.aheadTotal }} дн.
-                  </span>
-                </div>
+              <div v-if="calendarOverdueDays > 0" class="row items-center justify-end q-mt-xs">
+                <span class="text-caption text-weight-bold" style="color: #E53935; font-size: 13px">
+                  Просрочка: {{ calendarOverdueDays }} р.д.
+                </span>
               </div>
-              <div v-if="pauseInfo.postStart > 0" class="row items-center justify-between q-mt-xs">
+              <div v-if="pauseInfo.total > 0" class="row items-center justify-between q-mt-xs">
                 <span class="text-caption" style="color: var(--fc-text-light)">
                   <q-icon name="pause_circle_outline" size="12px" class="q-mr-xs" />
-                  Дни ожидания (добавлены к дедлайну)
+                  Дни ожидания («В ожидании»)
                 </span>
-                <span class="text-caption text-weight-bold" style="color: var(--fc-text-light)">+{{ pauseInfo.postStart }} дн.</span>
+                <span class="text-caption text-weight-bold" style="color: var(--fc-text-light)">{{ pauseInfo.total }} дн.</span>
               </div>
-              <div v-if="pauseInfo.preStart > 0" class="row items-center justify-between q-mt-xs">
-                <span class="text-caption" style="color: var(--fc-text-light)">
-                  <q-icon name="pause_circle_outline" size="12px" class="q-mr-xs" />
-                  Дни ожидания (до начала разработки)
+              <div v-if="pauseInfo.preStart > 0" class="row items-center justify-between">
+                <span class="text-caption" style="color: var(--fc-text-light); padding-left: 16px">
+                  из них до начала разработки
                 </span>
-                <span class="text-caption text-weight-bold" style="color: var(--fc-text-light)">+{{ pauseInfo.preStart }} дн.</span>
+                <span class="text-caption" style="color: var(--fc-text-light)">{{ pauseInfo.preStart }} дн.</span>
               </div>
               <div v-if="hasCustomNormDays" style="color: #E53935; font-size: 11px; margin-top: 4px">
                 ⚠ Норма-дни изменены. Требуется учёт в расчёте последующих стадий.
@@ -2491,13 +2478,11 @@
                 Опережение по этапам: {{ Math.abs(netDeadlineDiff) }} дн.
               </template>
             </div>
-            <div v-if="pauseInfo.postStart > 0" class="text-caption q-mb-xs" style="color: var(--fc-text-light)">
+            <div v-if="pauseInfo.total > 0" class="text-caption q-mb-sm" style="color: var(--fc-text-light)">
               <q-icon name="pause_circle" size="12px" class="q-mr-xs" />
-              Дни ожидания (добавлены к дедлайну): {{ pauseInfo.postStart }} дн.
-            </div>
-            <div v-if="pauseInfo.preStart > 0" class="text-caption q-mb-sm" style="color: var(--fc-text-light)">
-              <q-icon name="pause_circle" size="12px" class="q-mr-xs" />
-              Дни ожидания (до начала разработки): {{ pauseInfo.preStart }} дн.
+              Дни ожидания («В ожидании»): {{ pauseInfo.total }} дн.<template v-if="pauseInfo.preStart > 0">
+                , из них до начала разработки {{ pauseInfo.preStart }} дн.
+              </template>
             </div>
             <q-separator v-if="deadlineDeviations.length || aheadDeviations.length" class="q-mb-sm" />
             <template v-if="deadlineDeviations.length">
@@ -2618,7 +2603,7 @@ import { useAuthStore } from 'src/stores/auth'
 import { useReferencesStore } from 'src/stores/references'
 import { useChatUnreadStore } from 'src/stores/chatUnread'
 import { usePermission } from 'src/composables/usePermission'
-import { addWorkingDays, calcDeadlineFromTimeline, countWorkingDaysUntil, countWorkingDaysBetween } from 'src/composables/useDeadline'
+import { addWorkingDays, calcDeadlineFromTimeline } from 'src/composables/useDeadline'
 import { crmApi, employeesApi, filesApi, contractsApi, paymentsApi, locksApi, messengerApi, tzApi } from 'src/services/api'
 import MeasurementDialog from 'src/components/MeasurementDialog.vue'
 import InlineChatRoom from 'src/components/InlineChatRoom.vue'
@@ -2875,30 +2860,22 @@ const hasCustomNormDays = computed(() =>
     e.executor_role !== 'header' && e.custom_norm_days && e.custom_norm_days !== e.norm_days,
   ),
 )
+// Факт, просрочку, ожидание и дедлайн считает сервер (services/project_deadline.py) —
+// одни правила для карточки, договора, выгрузок и дашборда
+const timelineMetrics = computed(() => card.value?.timeline_metrics || null)
 const timelineTotals = computed(() => {
-  let normFallback = 0, storedActual = 0, outScopeActual = 0
+  let normFallback = 0
   const contractPeriod = contractData.value?.contract_period || 0
   for (const e of timelineEntries.value) {
     if (e.executor_role === 'header') continue
     if (e.is_in_contract_scope !== false) normFallback += (e.norm_days || 0)
-    if (e.status !== 'skipped') storedActual += (e.actual_days || 0)
-    if (e.status !== 'skipped' && e.is_in_contract_scope === false) outScopeActual += (e.actual_days || 0)
   }
-  const normTotal = contractPeriod > 0 ? contractPeriod : normFallback
-  // Факт: для открытого проекта — р.д. от START до сегодня минус дни паузы; для закрытого — сумма
-  let actualTotal = storedActual
-  if (projectStartDate.value && !isProjectClosed.value) {
-    const d = countWorkingDaysUntil(projectStartDate.value)
-    const pauseDays = card.value?.total_pause_days || 0
-    actualTotal = d < 0 ? Math.max(0, Math.abs(d) - pauseDays) : 0
+  const m = timelineMetrics.value
+  return {
+    normTotal: contractPeriod > 0 ? contractPeriod : normFallback,
+    actualTotal: m?.fact_days || 0,
+    actualAll: m?.fact_days_all || 0,
   }
-  // Просрочка = та же формула что в popup (per-stage in-scope) — единая система
-  const netDiff = netDeadlineDiff.value
-  const overdueTotal = Math.max(0, netDiff)
-  const aheadTotal = Math.max(0, -netDiff)
-  // Норма — по объёму договора, значит и факт рядом с ней без этапов вне объёма
-  const actualInScope = Math.max(0, actualTotal - outScopeActual)
-  return { normTotal, actualTotal: actualInScope, actualAll: actualTotal, overdueTotal, aheadTotal }
 })
 const workflowStates = ref([])
 const showRejectDialog = ref(false)
@@ -3482,37 +3459,12 @@ function workflowLabel(s) { return { in_progress: 'В работе', pending_rev
 const projectStartDate = computed(() =>
   timelineEntries.value.find(e => e.stage_code === 'START')?.actual_date || null,
 )
-// Проект закрыт, если в итоговой колонке или архиве — тогда Факт фиксируется
-const isProjectClosed = computed(() =>
-  card.value?.column_name === 'Выполненный проект' || !!card.value?.is_archived,
-)
-// Разбиваем total_pause_days на до-стартовые и пост-стартовые.
-// postStart = рабочие дни на которые сдвинулся effective_deadline vs чистый START+период.
-// preStart = остаток (были до начала разработки и не сдвигают дедлайн).
-// Используем card.deadline (не effective_deadline) — оба поля обновляются синхронно при resume.
-// effective_deadline включает текущую активную паузу, а total_pause_days — нет.
-// Сравниваем stored deadline vs чистый START+период чтобы получить накопленные пост-старт паузы.
-const pauseInfo = computed(() => {
-  const totalPause = card.value?.total_pause_days || 0
-  if (!totalPause) return { preStart: 0, postStart: 0 }
-  if (!projectStartDate.value) return { preStart: totalPause, postStart: 0 }
-  const period = contractData.value?.contract_period || card.value?.contract_period
-  if (!period) return { preStart: totalPause, postStart: 0 }
-  const pureDeadline = addWorkingDays(projectStartDate.value, period)
-  const storedDeadline = card.value?.deadline
-  if (!storedDeadline || storedDeadline === pureDeadline) return { preStart: totalPause, postStart: 0 }
-  const postStart = Math.max(0, countWorkingDaysBetween(pureDeadline, storedDeadline))
-  const preStart = Math.max(0, totalPause - postStart)
-  return { preStart, postStart }
-})
-// Дата фактического закрытия = последняя actual_date в таймлайне (для закрытых проектов)
-const closureDate = computed(() => {
-  if (!isProjectClosed.value) return null
-  const dates = timelineEntries.value
-    .filter(e => e.executor_role !== 'header' && e.actual_date)
-    .map(e => e.actual_date)
-  return dates.length ? [...dates].sort().at(-1) : null
-})
+// «В ожидании»: всего и сколько из них пришлось на время до начала разработки
+const pauseInfo = computed(() => ({
+  total: timelineMetrics.value?.wait_days_total || 0,
+  preStart: timelineMetrics.value?.wait_days_pre_start || 0,
+}))
+const closureDate = computed(() => timelineMetrics.value?.closure_date || null)
 // Дедлайн проекта = START + срок договора в рабочих днях (как в desktop timeline_widget.py:642-643)
 const effectiveDeadline = computed(() => {
   // Приоритет: effective_deadline от сервера (учитывает паузы «В ожидании» онлайн),
@@ -3525,18 +3477,7 @@ const effectiveDeadline = computed(() => {
   if (!period || period <= 0) return null
   return addWorkingDays(startDate, period)
 })
-// Фактическая просрочка:
-//  - открытый проект: р.д. от дедлайна до сегодня (растёт)
-//  - закрытый проект: р.д. от дедлайна до даты закрытия (фиксировано)
-const calendarOverdueDays = computed(() => {
-  if (!effectiveDeadline.value) return 0
-  if (isProjectClosed.value && closureDate.value) {
-    const d = countWorkingDaysBetween(effectiveDeadline.value, closureDate.value)
-    return d > 0 ? d : 0
-  }
-  const d = countWorkingDaysUntil(effectiveDeadline.value)
-  return d < 0 ? Math.abs(d) : 0
-})
+const calendarOverdueDays = computed(() => timelineMetrics.value?.overdue_days || 0)
 // Просрочки по завершённым подэтапам (как в desktop _recalculate_days deviation_reasons)
 // Этапы вне объёма договора (is_in_contract_scope=false) исключаются из расчёта просрочки
 const deadlineDeviations = computed(() => {

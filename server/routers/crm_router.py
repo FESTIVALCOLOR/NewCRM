@@ -45,6 +45,7 @@ from schemas import (
 )
 from services.notification_dispatcher import dispatch_notification
 from services.notification_service import send_survey_to_chat, trigger_messenger_notification
+from services.project_deadline import compute_project_metrics, load_project_metrics
 from services.timeline_service import build_project_timeline_template, build_template_project_timeline, refresh_timeline_start_date
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -237,19 +238,6 @@ def _add_working_days_to_date(start_date_str, working_days):
     return current.strftime("%Y-%m-%d")
 
 
-def _compute_effective_deadline(card):
-    """Эффективный дедлайн с учётом паузы — для карточек «В ожидании» сдвигается на число рабочих дней паузы."""
-    base = str(card.deadline) if card.deadline else None
-    if card.column_name == "В ожидании" and card.paused_at and card.deadline:
-        try:
-            pd = _count_business_days(card.paused_at, datetime.utcnow())
-            if pd > 0:
-                return _add_working_days_to_date(str(card.deadline), pd)
-        except Exception:
-            pass
-    return base
-
-
 def _compute_is_client_stage(db, card, wf_status, substep_code):
     """True если текущий этап — клиентский (вне объёма просрочки проекта)."""
     if wf_status in ("client_approval", "pending_decision", "act_signing"):
@@ -427,16 +415,7 @@ async def get_crm_cards(project_type: Optional[str] = None, archived: bool = Fal
             designer_employee = executor_employees_map.get(designer_executor.executor_id) if designer_executor else None
             draftsman_employee = executor_employees_map.get(draftsman_executor.executor_id) if draftsman_executor else None
 
-            # Эффективный дедлайн: для карточек в «В ожидании» сдвигаем на текущие дни паузы
-            # Это позволяет корректно отображать дедлайн без ежедневного изменения БД
-            _effective_deadline = str(card.deadline) if card.deadline else None
-            if card.column_name == "В ожидании" and card.paused_at and card.deadline:
-                try:
-                    _pause_days = _count_business_days(card.paused_at, datetime.utcnow())
-                    if _pause_days > 0:
-                        _effective_deadline = _add_working_days_to_date(str(card.deadline), _pause_days)
-                except Exception:
-                    pass
+            _metrics = compute_project_metrics(card, contract, timeline_by_contract.get(card.contract_id, []))
 
             # Флаг «клиентский этап» — просрочка по таким этапам не должна красить дедлайн красным
             _wf = wf_states_by_card.get((card.id, card.column_name))
@@ -449,7 +428,8 @@ async def get_crm_cards(project_type: Optional[str] = None, archived: bool = Fal
                 "contract_id": card.contract_id,
                 "column_name": card.column_name,
                 "deadline": str(card.deadline) if card.deadline else None,
-                "effective_deadline": _effective_deadline,
+                "effective_deadline": _metrics["deadline"],
+                "timeline_metrics": _metrics,
                 "total_pause_days": card.total_pause_days or 0,
                 "is_client_stage": _is_client_stage,
                 "tags": card.tags,
@@ -551,14 +531,15 @@ async def get_crm_card(card_id: int, current_user: Employee = Depends(get_curren
 
         stage_executors = db.query(StageExecutor).filter(StageExecutor.crm_card_id == card_id).all()
         executor_data = [_format_stage_executor(se) for se in stage_executors]
-        _eff_dl_single = _compute_effective_deadline(card)
+        _metrics = load_project_metrics(db, card, contract)
 
         result = {
             "id": card.id,
             "contract_id": card.contract_id,
             "column_name": card.column_name,
             "deadline": str(card.deadline) if card.deadline else None,
-            "effective_deadline": _eff_dl_single,
+            "effective_deadline": _metrics["deadline"],
+            "timeline_metrics": _metrics,
             "total_pause_days": card.total_pause_days or 0,
             "tags": card.tags,
             "tag_color": card.tag_color,
@@ -979,11 +960,8 @@ async def move_crm_card_to_column(card_id: int, move_request: ColumnMoveRequest,
                 except Exception:
                     pass  # fallback: всегда сдвигаем
                 if _should_shift:
-                    if card.deadline:
-                        try:
-                            card.deadline = _add_working_days_to_date(card.deadline, pause_days)
-                        except (ValueError, TypeError):
-                            pass
+                    # Дедлайн проекта считается в services/project_deadline.py из post_start_wait_days
+                    card.post_start_wait_days = (card.post_start_wait_days or 0) + pause_days
                     executors = db.query(StageExecutor).filter(StageExecutor.crm_card_id == card_id).all()
                     for ex in executors:
                         if ex.deadline:
@@ -2807,19 +2785,12 @@ async def workflow_client_approved(card_id: int, current_user: Employee = Depend
 
         wf = db.query(StageWorkflowState).filter(StageWorkflowState.crm_card_id == card_id, StageWorkflowState.stage_name == stage_name).first()
         if wf:
-            # K7: Пересчёт дедлайна — считаем РАБОЧИЕ дни паузы на согласовании клиента
+            # K7: согласование клиентом — этап вне объёма, дедлайн проекта сдвигается в
+            # services/project_deadline.py; здесь сдвигаем только дедлайны исполнителей стадий
             if wf.client_approval_deadline_paused and wf.client_approval_started_at:
                 approval_pause_days = _count_business_days(wf.client_approval_started_at, datetime.utcnow())
-                if approval_pause_days > 0 and card.deadline:
-                    try:
-                        card.deadline = _add_working_days_to_date(card.deadline, approval_pause_days)
-                        card.total_pause_days = (card.total_pause_days or 0) + approval_pause_days
-                        logger.info(f"K7: Client approval pause {approval_pause_days} business days, card {card_id}")
-                    except (ValueError, TypeError):
-                        pass
-
-                # Сдвигаем дедлайны исполнителей стадий
                 if approval_pause_days > 0:
+                    logger.info(f"K7: Client approval {approval_pause_days} business days, card {card_id}")
                     executors = db.query(StageExecutor).filter(StageExecutor.crm_card_id == card_id).all()
                     for ex in executors:
                         if ex.deadline:
@@ -4002,6 +3973,7 @@ async def reset_crm_card(card_id: int, current_user: Employee = Depends(get_curr
         card.deadline = None
         card.paused_at = None
         card.total_pause_days = 0
+        card.post_start_wait_days = 0
         card.tags = None
         # Сбрасываем назначенных сотрудников
         card.manager_id = None

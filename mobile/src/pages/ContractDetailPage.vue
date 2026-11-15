@@ -1290,37 +1290,20 @@
                   {{ timelineCalendarOverdue }} р.д.
                 </div>
               </div>
-              <!-- Отклонение по этапам — SECONDARY -->
-              <div v-if="timelineOverdueTotal > 0" class="row items-center justify-between q-mb-xs">
-                <div class="text-caption" style="color: #C07070">
-                  откл. по этапам
-                </div>
-                <div class="text-caption" style="color: #C07070">
-                  +{{ timelineOverdueTotal }} дн.
-                </div>
-              </div>
-              <div v-if="timelineAheadTotal > 0" class="row items-center justify-between q-mb-xs">
-                <div class="text-caption" style="color: #27AE60">
-                  Раньше срока
-                </div>
-                <div class="text-caption text-weight-bold" style="color: #27AE60">
-                  -{{ timelineAheadTotal }} дн.
-                </div>
-              </div>
-              <div v-if="contractPauseInfo.postStart > 0" class="row items-center justify-between">
+              <div v-if="contractPauseInfo.total > 0" class="row items-center justify-between">
                 <div class="text-caption" style="color: var(--fc-text-light)">
-                  <q-icon name="pause_circle_outline" size="12px" class="q-mr-xs" />Дни ожидания (добавлены к дедлайну)
+                  <q-icon name="pause_circle_outline" size="12px" class="q-mr-xs" />Дни ожидания («В ожидании»)
                 </div>
                 <div class="text-caption text-weight-bold" style="color: var(--fc-text-light)">
-                  +{{ contractPauseInfo.postStart }} дн.
+                  {{ contractPauseInfo.total }} дн.
                 </div>
               </div>
               <div v-if="contractPauseInfo.preStart > 0" class="row items-center justify-between">
-                <div class="text-caption" style="color: var(--fc-text-light)">
-                  <q-icon name="pause_circle_outline" size="12px" class="q-mr-xs" />Дни ожидания (до начала разработки)
+                <div class="text-caption" style="color: var(--fc-text-light); padding-left: 16px">
+                  из них до начала разработки
                 </div>
-                <div class="text-caption text-weight-bold" style="color: var(--fc-text-light)">
-                  +{{ contractPauseInfo.preStart }} дн.
+                <div class="text-caption" style="color: var(--fc-text-light)">
+                  {{ contractPauseInfo.preStart }} дн.
                 </div>
               </div>
             </q-card-section>
@@ -1555,7 +1538,6 @@
 
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
-import { addWorkingDays, countWorkingDaysUntil, countWorkingDaysBetween } from 'src/composables/useDeadline'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { contractsApi, filesApi, crmApi, clientsApi, timelineApi, surveyApi, supervisionClientPaymentsApi, contractDocsApi, tzApi } from 'src/services/api'
@@ -1610,7 +1592,7 @@ const uploadStage = ref('')
 const receiptType = ref('')
 
 const agentColor = computed(() => refs.agentByName(contract.value?.agent_type)?.color || '#95A5A6')
-const crmDeadline = computed(() => contract.value?.crm_card_deadline || null)
+const crmDeadline = computed(() => contract.value?.timeline_metrics?.deadline || contract.value?.crm_card_deadline || null)
 
 // Ежемесячные платежи клиента по надзору (только для Авторский надзор)
 const svClientPayments = ref([])
@@ -1848,12 +1830,6 @@ const timelineTotalAll = computed(() => {
   return timelineTotalInScope.value + outScope
 })
 
-// Договор закрыт, если статус СДАН или РАСТОРГНУТ — тогда Факт фиксируется
-const isContractClosed = computed(() => {
-  const s = contract.value?.status || ''
-  return s === 'СДАН' || s === 'РАСТОРГНУТ'
-})
-
 const isSupervisionContract = computed(() => {
   const c = contract.value
   return c?.project_type === 'Авторский надзор' || c?.status === 'АВТОРСКИЙ НАДЗОР'
@@ -1874,95 +1850,19 @@ const displayContractSum = computed(() => {
   return c.total_amount || 0
 })
 
-const timelineActualTotal = computed(() => {
-  // Факт: для открытого проекта — р.д. от START до сегодня минус дни паузы; для закрытого — сумма
-  if (contractStartDate.value && !isContractClosed.value) {
-    const d = countWorkingDaysUntil(contractStartDate.value)
-    const pauseDays = contractPauseDays.value || 0
-    return d < 0 ? Math.max(0, Math.abs(d) - pauseDays) : 0
-  }
-  return timeline.value.filter(isTimelineEntry).reduce((s, e) => s + (e.actual_days || 0), 0)
-})
-// timelineActualTotal — факт с учётом этапов вне объёма; «по договору» их не включает
-const timelineFactOutScope = computed(() => timeline.value
-  .filter(e => isTimelineEntry(e) && e.is_in_contract_scope === false)
-  .reduce((s, e) => s + (e.actual_days || 0), 0))
-const timelineFactInScope = computed(() => Math.max(0, timelineActualTotal.value - timelineFactOutScope.value))
-
-const timelineOverdueTotal = computed(() => {
-  // Та же формула что в дедлайн popup CrmCardPage (per-stage in-scope, единая система)
-  let ov = 0, ah = 0
-  for (const e of timeline.value) {
-    if (!isTimelineEntry(e)) continue
-    if (e.is_in_contract_scope === false) continue
-    const ad = e.actual_days || 0
-    const norm = e.custom_norm_days || e.norm_days || 0
-    if (ad > 0 && norm > 0) {
-      const d = ad - norm
-      if (d > 0) ov += d; else if (d < 0) ah += -d
-    }
-  }
-  return Math.max(0, ov - ah)
-})
-
-const timelineAheadTotal = computed(() => {
-  let ov = 0, ah = 0
-  for (const e of timeline.value) {
-    if (!isTimelineEntry(e)) continue
-    if (e.is_in_contract_scope === false) continue
-    const ad = e.actual_days || 0
-    const norm = e.custom_norm_days || e.norm_days || 0
-    if (ad > 0 && norm > 0) {
-      const d = ad - norm
-      if (d > 0) ov += d; else if (d < 0) ah += -d
-    }
-  }
-  return Math.max(0, ah - ov)
-})
-
-const contractPauseDays = computed(() => contract.value?.crm_card_total_pause_days || 0)
-const contractPauseInfo = computed(() => {
-  const totalPause = contractPauseDays.value
-  if (!totalPause) return { preStart: 0, postStart: 0 }
-  if (!contractStartDate.value) return { preStart: totalPause, postStart: 0 }
-  const period = contract.value?.contract_period
-  if (!period || period <= 0) return { preStart: totalPause, postStart: 0 }
-  const pureDeadline = addWorkingDays(contractStartDate.value, period)
-  const storedDeadline = contract.value?.crm_card_deadline
-  if (!storedDeadline || storedDeadline === pureDeadline) return { preStart: totalPause, postStart: 0 }
-  const postStart = Math.max(0, countWorkingDaysBetween(pureDeadline, storedDeadline))
-  const preStart = Math.max(0, totalPause - postStart)
-  return { preStart, postStart }
-})
-
-const contractStartDate = computed(() =>
-  timeline.value.find(e => e.stage_code === 'START')?.actual_date || null,
-)
-const contractDeadline = computed(() => {
-  if (!contractStartDate.value) return null
-  const period = contract.value?.contract_period
-  if (!period || period <= 0) return null
-  return addWorkingDays(contractStartDate.value, period)
-})
-// Дата фактического закрытия = последняя actual_date в таймлайне (для закрытых договоров)
-const contractClosureDate = computed(() => {
-  if (!isContractClosed.value) return null
-  const dates = timeline.value
-    .filter(e => isTimelineEntry(e) && e.actual_date)
-    .map(e => e.actual_date)
-  return dates.length ? [...dates].sort().at(-1) : null
-})
-const timelineCalendarOverdue = computed(() => {
-  if (!contractDeadline.value) return 0
-  if (isContractClosed.value && contractClosureDate.value) {
-    // Закрытый: р.д. от дедлайна до даты закрытия (фиксировано)
-    const d = countWorkingDaysBetween(contractDeadline.value, contractClosureDate.value)
-    return d > 0 ? d : 0
-  }
-  // Открытый: р.д. от дедлайна до сегодня (растёт)
-  const d = countWorkingDaysUntil(contractDeadline.value)
-  return d < 0 ? Math.abs(d) : 0
-})
+// Факт, дедлайн, просрочку и ожидание считает сервер (services/project_deadline.py) —
+// одни правила для договора, карточки CRM, выгрузок и дашборда
+const timelineMetrics = computed(() => contract.value?.timeline_metrics || null)
+const timelineActualTotal = computed(() => timelineMetrics.value?.fact_days_all || 0)
+const timelineFactInScope = computed(() => timelineMetrics.value?.fact_days || 0)
+const timelineFactOutScope = computed(() => timelineMetrics.value?.out_of_scope_days || 0)
+const contractDeadline = computed(() => timelineMetrics.value?.deadline || null)
+const contractClosureDate = computed(() => timelineMetrics.value?.closure_date || null)
+const timelineCalendarOverdue = computed(() => timelineMetrics.value?.overdue_days || 0)
+const contractPauseInfo = computed(() => ({
+  total: timelineMetrics.value?.wait_days_total || 0,
+  preStart: timelineMetrics.value?.wait_days_pre_start || 0,
+}))
 
 // Строки под итогами — те же, что на экране договора (для PDF и Excel)
 function timelineSummaryLines() {
@@ -1972,11 +1872,9 @@ function timelineSummaryLines() {
   if (contractClosureDate.value) lines.push({ label: 'Закрыт', value: date(contractClosureDate.value), tone: 'green' })
   else if (contractDeadline.value) lines.push({ label: 'Статус', value: 'В работе', tone: 'orange' })
   if (timelineCalendarOverdue.value > 0) lines.push({ label: 'Просрочка', value: `${timelineCalendarOverdue.value} р.д.`, tone: 'red' })
-  if (timelineOverdueTotal.value > 0) lines.push({ label: 'Отклонение по этапам', value: `+${timelineOverdueTotal.value} дн.`, tone: 'redsoft' })
-  if (timelineAheadTotal.value > 0) lines.push({ label: 'Раньше срока', value: `-${timelineAheadTotal.value} дн.`, tone: 'green' })
   const pause = contractPauseInfo.value
-  if (pause.postStart > 0) lines.push({ label: 'Дни ожидания (добавлены к дедлайну)', value: `+${pause.postStart} дн.`, tone: 'muted' })
-  if (pause.preStart > 0) lines.push({ label: 'Дни ожидания (до начала разработки)', value: `+${pause.preStart} дн.`, tone: 'muted' })
+  if (pause.total > 0) lines.push({ label: 'Дни ожидания («В ожидании»)', value: `${pause.total} дн.`, tone: 'muted' })
+  if (pause.preStart > 0) lines.push({ label: 'из них до начала разработки', value: `${pause.preStart} дн.`, tone: 'muted' })
   return lines
 }
 
