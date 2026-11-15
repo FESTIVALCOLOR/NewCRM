@@ -639,6 +639,12 @@ export const filesApi = {
     }),
 }
 
+// === Гостевой просмотр CRM-карточки по ключу из ссылки (без авторизации) ===
+
+export const publicCardApi = {
+  get: (token) => api.get(`/api/v1/public/crm-card/${encodeURIComponent(token)}`),
+}
+
 // === Surveys (опросы клиентов) ===
 
 export const surveyApi = {

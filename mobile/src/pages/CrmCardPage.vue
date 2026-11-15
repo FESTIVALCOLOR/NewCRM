@@ -2797,7 +2797,9 @@ function copyLink(link, okMessage) {
 
 function copyCardLink() {
   if (!card.value?.id) return
-  const { href } = router.resolve({ name: 'crm-card', params: { id: card.value.id } })
+  // ?s=<ключ> — без входа по этой ссылке откроется гостевой просмотр (src/pages/GuestCardPage.vue)
+  const query = card.value.share_token ? { s: card.value.share_token } : {}
+  const { href } = router.resolve({ name: 'crm-card', params: { id: card.value.id }, query })
   copyLink(`${window.location.origin}${href}`, 'Ссылка на заказ скопирована')
 }
 

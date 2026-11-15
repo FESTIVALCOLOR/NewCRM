@@ -205,6 +205,20 @@ export default [
     ],
   },
 
+  // === Гостевой просмотр CRM-карточки по ссылке с ключом (без авторизации) ===
+  {
+    path: '/g/:token',
+    component: () => import('src/layouts/SurveyLayout.vue'),
+    children: [
+      {
+        path: '',
+        name: 'guest-card',
+        component: () => import('src/pages/GuestCardPage.vue'),
+        meta: { requiresAuth: false },
+      },
+    ],
+  },
+
   // === Редактирование анкеты ТЗ менеджером ===
   {
     path: '/tz-survey-edit/:id',

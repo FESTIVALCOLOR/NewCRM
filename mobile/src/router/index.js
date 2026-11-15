@@ -22,8 +22,11 @@ router.beforeEach(async (to) => {
   }
 
   const requiresAuth = to.meta.requiresAuth !== false
+  // Ссылка на заказ с ключом (?s=): без входа — гостевой просмотр вместо страницы логина
+  const guestCard = to.name === 'crm-card' && to.query.s ? { name: 'guest-card', params: { token: String(to.query.s) } } : null
 
   if (requiresAuth && !authStore.isAuthenticated) {
+    if (guestCard) return guestCard
     return { path: '/login', query: { redirect: to.fullPath } }
   }
 
@@ -40,7 +43,7 @@ router.beforeEach(async (to) => {
       await permsStore.load()
     }
     if (!permsStore.has(requiredPerm)) {
-      return { path: '/' }
+      return guestCard || { path: '/' }
     }
   }
 })

@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 import json
 import logging
 import os
+import secrets
 from typing import List, Optional
 
 from auth import get_current_user
@@ -532,6 +533,9 @@ async def get_crm_card(card_id: int, current_user: Employee = Depends(get_curren
         stage_executors = db.query(StageExecutor).filter(StageExecutor.crm_card_id == card_id).all()
         executor_data = [_format_stage_executor(se) for se in stage_executors]
         _metrics = load_project_metrics(db, card, contract)
+        if not card.share_token:
+            card.share_token = secrets.token_urlsafe(24)
+            db.commit()
 
         result = {
             "id": card.id,
@@ -540,6 +544,7 @@ async def get_crm_card(card_id: int, current_user: Employee = Depends(get_curren
             "deadline": str(card.deadline) if card.deadline else None,
             "effective_deadline": _metrics["deadline"],
             "timeline_metrics": _metrics,
+            "share_token": card.share_token,
             "total_pause_days": card.total_pause_days or 0,
             "tags": card.tags,
             "tag_color": card.tag_color,

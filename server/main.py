@@ -340,7 +340,9 @@ async def startup_event():
         with engine.begin() as conn:
             conn.execute(_text_wait(f"SET LOCAL lock_timeout = '{_LOCK_TIMEOUT_MS}'"))
             conn.execute(_text_wait("ALTER TABLE crm_cards ADD COLUMN IF NOT EXISTS post_start_wait_days INTEGER DEFAULT 0"))
-            logger.info("Migrated crm_cards: added post_start_wait_days column")
+            conn.execute(_text_wait("ALTER TABLE crm_cards ADD COLUMN IF NOT EXISTS share_token VARCHAR(64)"))
+            conn.execute(_text_wait("CREATE UNIQUE INDEX IF NOT EXISTS ix_crm_cards_share_token ON crm_cards (share_token)"))
+            logger.info("Migrated crm_cards: added post_start_wait_days, share_token columns")
     except Exception as e:
         _em = str(e).lower()
         if "lock" in _em or "timeout" in _em:
@@ -997,6 +999,11 @@ from routers.deleted_contracts_router import router as deleted_contracts_router
 app.include_router(chat_router, prefix="/api/v1/chats")
 # Клиентский доступ без JWT + WebSocket эндпоинты — отдельный роутер
 app.include_router(client_chat_router, prefix="/api/v1")
+
+from routers.public_card_router import router as public_card_router
+
+# Гостевой просмотр CRM-карточки по секретной ссылке (без JWT)
+app.include_router(public_card_router, prefix="/api/v1")
 app.include_router(deleted_contracts_router, prefix="/api/v1/admin/deleted-contracts")
 
 from routers.admin_router import router as admin_router

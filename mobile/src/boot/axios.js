@@ -14,6 +14,9 @@ const api = axios.create({
 export function loginUrlWithReturn() {
   const here = window.location.pathname + window.location.search
   if (here.startsWith('/login')) return here
+  // Ссылка на заказ с гостевым ключом — сессии нет, показываем просмотр без входа
+  const shareKey = new URLSearchParams(window.location.search).get('s')
+  if (shareKey && /^\/crm\/\d+/.test(window.location.pathname)) return `/g/${encodeURIComponent(shareKey)}`
   return here && here !== '/' ? `/login?redirect=${encodeURIComponent(here)}` : '/login'
 }
 

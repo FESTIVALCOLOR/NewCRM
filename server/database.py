@@ -525,6 +525,7 @@ class CRMCard(Base):
     paused_at = Column(DateTime)  # K1: Время постановки на паузу (для пересчёта дедлайна)
     total_pause_days = Column(Integer, default=0)  # K1: Суммарные дни паузы
     post_start_wait_days = Column(Integer, default=0)  # Часть total_pause_days после START — сдвигает дедлайн
+    share_token = Column(String(64), unique=True, index=True)  # Ключ гостевой ссылки на карточку (просмотр без входа)
     tags = Column(String)
     tag_color = Column(String)
 
