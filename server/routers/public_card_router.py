@@ -93,7 +93,8 @@ def _survey(db, contract):
         return None
     project_type = contract.project_type or "Индивидуальный"
     template = _get_or_create_template(db, project_type)
-    contact_ids = _collect_contact_ids(template, set())
+    # Личные данные клиента: вопросы-контакты и ФИО заказчика
+    contact_ids = _collect_contact_ids(template, {"client_name"})
     return {
         "status": survey.status,
         "template_data": template,
