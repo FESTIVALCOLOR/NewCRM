@@ -518,6 +518,9 @@ def pay(db, row, data, employee):
     by_agent = data["method"] == "agent"
     if by_agent and not is_agent_contract(contract):
         raise HTTPException(400, "Оплата агенту доступна только для договоров сторонних агентов (не «Фестиваль»)")
+    if not by_agent and is_agent_contract(contract):
+        # Иначе случайный выбор СБП/наличных выписал бы документ и израсходовал порядковый номер
+        raise HTTPException(400, f"Договор агента {contract.agent_type}: деньги принимает агент — выберите способ «Агенту»")
 
     row.status = "paid"
     row.paid_amount = amount

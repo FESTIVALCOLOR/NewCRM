@@ -207,6 +207,16 @@ def test_agent_contract_paid_to_agent_without_doc(db):
         cp.issue_doc_for_legacy(db, db.get(database.ContractClientPayment, first["id"]), {"method": "sbp"}, db.manager)
 
 
+def test_agent_contract_rejects_own_methods(db):
+    """Договор агента: СБП/наличные не принимаются — документ не выписывается, номер не расходуется."""
+    contract = make_contract(db, n=9, agent_type="ПЕТРОВИЧ")
+    with pytest.raises(HTTPException) as err:
+        pay(db, contract, 0, 150000, method="cash")
+    assert err.value.status_code == 400
+    assert db.query(database.ClientPaymentDoc).count() == 0
+    assert rows(db, contract)[0]["status"] == "planned"
+
+
 def test_agent_method_rejected_for_own_contract(db):
     own = make_contract(db, n=8, agent_type="ФЕСТИВАЛЬ")
     with pytest.raises(HTTPException) as err:

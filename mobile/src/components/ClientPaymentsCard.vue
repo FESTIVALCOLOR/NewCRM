@@ -642,9 +642,9 @@ const OWN_METHODS = [
   { label: 'Карта', value: 'card' },
 ]
 // Договор стороннего агента (ПЕТРОВИЧ и др.): клиент платит агенту — отмечаем без документа и без номера.
-// Остальные способы оставлены на случай, если клиент всё же заплатил студии.
+// Способы студии показаны серыми и недоступны: случайный выбор выписал бы документ и израсходовал номер.
 const methodOptions = computed(() => (state.agent_contract && pay.mode !== 'issue'
-  ? [{ label: 'Агенту', value: 'agent' }, ...OWN_METHODS]
+  ? [{ label: 'Агенту', value: 'agent' }, ...OWN_METHODS.map(m => ({ ...m, disable: true, attrs: { title: `Договор агента ${state.agent_type}: деньги принимает агент` } }))]
   : OWN_METHODS))
 const byAgent = computed(() => pay.method === 'agent')
 const payTitle = computed(() => {
