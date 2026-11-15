@@ -164,7 +164,7 @@
             <div class="text-caption" style="color: var(--fc-text-light)">
               Дата анкеты: <span style="color: var(--fc-text)">{{ fmtDate(data.tech_task_date) || 'Не установлена' }}</span>
             </div>
-            <div v-if="data.survey" class="row items-center q-mt-sm" style="gap: 8px">
+            <div v-if="data.survey" class="row items-center justify-between q-mt-sm" style="gap: 8px">
               <span class="text-caption" style="color: var(--fc-text-light)">Анкета ТЗ</span>
               <q-btn
                 flat
@@ -177,7 +177,13 @@
                 @click="surveyOpen = true"
               />
             </div>
-            <GuestFileList :files="filesOf('tech_task').concat(filesOf('questionnaire'))" class="q-mt-sm" />
+            <template v-if="techTaskFiles.length">
+              <q-separator class="q-my-sm" />
+              <div class="text-caption text-weight-bold q-mb-xs" style="color: var(--fc-text-medium)">
+                Доп. данные
+              </div>
+              <GuestFileList :files="techTaskFiles" />
+            </template>
           </q-card-section>
         </q-card>
 
@@ -350,6 +356,8 @@ const stages = computed(() => {
   ]
 })
 
+const techTaskFiles = computed(() => filesOf('tech_task').concat(filesOf('questionnaire')))
+
 function filesOf(stage, variation = null) {
   return (data.value?.files || []).filter(f => f.stage === stage && (variation === null || f.variation === variation))
 }
@@ -436,6 +444,11 @@ onMounted(async () => {
   color: var(--fc-text);
   font-size: 12px;
   white-space: nowrap;
+}
+/* Кнопки внутри блоков одной ширины: «Открыть в ЯД», «Просмотр анкеты», «Открыть» */
+.is-card :deep(.guest-btn) {
+  width: 150px;
+  flex-shrink: 0;
 }
 .guest-avatar {
   display: flex;

@@ -54,14 +54,29 @@ def _http(link):
     return link if link and str(link).startswith("http") else None
 
 
+def _norm_path(path):
+    return (path or "").removeprefix("disk:").strip()
+
+
 def _files(db, contract):
+    # PDF анкеты не показываем — анкета открывается через «Просмотр анкеты»
+    survey = db.query(TechnicalSurvey.pdf_yandex_path).filter(TechnicalSurvey.contract_id == contract.id).first()
+    survey_pdf = _norm_path(survey.pdf_yandex_path) if survey else ""
     files = (
         db.query(ProjectFile)
         .filter(ProjectFile.contract_id == contract.id, ProjectFile.stage.in_(GUEST_FILE_STAGES), ProjectFile.public_link.isnot(None), ProjectFile.public_link != "")
         .order_by(ProjectFile.stage, ProjectFile.file_order)
         .all()
     )
-    return [{"stage": f.stage, "name": f.file_name, "link": f.public_link, "variation": f.variation or 1} for f in files if _http(f.public_link)]
+    return [{"stage": f.stage, "name": f.file_name, "link": f.public_link, "variation": f.variation or 1} for f in files if _http(f.public_link) and not _is_survey_pdf(f, survey_pdf)]
+
+
+def _is_survey_pdf(f, survey_pdf):
+    if survey_pdf and _norm_path(f.yandex_path) == survey_pdf:
+        return True
+    # Прежние версии PDF анкеты, которые CRM сохраняла под именем «анкета-…pdf»
+    name = (f.file_name or "").lower()
+    return f.stage == "questionnaire" and name.startswith("анкета") and name.endswith(".pdf")
 
 
 def _collect_contact_ids(node, ids):
