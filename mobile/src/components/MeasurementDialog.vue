@@ -248,13 +248,16 @@ function resetFields() {
 
 function onFileSelected(e) { selectedFile.value = e.target.files?.[0] || null }
 
+// Замер может выполнять и руководитель студии
+const SURVEYOR_POSITIONS = ['Замерщик', 'Руководитель студии']
+
 async function loadSurveyors() {
   try {
     const { data } = await employeesApi.getList()
     surveyorOptions.value = [
       { id: null, label: 'Не назначен' },
       ...(data || [])
-        .filter(e => e.status === 'активный' && (e.position === 'Замерщик' || e.secondary_position === 'Замерщик'))
+        .filter(e => e.status === 'активный' && [e.position, e.secondary_position].some(p => SURVEYOR_POSITIONS.includes(p)))
         .map(e => ({ id: e.id, label: e.full_name })),
     ]
     if (props.cardSurveyorId) surveyorId.value = props.cardSurveyorId

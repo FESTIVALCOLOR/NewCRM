@@ -3,34 +3,27 @@
 
 GET /api/v1/public/crm-card/{token}
 
-Отдаёт только рабочие данные для исполнителей: адрес, стадию, сроки, команду, таблицу сроков
-и файлы рабочих разделов. Не отдаёт: данные клиента, суммы и оплаты, договор и акты, чаты.
+Отдаёт только рабочие данные для исполнителей: шапку карточки, сроки, команду, папки и файлы
+рабочих разделов, анкету ТЗ без контактов. Не отдаёт: данные клиента, суммы и оплаты,
+договор и акты, чаты, ключ анкеты.
 """
+
+import copy
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from rate_limit import limiter
 from services.project_deadline import compute_project_metrics
 from sqlalchemy.orm import Session
 
-from database import Contract, CRMCard, Employee, ProjectFile, ProjectTimelineEntry, StageExecutor, get_db
+from database import Agent, Contract, CRMCard, Employee, ProjectFile, ProjectTimelineEntry, StageExecutor, TechnicalSurvey, get_db
 
 router = APIRouter(tags=["public-card"])
 
 # Разделы файлов, нужные исполнителям; договор, акты, письма и надзор не показываем
-GUEST_FILE_STAGES = {
-    "tech_task": "Техническое задание",
-    "questionnaire": "Анкета",
-    "measurement": "Замер",
-    "photo_documentation": "Фотофиксация",
-    "references": "Референсы",
-    "stage1": "Стадия 1: планировочное решение",
-    "stage2_concept": "Стадия 2: концепция / коллажи",
-    "stage2_3d": "Стадия 2: 3D визуализация",
-    "stage3": "Стадия 3: чертёжный проект",
-}
+GUEST_FILE_STAGES = ("tech_task", "questionnaire", "measurement", "photo_documentation", "references", "stage1", "stage2_concept", "stage2_3d", "stage3")
 
 TEAM_ROLES = (
-    ("senior_manager", "Старший менеджер проектов"),
+    ("senior_manager", "Ст. менеджер"),
     ("sdp", "СДП"),
     ("gap", "ГАП"),
     ("manager", "Менеджер"),
@@ -38,65 +31,86 @@ TEAM_ROLES = (
 )
 
 
+def _executor_role(stage_name):
+    name = (stage_name or "").lower()
+    return "Дизайнер" if "концепц" in name or "визуализ" in name else "Чертёжник"
+
+
 def _team(db, card):
     team = [{"role": role, "name": getattr(card, attr).full_name} for attr, role in TEAM_ROLES if getattr(card, attr, None)]
     executors = db.query(StageExecutor).filter(StageExecutor.crm_card_id == card.id).order_by(StageExecutor.id).all()
-    names = {e.id: e.full_name for e in db.query(Employee).filter(Employee.id.in_([x.executor_id for x in executors if x.executor_id])).all()} if executors else {}
+    ids = [x.executor_id for x in executors if x.executor_id]
+    names = {e.id: e.full_name for e in db.query(Employee).filter(Employee.id.in_(ids)).all()} if ids else {}
     latest = {}
     for ex in executors:
         latest[ex.stage_name] = ex
     for stage_name, ex in latest.items():
         if ex.executor_id in names:
-            team.append({"role": f"Исполнитель — {stage_name}", "name": names[ex.executor_id], "deadline": str(ex.deadline) if ex.deadline else None, "completed": bool(ex.completed)})
+            team.append({"role": f"{_executor_role(stage_name)} — {stage_name}", "name": names[ex.executor_id]})
     return team
 
 
-def _timeline_rows(entries):
-    rows = []
-    for e in sorted(entries, key=lambda x: x.sort_order or 0):
-        if e.executor_role == "header":
-            rows.append({"kind": "group", "stage": e.stage_name})
-        elif (e.stage_code or "").endswith("_HDR"):
-            rows.append({"kind": "sub", "stage": e.stage_name})
-        else:
-            rows.append(
-                {
-                    "kind": "row",
-                    "stage": e.stage_name,
-                    "role": e.executor_role or "",
-                    "norm": e.custom_norm_days or e.norm_days or None,
-                    "fact": e.actual_days or None,
-                    "date": str(e.actual_date) if e.actual_date else None,
-                    "skipped": e.status == "skipped",
-                    "out_of_scope": e.is_in_contract_scope is False,
-                }
-            )
-    return rows
+def _http(link):
+    return link if link and str(link).startswith("http") else None
 
 
 def _files(db, contract):
     files = (
         db.query(ProjectFile)
-        .filter(ProjectFile.contract_id == contract.id, ProjectFile.stage.in_(list(GUEST_FILE_STAGES)), ProjectFile.public_link.isnot(None), ProjectFile.public_link != "")
+        .filter(ProjectFile.contract_id == contract.id, ProjectFile.stage.in_(GUEST_FILE_STAGES), ProjectFile.public_link.isnot(None), ProjectFile.public_link != "")
         .order_by(ProjectFile.stage, ProjectFile.file_order)
         .all()
     )
-    groups = {}
-    for f in files:
-        groups.setdefault(f.stage, []).append({"name": f.file_name, "link": f.public_link, "variation": f.variation})
-    folders = {
-        "measurement": contract.measurement_image_link,
-        "photo_documentation": contract.photo_documentation_yandex_path,
-        "references": contract.references_yandex_path,
-        "tech_task": contract.tech_task_link,
+    return [{"stage": f.stage, "name": f.file_name, "link": f.public_link, "variation": f.variation or 1} for f in files if _http(f.public_link)]
+
+
+def _collect_contact_ids(node, ids):
+    if isinstance(node, dict):
+        if node.get("type") == "contacts" and node.get("id"):
+            ids.add(node["id"])
+        for value in node.values():
+            _collect_contact_ids(value, ids)
+    elif isinstance(node, list):
+        for value in node:
+            _collect_contact_ids(value, ids)
+    return ids
+
+
+def _strip_keys(node, keys):
+    if isinstance(node, dict):
+        return {k: _strip_keys(v, keys) for k, v in node.items() if k not in keys}
+    if isinstance(node, list):
+        return [_strip_keys(v, keys) for v in node]
+    return node
+
+
+def _survey(db, contract):
+    """Анкета ТЗ для просмотра: без ключа доступа и без ответов на вопросы-контакты."""
+    from routers.tz_router import _get_agent_logo_url, _get_or_create_template
+
+    survey = db.query(TechnicalSurvey).filter(TechnicalSurvey.contract_id == contract.id).first()
+    if not survey or not survey.answers:
+        return None
+    project_type = contract.project_type or "Индивидуальный"
+    template = _get_or_create_template(db, project_type)
+    contact_ids = _collect_contact_ids(template, set())
+    return {
+        "status": survey.status,
+        "template_data": template,
+        "answers": _strip_keys(copy.deepcopy(survey.answers), contact_ids),
+        "project_type": project_type,
+        "contract_number": contract.contract_number or "",
+        "agent_logo_url": _get_agent_logo_url(db, contract.agent_type),
     }
-    result = []
-    for stage, title in GUEST_FILE_STAGES.items():
-        folder = folders.get(stage)
-        folder = folder if folder and str(folder).startswith("http") else None
-        if groups.get(stage) or folder:
-            result.append({"stage": stage, "title": title, "folder_link": folder, "files": groups.get(stage, [])})
-    return result
+
+
+def _folders(card, contract):
+    return {
+        "tech_task": _http(contract.tech_task_link),
+        "measurement": _http(contract.measurement_image_link) or _http(contract.measurement_folder_public_link),
+        "photo_documentation": _http(contract.photo_folder_public_link) or _http(contract.photo_documentation_yandex_path),
+        "references": _http(contract.references_yandex_path),
+    }
 
 
 @router.get("/public/crm-card/{token}")
@@ -110,6 +124,7 @@ def get_public_crm_card(request: Request, token: str, db: Session = Depends(get_
         raise HTTPException(status_code=404, detail="Ссылка недействительна")
 
     entries = db.query(ProjectTimelineEntry).filter(ProjectTimelineEntry.contract_id == contract.id).all()
+    agent = db.query(Agent).filter(Agent.name == contract.agent_type).first() if contract.agent_type else None
     return {
         "card_id": card.id,
         "contract_number": contract.contract_number,
@@ -118,10 +133,16 @@ def get_public_crm_card(request: Request, token: str, db: Session = Depends(get_
         "area": contract.area,
         "project_type": contract.project_type,
         "project_subtype": getattr(contract, "project_subtype", None),
+        "contract_period": contract.contract_period,
         "agent_type": contract.agent_type,
+        "agent_color": agent.color if agent else None,
         "column_name": card.column_name,
+        "tags": card.tags,
+        "tech_task_date": str(card.tech_task_date) if card.tech_task_date else None,
+        "measurement_date": str(contract.measurement_date) if contract.measurement_date else None,
         "metrics": compute_project_metrics(card, contract, entries),
         "team": _team(db, card),
-        "timeline": _timeline_rows(entries),
+        "folders": _folders(card, contract),
         "files": _files(db, contract),
+        "survey": _survey(db, contract),
     }
