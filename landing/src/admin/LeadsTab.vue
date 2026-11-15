@@ -25,7 +25,6 @@
             <strong>{{ item.name }}</strong>
             <a :href="`tel:${item.phone.replace(/[^\d+]/g, '')}`">{{ item.phone }}</a>
             <span class="lead-row__method">{{ METHODS[item.contact_method] || 'звонок' }}</span>
-            <span class="lead-row__date">{{ fmt(item.created_at) }}</span>
           </div>
           <div v-for="line in contextLines(item)" :key="line" class="lead-row__ctx">{{ line }}</div>
           <div v-if="item.comment" class="lead-row__comment">{{ item.comment }}</div>
@@ -50,6 +49,8 @@
             <div class="lead-timer__value">{{ timer(item).text }}</div>
             <div class="lead-timer__caption">{{ timer(item).caption }}</div>
           </div>
+          <!-- Дата поступления — под таймером, по центру -->
+          <span class="lead-row__date">{{ fmt(item.created_at) }}</span>
           <button v-if="item.status === 'done'" class="btn-sm" @click="reopen(item)">Вернуть в новые</button>
           <button v-else-if="processingId !== item.id" class="btn-sm" @click="startProcess(item)">Обработать</button>
           <button class="btn-sm btn-danger-text" @click="remove(item)">Удалить</button>
@@ -175,7 +176,7 @@ onUnmounted(() => {
 .lead-row__head { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; margin-bottom: 4px; }
 .lead-row__head a { color: #c0392b; text-decoration: none; font-weight: 500; }
 .lead-row__method { font-size: 0.8rem; background: #f3f4f6; border-radius: 4px; padding: 1px 8px; }
-.lead-row__date { font-size: 0.8rem; color: #6b7280; }
+.lead-row__date { font-size: 0.75rem; color: #6b7280; text-align: center; white-space: nowrap; }
 .lead-row__ctx { font-size: 0.85rem; color: #374151; }
 .lead-row__actions { display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
 .lead-timer { text-align: right; border-radius: 8px; padding: 4px 10px; line-height: 1.25; white-space: nowrap; cursor: default; }

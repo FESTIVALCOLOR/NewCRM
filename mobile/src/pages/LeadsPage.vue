@@ -40,34 +40,39 @@
 
       <div v-for="item in leads" :key="item.id" :class="['lead-card', { 'lead-card--done': item.status === 'done' }]">
         <div class="lead-card__head">
-          <div class="lead-card__name">
-            {{ item.name }}
-          </div>
-          <!-- Таймер на принятие (рабочее время) — у новых заявок вместо статуса -->
-          <div v-if="timer(item)" :class="['lead-timer', `lead-timer--${timer(item).phase}`, { 'lead-timer--paused': timer(item).paused }]">
-            <div class="lead-timer__value">
-              <q-icon :name="timer(item).phase === 'overdue' ? 'alarm_off' : 'timer'" size="15px" />
-              {{ timer(item).text }}
+          <div class="lead-card__main">
+            <div class="lead-card__name">
+              {{ item.name }}
             </div>
-            <div class="lead-timer__caption">
-              {{ timer(item).caption }}
+            <div class="lead-card__meta">
+              <a :href="`tel:${phoneDigits(item.phone)}`" class="lead-card__phone">{{ item.phone }}</a>
+              <span class="lead-chip">{{ METHODS[item.contact_method] || 'звонок' }}</span>
             </div>
-            <q-tooltip v-if="timer(item).hint" max-width="260px">
-              {{ timer(item).hint }}
-            </q-tooltip>
+            <div class="lead-card__links">
+              <a :href="`tel:${phoneDigits(item.phone)}`">Позвонить</a>
+              <a :href="`https://wa.me/${phoneDigits(item.phone).replace('+', '')}`" target="_blank" rel="noopener">WhatsApp</a>
+            </div>
           </div>
-          <span v-else :class="['lead-status', item.status === 'done' ? 'lead-status--done' : 'lead-status--new']">
-            {{ item.status === 'done' ? 'Обработана' : 'Новая' }}
-          </span>
-        </div>
-        <div class="lead-card__meta">
-          <a :href="`tel:${phoneDigits(item.phone)}`" class="lead-card__phone">{{ item.phone }}</a>
-          <span class="lead-chip">{{ METHODS[item.contact_method] || 'звонок' }}</span>
-          <span class="lead-card__date">{{ fmt(item.created_at) }}</span>
-        </div>
-        <div class="lead-card__links">
-          <a :href="`tel:${phoneDigits(item.phone)}`">Позвонить</a>
-          <a :href="`https://wa.me/${phoneDigits(item.phone).replace('+', '')}`" target="_blank" rel="noopener">WhatsApp</a>
+          <!-- Справа: таймер (или статус) и под ним дата поступления, по центру -->
+          <div class="lead-card__side">
+            <!-- Таймер на принятие (рабочее время) — у новых заявок вместо статуса -->
+            <div v-if="timer(item)" :class="['lead-timer', `lead-timer--${timer(item).phase}`, { 'lead-timer--paused': timer(item).paused }]">
+              <div class="lead-timer__value">
+                <q-icon :name="timer(item).phase === 'overdue' ? 'alarm_off' : 'timer'" size="15px" />
+                {{ timer(item).text }}
+              </div>
+              <div class="lead-timer__caption">
+                {{ timer(item).caption }}
+              </div>
+              <q-tooltip v-if="timer(item).hint" max-width="260px">
+                {{ timer(item).hint }}
+              </q-tooltip>
+            </div>
+            <span v-else :class="['lead-status', item.status === 'done' ? 'lead-status--done' : 'lead-status--new']">
+              {{ item.status === 'done' ? 'Обработана' : 'Новая' }}
+            </span>
+            <span class="lead-card__date">{{ fmt(item.created_at) }}</span>
+          </div>
         </div>
 
         <div v-for="line in contextLines(item)" :key="line" class="lead-card__ctx">
@@ -338,7 +343,9 @@ onMounted(load)
 .leads-hint { font-size: 12px; color: #6b7280; background: #f9fafb; border: 1px solid #eee; border-radius: 8px; padding: 8px 12px; }
 .lead-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; }
 .lead-card--done { background: #fcfcfc; }
-.lead-card__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.lead-card__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.lead-card__main { min-width: 0; flex: 1; }
+.lead-card__side { display: flex; flex-direction: column; align-items: center; gap: 4px; flex-shrink: 0; }
 .lead-card__name { font-size: 15px; font-weight: 600; color: #222; overflow-wrap: anywhere; }
 .lead-status { font-size: 11px; border-radius: 10px; padding: 2px 10px; white-space: nowrap; }
 .lead-status--new { background: #fdecea; color: #c0392b; }
@@ -354,7 +361,7 @@ onMounted(load)
 .lead-card__meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin-top: 4px; }
 .lead-card__phone { color: #c0392b; font-weight: 500; text-decoration: none; }
 .lead-chip { font-size: 11px; background: #f3f4f6; border-radius: 4px; padding: 1px 8px; color: #374151; }
-.lead-card__date { font-size: 12px; color: #6b7280; }
+.lead-card__date { font-size: 11px; color: #6b7280; white-space: nowrap; }
 .lead-card__links { display: flex; gap: 14px; margin: 4px 0 6px; font-size: 12px; }
 .lead-card__links a { color: #2563eb; text-decoration: none; }
 .lead-card__ctx { font-size: 13px; color: #374151; }
