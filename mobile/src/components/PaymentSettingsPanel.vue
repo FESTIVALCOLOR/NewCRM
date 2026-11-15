@@ -80,6 +80,28 @@
           hint="Адрес офиса, где принимаются наличные"
         />
 
+        <div class="ps-section">
+          Приём оплаты по агентам
+        </div>
+        <div class="text-caption text-grey-7" style="margin-top: 4px">
+          Галочка стоит — оплату по договорам агента принимает студия: «Провести оплату» выдаёт документ с порядковым номером.
+          Галочки нет — клиент платит агенту напрямую: оплата только отмечается («Агенту»), без документа и номера. Новые агенты — с галочкой.
+        </div>
+        <div class="ps-agents">
+          <q-checkbox
+            v-for="m in agentModes"
+            :key="m.name"
+            v-model="m.studio_accepts"
+            :label="m.name"
+            dense
+          >
+            <q-tooltip>{{ m.studio_accepts ? 'Оплату принимает студия (документ об оплате)' : 'Оплату принимает агент (без документа)' }}</q-tooltip>
+          </q-checkbox>
+          <div v-if="!agentModes.length" class="text-caption text-grey-6">
+            Агентов нет
+          </div>
+        </div>
+
         <div v-if="missing.length" class="ps-warn">
           Не заполнено: {{ missing.join(', ') }} — без этого документ не сформируется.
         </div>
@@ -113,6 +135,7 @@ const FIELDS = ['sbp_link', 'message_template', 'seller_name', 'seller_inn', 'se
 const form = ref(Object.fromEntries(FIELDS.map(f => [f, ''])))
 const missing = ref([])
 const cashierDefault = ref('')
+const agentModes = ref([]) // [{ name, studio_accepts }]
 const loading = ref(false)
 const saving = ref(false)
 const qrBlobUrl = ref('')
@@ -136,6 +159,7 @@ function apply(data) {
   for (const f of FIELDS) form.value[f] = data[f] || ''
   missing.value = data.requisites_missing || []
   cashierDefault.value = data.cashier_default || ''
+  if (Array.isArray(data.agent_modes)) agentModes.value = data.agent_modes.map(m => ({ ...m }))
   loadQr()
 }
 
@@ -148,7 +172,7 @@ async function load() {
 async function save() {
   saving.value = true
   try {
-    const { data } = await clientPaymentsApi.saveSettings(form.value)
+    const { data } = await clientPaymentsApi.saveSettings({ ...form.value, agent_modes: agentModes.value })
     apply({ ...data, cashier_default: cashierDefault.value })
     $q.notify({ type: 'positive', message: 'Настройки оплат сохранены' })
   } catch (e) {
@@ -167,6 +191,7 @@ onMounted(load)
 
 <style scoped>
 .ps-wrap { max-width: 720px; }
+.ps-agents { display: flex; flex-wrap: wrap; gap: 8px 24px; padding: 4px 0; }
 /* Ряд из двух полей без q-col-gutter (внутри q-gutter-md он сдвигает поля) */
 .ps-row { display: flex; flex-wrap: wrap; gap: 12px; }
 .ps-row > * { flex: 1 1 200px; }

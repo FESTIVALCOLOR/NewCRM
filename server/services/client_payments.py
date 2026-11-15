@@ -34,15 +34,69 @@ METHODS = {
     "card": "безналичный расчёт (банковская карта)",
     "agent": "оплата принята агентом",
 }
-# Договоры своей студии: только по ним мы принимаем деньги и выдаём документ об оплате.
-# По договорам других агентов (ПЕТРОВИЧ и т.д.) клиент платит агенту — оплату только отмечаем, без документа.
-OWN_AGENT = "ФЕСТИВАЛЬ"
+# Приём оплаты по агентам настраивается в админке («Оплаты (СБП)» → «Приём оплаты по агентам»).
+# В настройке хранится список агентов, по договорам которых клиент платит АГЕНТУ — оплату только отмечаем,
+# без документа и без номера. Агенты не из списка (в т.ч. вновь созданные) — студия принимает оплату сама.
+AGENTS_PAID_TO_AGENT_KEY = "agents_paid_to_agent"
+OWN_AGENT = "ФЕСТИВАЛЬ"  # своя студия: при первой инициализации настройки всегда «студия принимает»
 
 
-def is_agent_contract(contract):
-    """Договор стороннего агента (не «Фестиваль»): деньги принимает агент."""
-    agent = (contract.agent_type or "").strip().upper()
-    return bool(agent) and agent != OWN_AGENT
+def _norm_agent(name):
+    return (name or "").strip().upper()
+
+
+def _active_agents(db):
+    from database import Agent
+
+    rows = db.query(Agent.name).filter(Agent.status == "активный").order_by(Agent.id).all()
+    return [name for (name,) in rows if name and not name.startswith("__TEST__")]
+
+
+def agents_paid_to_agent(db):
+    """Агенты, по договорам которых деньги принимает агент. При первом обращении — все, кроме «Фестиваля»
+    (как было до появления настройки); дальше — только то, что выбрано в админке."""
+    import json
+
+    row = db.query(ClientPaymentSetting).filter(ClientPaymentSetting.key == AGENTS_PAID_TO_AGENT_KEY).first()
+    if row is None:
+        initial = sorted({_norm_agent(n) for n in _active_agents(db)} - {OWN_AGENT})
+        db.add(ClientPaymentSetting(key=AGENTS_PAID_TO_AGENT_KEY, value=json.dumps(initial, ensure_ascii=False)))
+        db.commit()
+        return set(initial)
+    try:
+        return {_norm_agent(n) for n in json.loads(row.value or "[]")}
+    except ValueError:
+        return set()
+
+
+def agent_payment_modes(db):
+    """Для админки: [{name, studio_accepts}] по активным агентам."""
+    paid_to_agent = agents_paid_to_agent(db)
+    return [{"name": name, "studio_accepts": _norm_agent(name) not in paid_to_agent} for name in _active_agents(db)]
+
+
+def save_agent_payment_modes(db, modes):
+    """modes: [{name, studio_accepts}] — сохранить, кому из агентов платят напрямую."""
+    import json
+
+    current = agents_paid_to_agent(db)
+    for item in modes or []:
+        name = _norm_agent(item.get("name"))
+        if not name:
+            continue
+        if item.get("studio_accepts", True):
+            current.discard(name)
+        else:
+            current.add(name)
+    row = db.query(ClientPaymentSetting).filter(ClientPaymentSetting.key == AGENTS_PAID_TO_AGENT_KEY).first()
+    row.value = json.dumps(sorted(current), ensure_ascii=False)
+    db.commit()
+
+
+def is_agent_contract(db, contract):
+    """Договор агента, которому клиент платит напрямую (настройка в админке): без документа об оплате."""
+    agent = _norm_agent(contract.agent_type)
+    return bool(agent) and agent in agents_paid_to_agent(db)
 
 
 LOCKED_CONTRACT_FIELDS = ("total_amount", "advance_payment", "additional_payment", "third_payment")
@@ -305,7 +359,7 @@ def contract_payments(db, contract):
         "payments": [serialize_payment(db, r, settings, names) for r in rows],
         "sbp_configured": bool(settings.get("sbp_link")),
         # Сторонний агент: клиент платит агенту — без СБП-ссылки студии и без документов об оплате
-        "agent_contract": is_agent_contract(contract),
+        "agent_contract": is_agent_contract(db, contract),
         "agent_type": contract.agent_type,
         "requisites_missing": requisites_missing(settings),
     }
@@ -368,7 +422,7 @@ def payment_link(db, row, employee):
         raise HTTPException(400, "Ссылку можно сформировать только для неоплаченного платежа")
     if _round(row.amount) <= 0:
         raise HTTPException(400, "У платежа не указана сумма")
-    if is_agent_contract(get_contract_or_404(db, row.contract_id)):
+    if is_agent_contract(db, get_contract_or_404(db, row.contract_id)):
         raise HTTPException(400, "Договор стороннего агента: клиент платит агенту, СБП-ссылка студии не используется")
     settings = get_settings(db)
     link = settings.get("sbp_link") or ""
@@ -516,9 +570,9 @@ def pay(db, row, data, employee):
         raise HTTPException(400, f"Сумма возврата больше суммы к возврату ({_fmt_money(row.amount)})")
 
     by_agent = data["method"] == "agent"
-    if by_agent and not is_agent_contract(contract):
-        raise HTTPException(400, "Оплата агенту доступна только для договоров сторонних агентов (не «Фестиваль»)")
-    if not by_agent and is_agent_contract(contract):
+    if by_agent and not is_agent_contract(db, contract):
+        raise HTTPException(400, f"По договорам агента «{contract.agent_type or '—'}» оплату принимает студия (Админка → Оплаты → Приём оплаты по агентам)")
+    if not by_agent and is_agent_contract(db, contract):
         # Иначе случайный выбор СБП/наличных выписал бы документ и израсходовал порядковый номер
         raise HTTPException(400, f"Договор агента {contract.agent_type}: деньги принимает агент — выберите способ «Агенту»")
 

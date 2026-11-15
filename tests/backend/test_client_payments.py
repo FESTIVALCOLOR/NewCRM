@@ -32,6 +32,7 @@ def db():
         database.ActionHistory.__table__,
         database.CompanyRequisite.__table__,
         database.Payment.__table__,
+        database.Agent.__table__,
     ]
     database.Base.metadata.create_all(engine, tables=[t for t in tables if t is not None])
     session = sessionmaker(bind=engine)()
@@ -39,7 +40,8 @@ def db():
     director = database.Employee(full_name="Талер Илья", login="dir", position="Руководитель студии", **common)
     manager = database.Employee(full_name="Иванова Светлана", login="man", position="Менеджер", **common)
     client = database.Client(client_type="Физическое лицо", full_name="Петров Пётр", phone="+7 900 000-00-00")
-    session.add_all([director, manager, client])
+    agents = [database.Agent(name="ФЕСТИВАЛЬ", color="#fff", status="активный"), database.Agent(name="ПЕТРОВИЧ", color="#fff", status="активный")]
+    session.add_all([director, manager, client, *agents])
     session.commit()
     cp.save_settings(session, {"seller_name": "Талер Илья Игоревич", "seller_inn": "123456789012", "sbp_link": "https://qr.nspk.ru/TEST"})
     session.director, session.manager, session.client = director, manager, client
@@ -215,6 +217,26 @@ def test_agent_contract_rejects_own_methods(db):
     assert err.value.status_code == 400
     assert db.query(database.ClientPaymentDoc).count() == 0
     assert rows(db, contract)[0]["status"] == "planned"
+
+
+def test_agent_payment_modes_setting(db):
+    """Настройка «Приём оплаты по агентам»: по умолчанию Фестиваль — студия, остальные существующие — агенту;
+    новый агент — студия принимает; галочку можно переключить."""
+    modes = {m["name"]: m["studio_accepts"] for m in cp.agent_payment_modes(db)}
+    assert modes == {"ФЕСТИВАЛЬ": True, "ПЕТРОВИЧ": False}
+
+    db.add(database.Agent(name="НОВЫЙ", color="#fff", status="активный"))
+    db.commit()
+    assert {m["name"]: m["studio_accepts"] for m in cp.agent_payment_modes(db)}["НОВЫЙ"] is True
+    new_contract = make_contract(db, n=10, agent_type="НОВЫЙ")
+    assert cp.contract_payments(db, new_contract)["agent_contract"] is False
+
+    # Снимаем галочку у нового агента и ставим у ПЕТРОВИЧА
+    cp.save_agent_payment_modes(db, [{"name": "НОВЫЙ", "studio_accepts": False}, {"name": "ПЕТРОВИЧ", "studio_accepts": True}])
+    assert cp.contract_payments(db, new_contract)["agent_contract"] is True
+    petrovich = make_contract(db, n=11, agent_type="ПЕТРОВИЧ")
+    assert cp.contract_payments(db, petrovich)["agent_contract"] is False
+    assert pay(db, petrovich, 0, 150000).number == "2026-0001"
 
 
 def test_agent_method_rejected_for_own_contract(db):

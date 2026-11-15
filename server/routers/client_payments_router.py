@@ -60,6 +60,8 @@ class SettingsBody(BaseModel):
     place_remote: Optional[str] = Field(None, max_length=300)
     place_office: Optional[str] = Field(None, max_length=300)
     cashier: Optional[str] = Field(None, max_length=200)
+    # Приём оплаты по агентам: [{name, studio_accepts}] — галочка снята = клиент платит агенту (без документа)
+    agent_modes: Optional[list[dict]] = None
 
 
 def _result(db, contract_id, **extra):
@@ -76,14 +78,21 @@ def get_settings(db: Session = Depends(get_db), user: Employee = Depends(require
     if not check_permission(user, "client_payments.settings", db):
         # Без права настроек — только то, что нужно для «Сформировать оплату»
         settings = {"sbp_link": settings["sbp_link"]}
-    return {**settings, "requisites_missing": cp.requisites_missing(cp.get_settings(db)), "cashier_default": cp.director_cashier(db, {})}
+    return {
+        **settings,
+        "requisites_missing": cp.requisites_missing(cp.get_settings(db)),
+        "cashier_default": cp.director_cashier(db, {}),
+        "agent_modes": cp.agent_payment_modes(db),
+    }
 
 
 @router.put("/settings")
 def save_settings(body: SettingsBody, db: Session = Depends(get_db), _: Employee = Depends(require_permission("client_payments.settings"))):
-    data = {k: v for k, v in body.model_dump().items() if v is not None}
+    data = {k: v for k, v in body.model_dump().items() if v is not None and k != "agent_modes"}
     settings = cp.save_settings(db, data)
-    return {**settings, "requisites_missing": cp.requisites_missing(settings)}
+    if body.agent_modes is not None:
+        cp.save_agent_payment_modes(db, body.agent_modes)
+    return {**settings, "requisites_missing": cp.requisites_missing(settings), "agent_modes": cp.agent_payment_modes(db)}
 
 
 @router.get("/qr.svg")
