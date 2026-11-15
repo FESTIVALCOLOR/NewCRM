@@ -188,6 +188,32 @@ def test_link_message_and_qr(db):
     assert rows(db, contract)[0]["status"] == "link_sent"
 
 
+def test_agent_contract_paid_to_agent_without_doc(db):
+    contract = make_contract(db, n=6, agent_type="ПЕТРОВИЧ")
+    assert cp.contract_payments(db, contract)["agent_contract"] is True
+    doc = pay(db, contract, 0, 150000, method="agent")
+    assert doc is None
+    first = rows(db, contract)[0]
+    assert first["status"] == "paid" and first["method"] == "agent" and first["doc"] is None
+    db.refresh(contract)
+    assert contract.advance_payment_paid_date == "2026-11-10"
+    # Номер документа не израсходован: следующий документ по договору «Фестиваля» — первый
+    own = make_contract(db, n=7, agent_type="ФЕСТИВАЛЬ")
+    assert pay(db, own, 0, 150000).number == "2026-0001"
+    # Ссылку СБП студии и «Выписать документ» для договора агента не даём
+    with pytest.raises(HTTPException):
+        cp.payment_link(db, db.get(database.ContractClientPayment, rows(db, contract)[1]["id"]), db.manager)
+    with pytest.raises(HTTPException):
+        cp.issue_doc_for_legacy(db, db.get(database.ContractClientPayment, first["id"]), {"method": "sbp"}, db.manager)
+
+
+def test_agent_method_rejected_for_own_contract(db):
+    own = make_contract(db, n=8, agent_type="ФЕСТИВАЛЬ")
+    with pytest.raises(HTTPException) as err:
+        pay(db, own, 0, 150000, method="agent")
+    assert err.value.status_code == 400
+
+
 def test_template_single_payment_follows_total_until_paid(db):
     contract = make_contract(db, "Шаблонный", n=5, advance_payment=None, additional_payment=None, third_payment=None, total_amount=80000)
     rows(db, contract)

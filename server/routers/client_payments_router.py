@@ -28,7 +28,7 @@ class PaidBody(BaseModel):
     amount: Optional[float] = None
     date: Optional[str] = None  # YYYY-MM-DD
     time: Optional[str] = None  # HH:MM (МСК)
-    method: str = Field(..., pattern="^(sbp|cash|transfer|card)$")
+    method: str = Field(..., pattern="^(sbp|cash|transfer|card|agent)$")  # agent — деньги принял агент, без документа
 
 
 class ExtraBody(BaseModel):
@@ -165,7 +165,8 @@ def pay(payment_id: int, body: PaidBody, background: BackgroundTasks, db: Sessio
     if row.direction == "out" and not check_permission(user, "client_payments.refund", db):
         raise HTTPException(403, "Проводить возврат клиенту может только руководитель")
     doc = cp.pay(db, row, body.model_dump(), user)
-    background.add_task(cp.upload_doc_to_disk, doc.id)
+    if doc:  # оплата агенту — без документа
+        background.add_task(cp.upload_doc_to_disk, doc.id)
     return _result(db, row.contract_id, doc=cp.serialize_doc(doc, cp.get_settings(db)))
 
 

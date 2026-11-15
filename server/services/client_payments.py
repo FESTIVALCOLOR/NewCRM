@@ -32,7 +32,19 @@ METHODS = {
     "cash": "наличные денежные средства",
     "transfer": "безналичный расчёт (перевод на расчётный счёт)",
     "card": "безналичный расчёт (банковская карта)",
+    "agent": "оплата принята агентом",
 }
+# Договоры своей студии: только по ним мы принимаем деньги и выдаём документ об оплате.
+# По договорам других агентов (ПЕТРОВИЧ и т.д.) клиент платит агенту — оплату только отмечаем, без документа.
+OWN_AGENT = "ФЕСТИВАЛЬ"
+
+
+def is_agent_contract(contract):
+    """Договор стороннего агента (не «Фестиваль»): деньги принимает агент."""
+    agent = (contract.agent_type or "").strip().upper()
+    return bool(agent) and agent != OWN_AGENT
+
+
 LOCKED_CONTRACT_FIELDS = ("total_amount", "advance_payment", "additional_payment", "third_payment")
 
 DEFAULT_SETTINGS = {
@@ -292,6 +304,9 @@ def contract_payments(db, contract):
         "summary": summary(db, contract),
         "payments": [serialize_payment(db, r, settings, names) for r in rows],
         "sbp_configured": bool(settings.get("sbp_link")),
+        # Сторонний агент: клиент платит агенту — без СБП-ссылки студии и без документов об оплате
+        "agent_contract": is_agent_contract(contract),
+        "agent_type": contract.agent_type,
         "requisites_missing": requisites_missing(settings),
     }
 
@@ -353,6 +368,8 @@ def payment_link(db, row, employee):
         raise HTTPException(400, "Ссылку можно сформировать только для неоплаченного платежа")
     if _round(row.amount) <= 0:
         raise HTTPException(400, "У платежа не указана сумма")
+    if is_agent_contract(get_contract_or_404(db, row.contract_id)):
+        raise HTTPException(400, "Договор стороннего агента: клиент платит агенту, СБП-ссылка студии не используется")
     settings = get_settings(db)
     link = settings.get("sbp_link") or ""
     if not link:
@@ -498,6 +515,10 @@ def pay(db, row, data, employee):
     if row.direction == "out" and amount - _round(row.amount) > 0.01:
         raise HTTPException(400, f"Сумма возврата больше суммы к возврату ({_fmt_money(row.amount)})")
 
+    by_agent = data["method"] == "agent"
+    if by_agent and not is_agent_contract(contract):
+        raise HTTPException(400, "Оплата агенту доступна только для договоров сторонних агентов (не «Фестиваль»)")
+
     row.status = "paid"
     row.paid_amount = amount
     row.paid_date = data["date"]
@@ -506,7 +527,8 @@ def pay(db, row, data, employee):
     row.paid_by = employee.id
     row.paid_at = datetime.utcnow()
     row.legacy = False
-    doc = _issue_doc(db, row, contract, employee, settings)
+    # Деньги принял агент — документ об оплате выдаёт не студия, номер не расходуется
+    doc = None if by_agent else _issue_doc(db, row, contract, employee, settings)
 
     rest = _round(row.amount) - amount
     if rest > 0.01:
@@ -525,7 +547,8 @@ def pay(db, row, data, employee):
         )
         row.amount = amount if row.kind not in BASE_KINDS else row.amount
     sign = "Возврат" if row.direction == "out" else "Оплата"
-    _log(db, employee, contract.id, "client_payment", f"{sign} «{row.title}»: {_fmt_money(amount)}, {METHODS[row.method]}, документ № {doc.number}")
+    tail = f"агенту {contract.agent_type}, без документа" if by_agent else f"{METHODS[row.method]}, документ № {doc.number}"
+    _log(db, employee, contract.id, "client_payment", f"{sign} «{row.title}»: {_fmt_money(amount)}, {tail}")
     db.commit()
     if row.kind in BASE_KINDS:
         mirror_to_contract(db, contract)
@@ -536,6 +559,8 @@ def issue_doc_for_legacy(db, row, data, employee):
     """Выписать документ для оплаты, отмеченной до появления документов (данные уточняются при выдаче)."""
     if row.status != "paid" or row.doc_id:
         raise HTTPException(400, "Документ уже выдан или платёж не оплачен")
+    if data.get("method") == "agent" or row.method == "agent":
+        raise HTTPException(400, "Оплату принял агент — документ об оплате студия не выдаёт")
     amount, time_value = _validate_paid({**data, "amount": data.get("amount") or row.paid_amount or row.amount, "date": data.get("date") or row.paid_date})
     row.paid_amount = amount
     row.paid_date = data.get("date") or row.paid_date

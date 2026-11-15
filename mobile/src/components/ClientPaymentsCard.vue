@@ -50,7 +50,7 @@
           <span>Возвращено</span><b>{{ money(state.summary.refunded) }}</b>
         </div>
       </div>
-      <div v-if="canManage && state.requisites_missing.length" class="cp-warn q-mt-sm">
+      <div v-if="canManage && !state.agent_contract && state.requisites_missing.length" class="cp-warn q-mt-sm">
         Для документов об оплате заполните реквизиты в Админке → «Оплаты (СБП)»: {{ state.requisites_missing.join(', ') }}
       </div>
     </q-card-section>
@@ -93,7 +93,8 @@
         <q-item-section side top style="min-width: 118px">
           <div class="column q-gutter-xs items-stretch">
             <template v-if="isOpen(p) && p.direction === 'in' && canManage">
-              <button v-if="state.sbp_configured" type="button" class="cp-btn" @click="openLink(p)">
+              <!-- Договор стороннего агента: клиент платит агенту, СБП-ссылка студии не нужна -->
+              <button v-if="state.sbp_configured && !state.agent_contract" type="button" class="cp-btn" @click="openLink(p)">
                 <q-icon name="qr_code_2" size="16px" />Сформировать оплату
               </button>
               <button type="button" class="cp-btn cp-btn--ok" @click="openPay(p)">
@@ -106,7 +107,7 @@
             <button v-if="p.status === 'paid' && p.doc" type="button" class="cp-btn" @click="openDoc(p.doc)">
               <q-icon name="receipt_long" size="16px" />Документ № {{ p.doc.number }}
             </button>
-            <button v-if="p.status === 'paid' && !p.doc && canManage && (p.direction === 'in' || canRefund)" type="button" class="cp-btn" @click="openIssue(p)">
+            <button v-if="p.status === 'paid' && !p.doc && !state.agent_contract && p.method !== 'agent' && canManage && (p.direction === 'in' || canRefund)" type="button" class="cp-btn" @click="openIssue(p)">
               <q-icon name="receipt_long" size="16px" />Выписать документ
             </button>
             <div class="row justify-end q-gutter-xs">
@@ -266,7 +267,10 @@
               />
             </div>
           </div>
-          <div class="text-caption text-grey-7">
+          <div v-if="byAgent" class="text-caption text-grey-7">
+            Деньги {{ pay.row?.direction === 'out' ? 'вернул' : 'принял' }} агент {{ state.agent_type }} — платёж только отмечается в CRM. Документ об оплате не выписывается, номер не расходуется.
+          </div>
+          <div v-else class="text-caption text-grey-7">
             Будет сформирован документ, подтверждающий расчёт ({{ pay.row?.direction === 'out' ? 'возврат прихода' : 'приход' }}), с порядковым номером.
             <template v-if="pay.method === 'cash'">
               Место расчёта — адрес офиса из настроек.
@@ -280,7 +284,7 @@
             no-caps
             color="positive"
             :loading="saving"
-            :label="pay.mode === 'issue' ? 'Выписать документ' : (pay.row?.direction === 'out' ? 'Провести возврат' : 'Провести оплату')"
+            :label="submitLabel"
             @click="submitPay"
           />
         </q-card-actions>
@@ -555,12 +559,12 @@ const canCancel = computed(() => can('client_payments.cancel'))
 const canShare = typeof navigator !== 'undefined' && !!navigator.share
 
 const BASE_KINDS = ['advance', 'additional', 'third']
-const METHOD_LABELS = { sbp: 'СБП', cash: 'наличные', transfer: 'перевод', card: 'карта' }
+const METHOD_LABELS = { sbp: 'СБП', cash: 'наличные', transfer: 'перевод', card: 'карта', agent: 'агенту' }
 
 const loading = ref(false)
 const saving = ref(false)
 const pdfBusy = ref(false)
-const state = reactive({ summary: { total: 0, paid: 0, due: 0, to_refund: 0, refunded: 0, net_paid: 0 }, payments: [], sbp_configured: false, requisites_missing: [] })
+const state = reactive({ summary: { total: 0, paid: 0, due: 0, to_refund: 0, refunded: 0, net_paid: 0 }, payments: [], sbp_configured: false, requisites_missing: [], agent_contract: false, agent_type: '' })
 
 const link = reactive({ show: false, data: {} })
 const pay = reactive({ show: false, mode: 'pay', row: null, method: 'sbp', amount: null, date: '', time: '' })
@@ -583,6 +587,10 @@ function statusText(p) {
   if (p.status === 'cancelled') return 'Аннулирован'
   if (p.status === 'paid') {
     const verb = p.direction === 'out' ? 'Возвращено' : 'Оплачено'
+    if (p.method === 'agent') {
+      const who = p.paid_by_name ? ` · отметил(а) ${p.paid_by_name}` : ''
+      return `${verb} агенту ${state.agent_type || ''} ${fmtDate(p.paid_date)}${who}`
+    }
     const how = p.method ? `, ${METHOD_LABELS[p.method]}` : ''
     const who = p.paid_by_name ? ` · провёл(а) ${p.paid_by_name}` : ''
     return `${verb} ${fmtDate(p.paid_date)}${how}${p.legacy ? ' · без документа' : ''}${who}`
@@ -627,15 +635,27 @@ async function openLink(p) {
 }
 
 // ── Провести оплату / возврат / выписать документ ──
-const methodOptions = [
+const OWN_METHODS = [
   { label: 'СБП', value: 'sbp' },
   { label: 'Наличные', value: 'cash' },
   { label: 'Перевод', value: 'transfer' },
   { label: 'Карта', value: 'card' },
 ]
+// Договор стороннего агента (ПЕТРОВИЧ и др.): клиент платит агенту — отмечаем без документа и без номера.
+// Остальные способы оставлены на случай, если клиент всё же заплатил студии.
+const methodOptions = computed(() => (state.agent_contract && pay.mode !== 'issue'
+  ? [{ label: 'Агенту', value: 'agent' }, ...OWN_METHODS]
+  : OWN_METHODS))
+const byAgent = computed(() => pay.method === 'agent')
 const payTitle = computed(() => {
   if (pay.mode === 'issue') return 'Выписать документ'
   return pay.row?.direction === 'out' ? 'Провести возврат' : 'Провести оплату'
+})
+const submitLabel = computed(() => {
+  if (pay.mode === 'issue') return 'Выписать документ'
+  const out = pay.row?.direction === 'out'
+  if (byAgent.value) return out ? 'Отметить возврат' : 'Отметить оплату'
+  return out ? 'Провести возврат' : 'Провести оплату'
 })
 const amountHint = computed(() => {
   if (!pay.row || pay.mode === 'issue') return ''
@@ -654,7 +674,8 @@ function nowParts() {
 }
 function openPay(p) {
   const now = nowParts()
-  Object.assign(pay, { show: true, mode: 'pay', row: p, method: p.direction === 'out' ? 'transfer' : 'sbp', amount: p.amount, date: now.date, time: now.time })
+  const method = state.agent_contract ? 'agent' : (p.direction === 'out' ? 'transfer' : 'sbp')
+  Object.assign(pay, { show: true, mode: 'pay', row: p, method, amount: p.amount, date: now.date, time: now.time })
 }
 function openIssue(p) {
   const now = nowParts()
@@ -668,7 +689,7 @@ async function submitPay() {
     const { data } = pay.mode === 'issue' ? await clientPaymentsApi.issueDoc(pay.row.id, body) : await clientPaymentsApi.pay(pay.row.id, body)
     applyResult(data)
     pay.show = false
-    $q.notify({ type: 'positive', message: `Документ № ${data.doc?.number} сформирован` })
+    $q.notify({ type: 'positive', message: data.doc ? `Документ № ${data.doc.number} сформирован` : `Отмечено: ${pay.row?.direction === 'out' ? 'возврат' : 'оплата'} через агента, без документа` })
     if (data.doc) openDoc(data.doc)
   } catch (e) { $q.notify({ type: 'negative', message: errorText(e, 'Не удалось провести') }) } finally { saving.value = false }
 }
