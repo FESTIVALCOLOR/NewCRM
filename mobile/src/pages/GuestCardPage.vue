@@ -143,7 +143,7 @@
             >
               <q-icon :name="fileIcon(f.name)" size="16px" class="q-mr-xs" />
               <span class="ellipsis">{{ f.name }}</span>
-              <span v-if="f.variation > 1" class="q-ml-xs" style="color: var(--fc-text-muted)">(вар. {{ f.variation }})</span>
+              <span v-if="f.variation > 1" class="q-ml-xs" style="color: var(--fc-text-muted); white-space: nowrap; flex-shrink: 0">(вар. {{ f.variation }})</span>
             </a>
           </div>
         </q-card>
