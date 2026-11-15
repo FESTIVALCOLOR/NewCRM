@@ -25,6 +25,12 @@ export default [
         meta: { title: 'Главная', icon: 'dashboard' },
       },
       {
+        path: 'leads',
+        name: 'leads',
+        component: () => import('src/pages/LeadsPage.vue'),
+        meta: { title: 'Заявки', icon: 'inbox', requiresPermission: 'access.leads' },
+      },
+      {
         path: 'crm',
         name: 'crm',
         component: () => import('src/pages/CrmBoardPage.vue'),

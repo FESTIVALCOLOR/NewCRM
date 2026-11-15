@@ -26,6 +26,7 @@ export const usePermissionsStore = defineStore('permissions', () => {
   const visiblePages = computed(() => {
     if (isSuperuser.value) return 'all'
     const pages = ['/'] // Дашборд всегда виден
+    if (has('access.leads')) pages.push('/leads')
     if (has('access.clients')) pages.push('/clients')
     if (has('access.contracts')) pages.push('/contracts')
     if (has('access.crm')) pages.push('/crm')

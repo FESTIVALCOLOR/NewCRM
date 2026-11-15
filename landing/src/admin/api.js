@@ -53,7 +53,8 @@ export const settings = {
 // ── Leads (заявки из окна «Заказать») ───────
 export const leads = {
   list: (status = '') => req('GET', `/site/admin/leads${status ? `?status=${status}` : ''}`),
-  setStatus: (id, status) => req('PUT', `/site/admin/leads/${id}`, { status }),
+  setStatus: (id, status, result = '') => req('PUT', `/site/admin/leads/${id}`, { status, result }),
+  delete: (id) => req('DELETE', `/site/admin/leads/${id}`),
 }
 
 // ── Sections ────────────────────────────────

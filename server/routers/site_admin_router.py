@@ -50,6 +50,7 @@ from schemas import (
     TeamMemberResponse,
     TeamMemberUpdate,
 )
+from services import site_leads
 from sqlalchemy.orm import Session
 
 from database import (
@@ -59,7 +60,6 @@ from database import (
     PricingPlan,
     Review,
     SiteAnalytics,
-    SiteLead,
     SiteSection,
     SiteService,
     SiteSetting,
@@ -189,21 +189,18 @@ def update_setting(key: str, data: SiteSettingUpdate, db: Session = Depends(get_
 
 @router.get("/leads", response_model=list[SiteLeadResponse])
 def list_leads(status: str = "", db: Session = Depends(get_db), _: Employee = Depends(require_site_admin)):
-    query = db.query(SiteLead)
-    if status in ("new", "done"):
-        query = query.filter(SiteLead.status == status)
-    return query.order_by(SiteLead.created_at.desc()).limit(300).all()
+    return site_leads.list_leads(db, status)
 
 
 @router.put("/leads/{lead_id}", response_model=SiteLeadResponse)
-def update_lead_status(lead_id: int, data: SiteLeadStatusUpdate, db: Session = Depends(get_db), _: Employee = Depends(require_site_admin)):
-    lead = db.query(SiteLead).filter(SiteLead.id == lead_id).first()
-    if not lead:
-        raise HTTPException(404, "Заявка не найдена")
-    lead.status = data.status
-    db.commit()
-    db.refresh(lead)
-    return lead
+def update_lead_status(lead_id: int, data: SiteLeadStatusUpdate, db: Session = Depends(get_db), user: Employee = Depends(require_site_admin)):
+    return site_leads.update_lead_status(db, lead_id, data.status, data.result, user)
+
+
+@router.delete("/leads/{lead_id}")
+def delete_lead(lead_id: int, db: Session = Depends(get_db), _: Employee = Depends(require_site_admin)):
+    site_leads.delete_lead(db, lead_id)
+    return {"ok": True}
 
 
 # ──────────────────────────────────────────────

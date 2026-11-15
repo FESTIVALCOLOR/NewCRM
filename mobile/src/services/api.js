@@ -203,6 +203,15 @@ export const contractsApi = {
     api.patch(`/api/v1/contracts/${contractId}/files`, data),
 }
 
+// === Заявки с сайта ===
+
+export const leadsApi = {
+  getList: (status = '') => api.get('/api/v1/leads', { params: status ? { status } : {} }),
+  countNew: () => api.get('/api/v1/leads/count'),
+  setStatus: (id, status, result = '') => api.put(`/api/v1/leads/${id}`, { status, result }),
+  remove: (id) => api.delete(`/api/v1/leads/${id}`),
+}
+
 // === Notifications ===
 
 export const notificationsApi = {

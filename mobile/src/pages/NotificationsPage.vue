@@ -202,6 +202,8 @@ function handleClick(n) {
     router.push(`/crm/${n.related_entity_id}`)
   } else if (n.related_entity_type === 'supervision_card' && n.related_entity_id) {
     router.push(`/supervision/${n.related_entity_id}`)
+  } else if (n.related_entity_type === 'site_lead') {
+    router.push('/leads')
   }
 }
 

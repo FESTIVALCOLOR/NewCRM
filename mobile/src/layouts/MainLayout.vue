@@ -806,6 +806,7 @@ import { usePermissionsStore } from 'src/stores/permissions'
 import { useWebSocket } from 'src/composables/useWebSocket'
 import { pendingCount as getOfflinePendingCount, getPending, syncAll as syncOfflineAll, clearAll as clearOfflineAll } from 'src/services/offlineQueue'
 import PwaInstallBanner from 'src/components/PwaInstallBanner.vue'
+import { leadsApi } from 'src/services/api'
 import { usePwaInstall } from 'src/composables/usePwaInstall'
 
 const $q = useQuasar()
@@ -871,7 +872,20 @@ function handleInstallClick() {
 }
 
 // Бейдж непрочитанных чатов для пункта меню по пути
+// Новые (необработанные) заявки с сайта — бейдж у пункта «Заявки»
+const newLeads = ref(0)
+async function loadNewLeads() {
+  if (!permsStore.isSuperuser && !permsStore.has('access.leads')) { newLeads.value = 0; return }
+  try {
+    const { data } = await leadsApi.countNew()
+    newLeads.value = data?.new || 0
+  } catch { /* нет доступа или нет сети — бейдж просто не показываем */ }
+}
+watch(() => permsStore.loaded, (loaded) => { if (loaded) loadNewLeads() }, { immediate: true })
+window.addEventListener('leads:changed', loadNewLeads)
+
 function chatBadge(to) {
+  if (to === '/leads') return newLeads.value
   if (to === '/employee-chats') return chatUnreadStore.totalEmployeeUnread || 0
   if (to === '/client-chats') return chatUnreadStore.totalClientUnread || 0
   return 0
@@ -1060,7 +1074,7 @@ onMounted(() => {
   notificationsStore.load()
   referencesStore.loadAll()
   permsStore.load()
-  setInterval(() => notificationsStore.load(), 60000)
+  setInterval(() => { notificationsStore.load(); loadNewLeads() }, 60000)
 
   // Загружать счётчики непрочитанных чатов каждые 30 секунд
   chatUnreadStore.fetchUnreadCounts()
@@ -1092,6 +1106,7 @@ const filteredBottomTabs = computed(() => {
 // Порядок как в десктопе: Дашборд, Клиенты, Договора, СРМ, СРМ надзора, Отчёты, Сотрудники, Зарплаты, Отчёты по сотр.
 const menuItems = [
   { to: '/', icon: 'dashboard', label: 'Дашборд' },
+  { to: '/leads', icon: 'inbox', label: 'Заявки' },
   { to: '/clients', icon: 'people', label: 'Клиенты' },
   { to: '/contracts', icon: 'description', label: 'Договора' },
   { to: '/crm', icon: 'view_kanban', label: 'СРМ' },
@@ -1109,6 +1124,7 @@ const menuItems = [
 // Bottom bar — все кнопки без подписей, порядок как десктоп
 const bottomTabs = [
   { to: '/', icon: 'dashboard', label: 'Дашборд' },
+  { to: '/leads', icon: 'inbox', label: 'Заявки' },
   { to: '/clients', icon: 'people', label: 'Клиенты' },
   { to: '/contracts', icon: 'description', label: 'Договора' },
   { to: '/crm', icon: 'view_kanban', label: 'СРМ' },
@@ -1367,6 +1383,7 @@ function _connectWebSocket() {
     // Новое уведомление — обновляем store + показываем toast
     onNotificationNew(data) {
       notificationsStore.load()
+      loadNewLeads()
       $q.notify({
           type: 'info',
           message: data.title || 'Новое уведомление',
@@ -1397,6 +1414,7 @@ function _connectWebSocket() {
 }
 
 onUnmounted(() => {
+  window.removeEventListener('leads:changed', loadNewLeads)
   if (heartbeatTimer) clearInterval(heartbeatTimer)
   if (offlinePendingTimer) clearInterval(offlinePendingTimer)
   if (_chatUnreadTimer) clearInterval(_chatUnreadTimer)

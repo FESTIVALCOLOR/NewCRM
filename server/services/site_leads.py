@@ -1,11 +1,12 @@
 """
-Заявки с сайта (кнопки «Заказать» / «Заказать готовый дизайн»): сохранение и уведомление руководителей.
+Заявки с сайта (кнопки «Заказать» / «Заказать готовый дизайн»): сохранение, обработка и уведомление ответственных.
 """
 
+from datetime import datetime
 import json
 import logging
 
-from constants import POSITION_STUDIO_DIRECTOR, ROLE_ADMIN, ROLE_DIRECTOR
+from fastapi import HTTPException
 
 from database import Employee, SessionLocal, SiteLead
 
@@ -35,18 +36,65 @@ def lead_text(lead):
 
 
 def _recipients(db):
-    return (
-        db.query(Employee.id)
-        .filter(
-            (Employee.position == POSITION_STUDIO_DIRECTOR) | (Employee.role.in_((ROLE_ADMIN, ROLE_DIRECTOR))),
-            Employee.status == "активный",
-        )
-        .all()
-    )
+    """Все активные сотрудники с доступом к странице «Заявки» (по умолчанию: Руководитель студии,
+    Старший менеджер, Менеджер — настраивается в ролях админки CRM)."""
+    from permissions import check_permission
+
+    employees = db.query(Employee).filter(Employee.status == "активный").all()
+    return [(emp.id,) for emp in employees if check_permission(emp, "access.leads", db)]
+
+
+# ── Общие операции для страницы «Заявки» в CRM и вкладки «Заявки» в панели сайта ──
+
+
+def serialize_lead(db, lead):
+    data = {c.name: getattr(lead, c.name) for c in SiteLead.__table__.columns if c.name != "ip"}
+    data["processed_by_name"] = None
+    if lead.processed_by:
+        emp = db.query(Employee.full_name).filter(Employee.id == lead.processed_by).first()
+        data["processed_by_name"] = emp[0] if emp else None
+    return data
+
+
+def list_leads(db, status=""):
+    query = db.query(SiteLead)
+    if status in ("new", "done"):
+        query = query.filter(SiteLead.status == status)
+    leads = query.order_by(SiteLead.created_at.desc()).limit(300).all()
+    return [serialize_lead(db, lead) for lead in leads]
+
+
+def get_lead_or_404(db, lead_id):
+    lead = db.query(SiteLead).filter(SiteLead.id == lead_id).first()
+    if not lead:
+        raise HTTPException(404, "Заявка не найдена")
+    return lead
+
+
+def update_lead_status(db, lead_id, status, result, employee):
+    """«Обработана» — только с результатом обработки; «Вернуть в новые» — результат сохраняется для истории."""
+    lead = get_lead_or_404(db, lead_id)
+    result = (result or "").strip()
+    if status == "done":
+        if not result:
+            raise HTTPException(400, "Опишите результат обработки заявки")
+        lead.result = result
+        lead.processed_by = employee.id
+        lead.processed_at = datetime.utcnow()
+    lead.status = status
+    db.commit()
+    db.refresh(lead)
+    return serialize_lead(db, lead)
+
+
+def delete_lead(db, lead_id):
+    lead = get_lead_or_404(db, lead_id)
+    db.delete(lead)
+    db.commit()
 
 
 async def notify_new_lead(lead_id):
-    """Уведомление в CRM (панель, Telegram, push) всем руководителям студии."""
+    """Уведомление в CRM (панель, Telegram, push) всем, у кого есть доступ к заявкам."""
     from services.notification_dispatcher import dispatch_notification
 
     db = SessionLocal()

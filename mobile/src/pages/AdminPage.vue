@@ -2101,7 +2101,8 @@ const emailPreviewHtml = ref('')
 
 // Блоки прав как в десктопе
 const PERMISSION_GROUPS = {
-  'Доступ к страницам': ['access.clients', 'access.contracts', 'access.crm', 'access.supervision', 'access.reports', 'access.employees', 'access.salaries', 'access.employee_reports', 'access.admin', 'access.dashboards'],
+  'Доступ к страницам': ['access.clients', 'access.contracts', 'access.crm', 'access.supervision', 'access.reports', 'access.employees', 'access.salaries', 'access.employee_reports', 'access.admin', 'access.dashboards', 'access.leads'],
+  'Заявки с сайта': ['leads.delete'],
   'Сотрудники': ['employees.create', 'employees.update', 'employees.delete'],
   'Клиенты': ['clients.create', 'clients.view', 'clients.update', 'clients.delete'],
   'Договоры': ['contracts.create', 'contracts.view', 'contracts.update', 'contracts.delete', 'contracts.generate_contract', 'contracts.generate_acts'],

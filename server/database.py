@@ -1596,6 +1596,9 @@ class SiteLead(Base):
     context = Column(Text)  # JSON: дизайн, тариф, город, площадь, цена, страница
     status = Column(String(20), default="new", index=True)  # new / done
     ip = Column(String(64))
+    result = Column(Text)  # результат обработки (пишет менеджер при отметке «Обработана»)
+    processed_by = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    processed_at = Column(DateTime)
 
 
 class SiteSection(Base):

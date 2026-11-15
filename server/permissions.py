@@ -42,6 +42,9 @@ PERMISSION_NAMES: dict[str, str] = {
     "access.employee_analytics": "Доступ к странице Аналитика сотрудников",
     "access.admin": "Доступ к администрированию",
     "access.dashboards": "Показ дашбордов внизу страницы",
+    "access.leads": "Доступ к странице Заявки (обработка заявок с сайта)",
+    # === Заявки с сайта ===
+    "leads.delete": "Удаление заявок",
     # === Сотрудники ===
     "employees.create": "Создание сотрудников",
     "employees.update": "Редактирование сотрудников",
@@ -254,6 +257,8 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, set[str]] = {
         "notifications.settings_supervision",
         "notifications.settings_payment",
         "contracts.generate_contract",
+        "access.leads",
+        "leads.delete",
     },
     POSITION_SENIOR_MANAGER: _ACCESS_MANAGER
     | _BASE_MANAGER
@@ -320,8 +325,10 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, set[str]] = {
         "chat.client.show_phone",
         "chat.members.show_last_login",
         "notifications.settings_projects",
+        "access.leads",
     },
     POSITION_MANAGER: {
+        "access.leads",
         "access.crm",
         "access.supervision",
         "access.clients",
@@ -600,6 +607,8 @@ def _migrate_new_permissions(db: Session):
 
     # Новые права, которые нужно добавить в существующую матрицу
     NEW_ROLE_PERMS = {
+        "access.leads": [POSITION_STUDIO_DIRECTOR, POSITION_SENIOR_MANAGER, POSITION_MANAGER],
+        "leads.delete": [POSITION_STUDIO_DIRECTOR],
         "notifications.settings_projects": [
             POSITION_STUDIO_DIRECTOR,
             POSITION_SENIOR_MANAGER,

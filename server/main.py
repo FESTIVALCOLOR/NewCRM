@@ -1004,6 +1004,11 @@ from routers.public_card_router import router as public_card_router
 
 # Гостевой просмотр CRM-карточки по секретной ссылке (без JWT)
 app.include_router(public_card_router, prefix="/api/v1")
+
+# Заявки с сайта в CRM (страница «Заявки»)
+from routers.leads_router import router as leads_router
+
+app.include_router(leads_router, prefix="/api/v1/leads")
 app.include_router(deleted_contracts_router, prefix="/api/v1/admin/deleted-contracts")
 
 from routers.admin_router import router as admin_router

@@ -1795,6 +1795,10 @@ class SiteLeadResponse(BaseModel):
     source: Optional[str]
     context: Optional[str]
     status: Optional[str]
+    result: Optional[str] = None
+    processed_by: Optional[int] = None
+    processed_by_name: Optional[str] = None
+    processed_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -1802,6 +1806,8 @@ class SiteLeadResponse(BaseModel):
 
 class SiteLeadStatusUpdate(BaseModel):
     status: str = Field(..., pattern="^(new|done)$")
+    # Результат обработки обязателен при отметке «Обработана»
+    result: str = Field("", max_length=2000)
 
 
 class SiteSectionResponse(BaseModel):

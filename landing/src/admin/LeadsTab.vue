@@ -1,8 +1,9 @@
 <template>
   <section class="tab-body">
     <div class="card-info">
-      Заявки из окна «Заказать» на сайте. О каждой новой заявке сразу приходит уведомление в CRM всем Руководителям студии.
-      Обработанную заявку отметьте — она уйдёт из списка новых.
+      Заявки из окна «Заказать» на сайте. О каждой новой заявке сразу приходит уведомление в CRM (и в Telegram)
+      всем, у кого есть доступ к странице «Заявки» в CRM — по умолчанию Руководителю студии, Старшему менеджеру и Менеджеру.
+      Те же заявки видны и обрабатываются в CRM. Отмечая заявку обработанной, опишите результат.
     </div>
 
     <div class="card">
@@ -26,10 +27,26 @@
           </div>
           <div v-for="line in contextLines(item)" :key="line" class="lead-row__ctx">{{ line }}</div>
           <div v-if="item.comment" class="lead-row__comment">{{ item.comment }}</div>
+          <div v-if="item.result" class="lead-row__result">
+            <div class="lead-row__result-title">
+              Результат обработки<span v-if="item.processed_by_name || item.processed_at" class="lead-row__result-who">
+                — {{ item.processed_by_name || 'сотрудник' }}<template v-if="item.processed_at">, {{ fmt(item.processed_at) }}</template></span>
+            </div>
+            {{ item.result }}
+          </div>
+          <div v-if="processingId === item.id" class="lead-row__process">
+            <textarea v-model="resultText" rows="3" maxlength="2000" placeholder="Результат обработки: созвонились, назначили замер, клиент думает…" />
+            <div class="lead-row__process-actions">
+              <button class="btn-sm btn-active" :disabled="!resultText.trim()" @click="submitDone(item)">Отметить обработанной</button>
+              <button class="btn-sm" @click="processingId = null">Отмена</button>
+            </div>
+          </div>
         </div>
-        <button class="btn-sm" @click="toggle(item)">
-          {{ item.status === 'done' ? 'Вернуть в новые' : 'Обработана' }}
-        </button>
+        <div class="lead-row__actions">
+          <button v-if="item.status === 'done'" class="btn-sm" @click="reopen(item)">Вернуть в новые</button>
+          <button v-else-if="processingId !== item.id" class="btn-sm" @click="startProcess(item)">Обработать</button>
+          <button class="btn-sm btn-danger-text" @click="remove(item)">Удалить</button>
+        </div>
       </div>
     </div>
   </section>
@@ -52,6 +69,8 @@ const CONTEXT = [['design', ''], ['plan', ''], ['city', 'Город'], ['area', 
 const leads = ref([])
 const filter = ref('new')
 const loading = ref(false)
+const processingId = ref(null)
+const resultText = ref('')
 
 function contextLines(item) {
   let ctx = {}
@@ -78,11 +97,35 @@ function setFilter(value) {
   load()
 }
 
-async function toggle(item) {
+function applyUpdated(item, updated) {
+  if (filter.value && updated.status !== filter.value) leads.value = leads.value.filter(l => l.id !== item.id)
+  else Object.assign(item, updated)
+}
+
+function startProcess(item) {
+  processingId.value = item.id
+  resultText.value = item.result || ''
+}
+
+async function submitDone(item) {
   try {
-    const updated = await api.leads.setStatus(item.id, item.status === 'done' ? 'new' : 'done')
-    if (filter.value && updated.status !== filter.value) leads.value = leads.value.filter(l => l.id !== item.id)
-    else Object.assign(item, updated)
+    applyUpdated(item, await api.leads.setStatus(item.id, 'done', resultText.value.trim()))
+    processingId.value = null
+    props.toast('Заявка обработана')
+  } catch (e) { props.toast(e.message, 'error') }
+}
+
+async function reopen(item) {
+  try { applyUpdated(item, await api.leads.setStatus(item.id, 'new')) }
+  catch (e) { props.toast(e.message, 'error') }
+}
+
+async function remove(item) {
+  if (!confirm(`Удалить заявку «${item.name}, ${item.phone}»? Она исчезнет и в CRM.`)) return
+  try {
+    await api.leads.delete(item.id)
+    leads.value = leads.value.filter(l => l.id !== item.id)
+    props.toast('Заявка удалена')
   } catch (e) { props.toast(e.message, 'error') }
 }
 
@@ -101,5 +144,13 @@ onMounted(load)
 .lead-row__method { font-size: 0.8rem; background: #f3f4f6; border-radius: 4px; padding: 1px 8px; }
 .lead-row__date { font-size: 0.8rem; color: #6b7280; }
 .lead-row__ctx { font-size: 0.85rem; color: #374151; }
+.lead-row__actions { display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
+.btn-danger-text { color: #c0392b; }
+.lead-row__result { margin-top: 6px; font-size: 0.85rem; color: #374151; white-space: pre-line; background: #f1f8f2; border-left: 3px solid #66bb6a; padding: 6px 10px; }
+.lead-row__result-title { font-weight: 600; color: #2e7d32; white-space: normal; }
+.lead-row__result-who { font-weight: 400; color: #6b7280; }
+.lead-row__process { margin-top: 8px; }
+.lead-row__process textarea { width: 100%; box-sizing: border-box; font: inherit; font-size: 0.9rem; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; resize: vertical; }
+.lead-row__process-actions { display: flex; gap: 8px; margin-top: 6px; }
 .lead-row__comment { margin-top: 6px; font-size: 0.85rem; color: #374151; white-space: pre-line; background: #fafafa; border-left: 3px solid #e5e7eb; padding: 6px 10px; }
 </style>
