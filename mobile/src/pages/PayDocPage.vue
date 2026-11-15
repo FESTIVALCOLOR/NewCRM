@@ -109,7 +109,9 @@ onMounted(async () => {
 .pd-list dt { color: #666; }
 .pd-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
 .pd-btn { flex: 1 1 180px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 42px; border-radius: 8px; border: 1px solid #D0D4DA; color: #222; text-decoration: none; font-size: 14px; }
-.pd-btn--main { background: #222; color: #fff; border-color: #222; }
+/* !important: глобальные стили ссылок перебивают цвет текста на тёмной кнопке */
+.pd-btn--main { background: #222; color: #fff !important; border-color: #222; }
+.pd-btn--main .q-icon { color: #fff !important; }
 @media (max-width: 480px) {
   .pd-list { grid-template-columns: 1fr; }
   .pd-list dt { border-bottom: none; padding-bottom: 0; font-size: 12px; }

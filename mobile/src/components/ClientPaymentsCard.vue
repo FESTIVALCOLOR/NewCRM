@@ -187,7 +187,7 @@
             no-caps
             icon="share"
             label="Отправить"
-            color="primary"
+            color="positive"
             @click="shareText(link.data.message)"
           />
         </q-card-actions>
@@ -237,8 +237,9 @@
           <div v-if="amountHint" class="cp-warn">
             {{ amountHint }}
           </div>
-          <div class="row q-col-gutter-sm">
-            <div class="col-7">
+          <!-- Без q-col-gutter: родитель q-gutter-sm уже даёт отступы, вместе они сдвигают поля за край окна -->
+          <div class="cp-row">
+            <div style="flex: 7">
               <q-input
                 v-model="pay.date"
                 type="date"
@@ -248,7 +249,7 @@
                 stack-label
               />
             </div>
-            <div class="col-5">
+            <div style="flex: 5">
               <q-input
                 v-model="pay.time"
                 type="time"
@@ -338,7 +339,7 @@
             unelevated
             no-caps
             icon="share"
-            color="primary"
+            color="positive"
             label="Отправить PDF и ссылку"
             :loading="pdfBusy"
             @click="sharePdf"
@@ -402,7 +403,7 @@
           <q-btn
             unelevated
             no-caps
-            color="primary"
+            color="positive"
             :loading="saving"
             label="Добавить платёж"
             @click="submitExtra"
@@ -457,7 +458,7 @@
           <q-btn
             unelevated
             no-caps
-            color="primary"
+            color="positive"
             :loading="saving"
             label="Применить"
             @click="submitDecrease"
@@ -800,4 +801,5 @@ defineExpose({ reload: load })
 .cp-qr :deep(svg) { width: 100%; height: 100%; }
 .cp-link { font-size: 12px; word-break: break-all; color: var(--fc-text-light); }
 .cp-toggle { border: 1px solid #d9d9d9; border-radius: 6px; }
+.cp-row { display: flex; gap: 8px; }
 </style>

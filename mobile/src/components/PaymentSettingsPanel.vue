@@ -41,13 +41,9 @@
           Документ, подтверждающий расчёт, выдаётся без ККТ (ИП на ПСН, п. 2.1 ст. 2 54-ФЗ). Реквизиты фиксируются в документе в момент выдачи.
         </div>
         <q-input v-model="form.seller_name" outlined dense label="ФИО индивидуального предпринимателя *" />
-        <div class="row q-col-gutter-sm">
-          <div class="col-12 col-sm-6">
-            <q-input v-model="form.seller_inn" outlined dense label="ИНН *" />
-          </div>
-          <div class="col-12 col-sm-6">
-            <q-input v-model="form.seller_ogrnip" outlined dense label="ОГРНИП" />
-          </div>
+        <div class="ps-row">
+          <q-input v-model="form.seller_inn" outlined dense label="ИНН *" />
+          <q-input v-model="form.seller_ogrnip" outlined dense label="ОГРНИП" />
         </div>
         <q-input v-model="form.tax_system" outlined dense label="Система налогообложения *" />
         <q-input
@@ -88,7 +84,7 @@
             type="submit"
             unelevated
             no-caps
-            color="primary"
+            color="positive"
             label="Сохранить"
             :loading="saving"
           />
@@ -157,6 +153,9 @@ onMounted(load)
 
 <style scoped>
 .ps-wrap { max-width: 720px; }
+/* Ряд из двух полей без q-col-gutter (внутри q-gutter-md он сдвигает поля) */
+.ps-row { display: flex; flex-wrap: wrap; gap: 12px; }
+.ps-row > * { flex: 1 1 200px; }
 .ps-section { font-weight: 700; font-size: 14px; color: var(--fc-text); margin-top: 18px; }
 .ps-qr { width: 120px; height: 120px; background: #fff; padding: 4px; border-radius: 6px; border: 1px solid #E0E0E0; }
 .ps-warn { background: #FFF4E5; color: #8A4B00; border: 1px solid #F5C77E; border-radius: 6px; padding: 8px 12px; font-size: 13px; }
