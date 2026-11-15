@@ -29,6 +29,18 @@ def update_lead_status(lead_id: int, data: SiteLeadStatusUpdate, db: Session = D
     return site_leads.update_lead_status(db, lead_id, data.status, data.result, user)
 
 
+@router.post("/{lead_id}/prepare-contract")
+def prepare_contract(lead_id: int, db: Session = Depends(get_db), user: Employee = Depends(require_permission("contracts.create"))):
+    """«Создать договор»: клиент (найден по телефону или создан) + предзаполнение формы договора."""
+    return site_leads.prepare_contract(db, lead_id, user)
+
+
+@router.post("/{lead_id}/contract/{contract_id}", response_model=SiteLeadResponse)
+def link_contract(lead_id: int, contract_id: int, db: Session = Depends(get_db), user: Employee = Depends(require_permission("access.leads"))):
+    """Договор создан из заявки — привязать и отметить заявку обработанной."""
+    return site_leads.link_contract(db, lead_id, contract_id, user)
+
+
 @router.delete("/{lead_id}")
 def delete_lead(lead_id: int, db: Session = Depends(get_db), _: Employee = Depends(require_permission("leads.delete"))):
     site_leads.delete_lead(db, lead_id)

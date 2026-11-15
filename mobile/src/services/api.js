@@ -210,6 +210,28 @@ export const leadsApi = {
   countNew: () => api.get('/api/v1/leads/count'),
   setStatus: (id, status, result = '') => api.put(`/api/v1/leads/${id}`, { status, result }),
   remove: (id) => api.delete(`/api/v1/leads/${id}`),
+  // «Создать договор» из заявки: клиент + предзаполнение формы; после создания — привязка договора
+  prepareContract: (id) => api.post(`/api/v1/leads/${id}/prepare-contract`),
+  linkContract: (id, contractId) => api.post(`/api/v1/leads/${id}/contract/${contractId}`),
+}
+
+// === Оплаты клиента по договору (СБП-ссылка, документ об оплате, доп. соглашения, возвраты) ===
+
+export const clientPaymentsApi = {
+  getByContract: (contractId) => api.get(`/api/v1/client-payments/contract/${contractId}`),
+  link: (paymentId) => api.post(`/api/v1/client-payments/${paymentId}/link`),
+  pay: (paymentId, data) => api.post(`/api/v1/client-payments/${paymentId}/pay`, data),
+  issueDoc: (paymentId, data) => api.post(`/api/v1/client-payments/${paymentId}/issue-doc`, data),
+  cancel: (paymentId) => api.post(`/api/v1/client-payments/${paymentId}/cancel`),
+  remove: (paymentId) => api.delete(`/api/v1/client-payments/${paymentId}`),
+  extra: (contractId, data) => api.post(`/api/v1/client-payments/contract/${contractId}/extra`, data),
+  decrease: (contractId, data) => api.post(`/api/v1/client-payments/contract/${contractId}/decrease`, data),
+  terminate: (contractId, data) => api.post(`/api/v1/client-payments/contract/${contractId}/terminate`, data),
+  getSettings: () => api.get('/api/v1/client-payments/settings'),
+  saveSettings: (data) => api.put('/api/v1/client-payments/settings', data),
+  // Публично (страница /p/:token для клиента)
+  publicDoc: (token) => api.get(`/api/v1/client-payments/public/docs/${encodeURIComponent(token)}`),
+  publicPdfUrl: (token, download = false) => `${api.defaults.baseURL}/api/v1/client-payments/public/docs/${encodeURIComponent(token)}/pdf${download ? '?download=true' : ''}`,
 }
 
 // === Notifications ===

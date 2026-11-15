@@ -45,6 +45,11 @@ PERMISSION_NAMES: dict[str, str] = {
     "access.leads": "Доступ к странице Заявки (обработка заявок с сайта)",
     # === Заявки с сайта ===
     "leads.delete": "Удаление заявок",
+    # === Оплаты клиента по договору ===
+    "client_payments.manage": "Оплаты клиента: сформировать ссылку СБП, провести оплату, документ об оплате, доп. соглашение, расторжение",
+    "client_payments.refund": "Проведение возврата денег клиенту",
+    "client_payments.cancel": "Снятие проведённой оплаты/возврата (документ аннулируется)",
+    "client_payments.settings": "Настройки оплат: СБП-ссылка, реквизиты для документа",
     # === Сотрудники ===
     "employees.create": "Создание сотрудников",
     "employees.update": "Редактирование сотрудников",
@@ -259,10 +264,15 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, set[str]] = {
         "contracts.generate_contract",
         "access.leads",
         "leads.delete",
+        "client_payments.manage",
+        "client_payments.refund",
+        "client_payments.cancel",
+        "client_payments.settings",
     },
     POSITION_SENIOR_MANAGER: _ACCESS_MANAGER
     | _BASE_MANAGER
     | {
+        "client_payments.manage",
         "employees.update",
         "crm_cards.reset_designer",
         "crm_cards.reset_draftsman",
@@ -329,6 +339,7 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, set[str]] = {
     },
     POSITION_MANAGER: {
         "access.leads",
+        "client_payments.manage",
         "access.crm",
         "access.supervision",
         "access.clients",
@@ -609,6 +620,10 @@ def _migrate_new_permissions(db: Session):
     NEW_ROLE_PERMS = {
         "access.leads": [POSITION_STUDIO_DIRECTOR, POSITION_SENIOR_MANAGER, POSITION_MANAGER],
         "leads.delete": [POSITION_STUDIO_DIRECTOR],
+        "client_payments.manage": [POSITION_STUDIO_DIRECTOR, POSITION_SENIOR_MANAGER, POSITION_MANAGER],
+        "client_payments.refund": [POSITION_STUDIO_DIRECTOR],
+        "client_payments.cancel": [POSITION_STUDIO_DIRECTOR],
+        "client_payments.settings": [POSITION_STUDIO_DIRECTOR],
         "notifications.settings_projects": [
             POSITION_STUDIO_DIRECTOR,
             POSITION_SENIOR_MANAGER,

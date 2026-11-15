@@ -419,7 +419,8 @@ import ClientFormDialog from 'src/components/ClientFormDialog.vue'
 const PROJECT_SUBTYPES = ['Полный (с 3д визуализацией)', 'Эскизный (с коллажами)', 'Планировочный']
 const TEMPLATE_SUBTYPES = ['Стандарт', 'Стандарт с визуализацией', 'Проект ванной комнаты', 'Проект ванной комнаты с визуализацией']
 
-const props = defineProps({ modelValue: Boolean, contract: { type: Object, default: null } })
+// prefill — предзаполнение нового договора (из заявки с сайта): { fields: {...}, client: { id, label } }
+const props = defineProps({ modelValue: Boolean, contract: { type: Object, default: null }, prefill: { type: Object, default: null } })
 const emit = defineEmits(['update:modelValue', 'saved'])
 
 const $q = useQuasar()
@@ -486,8 +487,10 @@ watch(() => props.modelValue, (val) => {
     manualPeriod.value = false
   } else if (val) {
     isEdit.value = false
-    form.value = emptyForm()
+    form.value = { ...emptyForm(), ...(props.prefill?.fields || {}) }
+    if (props.prefill?.client) clientOptions.value = [props.prefill.client]
     manualPeriod.value = false
+    recalcPeriod()
   }
 })
 watch(show, (val) => emit('update:modelValue', val))
@@ -641,6 +644,9 @@ async function save() {
         try { await api.post(`/api/v1/contracts/${newContract.id}/fix-folder`) } catch {}
       }
       $q.notify({ type: 'positive', message: 'Договор создан' })
+      emit('saved', newContract)
+      close()
+      return
     }
     emit('saved')
     close()

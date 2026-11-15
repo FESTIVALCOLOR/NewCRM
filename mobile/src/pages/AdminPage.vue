@@ -21,6 +21,7 @@
 
       <q-tab name="doctemplates" label="Шаблоны" />
       <q-tab name="tz-survey" label="Анкета ТЗ" />
+      <q-tab name="payments" label="Оплаты (СБП)" />
     </q-tabs>
 
     <q-tab-panels v-model="tab" animated class="bg-transparent">
@@ -1652,6 +1653,11 @@
           Выберите тип проекта и нажмите «Загрузить»
         </div>
       </q-tab-panel>
+
+      <!-- ОПЛАТЫ: СБП-ссылка, сообщение клиенту, реквизиты для документа об оплате -->
+      <q-tab-panel name="payments" class="q-pa-sm">
+        <payment-settings-panel />
+      </q-tab-panel>
     </q-tab-panels>
 
     <!-- Диалог подтверждения восстановления -->
@@ -2044,6 +2050,7 @@ import { api } from 'src/boot/axios'
 import { useReferencesStore } from 'src/stores/references'
 import { deletedContractsApi, messengerApi, adminApi, contractDocsApi, tzApi } from 'src/services/api'
 import TzTemplateEditor from 'src/components/survey/TzTemplateEditor.vue'
+import PaymentSettingsPanel from 'src/components/PaymentSettingsPanel.vue'
 
 const $q = useQuasar()
 const refs = useReferencesStore()
@@ -2103,6 +2110,7 @@ const emailPreviewHtml = ref('')
 const PERMISSION_GROUPS = {
   'Доступ к страницам': ['access.clients', 'access.contracts', 'access.crm', 'access.supervision', 'access.reports', 'access.employees', 'access.salaries', 'access.employee_reports', 'access.admin', 'access.dashboards', 'access.leads'],
   'Заявки с сайта': ['leads.delete'],
+  'Оплаты клиентов': ['client_payments.manage', 'client_payments.refund', 'client_payments.cancel', 'client_payments.settings'],
   'Сотрудники': ['employees.create', 'employees.update', 'employees.delete'],
   'Клиенты': ['clients.create', 'clients.view', 'clients.update', 'clients.delete'],
   'Договоры': ['contracts.create', 'contracts.view', 'contracts.update', 'contracts.delete', 'contracts.generate_contract', 'contracts.generate_acts'],

@@ -96,6 +96,28 @@
 
         <div class="lead-card__actions">
           <q-btn
+            v-if="item.contract_id"
+            outline
+            dense
+            no-caps
+            color="primary"
+            icon="description"
+            :label="`Договор № ${item.contract_number || item.contract_id}`"
+            class="lead-btn"
+            :to="`/contracts/${item.contract_id}`"
+          />
+          <q-btn
+            v-else-if="canCreateContract"
+            outline
+            dense
+            no-caps
+            color="primary"
+            icon="note_add"
+            label="Создать договор"
+            class="lead-btn"
+            :to="{ path: '/contracts', query: { lead: item.id } }"
+          />
+          <q-btn
             v-if="item.status !== 'done'"
             outline
             dense
@@ -207,6 +229,7 @@ const resultText = ref('')
 const saving = ref(false)
 
 const canDelete = computed(() => permsStore.isSuperuser || permsStore.has('leads.delete'))
+const canCreateContract = computed(() => permsStore.isSuperuser || permsStore.has('contracts.create'))
 
 function phoneDigits(phone) {
   return (phone || '').replace(/[^\d+]/g, '')

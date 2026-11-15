@@ -191,120 +191,12 @@
             </q-card-section>
           </q-card>
 
-          <!-- Платежи от клиента (индивидуальный) -->
-          <q-card v-if="contract.project_type === 'Индивидуальный'" class="is-card q-mb-md">
-            <q-card-section class="q-pb-none">
-              <div class="text-subtitle2 text-weight-bold" style="color: var(--fc-text)">
-                Платежи от клиента
-              </div>
-            </q-card-section>
-            <q-list dense separator>
-              <q-item v-for="pay in clientPayments" :key="pay.key">
-                <q-item-section>
-                  <q-item-label class="text-weight-medium">
-                    {{ pay.label }}
-                  </q-item-label>
-                  <q-item-label class="text-weight-bold" style="color: var(--fc-text)">
-                    {{ fmtMoney(pay.amount) }}
-                    <span v-if="pay.amount && contract.total_amount" class="text-caption text-grey-6 q-ml-xs">
-                      ({{ Math.round(pay.amount / contract.total_amount * 100) }}%)
-                    </span>
-                  </q-item-label>
-                  <q-item-label caption :style="{ color: pay.paidDate ? '#27AE60' : 'var(--fc-text-light)' }">
-                    {{ pay.paidDate ? `Оплачено ${fmtDate(pay.paidDate)}` : 'Не оплачено' }}
-                  </q-item-label>
-                </q-item-section>
-                <q-item-section side style="min-width: 110px">
-                  <div class="column q-gutter-xs items-stretch">
-                    <q-btn
-                      v-if="!pay.paidDate"
-                      outline
-                      dense
-                      size="sm"
-                      icon="check_circle"
-                      label="Оплатить"
-                      color="positive"
-                      no-caps
-                      style="border-radius: 4px; min-width: 105px; height: 30px"
-                      @click="pickPayDate(pay.key)"
-                    />
-                    <q-badge v-else color="positive" style="padding: 6px 12px; font-size: 11px; border-radius: 4px; min-width: 105px; justify-content: center; height: 30px; display: flex; align-items: center">
-                      Оплачено
-                      <q-btn
-                        flat
-                        round
-                        dense
-                        size="xs"
-                        icon="close"
-                        color="white"
-                        class="q-ml-xs"
-                        style="margin: -4px -4px -4px 0"
-                        @click.stop="cancelPayment(pay.key)"
-                      />
-                    </q-badge>
-                    <q-btn
-                      outline
-                      dense
-                      size="sm"
-                      icon="upload_file"
-                      label="Чек"
-                      no-caps
-                      style="color: var(--fc-text); border-color: var(--fc-accent); border-radius: 4px; min-width: 105px; height: 30px"
-                      @click="uploadReceipt(pay.key)"
-                    />
-                  </div>
-                </q-item-section>
-              </q-item>
-            </q-list>
-          </q-card>
-
-          <!-- Шаблонный — 1 платёж -->
-          <q-card v-if="contract.project_type === 'Шаблонный'" class="is-card q-mb-md">
-            <q-card-section class="q-pb-none">
-              <div class="text-subtitle2 text-weight-bold" style="color: var(--fc-text)">
-                Оплата
-              </div>
-            </q-card-section>
-            <q-list dense>
-              <q-item>
-                <q-item-section>
-                  <q-item-label class="text-weight-bold" style="color: var(--fc-text)">
-                    {{ fmtMoney(contract.advance_payment || contract.total_amount) }}
-                  </q-item-label>
-                  <q-item-label caption :style="{ color: contract.advance_payment_paid_date ? '#27AE60' : 'var(--fc-text-light)' }">
-                    {{ contract.advance_payment_paid_date ? `Оплачено ${fmtDate(contract.advance_payment_paid_date)}` : 'Не оплачено' }}
-                  </q-item-label>
-                </q-item-section>
-                <q-item-section side style="min-width: 110px">
-                  <q-btn
-                    v-if="!contract.advance_payment_paid_date"
-                    outline
-                    dense
-                    size="sm"
-                    icon="check_circle"
-                    label="Оплатить"
-                    color="positive"
-                    no-caps
-                    style="border-radius: 4px; min-width: 105px"
-                    @click="pickPayDate('advance')"
-                  />
-                  <q-badge v-else color="positive" style="padding: 5px 12px; font-size: 11px; border-radius: 4px; min-width: 105px; justify-content: center">
-                    Оплачено
-                    <q-btn
-                      flat
-                      round
-                      dense
-                      size="xs"
-                      icon="close"
-                      color="white"
-                      class="q-ml-xs"
-                      @click.stop="cancelPayment('advance')"
-                    />
-                  </q-badge>
-                </q-item-section>
-              </q-item>
-            </q-list>
-          </q-card>
+          <!-- Оплаты клиента: план платежей, СБП-ссылка, документ об оплате, доп. соглашения, возвраты -->
+          <client-payments-card
+            v-if="contract.project_type === 'Индивидуальный' || contract.project_type === 'Шаблонный'"
+            :contract="contract"
+            @changed="reload"
+          />
 
           <!-- Платежи клиента по авторскому надзору (ежемесячные) -->
           <q-card v-if="(contract.project_type === 'Авторский надзор' || contract.status === 'АВТОРСКИЙ НАДЗОР') && contract.supervision_card_id" class="is-card q-mb-md">
@@ -1358,13 +1250,6 @@
         @change="handleFileUpload"
       >
       <input
-        ref="receiptInput"
-        type="file"
-        style="position: absolute; left: -9999px; opacity: 0"
-        accept=".pdf,.jpg,.jpeg,.png"
-        @change="handleReceiptUpload"
-      >
-      <input
         ref="svClientPayReceiptInput"
         type="file"
         style="display:none"
@@ -1431,85 +1316,6 @@
       <q-spinner size="40px" color="accent" />
     </div>
 
-    <!-- Диалог оплаты: сумма + дата -->
-    <q-dialog v-model="payDialogOpen" persistent>
-      <q-card style="min-width: 300px; border-radius: 12px">
-        <q-card-section>
-          <div class="text-subtitle1 text-weight-bold" style="color: var(--fc-text)">
-            Подтвердить оплату
-          </div>
-        </q-card-section>
-        <q-card-section class="q-pt-none">
-          <!-- Переключатель ₽/% с подсказкой — только для Индивидуальных с известной суммой -->
-          <div v-if="payDialogIsIndividual && payDialogTotalAmount" class="row items-center q-mb-sm">
-            <q-btn-toggle
-              v-model="payDialogMode"
-              :options="[{ label: '₽', value: 'rub' }, { label: '%', value: 'pct' }]"
-              dense
-              unelevated
-              no-caps
-              size="sm"
-              color="white"
-              text-color="grey-7"
-              toggle-color="primary"
-              toggle-text-color="white"
-              style="border: 1px solid var(--fc-border-card); border-radius: 6px"
-            />
-            <span class="text-caption text-grey-6 q-ml-sm">
-              <template v-if="payDialogMode === 'rub' && payDialogCalcPercent !== null">
-                ≈ {{ payDialogCalcPercent }}% от договора
-              </template>
-              <template v-else-if="payDialogMode === 'pct' && payDialogCalcRubles !== null">
-                = {{ fmtMoney(payDialogCalcRubles) }}
-              </template>
-              <template v-else>
-                договор: {{ fmtMoney(payDialogTotalAmount) }}
-              </template>
-            </span>
-          </div>
-
-          <q-input
-            v-if="payDialogMode === 'rub'"
-            v-model="payDialogAmount"
-            label="Сумма оплаты, ₽"
-            outlined
-            dense
-            type="number"
-            class="q-mb-sm"
-          />
-          <q-input
-            v-else
-            v-model="payDialogPercent"
-            label="Процент от суммы договора"
-            outlined
-            dense
-            type="number"
-            suffix="%"
-            class="q-mb-sm"
-          />
-          <div class="text-caption text-grey-7 q-mb-xs">
-            Дата оплаты
-          </div>
-          <q-input
-            v-model="payDialogDate"
-            outlined
-            dense
-            type="date"
-          />
-        </q-card-section>
-        <q-card-actions align="right" class="q-pt-none">
-          <q-btn flat label="Отмена" no-caps @click="payDialogOpen = false" />
-          <q-btn
-            unelevated
-            label="Подтвердить"
-            color="positive"
-            no-caps
-            @click="confirmPay"
-          />
-        </q-card-actions>
-      </q-card>
-    </q-dialog>
-
     <!-- Диалог просмотра анкеты ТЗ (CRM-режим с учётом прав на персональные данные) -->
     <q-dialog v-model="tzSurveyViewOpen" maximized>
       <q-card :dark="$q.dark.isActive" style="display: flex; flex-direction: column; overflow: hidden">
@@ -1537,7 +1343,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { contractsApi, filesApi, crmApi, clientsApi, timelineApi, surveyApi, supervisionClientPaymentsApi, contractDocsApi, tzApi } from 'src/services/api'
@@ -1546,6 +1352,7 @@ import { useAuthStore } from 'src/stores/auth'
 import { usePermission } from 'src/composables/usePermission'
 import { useYdUpload } from 'src/composables/useYdUpload'
 import ContractFormDialog from 'src/components/ContractFormDialog.vue'
+import ClientPaymentsCard from 'src/components/ClientPaymentsCard.vue'
 import SurveyReadonlyView from 'src/components/survey/SurveyReadonlyView.vue'
 
 const { can, isSuperuser } = usePermission()
@@ -1587,9 +1394,7 @@ const loading = ref(true)
 const syncing = ref(false)
 const showEdit = ref(false)
 const fileInput = ref(null)
-const receiptInput = ref(null)
 const uploadStage = ref('')
-const receiptType = ref('')
 
 const agentColor = computed(() => refs.agentByName(contract.value?.agent_type)?.color || '#95A5A6')
 const crmDeadline = computed(() => contract.value?.timeline_metrics?.deadline || contract.value?.crm_card_deadline || null)
@@ -1749,16 +1554,6 @@ const clientDisplayName = computed(() => {
   if (contract.value?.client_name) return contract.value.client_name
   if (clientName.value) return clientName.value
   return contract.value?.client_id ? `Клиент #${contract.value.client_id}` : 'Неизвестен'
-})
-
-// Платежи клиента (массив для удобства итерации)
-const clientPayments = computed(() => {
-  if (!contract.value) return []
-  return [
-    { key: 'advance', label: '1 платёж (Аванс)', amount: contract.value.advance_payment, paidDate: contract.value.advance_payment_paid_date },
-    { key: 'additional', label: '2 платёж (Доплата)', amount: contract.value.additional_payment, paidDate: contract.value.additional_payment_paid_date },
-    { key: 'third', label: '3 платёж (Доплата)', amount: contract.value.third_payment, paidDate: contract.value.third_payment_paid_date },
-  ]
 })
 
 // Файлы, сгруппированные по блокам
@@ -2136,89 +1931,6 @@ function clientTelegramLink(account) {
 }
 
 function uploadFor(stage) { uploadStage.value = stage; fileInput.value?.click() }
-function uploadReceipt(type) { receiptType.value = type; receiptInput.value?.click() }
-
-// Диалог подтверждения оплаты (сумма + дата)
-const payDialogOpen = ref(false)
-const payDialogKey = ref('')
-const payDialogDate = ref('')
-const payDialogAmount = ref('')
-const payDialogPercent = ref('')
-const payDialogMode = ref('rub')      // 'rub' | 'pct'
-const payDialogTotalAmount = ref(null)
-const payDialogIsIndividual = ref(false)
-
-const payDialogCalcPercent = computed(() => {
-  const amt = parseFloat(payDialogAmount.value)
-  const total = payDialogTotalAmount.value
-  if (!amt || !total) return null
-  return Math.round(amt / total * 1000) / 10
-})
-
-const payDialogCalcRubles = computed(() => {
-  const pct = parseFloat(payDialogPercent.value)
-  const total = payDialogTotalAmount.value
-  if (!pct || !total) return null
-  return Math.round(pct / 100 * total)
-})
-
-watch(payDialogMode, (newMode) => {
-  if (newMode === 'pct' && payDialogAmount.value && payDialogTotalAmount.value) {
-    const amt = parseFloat(payDialogAmount.value)
-    payDialogPercent.value = String(Math.round(amt / payDialogTotalAmount.value * 1000) / 10)
-  } else if (newMode === 'rub' && payDialogPercent.value && payDialogTotalAmount.value) {
-    const pct = parseFloat(payDialogPercent.value)
-    payDialogAmount.value = String(Math.round(pct / 100 * payDialogTotalAmount.value))
-  }
-})
-
-function pickPayDate(payKey) {
-  payDialogKey.value = payKey
-  payDialogDate.value = new Date().toISOString().split('T')[0]
-  const currentAmount = contract.value[`${payKey}_payment`]
-  payDialogAmount.value = currentAmount ? String(currentAmount) : ''
-  payDialogPercent.value = ''
-  payDialogMode.value = 'rub'
-  payDialogTotalAmount.value = contract.value.total_amount || null
-  payDialogIsIndividual.value = contract.value.project_type === 'Индивидуальный'
-  payDialogOpen.value = true
-}
-
-async function confirmPay() {
-  const payKey = payDialogKey.value
-  let amount = null
-  if (payDialogMode.value === 'pct' && payDialogCalcRubles.value !== null) {
-    amount = payDialogCalcRubles.value
-  } else if (payDialogAmount.value) {
-    amount = parseFloat(payDialogAmount.value)
-  }
-  try {
-    const update = { [`${payKey}_payment_paid_date`]: payDialogDate.value }
-    if (amount !== null) update[`${payKey}_payment`] = amount
-    await contractsApi.update(contract.value.id, update)
-    contract.value[`${payKey}_payment_paid_date`] = payDialogDate.value
-    if (amount !== null) contract.value[`${payKey}_payment`] = amount
-    payDialogOpen.value = false
-    $q.notify({ type: 'positive', message: 'Оплата проведена' })
-  } catch (err) {
-    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
-  }
-}
-
-// Снять оплату
-async function cancelPayment(payKey) {
-  $q.dialog({ title: 'Снять оплату?', message: 'Отменить дату оплаты?', cancel: { label: 'Нет', flat: true, noCaps: true }, ok: { label: 'Да, снять', noCaps: true, color: 'negative' } }).onOk(async () => {
-    try {
-      const update = {}
-      update[`${payKey}_payment_paid_date`] = null
-      await contractsApi.update(contract.value.id, update)
-      contract.value[`${payKey}_payment_paid_date`] = null
-      $q.notify({ type: 'positive', message: 'Оплата снята' })
-    } catch (err) {
-      $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
-    }
-  })
-}
 
 // Генерация пути ЯД на клиенте (как в десктопе yandex_disk.py build_contract_folder_path)
 function buildYdFolderPath(c) {
@@ -2342,18 +2054,6 @@ async function handleFileUpload(event) {
     const { data } = await filesApi.getContractFiles(contract.value.id)
     files.value = data || []
   } catch (err) { $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка загрузки' }) }
-  finally { $q.loading.hide(); event.target.value = '' }
-}
-
-async function handleReceiptUpload(event) {
-  const file = event.target.files?.[0]
-  if (!file || !contract.value) return
-  try {
-    $q.loading.show({ message: 'Загрузка чека...' })
-    const yandexPath = `/CRM/Чеки/${contract.value.contract_number}/${receiptType.value}_${file.name}`
-    await uploadToYd(file, yandexPath)
-    $q.notify({ type: 'positive', message: 'Чек загружен' })
-  } catch { $q.notify({ type: 'negative', message: 'Ошибка загрузки' }) }
   finally { $q.loading.hide(); event.target.value = '' }
 }
 

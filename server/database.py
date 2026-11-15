@@ -1602,6 +1602,72 @@ class SiteLead(Base):
     # Таймер на принятие заявки (рабочее время): начало отсчёта и сколько напоминаний уже отправлено
     sla_start = Column(DateTime, nullable=True)  # пусто — отсчёт от created_at
     sla_notified = Column(Integer, default=0, nullable=True)
+    # Договор, созданный из заявки (кнопка «Создать договор»)
+    contract_id = Column(Integer, ForeignKey("contracts.id", ondelete="SET NULL"), nullable=True)
+
+
+# =========================
+# ОПЛАТЫ КЛИЕНТА ПО ДОГОВОРУ (приход / возврат) И ДОКУМЕНТЫ ОБ ОПЛАТЕ
+# =========================
+
+
+class ContractClientPayment(Base):
+    """Платёж клиента по договору: плановые (аванс, 2-й, 3-й), дополнительные (доп. соглашение),
+    долг при расторжении и возвраты клиенту (direction='out')."""
+
+    __tablename__ = "contract_client_payments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    contract_id = Column(Integer, ForeignKey("contracts.id", ondelete="CASCADE"), nullable=False, index=True)
+    kind = Column(String(20), nullable=False)  # advance | additional | third | extra | rest | termination_debt | refund
+    direction = Column(String(3), nullable=False, default="in")  # in — оплата клиента, out — возврат клиенту
+    title = Column(String(200), nullable=False)
+    basis = Column(Text)  # основание: доп. соглашение, причина возврата и т.п.
+    amount = Column(Float, nullable=False, default=0)  # плановая сумма (для возврата — сумма к возврату)
+    status = Column(String(20), nullable=False, default="planned")  # planned | link_sent | paid | cancelled
+    link_sent_at = Column(DateTime)
+    paid_amount = Column(Float)
+    paid_date = Column(String(10))  # YYYY-MM-DD
+    paid_time = Column(String(5))  # HH:MM (МСК)
+    method = Column(String(20))  # sbp | cash | transfer | card
+    paid_by = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    paid_at = Column(DateTime)
+    legacy = Column(Boolean, default=False)  # оплата отмечена до появления документов об оплате
+    doc_id = Column(Integer, nullable=True)  # действующий документ (client_payment_docs.id); без FK — избегаем цикла
+    sort_order = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    created_by = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+
+
+class ClientPaymentDoc(Base):
+    """Документ, подтверждающий расчёт (п. 2.1 ст. 2 54-ФЗ). Номер сквозной в пределах года,
+    данные «замораживаются» в момент выдачи; при отмене оплаты документ аннулируется, но не удаляется."""
+
+    __tablename__ = "client_payment_docs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    number = Column(String(20), unique=True, nullable=False)  # 2026-0001
+    year = Column(Integer, nullable=False, index=True)
+    seq = Column(Integer, nullable=False)
+    token = Column(String(64), unique=True, nullable=False, index=True)  # публичная ссылка для клиента
+    payment_id = Column(Integer, ForeignKey("contract_client_payments.id", ondelete="SET NULL"), nullable=True, index=True)
+    contract_id = Column(Integer, ForeignKey("contracts.id", ondelete="SET NULL"), nullable=True, index=True)
+    data = Column(JSON, nullable=False)  # все реквизиты документа на момент выдачи
+    issued_at = Column(DateTime, default=datetime.utcnow)
+    issued_by = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    annulled_at = Column(DateTime)
+    annulled_by = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    yandex_path = Column(String(500))
+
+
+class ClientPaymentSetting(Base):
+    """Настройки оплат (админка CRM): СБП-ссылка, шаблон сообщения, реквизиты ИП для документа."""
+
+    __tablename__ = "client_payment_settings"
+
+    key = Column(String(50), primary_key=True)
+    value = Column(Text)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class SiteSection(Base):

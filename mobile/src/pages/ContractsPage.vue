@@ -166,7 +166,7 @@
       <q-btn fab icon="add" style="background: var(--fc-accent); color: var(--fc-text)" @click="showForm = true" />
     </q-page-sticky>
 
-    <contract-form-dialog v-model="showForm" @saved="loadContracts" />
+    <contract-form-dialog v-model="showForm" :prefill="leadPrefill" @saved="onContractSaved" />
 
     <!-- Дашборд внизу -->
     <page-dashboard :items="dashItems" />
@@ -174,9 +174,10 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useQuasar } from 'quasar'
-import { contractsApi } from 'src/services/api'
+import { useRoute, useRouter } from 'vue-router'
+import { contractsApi, leadsApi } from 'src/services/api'
 import { useReferencesStore } from 'src/stores/references'
 import { usePermission } from 'src/composables/usePermission'
 import ContractFormDialog from 'src/components/ContractFormDialog.vue'
@@ -339,7 +340,54 @@ function onRefresh(done) {
   loadContracts().finally(done)
 }
 
-onMounted(() => loadContracts())
+// ── Создание договора из заявки с сайта (/contracts?lead=ID) ──
+const route = useRoute()
+const router = useRouter()
+const leadPrefill = ref(null)
+const leadId = ref(null)
+
+async function openFromLead(id) {
+  if (!id) return
+  try {
+    $q.loading.show({ message: 'Подготовка договора из заявки...' })
+    const { data } = await leadsApi.prepareContract(id)
+    leadId.value = Number(id)
+    leadPrefill.value = { fields: data.prefill, client: data.client }
+    if (data.client_created) $q.notify({ type: 'info', message: `Создан клиент: ${data.client.label}` })
+    showForm.value = true
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Не удалось подготовить договор' })
+  } finally {
+    $q.loading.hide()
+    router.replace({ query: {} })
+  }
+}
+
+async function onContractSaved(newContract) {
+  loadContracts()
+  if (leadId.value && newContract?.id) {
+    try {
+      await leadsApi.linkContract(leadId.value, newContract.id)
+      $q.notify({ type: 'positive', message: 'Заявка отмечена обработанной' })
+      window.dispatchEvent(new Event('leads:changed'))
+    } catch (err) {
+      $q.notify({ type: 'warning', message: err.response?.data?.detail || 'Договор создан, но заявку не удалось отметить' })
+    }
+    router.push(`/contracts/${newContract.id}`)
+  }
+}
+
+// Закрыли форму без сохранения — дальше обычное создание без данных заявки
+watch(showForm, (open) => {
+  if (!open) {
+    setTimeout(() => { leadPrefill.value = null; leadId.value = null }, 300)
+  }
+})
+
+onMounted(() => {
+  loadContracts()
+  openFromLead(route.query.lead)
+})
 </script>
 
 <style scoped>

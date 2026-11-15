@@ -294,6 +294,11 @@ async def update_contract(contract_id: int, contract_data: ContractUpdate, curre
         if crm_card and crm_card.column_name and ("Стадия 2" in crm_card.column_name or "Стадия 3" in crm_card.column_name):
             raise HTTPException(status_code=400, detail=f"Нельзя сменить подтип на Планировочный: карточка уже на «{crm_card.column_name}». Сначала верните карточку на Стадию 1.")
 
+    # Если клиент уже платил — стоимость и суммы платежей меняются только через блок «Оплаты» (доп. соглашение)
+    from services import client_payments as client_payments_service
+
+    client_payments_service.check_contract_update(db, contract, update_data)
+
     # Обновление полей
     for field, value in update_data.items():
         setattr(contract, field, value)
@@ -314,6 +319,16 @@ async def update_contract(contract_id: int, contract_data: ContractUpdate, curre
             db.add(supervision_card)
             db.commit()
             logger.info(f"Автоматически создана карточка надзора для договора {contract_id}")
+
+    # План платежей клиента: неоплаченные платежи берут новые суммы из договора
+    if any(
+        f in update_data
+        for f in ("total_amount", "advance_payment", "additional_payment", "third_payment", "project_type", "advance_payment_paid_date", "additional_payment_paid_date", "third_payment_paid_date")
+    ):
+        try:
+            client_payments_service.sync_from_contract(db, contract)
+        except Exception as e:
+            logger.warning(f"Договор {contract_id}: план платежей клиента не синхронизирован ({e})")
 
     # Пересчёт оплат при изменении площади
     new_area = update_data.get("area")

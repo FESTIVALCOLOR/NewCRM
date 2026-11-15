@@ -225,6 +225,20 @@ export default [
     ],
   },
 
+  // === Документ об оплате для клиента (публичный, по ссылке с ключом) ===
+  {
+    path: '/p/:token',
+    component: () => import('src/layouts/SurveyLayout.vue'),
+    children: [
+      {
+        path: '',
+        name: 'pay-doc',
+        component: () => import('src/pages/PayDocPage.vue'),
+        meta: { requiresAuth: false },
+      },
+    ],
+  },
+
   // === Редактирование анкеты ТЗ менеджером ===
   {
     path: '/tz-survey-edit/:id',

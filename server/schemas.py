@@ -1801,6 +1801,9 @@ class SiteLeadResponse(BaseModel):
     processed_at: Optional[datetime] = None
     # Таймер на принятие (только у новых заявок): см. services/lead_sla.py
     sla: Optional[dict] = None
+    # Договор, созданный из заявки
+    contract_id: Optional[int] = None
+    contract_number: Optional[str] = None
 
     class Config:
         from_attributes = True

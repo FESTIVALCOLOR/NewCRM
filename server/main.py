@@ -1018,6 +1018,11 @@ app.include_router(public_card_router, prefix="/api/v1")
 from routers.leads_router import router as leads_router
 
 app.include_router(leads_router, prefix="/api/v1/leads")
+
+# Оплаты клиента по договору: СБП-ссылка, документ об оплате, доп. соглашения, возвраты
+from routers.client_payments_router import router as client_payments_router
+
+app.include_router(client_payments_router, prefix="/api/v1/client-payments")
 app.include_router(deleted_contracts_router, prefix="/api/v1/admin/deleted-contracts")
 
 from routers.admin_router import router as admin_router
