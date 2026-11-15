@@ -59,7 +59,13 @@
       <q-spinner size="24px" />
     </div>
     <q-list v-else dense separator>
-      <q-item v-for="p in state.payments" :key="p.id" :class="{ 'cp-cancelled': p.status === 'cancelled' }" :style="p.status === 'paid' ? { background: 'var(--fc-state-success-bg)' } : {}">
+      <q-item
+        v-for="p in state.payments"
+        :key="p.id"
+        class="cp-item"
+        :class="{ 'cp-cancelled': p.status === 'cancelled' }"
+        :style="p.status === 'paid' ? { background: 'var(--fc-state-success-bg)' } : {}"
+      >
         <q-item-section>
           <q-item-label class="text-weight-medium" style="font-size: 13px">
             <q-icon
@@ -788,6 +794,8 @@ defineExpose({ reload: load })
 .cp-summary b { color: var(--fc-text); font-size: 13px; }
 .cp-warn { background: #FFF4E5; color: #8A4B00; border: 1px solid #F5C77E; border-radius: 6px; padding: 6px 10px; font-size: 12px; }
 .cp-cancelled { opacity: 0.55; }
+/* Одинаковые поля сверху и снизу строки: кнопки не прилипают к верхнему краю зелёной подложки */
+.cp-item { padding-top: 10px; padding-bottom: 10px; }
 .cp-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 4px;
   min-height: 30px; padding: 0 8px; border-radius: 4px; cursor: pointer;

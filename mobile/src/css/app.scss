@@ -586,7 +586,9 @@ input[type='number'] {
   padding-bottom: 0;
 }
 
-input[type="date"].q-field__native {
+// Центрирование даты — только у полей без подписи. С подписью (label) текст опускается под неё
+// стандартным отступом Quasar, как у поля времени; иначе дата наезжает на подпись «Дата».
+.q-field:not(.q-field--labeled) input[type="date"].q-field__native {
   padding-top: 0 !important;
   padding-bottom: 0 !important;
   align-self: center;
