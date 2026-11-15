@@ -2079,6 +2079,8 @@ function exportTimelinePdf() {
     .join('')
   const printedAt = new Date().toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
   // Окно печати не видит CSS-переменные темы CRM — поэтому цвета в стилях заданы явно.
+  // Рамки без border-collapse: при печати в PDF Chrome рисует схлопнутые 0.5pt-границы
+  // каждой ячейки отдельно, и они сливаются в толстые серые линии.
   // @page margin:0 убирает колонтитулы браузера (about:blank, дата, заголовок) — свой
   // верхний колонтитул фиксирован, а место под него резервирует повторяющийся thead обёртки.
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
@@ -2093,9 +2095,9 @@ function exportTimelinePdf() {
     .page-hdr { position: fixed; top: 7mm; left: 12mm; right: 12mm; display: flex; justify-content: space-between; font-size: 9px; color: #777; }
     h2 { font-size: 13px; margin: 0 0 2px; }
     .sub { color: #666; margin-bottom: 12px; font-size: 10px; }
-    .tl { border-collapse: collapse; width: 100%; }
-    .tl th { background: #fff4c7; color: #222; font-weight: bold; padding: 8px 6px; text-align: left; border: 0.5pt solid #d6d6d6; font-size: 10px; }
-    .tl td { padding: 3px 6px; border: 0.5pt solid #e0e0e0; vertical-align: middle; }
+    .tl { border-collapse: separate; border-spacing: 0; width: 100%; border-top: 0.5pt solid #cfcfcf; border-left: 0.5pt solid #cfcfcf; }
+    .tl th { background: #fff4c7; color: #222; font-weight: bold; padding: 8px 6px; text-align: left; border: 0; border-right: 0.5pt solid #cfcfcf; border-bottom: 0.5pt solid #cfcfcf; font-size: 10px; }
+    .tl td { padding: 3px 6px; border: 0; border-right: 0.5pt solid #dcdcdc; border-bottom: 0.5pt solid #dcdcdc; vertical-align: middle; }
     .tl th.num, .tl .num { text-align: right; white-space: nowrap; }
     .grp-hdr td { background: #e8e8e8; font-weight: bold; font-size: 10px; }
     .sub-hdr td { background: #f5f5f5; font-weight: 600; font-size: 10px; }
@@ -2106,7 +2108,7 @@ function exportTimelinePdf() {
     .tag-ok { color: #27ae60; font-weight: bold; }
     .tag-over { color: #e74c3c; font-weight: bold; }
     .tag-skip { color: #aaa; }
-    .tl .total-row td { border-top: 1pt solid #999; font-size: 11px; }
+    .tl .total-row td { border-top: 0.75pt solid #999; font-size: 11px; }
     .total-sub td { color: #666; }
     .summary { border-collapse: collapse; margin-top: 10px; min-width: 300px; }
     .summary td { padding: 2px 6px 2px 0; font-size: 10px; }

@@ -1,1 +1,0 @@
-import{Tn as e,nn as t}from"./index-DV8NWIav.js";var n=t({name:`QSpace`,setup(){let t=e(`div`,{class:`q-space`});return()=>t}});export{n as t};
