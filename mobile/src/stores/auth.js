@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { api } from 'src/boot/axios'
+import { api, loginUrlWithReturn } from 'src/boot/axios'
 
 export const useAuthStore = defineStore('auth', () => {
   // Состояние
@@ -84,8 +84,8 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  // Выход
-  async function logout() {
+  // Выход. returnHere — после входа вернуть на текущую страницу (сессия истекла, а не выход по кнопке)
+  async function logout({ returnHere = false } = {}) {
     try {
       if (accessToken.value) {
         await api.post('/api/v1/auth/logout')
@@ -99,7 +99,7 @@ export const useAuthStore = defineStore('auth', () => {
       localStorage.removeItem('access_token')
       localStorage.removeItem('refresh_token')
       localStorage.removeItem('user_full_name')
-      window.location.href = '/login'
+      window.location.href = returnHere ? loginUrlWithReturn() : '/login'
     }
   }
 

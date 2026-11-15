@@ -1390,7 +1390,7 @@ function _connectWebSocket() {
         _connectWebSocket()
       } else {
         console.log('[WS] Обновление токена не удалось, выход...')
-        await authStore.logout()
+        await authStore.logout({ returnHere: true })
       }
     },
   })

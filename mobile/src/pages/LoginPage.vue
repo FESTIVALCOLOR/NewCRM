@@ -13,6 +13,17 @@
           </div>
         </q-card-section>
 
+        <!-- Ссылка открылась внутри мессенджера: там своё хранилище, вход не сохраняется -->
+        <q-card-section v-if="isInAppBrowser" class="q-pb-none">
+          <q-banner dense class="text-caption" style="background: var(--fc-bg-alt); color: var(--fc-text-secondary); border-radius: 4px">
+            <template #avatar>
+              <q-icon name="open_in_browser" size="20px" />
+            </template>
+            Ссылка открылась во встроенном браузере мессенджера — здесь вход не сохраняется.
+            Чтобы не входить каждый раз, откройте её в обычном браузере: меню «⋮» или «…» → «Открыть в браузере».
+          </q-banner>
+        </q-card-section>
+
         <!-- Форма -->
         <q-card-section>
           <q-form class="q-gutter-md" @submit.prevent="handleLogin">
@@ -100,6 +111,9 @@ const username = ref('')
 const password = ref('')
 const showPassword = ref(false)
 const rememberMe = ref(true)
+
+// Встроенные браузеры Telegram/WhatsApp/VK/Instagram/Facebook/Viber и Android WebView («; wv)»)
+const isInAppBrowser = /Telegram|WhatsApp|Instagram|FBAN|FBAV|VKClient|Viber|; wv\)/i.test(navigator.userAgent || '')
 
 async function handleLogin() {
   const success = await authStore.login(username.value, password.value)

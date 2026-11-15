@@ -10,6 +10,13 @@ const api = axios.create({
   },
 })
 
+// Страница входа с возвратом туда, где был пользователь (например, по ссылке на заказ)
+export function loginUrlWithReturn() {
+  const here = window.location.pathname + window.location.search
+  if (here.startsWith('/login')) return here
+  return here && here !== '/' ? `/login?redirect=${encodeURIComponent(here)}` : '/login'
+}
+
 // Request interceptor — добавляет JWT токен
 api.interceptors.request.use(
   (config) => {
@@ -79,10 +86,10 @@ api.interceptors.response.use(
         return api(originalRequest)
       } catch (refreshError) {
         processQueue(refreshError, null)
-        // Refresh не удался — очищаем токены и редиректим
+        // Refresh не удался — очищаем токены и ведём на вход, запомнив страницу (ссылка на заказ)
         localStorage.removeItem('access_token')
         localStorage.removeItem('refresh_token')
-        window.location.href = '/login'
+        window.location.href = loginUrlWithReturn()
         return Promise.reject(refreshError)
       } finally {
         isRefreshing = false
