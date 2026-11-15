@@ -11,7 +11,7 @@
           toggle-text-color="dark"
           text-color="grey-8"
           :options="FILTERS"
-          @update:model-value="load"
+          @update:model-value="load()"
         />
         <q-btn
           flat
@@ -21,13 +21,14 @@
           label="Обновить"
           color="grey-8"
           :loading="loading"
-          @click="load"
+          @click="load()"
         />
       </div>
 
       <div class="leads-hint q-mb-md">
         Заявки из окна «Заказать» на сайте. О новой заявке приходит уведомление всем, у кого есть доступ к этой странице.
         Отмечая заявку обработанной, опишите результат — его увидят коллеги.
+        Таймер в углу карточки — время на принятие в рабочих часах (будни 10:00–19:00): 12 ч, затем 3 напоминания каждые 3 ч и 6 — каждый час; после этого заявка просрочена.
       </div>
 
       <div v-if="loading && !leads.length" class="text-center q-pa-lg">
@@ -42,7 +43,20 @@
           <div class="lead-card__name">
             {{ item.name }}
           </div>
-          <span :class="['lead-status', item.status === 'done' ? 'lead-status--done' : 'lead-status--new']">
+          <!-- Таймер на принятие (рабочее время) — у новых заявок вместо статуса -->
+          <div v-if="timer(item)" :class="['lead-timer', `lead-timer--${timer(item).phase}`, { 'lead-timer--paused': timer(item).paused }]">
+            <div class="lead-timer__value">
+              <q-icon :name="timer(item).phase === 'overdue' ? 'alarm_off' : 'timer'" size="15px" />
+              {{ timer(item).text }}
+            </div>
+            <div class="lead-timer__caption">
+              {{ timer(item).caption }}
+            </div>
+            <q-tooltip v-if="timer(item).hint" max-width="260px">
+              {{ timer(item).hint }}
+            </q-tooltip>
+          </div>
+          <span v-else :class="['lead-status', item.status === 'done' ? 'lead-status--done' : 'lead-status--new']">
             {{ item.status === 'done' ? 'Обработана' : 'Новая' }}
           </span>
         </div>
@@ -160,9 +174,10 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useQuasar } from 'quasar'
 import { leadsApi } from 'src/services/api'
+import { leadTimerView } from 'src/utils/leadTimer'
 import { usePermissionsStore } from 'src/stores/permissions'
 
 const $q = useQuasar()
@@ -209,17 +224,43 @@ function errorText(e) {
   return e?.response?.data?.detail || e?.message || 'Ошибка'
 }
 
-async function load() {
-  loading.value = true
+// Таймер: тикает каждую секунду, раз в минуту (и когда интервал истёк) сверяемся с сервером
+const now = ref(Date.now())
+const fetchedAt = ref(Date.now())
+let tickTimer = null
+let syncTimer = null
+
+function timer(item) {
+  return leadTimerView(item.sla, fetchedAt.value, now.value)
+}
+
+async function load(silent = false) {
+  if (!silent) loading.value = true
   try {
     const { data } = await leadsApi.getList(filter.value)
     leads.value = data || []
+    fetchedAt.value = Date.now()
   } catch (e) {
-    $q.notify({ type: 'negative', message: `Не удалось загрузить заявки: ${errorText(e)}` })
+    if (!silent) $q.notify({ type: 'negative', message: `Не удалось загрузить заявки: ${errorText(e)}` })
   } finally {
     loading.value = false
   }
 }
+
+function tick() {
+  now.value = Date.now()
+  // Интервал истёк — сервер отправит напоминание и переключит таймер на следующий интервал
+  if (!loading.value && now.value - fetchedAt.value > 5000 && leads.value.some(item => timer(item)?.expired)) load(true)
+}
+
+onMounted(() => {
+  tickTimer = setInterval(tick, 1000)
+  syncTimer = setInterval(() => load(true), 60000)
+})
+onUnmounted(() => {
+  clearInterval(tickTimer)
+  clearInterval(syncTimer)
+})
 
 async function onRefresh(done) {
   await load()
@@ -297,11 +338,19 @@ onMounted(load)
 .leads-hint { font-size: 12px; color: #6b7280; background: #f9fafb; border: 1px solid #eee; border-radius: 8px; padding: 8px 12px; }
 .lead-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; }
 .lead-card--done { background: #fcfcfc; }
-.lead-card__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.lead-card__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
 .lead-card__name { font-size: 15px; font-weight: 600; color: #222; overflow-wrap: anywhere; }
 .lead-status { font-size: 11px; border-radius: 10px; padding: 2px 10px; white-space: nowrap; }
 .lead-status--new { background: #fdecea; color: #c0392b; }
 .lead-status--done { background: #e8f5e9; color: #2e7d32; }
+.lead-timer { text-align: right; border-radius: 8px; padding: 3px 9px; line-height: 1.2; white-space: nowrap; cursor: default; }
+.lead-timer__value { display: flex; align-items: center; justify-content: flex-end; gap: 4px; font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.lead-timer__caption { font-size: 10.5px; opacity: 0.85; }
+.lead-timer--first { background: #e8f1fb; color: #1d4f91; }
+.lead-timer--three { background: #fff3e0; color: #b45309; }
+.lead-timer--hour { background: #fdecea; color: #c0392b; }
+.lead-timer--overdue { background: #c0392b; color: #fff; }
+.lead-timer--paused .lead-timer__value { opacity: 0.6; }
 .lead-card__meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin-top: 4px; }
 .lead-card__phone { color: #c0392b; font-weight: 500; text-decoration: none; }
 .lead-chip { font-size: 11px; background: #f3f4f6; border-radius: 4px; padding: 1px 8px; color: #374151; }

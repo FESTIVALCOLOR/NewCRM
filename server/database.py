@@ -1599,6 +1599,9 @@ class SiteLead(Base):
     result = Column(Text)  # результат обработки (пишет менеджер при отметке «Обработана»)
     processed_by = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
     processed_at = Column(DateTime)
+    # Таймер на принятие заявки (рабочее время): начало отсчёта и сколько напоминаний уже отправлено
+    sla_start = Column(DateTime, nullable=True)  # пусто — отсчёт от created_at
+    sla_notified = Column(Integer, default=0, nullable=True)
 
 
 class SiteSection(Base):

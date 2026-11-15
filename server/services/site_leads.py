@@ -48,7 +48,10 @@ def _recipients(db):
 
 
 def serialize_lead(db, lead):
+    from services.lead_sla import lead_sla
+
     data = {c.name: getattr(lead, c.name) for c in SiteLead.__table__.columns if c.name != "ip"}
+    data["sla"] = lead_sla(lead)
     data["processed_by_name"] = None
     if lead.processed_by:
         emp = db.query(Employee.full_name).filter(Employee.id == lead.processed_by).first()
@@ -81,6 +84,10 @@ def update_lead_status(db, lead_id, status, result, employee):
         lead.result = result
         lead.processed_by = employee.id
         lead.processed_at = datetime.utcnow()
+    elif lead.status == "done":
+        # Заявку вернули в работу — таймер на принятие начинается заново
+        lead.sla_start = datetime.utcnow()
+        lead.sla_notified = 0
     lead.status = status
     db.commit()
     db.refresh(lead)

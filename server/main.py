@@ -540,6 +540,15 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"Daily notif checker: {e}")
 
+    # N3c: Таймер на принятие заявок с сайта — повторные уведомления (проверка раз в минуту)
+    try:
+        from services.lead_sla import lead_sla_loop
+
+        asyncio.create_task(lead_sla_loop())
+        logger.info("Lead SLA checker: задача запущена")
+    except Exception as e:
+        logger.warning(f"Lead SLA checker: {e}")
+
     # N4: Запуск фонового расчёта KPI (ежедневные снимки)
     try:
         from services.kpi_snapshot import kpi_snapshot_loop

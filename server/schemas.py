@@ -1799,6 +1799,8 @@ class SiteLeadResponse(BaseModel):
     processed_by: Optional[int] = None
     processed_by_name: Optional[str] = None
     processed_at: Optional[datetime] = None
+    # Таймер на принятие (только у новых заявок): см. services/lead_sla.py
+    sla: Optional[dict] = None
 
     class Config:
         from_attributes = True
