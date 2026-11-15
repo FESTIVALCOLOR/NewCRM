@@ -19,7 +19,11 @@
           hint="Статическая ссылка: клиент сам вводит сумму, поэтому сумма есть в сообщении"
         />
         <div v-if="form.sbp_link" class="row items-center q-gutter-md">
-          <img :src="qrUrl" alt="QR" class="ps-qr">
+          <img v-if="qrUrl" :src="qrUrl" alt="QR-код СБП" class="ps-qr">
+          <div v-else class="ps-qr ps-qr--empty">
+            <q-spinner v-if="qrLoading" size="24px" />
+            <span v-else>QR не построен</span>
+          </div>
           <div class="text-caption text-grey-7">
             Этот QR-код увидит менеджер в окне «Сформировать оплату».
           </div>
@@ -95,7 +99,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useQuasar } from 'quasar'
 import { api } from 'src/boot/axios'
 import { clientPaymentsApi } from 'src/services/api'
@@ -115,13 +119,17 @@ const qrBlobUrl = ref('')
 
 const qrUrl = computed(() => qrBlobUrl.value)
 
+const qrLoading = ref(false)
+let qrTimer = null
+
 async function loadQr() {
   if (!form.value.sbp_link) { qrBlobUrl.value = ''; return }
+  qrLoading.value = true
   try {
     const { data } = await api.get('/api/v1/client-payments/qr.svg', { params: { data: form.value.sbp_link }, responseType: 'blob' })
     if (qrBlobUrl.value) URL.revokeObjectURL(qrBlobUrl.value)
     qrBlobUrl.value = URL.createObjectURL(data)
-  } catch { qrBlobUrl.value = '' }
+  } catch { qrBlobUrl.value = '' } finally { qrLoading.value = false }
 }
 
 function apply(data) {
@@ -148,6 +156,12 @@ async function save() {
   } finally { saving.value = false }
 }
 
+// QR строится сразу при вводе/вставке ссылки (с паузой 400 мс), не дожидаясь сохранения
+watch(() => form.value.sbp_link, () => {
+  clearTimeout(qrTimer)
+  qrTimer = setTimeout(loadQr, 400)
+})
+
 onMounted(load)
 </script>
 
@@ -158,5 +172,6 @@ onMounted(load)
 .ps-row > * { flex: 1 1 200px; }
 .ps-section { font-weight: 700; font-size: 14px; color: var(--fc-text); margin-top: 18px; }
 .ps-qr { width: 120px; height: 120px; background: #fff; padding: 4px; border-radius: 6px; border: 1px solid #E0E0E0; }
+.ps-qr--empty { display: flex; align-items: center; justify-content: center; font-size: 11px; color: #999; text-align: center; }
 .ps-warn { background: #FFF4E5; color: #8A4B00; border: 1px solid #F5C77E; border-radius: 6px; padding: 8px 12px; font-size: 13px; }
 </style>
