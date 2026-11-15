@@ -2480,9 +2480,8 @@
             </div>
             <div v-if="pauseInfo.total > 0" class="text-caption q-mb-sm" style="color: var(--fc-text-light)">
               <q-icon name="pause_circle" size="12px" class="q-mr-xs" />
-              Дни ожидания («В ожидании»): {{ pauseInfo.total }} дн.<template v-if="pauseInfo.preStart > 0">
-                , из них до начала разработки {{ pauseInfo.preStart }} дн.
-              </template>
+              Дни ожидания («В ожидании»): {{ pauseInfo.total }} дн.
+              <span v-if="pauseInfo.preStart > 0">(из них до начала разработки {{ pauseInfo.preStart }} дн.)</span>
             </div>
             <q-separator v-if="deadlineDeviations.length || aheadDeviations.length" class="q-mb-sm" />
             <template v-if="deadlineDeviations.length">
