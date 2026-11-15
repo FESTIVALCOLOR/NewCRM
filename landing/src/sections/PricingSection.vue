@@ -23,9 +23,9 @@
               </ul>
             </li>
           </ul>
-          <a :href="buildWhatsApp(plan)" :target="linkTarget(buildWhatsApp(plan))" rel="noopener" class="btn" :class="plan.is_featured ? 'btn--accent' : 'btn--outline'">
+          <button type="button" class="btn" :class="plan.is_featured ? 'btn--accent' : 'btn--outline'" @click="order(plan)">
             Заказать
-          </a>
+          </button>
         </div>
       </div>
     </div>
@@ -34,16 +34,20 @@
 
 <script setup>
 import { ref } from 'vue'
-import { ctaUrl, linkTarget } from '../contact.js'
-const props = defineProps({ pricing: Array, settings: Object })
+import { openLead } from '../lead.js'
+defineProps({ pricing: Array, settings: Object })
 const expanded = ref({})
 
 function toggle(id) {
   expanded.value[id] = !expanded.value[id]
 }
 
-function buildWhatsApp(plan) {
-  return ctaUrl(props.settings, plan.whatsapp_text || `Здравствуйте, интересует тариф: ${plan.title}`)
+function order(plan) {
+  openLead({
+    title: `Заказать: ${plan.title}`,
+    source: 'pricing_plan',
+    context: { plan: `Индивидуальный дизайн, тариф «${plan.title}»`, price: plan.price_label || '' },
+  })
 }
 </script>
 

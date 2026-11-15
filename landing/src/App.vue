@@ -5,6 +5,7 @@
       <router-view />
     </main>
     <FooterSection :settings="site.settings" />
+    <LeadModal />
   </div>
 </template>
 
@@ -13,6 +14,7 @@ import { onMounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import NavHeader      from './sections/NavHeader.vue'
 import FooterSection   from './sections/FooterSection.vue'
+import LeadModal       from './components/LeadModal.vue'
 import { site, homeSectionKeys, loadSite } from './store.js'
 import { rememberHomeTitle, setPageTitle } from './router.js'
 import { scheduleReveal } from './reveal.js'

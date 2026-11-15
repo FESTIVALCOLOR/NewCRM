@@ -1774,6 +1774,36 @@ class SiteSettingUpdate(BaseModel):
     value: Optional[str] = None
 
 
+class SiteLeadCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    phone: str = Field(..., min_length=5, max_length=40)
+    contact_method: str = Field("call", pattern="^(call|whatsapp|telegram|max)$")
+    comment: str = Field("", max_length=1000)
+    source: str = Field("", max_length=50)
+    context: dict = Field(default_factory=dict)
+    consent: bool = False
+    website: str = ""  # поле-ловушка для ботов: на сайте скрыто, человек его не заполняет
+
+
+class SiteLeadResponse(BaseModel):
+    id: int
+    created_at: Optional[datetime] = None
+    name: str
+    phone: str
+    contact_method: Optional[str]
+    comment: Optional[str]
+    source: Optional[str]
+    context: Optional[str]
+    status: Optional[str]
+
+    class Config:
+        from_attributes = True
+
+
+class SiteLeadStatusUpdate(BaseModel):
+    status: str = Field(..., pattern="^(new|done)$")
+
+
 class SiteSectionResponse(BaseModel):
     id: int
     key: str

@@ -34,6 +34,8 @@ from schemas import (
     ReviewUpdate,
     SiteAnalyticsResponse,
     SiteAnalyticsUpdate,
+    SiteLeadResponse,
+    SiteLeadStatusUpdate,
     SiteSectionResponse,
     SiteSectionUpdate,
     SiteServiceCreate,
@@ -57,6 +59,7 @@ from database import (
     PricingPlan,
     Review,
     SiteAnalytics,
+    SiteLead,
     SiteSection,
     SiteService,
     SiteSetting,
@@ -177,6 +180,30 @@ def update_setting(key: str, data: SiteSettingUpdate, db: Session = Depends(get_
     db.commit()
     db.refresh(obj)
     return obj
+
+
+# ──────────────────────────────────────────────
+# ЗАЯВКИ С САЙТА
+# ──────────────────────────────────────────────
+
+
+@router.get("/leads", response_model=list[SiteLeadResponse])
+def list_leads(status: str = "", db: Session = Depends(get_db), _: Employee = Depends(require_site_admin)):
+    query = db.query(SiteLead)
+    if status in ("new", "done"):
+        query = query.filter(SiteLead.status == status)
+    return query.order_by(SiteLead.created_at.desc()).limit(300).all()
+
+
+@router.put("/leads/{lead_id}", response_model=SiteLeadResponse)
+def update_lead_status(lead_id: int, data: SiteLeadStatusUpdate, db: Session = Depends(get_db), _: Employee = Depends(require_site_admin)):
+    lead = db.query(SiteLead).filter(SiteLead.id == lead_id).first()
+    if not lead:
+        raise HTTPException(404, "Заявка не найдена")
+    lead.status = data.status
+    db.commit()
+    db.refresh(lead)
+    return lead
 
 
 # ──────────────────────────────────────────────

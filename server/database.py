@@ -1582,6 +1582,22 @@ class SiteSetting(Base):
     label = Column(String(200))  # Человекочитаемое название для admin-UI
 
 
+class SiteLead(Base):
+    """Заявка с сайта (кнопки «Заказать» / «Заказать готовый дизайн»)"""
+
+    __tablename__ = "site_leads"
+    id = Column(Integer, primary_key=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    name = Column(String(100), nullable=False)
+    phone = Column(String(40), nullable=False)
+    contact_method = Column(String(20))  # call / whatsapp / telegram / max
+    comment = Column(Text)
+    source = Column(String(50))  # ready_design / pricing_plan / …
+    context = Column(Text)  # JSON: дизайн, тариф, город, площадь, цена, страница
+    status = Column(String(20), default="new", index=True)  # new / done
+    ip = Column(String(64))
+
+
 class SiteSection(Base):
     """Порядок и видимость секций лендинга"""
 

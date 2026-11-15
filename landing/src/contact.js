@@ -22,6 +22,11 @@ export const CHANNELS = {
     color: 'var(--accent)',
     icon: 'M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z',
   },
+  max: {
+    label: 'MAX',
+    color: '#4D5CF2',
+    icon: 'M12 2C6.48 2 2 6.03 2 11c0 2.62 1.25 4.98 3.24 6.62L4.5 22l4.3-2.29c1 .26 2.07.4 3.2.4 5.52 0 10-4.03 10-9S17.52 2 12 2zm4.6 12.6h-1.8v-4.1l-2.3 3.2h-1l-2.3-3.2v4.1H7.4V7.4h1.7L12 11.5l2.9-4.1h1.7v7.2z',
+  },
   email: {
     label: 'Написать на почту',
     color: 'var(--accent)',
@@ -35,19 +40,45 @@ export function whatsappUrl(settings, text) {
   return `https://wa.clck.bar/${phone}${query}`
 }
 
-function telegramName(settings) {
+export function telegramName(settings) {
   return String(settings?.telegram || '').trim().replace(/^@/, '').replace(/^https?:\/\/t\.me\//i, '')
+}
+
+export function telegramUrl(settings) {
+  const name = telegramName(settings)
+  return name ? `https://t.me/${name}` : ''
+}
+
+// MAX: ссылка на профиль или чат копируется из приложения («Поделиться» → «Копировать ссылку»)
+export function maxUrl(settings) {
+  const url = String(settings?.max_url || '').trim()
+  return /^https?:\/\//i.test(url) ? url : ''
+}
+
+// Данные для кнопок «Связаться с нами» / «Позвонить нам» / «Написать нам»: свои (cta_*),
+// а незаполненные берутся из контактных данных — каналы для заявок и для блока «Контакты» могут различаться
+export function ctaContacts(settings) {
+  const s = settings || {}
+  return {
+    phone: s.cta_phone || s.phone || '',
+    whatsapp_phone: s.cta_whatsapp_phone || s.whatsapp_phone || '',
+    telegram: s.cta_telegram || s.telegram || '',
+    max_url: s.cta_max_url || s.max_url || '',
+    email: s.cta_email || s.email || '',
+  }
 }
 
 // Чего не хватает выбранному каналу; пустая строка — данных достаточно
 export function missingFor(method, settings) {
-  if (method === 'telegram' && !telegramName(settings)) return 'не указан ник Telegram'
-  if (method === 'phone' && !String(settings?.phone || '').replace(/[^\d+]/g, '')) return 'не указан телефон'
+  const c = ctaContacts(settings)
+  if (method === 'telegram' && !telegramName(c)) return 'не указан ник Telegram'
+  if (method === 'max' && !maxUrl(c)) return 'не указана ссылка MAX'
+  if (method === 'phone' && !String(c.phone).replace(/[^\d+]/g, '')) return 'не указан телефон'
   return ''
 }
 
 // Надпись на кнопке под канал: «Написать нам» при выбранном телефоне выглядела бы странно
-export const CTA_LABELS = { whatsapp: 'Написать нам', telegram: 'Написать нам', phone: 'Позвонить нам', email: 'Написать на почту' }
+export const CTA_LABELS = { whatsapp: 'Написать нам', telegram: 'Написать нам', max: 'Написать нам', phone: 'Позвонить нам', email: 'Написать на почту' }
 
 // Канал, выбранный в панели для этого устройства; для телефона без своего выбора — как на компьютере
 export function chosenChannel(settings, mobile = device.mobile) {
@@ -68,12 +99,13 @@ export function ctaLabel(settings, mobile = device.mobile) {
 
 // Ссылка для кнопок «Написать нам» — зависит от способа связи, выбранного в админке
 export function ctaUrl(settings, text, mobile = device.mobile) {
-  const s = settings || {}
-  const method = ctaChannel(s, mobile)
-  if (method === 'telegram') return `https://t.me/${telegramName(s)}`
-  if (method === 'phone') return `tel:${s.phone.replace(/[^\d+]/g, '')}`
-  if (method === 'email') return `mailto:${s.email || DEFAULT_EMAIL}${text ? `?subject=${encodeURIComponent(text)}` : ''}`
-  return whatsappUrl(s, text)
+  const c = ctaContacts(settings)
+  const method = ctaChannel(settings, mobile)
+  if (method === 'telegram') return telegramUrl(c)
+  if (method === 'max') return maxUrl(c)
+  if (method === 'phone') return `tel:${c.phone.replace(/[^\d+]/g, '')}`
+  if (method === 'email') return `mailto:${c.email || DEFAULT_EMAIL}${text ? `?subject=${encodeURIComponent(text)}` : ''}`
+  return whatsappUrl(c, text)
 }
 
 // Мессенджеры открываются в новой вкладке, а звонок и письмо — без неё: иначе остаётся пустая вкладка

@@ -50,6 +50,12 @@ export const settings = {
   update: (key, value) => req('PUT', `/site/admin/settings/${key}`, { value }),
 }
 
+// ── Leads (заявки из окна «Заказать») ───────
+export const leads = {
+  list: (status = '') => req('GET', `/site/admin/leads${status ? `?status=${status}` : ''}`),
+  setStatus: (id, status) => req('PUT', `/site/admin/leads/${id}`, { status }),
+}
+
 // ── Sections ────────────────────────────────
 export const sections = {
   list: () => req('GET', '/site/admin/sections'),

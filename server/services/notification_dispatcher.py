@@ -151,6 +151,7 @@ async def dispatch_notification(
             "deadline": settings.notify_deadline,
             "payment": settings.notify_payment,
             "supervision": settings.notify_supervision,
+            "site_lead": True,  # заявка клиента с сайта — без отключения в настройках
         }
         if not event_flag_map.get(event_type, False):
             return

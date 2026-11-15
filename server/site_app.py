@@ -26,6 +26,20 @@ app = FastAPI(
     description="API для публичного сайта и CMS festivalcolor.ru",
 )
 
+# Лимиты запросов (вход в CMS, заявки с сайта): превышение — 429, а не 500
+from fastapi import Request
+from fastapi.responses import JSONResponse
+from rate_limit import limiter
+from slowapi.errors import RateLimitExceeded
+
+app.state.limiter = limiter
+
+
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    return JSONResponse(status_code=429, content={"detail": "Слишком много запросов. Повторите позже."})
+
+
 # CORS
 _allowed_origins = os.environ.get("ALLOWED_ORIGINS", "").strip()
 if not _allowed_origins or _allowed_origins == "*":

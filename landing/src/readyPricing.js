@@ -13,8 +13,8 @@ export const READY_DEFAULTS = {
 }
 
 export const REGIONS = [
-  { key: 'msk', label: 'Москва', priceKey: 'ready_price_msk' },
-  { key: 'spb', label: 'Санкт-Петербург', priceKey: 'ready_price_spb' },
+  { key: 'msk', label: 'Москва и МО', priceKey: 'ready_price_msk' },
+  { key: 'spb', label: 'Санкт-Петербург и ЛО', priceKey: 'ready_price_spb' },
   { key: 'region', label: 'Другой город', priceKey: 'ready_price_region' },
 ]
 

@@ -58,3 +58,19 @@ test('надпись на кнопке соответствует каналу',
   assert.equal(ctaLabel({ ...full, phone: '', cta_method_mobile: 'phone' }, true), 'Написать нам')
 })
 
+
+test('кнопки «Связаться / Позвонить / Написать нам» берут свои контакты, а пустые — из блока «Контакты»', () => {
+  const settings = { ...full, cta_phone: '+7 900 111-22-33', cta_telegram: '@manager', cta_method: 'phone' }
+  assert.equal(ctaUrl(settings), 'tel:+79001112233')
+  assert.equal(ctaUrl({ ...settings, cta_method: 'telegram' }), 'https://t.me/manager')
+  // свой WhatsApp не указан — как в контактах
+  assert.equal(ctaUrl({ ...settings, cta_method: 'whatsapp' }), 'https://wa.clck.bar/79992800700')
+})
+
+test('MAX: ссылка из контактов или своя; без ссылки кнопки ведут в WhatsApp', () => {
+  assert.equal(ctaUrl({ ...full, max_url: 'https://max.ru/u/abc', cta_method: 'max' }), 'https://max.ru/u/abc')
+  assert.equal(ctaUrl({ ...full, max_url: 'https://max.ru/u/abc', cta_max_url: 'https://max.ru/u/mgr', cta_method: 'max' }), 'https://max.ru/u/mgr')
+  assert.equal(ctaChannel({ ...full, cta_method: 'max' }), 'whatsapp')
+  assert.equal(missingFor('max', full), 'не указана ссылка MAX')
+  assert.equal(ctaLabel({ ...full, max_url: 'https://max.ru/u/abc', cta_method: 'max' }), 'Написать нам')
+})

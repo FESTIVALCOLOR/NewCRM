@@ -4,11 +4,15 @@ GET /api/v1/site/public — весь контент одним запросом 
 GET /api/v1/site/media/{filename} — публичный доступ к загруженным изображениям
 """
 
+import json
 import os
+import re
 
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
 from fastapi.responses import FileResponse
-from schemas import SitePublicResponse
+from rate_limit import limiter
+from schemas import SiteLeadCreate, SitePublicResponse
+from services.site_leads import notify_new_lead
 from sqlalchemy.orm import Session
 
 from database import (
@@ -16,6 +20,7 @@ from database import (
     PricingPlan,
     Review,
     SiteAnalytics,
+    SiteLead,
     SiteSection,
     SiteService,
     SiteSetting,
@@ -54,6 +59,32 @@ def get_public_site(db: Session = Depends(get_db)):
         portfolio=portfolio,
         analytics=analytics,
     )
+
+
+@router.post("/leads", status_code=201)
+@limiter.limit("5/minute")
+def create_lead(request: Request, data: SiteLeadCreate, background: BackgroundTasks, db: Session = Depends(get_db)):
+    """Заявка из окна «Заказать» на сайте."""
+    if data.website:  # поле-ловушка заполнено — бот; отвечаем как обычно, но не сохраняем
+        return {"ok": True}
+    if not data.consent:
+        raise HTTPException(status_code=400, detail="Нужно согласие на обработку персональных данных")
+    if len(re.sub(r"\D", "", data.phone)) < 10:
+        raise HTTPException(status_code=400, detail="Укажите телефон полностью, с кодом города или оператора")
+    context = {k: str(v)[:200] for k, v in list(data.context.items())[:12]}
+    lead = SiteLead(
+        name=data.name.strip(),
+        phone=data.phone.strip(),
+        contact_method=data.contact_method,
+        comment=data.comment.strip(),
+        source=data.source,
+        context=json.dumps(context, ensure_ascii=False),
+        ip=(request.headers.get("x-real-ip") or (request.client.host if request.client else ""))[:64],
+    )
+    db.add(lead)
+    db.commit()
+    background.add_task(notify_new_lead, lead.id)
+    return {"ok": True}
 
 
 @router.get("/map-points")

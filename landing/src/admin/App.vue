@@ -40,8 +40,8 @@
       <!-- ── Настройки ── -->
       <section v-if="currentTab === 'settings'" class="tab-body">
         <div class="card">
-          <h3>Способ связи — кнопки «Написать нам»</h3>
-          <p class="hint">Выберите основной мессенджер для кнопок на сайте</p>
+          <h3>Кнопки «Связаться с нами», «Позвонить нам», «Написать нам»</h3>
+          <p class="hint">Кнопка в шапке сайта, на главном экране, на странице «Индивидуальный дизайн» и круглая кнопка в подвале. Выберите, куда они ведут.</p>
           <div class="cta-device">
             <strong>На компьютере</strong>
             <div class="radio-group">
@@ -50,7 +50,7 @@
                 {{ m.label }}
               </label>
             </div>
-            <p v-if="ctaMissing" class="alert-err" style="margin-top:8px">Для этого способа {{ ctaMissing }} — пока кнопки ведут в WhatsApp. Заполните поле в «Контактных данных» ниже и нажмите «Сохранить контакты».</p>
+            <p v-if="ctaMissing" class="alert-err" style="margin-top:8px">Для этого способа {{ ctaMissing }} — пока кнопки ведут в WhatsApp. Заполните поле ниже и нажмите «Сохранить данные кнопок».</p>
           </div>
           <div class="cta-device">
             <strong>На телефоне и планшете</strong>
@@ -63,14 +63,31 @@
             </div>
             <p v-if="ctaMissingMobile" class="alert-err" style="margin-top:8px">Для этого способа {{ ctaMissingMobile }} — пока кнопки на телефонах ведут в WhatsApp.</p>
           </div>
-          <p class="hint" style="margin:8px 0 0">Способ связи действует на кнопки «Написать нам», «Заказать» и на круглую кнопку в подвале — у неё меняется значок. Надпись на кнопке меняется вместе с каналом: «Написать нам» для мессенджеров, «Позвонить нам» для телефона, «Написать на почту» для почты. Телефоном и планшетом считается устройство с сенсорным экраном.<template v-if="(ctaMethod === 'email' || ctaMethodMobile === 'email') && !sf.email"> Почта не указана — используется festivalcolor@mail.ru.</template></p>
+          <p class="hint" style="margin:8px 0 0">Надпись на кнопке меняется вместе с каналом: «Написать нам» для мессенджеров, «Позвонить нам» для телефона, «Написать на почту» для почты; у круглой кнопки в подвале меняется значок. Телефоном и планшетом считается устройство с сенсорным экраном.<template v-if="(ctaMethod === 'email' || ctaMethodMobile === 'email') && !cf.cta_email && !sf.email"> Почта не указана — используется festivalcolor@mail.ru.</template></p>
+          <h4 class="sub-title">Контакты для этих кнопок</h4>
+          <p class="hint">Можно указать другие номер и аккаунты, чем в блоке «Контакты» — например, телефон менеджера по заявкам. Пустое поле — берётся из «Контактных данных» ниже (показано серым).</p>
+          <div class="form-grid">
+            <label>Телефон<input v-model="cf.cta_phone" :placeholder="sf.phone || '+7 (495) 000-00-00'" /></label>
+            <label>WhatsApp (номер с кодом страны)<input v-model="cf.cta_whatsapp_phone" :placeholder="sf.whatsapp_phone || '79991234567'" /></label>
+            <label>Telegram (username без @)<input v-model="cf.cta_telegram" :placeholder="sf.telegram || 'festivalcolor'" /></label>
+            <label>MAX (ссылка на профиль)<input v-model="cf.cta_max_url" :placeholder="sf.max_url || 'https://max.ru/…'" /></label>
+            <label>Email<input v-model="cf.cta_email" :placeholder="sf.email || 'info@festivalcolor.ru'" /></label>
+          </div>
+          <button class="btn-primary" @click="saveCtaContacts">Сохранить данные кнопок</button>
         </div>
         <div class="card">
-          <h3>Контактные данные</h3>
+          <h3>Кнопки «Заказать» и «Заказать готовый дизайн»</h3>
+          <p class="hint">Открывают на сайте окно заявки: имя, телефон, удобный способ связи (звонок, WhatsApp, Telegram, MAX) и комментарий. В заявку автоматически попадает, что выбрал посетитель: тариф или готовый дизайн, город, площадь, цена и срок.</p>
+          <p class="hint" style="margin:0">Заявки собираются во вкладке «Заявки», а о каждой новой сразу приходит уведомление в CRM (и в Telegram, если он подключён) всем Руководителям студии.</p>
+        </div>
+        <div class="card">
+          <h3>Контактные данные — блок «Контакты» и подвал</h3>
+          <p class="hint">Показываются посетителям в блоке «Контакты»: телефон, адрес, почта и кнопки соцсетей и мессенджеров. Кнопка появляется, только если поле заполнено.</p>
           <div class="form-grid">
             <label>Телефон<input v-model="sf.phone" placeholder="+7 (495) 000-00-00" /></label>
             <label>WhatsApp (номер с кодом страны)<input v-model="sf.whatsapp_phone" placeholder="79991234567" /></label>
-            <label>Telegram (@username без @)<input v-model="sf.telegram" placeholder="festivalcolor" /></label>
+            <label>Telegram (username без @)<input v-model="sf.telegram" placeholder="festivalcolor" /></label>
+            <label>MAX (ссылка на профиль)<input v-model="sf.max_url" placeholder="https://max.ru/…" /></label>
             <label>ВКонтакте (полный URL)<input v-model="sf.vk_url" placeholder="https://vk.com/festivalcolor" /></label>
             <label>Instagram (полный URL)<input v-model="sf.instagram_url" placeholder="https://instagram.com/festivalcolor" /></label>
             <label>Email<input v-model="sf.email" placeholder="info@festivalcolor.ru" /></label>
@@ -237,7 +254,6 @@
               <label>Название плана<input v-model="editingPlan.title" placeholder="Планировочные решения" /></label>
               <label>Цена (текст)<input v-model="editingPlan.price_label" placeholder="от 90 000 ₽" /></label>
             </div>
-            <label>Текст сообщения, которое клиент отправит по кнопке «Заказать» (необязательно)<input v-model="editingPlan.whatsapp_text" placeholder="Здравствуйте, интересует тариф…" /></label>
             <label class="cb-row"><input type="checkbox" v-model="editingPlan.is_featured" /> Выделить (цветной блок)</label>
             <label>Состав услуги — каждый пункт с новой строки. Строка, начинающаяся с дефиса «-», становится подпунктом предыдущего пункта
               <textarea v-model="editingPlan.items_text" rows="10"
@@ -673,6 +689,7 @@
       <IndividualTab v-if="currentTab === 'individual'" :toast="toast" />
       <ReadyTab v-if="currentTab === 'ready'" :toast="toast" />
       <ExampleTab v-if="currentTab === 'example'" :toast="toast" />
+      <LeadsTab v-if="currentTab === 'leads'" :toast="toast" />
 
       <!-- ── Аналитика / SEO ── -->
       <section v-if="currentTab === 'analytics'" class="tab-body">
@@ -778,6 +795,7 @@ import IndividualTab from './IndividualTab.vue'
 import { missingFor } from '../contact.js'
 import ReadyTab from './ReadyTab.vue'
 import ExampleTab from './ExampleTab.vue'
+import LeadsTab from './LeadsTab.vue'
 import * as api from './api.js'
 import { SERVICE_ICONS, serviceIconPath } from '../serviceIcons.js'
 import {
@@ -809,6 +827,7 @@ function doLogout() { api.logout(); authed.value = false }
 // ══ Tabs ══
 const tabs = [
   { id: 'settings',  icon: '⚙',  label: 'Настройки' },
+  { id: 'leads',     icon: '✉',  label: 'Заявки' },
   { id: 'style',     icon: '✎',  label: 'Стиль' },
   { id: 'sections',  icon: '☰',  label: 'Секции меню' },
   { id: 'services',  icon: '◈',  label: 'Услуги' },
@@ -880,9 +899,11 @@ async function uploadImg(e, setter) {
 
 // ══ Settings ══
 const sf = reactive({
-  phone: '', whatsapp_phone: '', telegram: '', vk_url: '', instagram_url: '', email: '', address: '',
+  phone: '', whatsapp_phone: '', telegram: '', max_url: '', vk_url: '', instagram_url: '', email: '', address: '',
   office_coords: '', yandex_maps_api_key: '',
 })
+// Свои контакты кнопок «Связаться / Позвонить / Написать нам»; пустое — как в контактных данных
+const cf = reactive({ cta_phone: '', cta_whatsapp_phone: '', cta_telegram: '', cta_max_url: '', cta_email: '' })
 const hf = reactive({ hero_title: '', hero_subtitle: '', hero_cta: '', hero_bg_url: '', logo_url: '', footer_logo_url: '', copyright: '' })
 // Заголовок блока «Цифры»: null — настройки ещё нет, на сайте стоит текст по умолчанию
 const STATS_TITLE_DEFAULT = 'Обращаясь к нам, вы помогаете улучшить эту статистику:'
@@ -897,6 +918,7 @@ const ctaMethodMobile = ref('')
 const contactMethods = [
   { value: 'whatsapp', label: 'WhatsApp' },
   { value: 'telegram', label: 'Telegram' },
+  { value: 'max',      label: 'MAX' },
   { value: 'phone',    label: 'Телефон (звонок)' },
   { value: 'email',    label: 'Email' },
 ]
@@ -906,6 +928,7 @@ async function loadSettings() {
     const rows = await api.settings.list()
     rows.forEach(r => {
       if (r.key in sf) sf[r.key] = r.value || ''
+      if (r.key in cf) cf[r.key] = r.value || ''
       if (r.key in hf) hf[r.key] = r.value || ''
       if (r.key === 'cta_method') ctaMethod.value = r.value || 'whatsapp'
       if (r.key === 'cta_method_mobile') ctaMethodMobile.value = r.value || ''
@@ -920,12 +943,27 @@ async function loadSettings() {
     loadMapSettings(rows)
   } catch (e) { loadError(e) }
 }
+// Общие проверки для контактов блока «Контакты» и для контактов кнопок; текст ошибки или ''
+function normalizeContacts(obj, prefix = '') {
+  const wa = `${prefix}whatsapp_phone`, tg = `${prefix}telegram`, max = `${prefix}max_url`
+  obj[wa] = obj[wa].replace(/\D/g, '')
+  obj[tg] = obj[tg].trim().replace(/^@/, '').replace(/^https?:\/\/t\.me\//i, '')
+  obj[max] = obj[max].trim()
+  if (obj[wa] && (obj[wa].length < 10 || obj[wa].length > 15)) return 'Номер WhatsApp должен содержать от 10 до 15 цифр, например 79991234567'
+  if (obj[max] && !/^https?:\/\//i.test(obj[max])) return 'MAX — полная ссылка, начинается с https://. Скопируйте её в приложении MAX: профиль → «Поделиться»'
+  return ''
+}
+async function saveCtaContacts() {
+  const err = normalizeContacts(cf, 'cta_')
+  if (err) { toast(err, 'error'); return }
+  try {
+    for (const key of Object.keys(cf)) await api.settings.update(key, cf[key].trim())
+    toast(ctaMissing.value ? `Сохранено, но ${ctaMissing.value} — пока кнопки ведут в WhatsApp` : 'Данные кнопок сохранены', ctaMissing.value ? 'error' : 'success')
+  } catch (e) { toast(e.message, 'error') }
+}
 async function saveSettings() {
-  sf.whatsapp_phone = sf.whatsapp_phone.replace(/\D/g, '')
-  sf.telegram = sf.telegram.trim().replace(/^@/, '')
-  if (sf.whatsapp_phone && (sf.whatsapp_phone.length < 10 || sf.whatsapp_phone.length > 15)) {
-    toast('Номер WhatsApp должен содержать от 10 до 15 цифр, например 79991234567', 'error'); return
-  }
+  const err = normalizeContacts(sf)
+  if (err) { toast(err, 'error'); return }
   sf.office_coords = sf.office_coords.trim()
   sf.yandex_maps_api_key = sf.yandex_maps_api_key.trim()
   const coords = sf.office_coords.match(/^(-?\d+(?:\.\d+)?)\s*[,;]\s*(-?\d+(?:\.\d+)?)$/)
@@ -944,8 +982,8 @@ async function saveHero() {
   } catch (e) { toast(e.message, 'error') }
 }
 // Канал выбран, но для него нет данных — кнопки на сайте ведут в WhatsApp, об этом нужно сказать сразу
-const ctaMissing = computed(() => missingFor(ctaMethod.value, { telegram: sf.telegram, phone: sf.phone }))
-const ctaMissingMobile = computed(() => missingFor(ctaMethodMobile.value, { telegram: sf.telegram, phone: sf.phone }))
+const ctaMissing = computed(() => missingFor(ctaMethod.value, { ...sf, ...cf }))
+const ctaMissingMobile = computed(() => missingFor(ctaMethodMobile.value, { ...sf, ...cf }))
 async function saveCta(key, value, missing) {
   try {
     await api.settings.update(key, value)
@@ -1462,6 +1500,7 @@ onMounted(() => { if (authed.value) loadAll() })
 
 .card { background: #fff; border-radius: 10px; padding: 24px; box-shadow: 0 1px 4px rgba(0,0,0,.07); }
 .card h3 { font-size: 1rem; font-weight: 600; margin-bottom: 12px; color: #1a1a1a; }
+.card .sub-title { font-size: 0.92rem; font-weight: 600; margin: 20px 0 6px; padding-top: 16px; border-top: 1px solid #eee; color: #1a1a1a; }
 .card-info { background: #e8f4fd; border: 1px solid #bae0ff; border-radius: 8px; padding: 10px 16px; font-size: 0.88rem; color: #0958d9; }
 .hint { font-size: 0.85rem; color: #6b7280; margin-bottom: 12px; }
 .empty-state { text-align: center; padding: 48px; color: #9ca3af; font-size: 0.95rem; background: #fff; border-radius: 10px; }

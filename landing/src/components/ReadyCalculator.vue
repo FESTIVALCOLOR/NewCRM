@@ -39,14 +39,14 @@
       <template v-else-if="hasArea">Площадь до {{ config.ready_area_base }} м² входит в базовую цену.</template>
       <template v-else>Цена для объекта до {{ config.ready_area_base }} м². Укажите площадь, чтобы увидеть точную стоимость и срок.</template>
     </p>
-    <a :href="orderUrl" :target="linkTarget(orderUrl)" rel="noopener" class="btn btn--accent calc__order">{{ design ? 'Заказать этот дизайн' : 'Заказать готовый дизайн' }}</a>
+    <button type="button" class="btn btn--accent calc__order" @click="order">{{ orderLabel }}</button>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted } from 'vue'
-import { ctaUrl, linkTarget } from '../contact.js'
 import { choice, detectVisitorRegion } from '../store.js'
+import { openLead } from '../lead.js'
 import { REGIONS, calcReady, readyConfig, regionCities, formatPrice, formatDays } from '../readyPricing.js'
 
 const props = defineProps({ settings: Object, design: { type: Object, default: null } })
@@ -69,13 +69,22 @@ const cityName = computed(() => {
   return REGIONS.find(region => region.key === choice.region)?.label || ''
 })
 
+const orderLabel = computed(() => (props.design ? 'Заказать этот дизайн' : 'Заказать готовый дизайн'))
+
 // В заявку попадает всё, что посетитель выбрал: менеджеру не придётся переспрашивать
-const orderUrl = computed(() => {
-  const what = props.design ? `готовый дизайн «${props.design.title}»` : 'готовый дизайн'
-  const area = hasArea.value ? ` Площадь: ${choice.area} м².` : ''
-  const text = `Здравствуйте! Хочу заказать ${what}. Город: ${cityName.value}.${area} Стоимость по калькулятору на сайте: ${formatPrice(result.value.price)}, срок: ${formatDays(result.value.days)}.`
-  return ctaUrl(props.settings, text)
-})
+function order() {
+  openLead({
+    title: orderLabel.value,
+    source: 'ready_design',
+    context: {
+      design: props.design ? `Готовый дизайн «${props.design.title}»` : 'Готовый дизайн',
+      city: cityName.value,
+      area: hasArea.value ? String(choice.area) : '',
+      price: formatPrice(result.value.price),
+      days: formatDays(result.value.days),
+    },
+  })
+}
 </script>
 
 <style scoped>
