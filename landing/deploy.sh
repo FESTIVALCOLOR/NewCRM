@@ -20,7 +20,9 @@ else
 fi
 
 echo "📦 Копирую dist на сервер..."
-rsync -avz --delete dist/ timeweb:/opt/interior_studio/landing/dist/
+# media/ (фото главного экрана, портфолио, отзывов, команды) есть только на сервере —
+# без исключения --delete стирает их при каждой выкатке
+rsync -avz --delete --exclude 'media/' dist/ timeweb:/opt/interior_studio/landing/dist/
 
 echo "🔄 Перезапускаю nginx..."
 ssh timeweb "docker exec crm_nginx nginx -s reload"
