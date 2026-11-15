@@ -7,7 +7,9 @@
           no-caps
           dense
           unelevated
-          toggle-color="primary"
+          toggle-color="grey-4"
+          toggle-text-color="dark"
+          text-color="grey-8"
           :options="FILTERS"
           @update:model-value="load"
         />
