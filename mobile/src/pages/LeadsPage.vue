@@ -10,9 +10,15 @@
           toggle-color="grey-4"
           toggle-text-color="dark"
           text-color="grey-8"
-          :options="FILTERS"
+          :options="filterOptions"
           @update:model-value="load()"
-        />
+        >
+          <!-- Счётчики у вкладок «Новые» и «Обработанные» -->
+          <template v-for="f in FILTERS" :key="f.value" #[f.slot]>
+            <span>{{ f.label }}</span>
+            <span v-if="f.count && counts[f.value]" :class="['leads-count', `leads-count--${f.value}`]">{{ counts[f.value] }}</span>
+          </template>
+        </q-btn-toggle>
         <q-btn
           flat
           dense
@@ -26,132 +32,175 @@
       </div>
 
       <div class="leads-hint q-mb-md">
-        Заявки из окна «Заказать» на сайте. О новой заявке приходит уведомление всем, у кого есть доступ к этой странице.
-        Отмечая заявку обработанной, опишите результат — его увидят коллеги.
-        Таймер в углу карточки — время на принятие в рабочих часах (будни 10:00–19:00): 12 ч, затем 3 напоминания каждые 3 ч и 6 — каждый час; после этого заявка просрочена.
+        Заявки из окна «Заказать» на сайте. Новая → «Обработать» (опишите результат, заявка переходит в «Обработанные» — ждём клиента, перезвон и т.п.)
+        → «Закрыть» с итогом: положительный или отрицательный. Создание договора из заявки закрывает её положительно.
+        Таймер у новых заявок — время на принятие в рабочих часах (будни 10:00–19:00): 12 ч, затем 3 напоминания каждые 3 ч и 6 — каждый час.
       </div>
 
       <div v-if="loading && !leads.length" class="text-center q-pa-lg">
         <q-spinner size="32px" color="grey-6" />
       </div>
-      <div v-else-if="!leads.length" class="text-center text-grey-6 q-pa-lg">
-        {{ filter === 'new' ? 'Новых заявок нет' : 'Заявок нет' }}
-      </div>
 
-      <div v-for="item in leads" :key="item.id" :class="['lead-card', { 'lead-card--done': item.status === 'done' }]">
-        <div class="lead-card__head">
-          <div class="lead-card__main">
-            <div class="lead-card__name">
-              {{ item.name }}
-            </div>
-            <div class="lead-card__meta">
-              <a :href="`tel:${phoneDigits(item.phone)}`" class="lead-card__phone">{{ item.phone }}</a>
-              <span class="lead-chip">{{ METHODS[item.contact_method] || 'звонок' }}</span>
-            </div>
-            <div class="lead-card__links">
-              <a :href="`tel:${phoneDigits(item.phone)}`">Позвонить</a>
-              <a :href="`https://wa.me/${phoneDigits(item.phone).replace('+', '')}`" target="_blank" rel="noopener">WhatsApp</a>
-            </div>
+      <!-- Два столбца: индивидуальный дизайн (тарифы) и готовый дизайн -->
+      <div v-else class="leads-cols">
+        <div v-for="col in columns" :key="col.key" class="leads-col">
+          <div class="leads-col__title">
+            {{ col.title }} <span class="leads-col__count">{{ col.items.length }}</span>
           </div>
-          <!-- Справа: таймер (или статус) и под ним дата поступления, по центру -->
-          <div class="lead-card__side">
-            <!-- Таймер на принятие (рабочее время) — у новых заявок вместо статуса -->
-            <div v-if="timer(item)" :class="['lead-timer', `lead-timer--${timer(item).phase}`, { 'lead-timer--paused': timer(item).paused }]">
-              <div class="lead-timer__value">
-                <q-icon :name="timer(item).phase === 'overdue' ? 'alarm_off' : 'timer'" size="15px" />
-                {{ timer(item).text }}
+          <div v-if="!col.items.length" class="leads-col__empty">
+            Заявок нет
+          </div>
+
+          <div v-for="item in col.items" :key="item.id" :class="['lead-card', cardClass(item)]">
+            <div class="lead-card__head">
+              <div class="lead-card__main">
+                <div class="lead-card__name">
+                  {{ item.name }}
+                </div>
+                <div class="lead-card__meta">
+                  <a :href="`tel:${phoneDigits(item.phone)}`" class="lead-card__phone">{{ item.phone }}</a>
+                  <span class="lead-chip">{{ METHODS[item.contact_method] || 'звонок' }}</span>
+                </div>
+                <div class="lead-card__links">
+                  <a :href="`tel:${phoneDigits(item.phone)}`">Позвонить</a>
+                  <a :href="`https://wa.me/${phoneDigits(item.phone).replace('+', '')}`" target="_blank" rel="noopener">WhatsApp</a>
+                </div>
               </div>
-              <div class="lead-timer__caption">
-                {{ timer(item).caption }}
+              <!-- Справа: таймер (или статус) и под ним дата поступления, по центру -->
+              <div class="lead-card__side">
+                <div v-if="timer(item)" :class="['lead-timer', `lead-timer--${timer(item).phase}`, { 'lead-timer--paused': timer(item).paused }]">
+                  <div class="lead-timer__value">
+                    <q-icon :name="timer(item).phase === 'overdue' ? 'alarm_off' : 'timer'" size="15px" />
+                    {{ timer(item).text }}
+                  </div>
+                  <div class="lead-timer__caption">
+                    {{ timer(item).caption }}
+                  </div>
+                  <q-tooltip v-if="timer(item).hint" max-width="260px">
+                    {{ timer(item).hint }}
+                  </q-tooltip>
+                </div>
+                <span v-else :class="['lead-status', `lead-status--${statusKey(item)}`]">
+                  {{ STATUS_LABELS[statusKey(item)] }}
+                </span>
+                <span class="lead-card__date">{{ fmt(item.created_at) }}</span>
               </div>
-              <q-tooltip v-if="timer(item).hint" max-width="260px">
-                {{ timer(item).hint }}
-              </q-tooltip>
             </div>
-            <span v-else :class="['lead-status', item.status === 'done' ? 'lead-status--done' : 'lead-status--new']">
-              {{ item.status === 'done' ? 'Обработана' : 'Новая' }}
-            </span>
-            <span class="lead-card__date">{{ fmt(item.created_at) }}</span>
-          </div>
-        </div>
 
-        <div v-for="line in contextLines(item)" :key="line" class="lead-card__ctx">
-          {{ line }}
-        </div>
-        <div v-if="item.comment" class="lead-card__comment">
-          {{ item.comment }}
-        </div>
+            <div v-for="line in contextLines(item)" :key="line" class="lead-card__ctx">
+              {{ line }}
+            </div>
+            <div v-if="item.comment" class="lead-card__comment">
+              {{ item.comment }}
+            </div>
 
-        <div v-if="item.result" class="lead-card__result">
-          <div class="lead-card__result-title">
-            Результат обработки
-            <span v-if="item.processed_by_name || item.processed_at" class="lead-card__result-who">
-              — {{ item.processed_by_name || 'сотрудник' }}<template v-if="item.processed_at">, {{ fmt(item.processed_at) }}</template>
-            </span>
-          </div>
-          <div class="lead-card__result-text">
-            {{ item.result }}
-          </div>
-        </div>
+            <div v-if="item.result" class="lead-card__result">
+              <div class="lead-card__result-title">
+                Результат обработки
+                <span v-if="item.processed_by_name || item.processed_at" class="lead-card__result-who">
+                  — {{ item.processed_by_name || 'сотрудник' }}<template v-if="item.processed_at">, {{ fmt(item.processed_at) }}</template>
+                </span>
+              </div>
+              <div class="lead-card__result-text">
+                {{ item.result }}
+              </div>
+            </div>
 
-        <div class="lead-card__actions">
-          <q-btn
-            v-if="item.contract_id"
-            outline
-            dense
-            no-caps
-            color="primary"
-            icon="description"
-            :label="`Договор № ${item.contract_number || item.contract_id}`"
-            class="lead-btn"
-            :to="`/contracts/${item.contract_id}`"
-          />
-          <q-btn
-            v-else-if="canCreateContract"
-            outline
-            dense
-            no-caps
-            color="primary"
-            icon="note_add"
-            label="Создать договор"
-            class="lead-btn"
-            :to="{ path: '/contracts', query: { lead: item.id } }"
-          />
-          <q-btn
-            v-if="item.status !== 'done'"
-            outline
-            dense
-            no-caps
-            color="positive"
-            icon="task_alt"
-            label="Обработать"
-            class="lead-btn"
-            @click="openProcess(item)"
-          />
-          <q-btn
-            v-else
-            outline
-            dense
-            no-caps
-            color="grey-8"
-            icon="undo"
-            label="Вернуть в новые"
-            class="lead-btn"
-            :loading="busyId === item.id"
-            @click="reopen(item)"
-          />
-          <q-btn
-            v-if="canDelete"
-            flat
-            dense
-            no-caps
-            color="negative"
-            icon="delete_outline"
-            label="Удалить"
-            class="lead-btn"
-            :loading="busyId === `del-${item.id}`"
-            @click="confirmDelete(item)"
-          />
+            <div v-if="item.status === 'closed'" :class="['lead-card__close', `lead-card__close--${item.outcome}`]">
+              <div class="lead-card__close-title">
+                {{ item.outcome === 'positive' ? 'Закрыта: положительный итог' : 'Закрыта: отрицательный итог' }}
+                <span v-if="item.closed_by_name || item.closed_at" class="lead-card__result-who">
+                  — {{ item.closed_by_name || 'сотрудник' }}<template v-if="item.closed_at">, {{ fmt(item.closed_at) }}</template>
+                </span>
+              </div>
+              <div v-if="item.close_comment" class="lead-card__result-text">
+                {{ item.close_comment }}
+              </div>
+            </div>
+
+            <div class="lead-card__actions">
+              <q-btn
+                v-if="item.contract_id"
+                outline
+                dense
+                no-caps
+                color="primary"
+                icon="description"
+                :label="`Договор № ${item.contract_number || item.contract_id}`"
+                class="lead-btn"
+                :to="`/contracts/${item.contract_id}`"
+              />
+              <q-btn
+                v-else-if="canCreateContract && item.status !== 'closed'"
+                outline
+                dense
+                no-caps
+                color="primary"
+                icon="note_add"
+                label="Создать договор"
+                class="lead-btn"
+                :to="{ path: '/contracts', query: { lead: item.id } }"
+              />
+              <q-btn
+                v-if="item.status === 'new'"
+                outline
+                dense
+                no-caps
+                color="positive"
+                icon="task_alt"
+                label="Обработать"
+                class="lead-btn"
+                @click="openProcess(item)"
+              />
+              <q-btn
+                v-if="item.status === 'done'"
+                outline
+                dense
+                no-caps
+                color="positive"
+                icon="flag"
+                label="Закрыть"
+                class="lead-btn"
+                @click="openClose(item)"
+              />
+              <q-btn
+                v-if="item.status === 'done'"
+                flat
+                dense
+                no-caps
+                color="grey-8"
+                icon="undo"
+                label="Вернуть в новые"
+                class="lead-btn"
+                :loading="busyId === item.id"
+                @click="setStatus(item, 'new')"
+              />
+              <q-btn
+                v-if="item.status === 'closed'"
+                flat
+                dense
+                no-caps
+                color="grey-8"
+                icon="undo"
+                label="Вернуть в работу"
+                class="lead-btn"
+                :loading="busyId === item.id"
+                @click="setStatus(item, 'done')"
+              />
+              <q-btn
+                v-if="canDelete"
+                flat
+                dense
+                no-caps
+                color="negative"
+                icon="delete_outline"
+                label="Удалить"
+                class="lead-btn"
+                :loading="busyId === `del-${item.id}`"
+                @click="confirmDelete(item)"
+              />
+            </div>
+          </div>
         </div>
       </div>
     </q-pull-to-refresh>
@@ -176,6 +225,9 @@
             input-style="min-height: 90px"
             placeholder="Например: созвонились, договорились о замере 20.11; клиент думает, перезвонить через неделю…"
           />
+          <div class="text-caption text-grey-7 q-mt-xs">
+            Заявка перейдёт в «Обработанные». Когда с клиентом всё решится — закройте её с итогом.
+          </div>
         </q-card-section>
         <q-card-actions align="right">
           <q-btn
@@ -197,6 +249,56 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
+
+    <!-- Закрытие заявки с итогом -->
+    <q-dialog v-model="closeDialog" persistent>
+      <q-card class="lead-dialog">
+        <q-card-section class="lead-dialog__title">
+          Закрыть заявку
+        </q-card-section>
+        <q-card-section class="q-pt-none">
+          <div class="text-grey-8 q-mb-sm">
+            {{ processing?.name }}, {{ processing?.phone }}
+          </div>
+          <div class="lead-outcome">
+            <button type="button" :class="['lead-outcome__btn', 'lead-outcome__btn--positive', { 'is-active': outcome === 'positive' }]" @click="outcome = 'positive'">
+              <q-icon name="thumb_up" size="18px" />Положительный
+            </button>
+            <button type="button" :class="['lead-outcome__btn', 'lead-outcome__btn--negative', { 'is-active': outcome === 'negative' }]" @click="outcome = 'negative'">
+              <q-icon name="thumb_down" size="18px" />Отрицательный
+            </button>
+          </div>
+          <q-input
+            v-model="closeComment"
+            type="textarea"
+            outlined
+            autogrow
+            maxlength="2000"
+            class="q-mt-md"
+            input-style="min-height: 70px"
+            placeholder="Комментарий (необязательно): заключили договор, клиент отказался — дорого…"
+          />
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn
+            flat
+            no-caps
+            label="Отмена"
+            color="grey-8"
+            @click="closeDialog = false"
+          />
+          <q-btn
+            outline
+            no-caps
+            color="positive"
+            label="Закрыть заявку"
+            :disable="!outcome"
+            :loading="saving"
+            @click="submitClose"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
@@ -211,25 +313,46 @@ const $q = useQuasar()
 const permsStore = usePermissionsStore()
 
 const FILTERS = [
-  { label: 'Новые', value: 'new' },
-  { label: 'Обработанные', value: 'done' },
-  { label: 'Все', value: '' },
+  { label: 'Новые', value: 'new', slot: 'f-new', count: true },
+  { label: 'Обработанные', value: 'done', slot: 'f-done', count: true },
+  { label: 'Закрытые', value: 'closed', slot: 'f-closed', count: false },
+  { label: 'Все', value: '', slot: 'f-all', count: false },
 ]
+const filterOptions = FILTERS.map(f => ({ value: f.value, slot: f.slot }))
+const STATUS_LABELS = { new: 'Новая', done: 'Обработана', positive: 'Закрыта +', negative: 'Закрыта −' }
 const METHODS = { call: 'звонок', whatsapp: 'WhatsApp', telegram: 'Telegram', max: 'MAX' }
 const CONTEXT = [['design', 'Дизайн'], ['plan', 'Тариф'], ['city', 'Город'], ['area', 'Площадь, м²'], ['price', 'Стоимость'], ['days', 'Срок']]
 
 const leads = ref([])
+const counts = ref({ new: 0, done: 0, closed: 0 })
 const filter = ref('new')
 const loading = ref(false)
 const busyId = ref(null)
 
 const processDialog = ref(false)
+const closeDialog = ref(false)
 const processing = ref(null)
 const resultText = ref('')
+const outcome = ref(null)
+const closeComment = ref('')
 const saving = ref(false)
 
 const canDelete = computed(() => permsStore.isSuperuser || permsStore.has('leads.delete'))
 const canCreateContract = computed(() => permsStore.isSuperuser || permsStore.has('contracts.create'))
+
+// Готовый дизайн — заявки из калькулятора готовых проектов; остальное (тарифы и пр.) — индивидуальный дизайн
+const columns = computed(() => [
+  { key: 'individual', title: 'Индивидуальные', items: leads.value.filter(l => l.source !== 'ready_design') },
+  { key: 'ready', title: 'Готовые', items: leads.value.filter(l => l.source === 'ready_design') },
+])
+
+function statusKey(item) {
+  return item.status === 'closed' ? (item.outcome === 'negative' ? 'negative' : 'positive') : item.status
+}
+function cardClass(item) {
+  if (item.status === 'closed') return `lead-card--${item.outcome === 'negative' ? 'negative' : 'positive'}`
+  return item.status === 'done' ? 'lead-card--done' : ''
+}
 
 function phoneDigits(phone) {
   return (phone || '').replace(/[^\d+]/g, '')
@@ -262,6 +385,10 @@ function timer(item) {
   return leadTimerView(item.sla, fetchedAt.value, now.value)
 }
 
+async function loadCounts() {
+  try { counts.value = { ...counts.value, ...(await leadsApi.countNew()).data } } catch { /* счётчики не критичны */ }
+}
+
 async function load(silent = false) {
   if (!silent) loading.value = true
   try {
@@ -273,6 +400,7 @@ async function load(silent = false) {
   } finally {
     loading.value = false
   }
+  loadCounts()
 }
 
 function tick() {
@@ -282,6 +410,7 @@ function tick() {
 }
 
 onMounted(() => {
+  load()
   tickTimer = setInterval(tick, 1000)
   syncTimer = setInterval(() => load(true), 60000)
 })
@@ -299,6 +428,7 @@ async function onRefresh(done) {
 function applyUpdated(item, updated) {
   if (filter.value && updated.status !== filter.value) leads.value = leads.value.filter(l => l.id !== item.id)
   else Object.assign(item, updated)
+  loadCounts()
   window.dispatchEvent(new CustomEvent('leads:changed'))
 }
 
@@ -316,7 +446,7 @@ async function submitProcess() {
     const { data } = await leadsApi.setStatus(item.id, 'done', resultText.value.trim())
     applyUpdated(item, data)
     processDialog.value = false
-    $q.notify({ type: 'positive', message: 'Заявка обработана' })
+    $q.notify({ type: 'positive', message: 'Заявка обработана — она в «Обработанных»' })
   } catch (e) {
     $q.notify({ type: 'negative', message: errorText(e) })
   } finally {
@@ -324,10 +454,33 @@ async function submitProcess() {
   }
 }
 
-async function reopen(item) {
+function openClose(item) {
+  processing.value = item
+  outcome.value = null
+  closeComment.value = ''
+  closeDialog.value = true
+}
+
+async function submitClose() {
+  const item = processing.value
+  if (!item || !outcome.value) return
+  saving.value = true
+  try {
+    const { data } = await leadsApi.setStatus(item.id, 'closed', '', outcome.value, closeComment.value.trim())
+    applyUpdated(item, data)
+    closeDialog.value = false
+    $q.notify({ type: 'positive', message: 'Заявка закрыта' })
+  } catch (e) {
+    $q.notify({ type: 'negative', message: errorText(e) })
+  } finally {
+    saving.value = false
+  }
+}
+
+async function setStatus(item, status) {
   busyId.value = item.id
   try {
-    const { data } = await leadsApi.setStatus(item.id, 'new')
+    const { data } = await leadsApi.setStatus(item.id, status)
     applyUpdated(item, data)
   } catch (e) {
     $q.notify({ type: 'negative', message: errorText(e) })
@@ -348,6 +501,7 @@ function confirmDelete(item) {
     try {
       await leadsApi.remove(item.id)
       leads.value = leads.value.filter(l => l.id !== item.id)
+      loadCounts()
       window.dispatchEvent(new CustomEvent('leads:changed'))
       $q.notify({ type: 'positive', message: 'Заявка удалена' })
     } catch (e) {
@@ -357,8 +511,6 @@ function confirmDelete(item) {
     }
   })
 }
-
-onMounted(load)
 </script>
 
 <style scoped>
@@ -399,4 +551,27 @@ onMounted(load)
 .lead-btn { font-size: 12px; padding: 0 10px; }
 .lead-dialog { width: 480px; max-width: 92vw; }
 .lead-dialog__title { font-size: 16px; font-weight: 600; }
+/* Вкладки со счётчиками */
+.leads-count { display: inline-block; min-width: 18px; margin-left: 6px; padding: 0 5px; border-radius: 9px; font-size: 11px; line-height: 18px; text-align: center; color: #fff; }
+.leads-count--new { background: var(--fc-red); }
+.leads-count--done { background: var(--fc-orange); }
+/* Два столбца: индивидуальные и готовые (на узком экране — друг под другом) */
+.leads-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+@media (max-width: 900px) { .leads-cols { grid-template-columns: minmax(0, 1fr); } }
+.leads-col__title { font-size: 14px; font-weight: 600; color: var(--fc-text); margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+.leads-col__count { font-size: 12px; font-weight: 500; color: var(--fc-text-light); background: var(--fc-bg-alt); border-radius: 9px; padding: 0 8px; }
+.leads-col__empty { font-size: 13px; color: var(--fc-text-muted); padding: 12px 0; }
+/* Закрытые: светло-зелёные (положительно) и светло-красные (отрицательно) */
+.lead-card--positive { background: rgba(39, 174, 96, 0.10); border-color: rgba(39, 174, 96, 0.35); }
+.lead-card--negative { background: rgba(231, 76, 60, 0.09); border-color: rgba(231, 76, 60, 0.35); }
+.lead-status--positive { background: rgba(39, 174, 96, 0.16); color: var(--fc-green); }
+.lead-status--negative { background: rgba(231, 76, 60, 0.14); color: var(--fc-red); }
+.lead-card__close { margin-top: 8px; padding: 6px 10px; border-radius: 0 6px 6px 0; }
+.lead-card__close--positive { border-left: 3px solid var(--fc-green); background: rgba(39, 174, 96, 0.08); }
+.lead-card__close--negative { border-left: 3px solid var(--fc-red); background: rgba(231, 76, 60, 0.08); }
+.lead-card__close-title { font-size: 12px; font-weight: 600; color: var(--fc-text); }
+.lead-outcome { display: flex; gap: 10px; }
+.lead-outcome__btn { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 42px; border-radius: 8px; cursor: pointer; font-size: 14px; background: transparent; color: var(--fc-text); border: 1px solid var(--fc-border); }
+.lead-outcome__btn--positive.is-active { background: rgba(39, 174, 96, 0.15); border-color: var(--fc-green); color: var(--fc-green); font-weight: 600; }
+.lead-outcome__btn--negative.is-active { background: rgba(231, 76, 60, 0.13); border-color: var(--fc-red); color: var(--fc-red); font-weight: 600; }
 </style>

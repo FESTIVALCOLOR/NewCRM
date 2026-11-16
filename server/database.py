@@ -1594,7 +1594,7 @@ class SiteLead(Base):
     comment = Column(Text)
     source = Column(String(50))  # ready_design / pricing_plan / …
     context = Column(Text)  # JSON: дизайн, тариф, город, площадь, цена, страница
-    status = Column(String(20), default="new", index=True)  # new / done
+    status = Column(String(20), default="new", index=True)  # new (новая) / done (в работе) / closed (закрыта с итогом)
     ip = Column(String(64))
     result = Column(Text)  # результат обработки (пишет менеджер при отметке «Обработана»)
     processed_by = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
@@ -1604,6 +1604,11 @@ class SiteLead(Base):
     sla_notified = Column(Integer, default=0, nullable=True)
     # Договор, созданный из заявки (кнопка «Создать договор»)
     contract_id = Column(Integer, ForeignKey("contracts.id", ondelete="SET NULL"), nullable=True)
+    # Закрытие заявки (status = closed): итог positive / negative, комментарий, кто и когда закрыл
+    outcome = Column(String(10), nullable=True)
+    close_comment = Column(Text, nullable=True)
+    closed_by = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    closed_at = Column(DateTime, nullable=True)
 
 
 # =========================

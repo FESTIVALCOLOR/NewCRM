@@ -208,7 +208,8 @@ export const contractsApi = {
 export const leadsApi = {
   getList: (status = '') => api.get('/api/v1/leads', { params: status ? { status } : {} }),
   countNew: () => api.get('/api/v1/leads/count'),
-  setStatus: (id, status, result = '') => api.put(`/api/v1/leads/${id}`, { status, result }),
+  // status: new / done (обработана, в работе) / closed (закрыта; outcome: positive | negative)
+  setStatus: (id, status, result = '', outcome = null, comment = '') => api.put(`/api/v1/leads/${id}`, { status, result, outcome, comment }),
   remove: (id) => api.delete(`/api/v1/leads/${id}`),
   // «Создать договор» из заявки: клиент + предзаполнение формы; после создания — привязка договора
   prepareContract: (id) => api.post(`/api/v1/leads/${id}/prepare-contract`),

@@ -1804,15 +1804,25 @@ class SiteLeadResponse(BaseModel):
     # Договор, созданный из заявки
     contract_id: Optional[int] = None
     contract_number: Optional[str] = None
+    # Закрытие: итог positive / negative
+    outcome: Optional[str] = None
+    close_comment: Optional[str] = None
+    closed_by: Optional[int] = None
+    closed_by_name: Optional[str] = None
+    closed_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
 
 
 class SiteLeadStatusUpdate(BaseModel):
-    status: str = Field(..., pattern="^(new|done)$")
-    # Результат обработки обязателен при отметке «Обработана»
+    # new — новая, done — обработана (в работе), closed — закрыта с итогом
+    status: str = Field(..., pattern="^(new|done|closed)$")
+    # Результат обработки обязателен при переводе новой заявки в «Обработанные»
     result: str = Field("", max_length=2000)
+    # Итог закрытия (обязателен для closed) и комментарий к нему
+    outcome: Optional[str] = Field(None, pattern="^(positive|negative)$")
+    comment: str = Field("", max_length=2000)
 
 
 class SiteSectionResponse(BaseModel):

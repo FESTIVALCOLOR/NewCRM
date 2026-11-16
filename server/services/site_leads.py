@@ -56,6 +56,10 @@ def serialize_lead(db, lead):
     if lead.processed_by:
         emp = db.query(Employee.full_name).filter(Employee.id == lead.processed_by).first()
         data["processed_by_name"] = emp[0] if emp else None
+    data["closed_by_name"] = None
+    if lead.closed_by:
+        emp = db.query(Employee.full_name).filter(Employee.id == lead.closed_by).first()
+        data["closed_by_name"] = emp[0] if emp else None
     data["contract_number"] = None
     if lead.contract_id:
         from database import Contract
@@ -67,10 +71,18 @@ def serialize_lead(db, lead):
 
 def list_leads(db, status=""):
     query = db.query(SiteLead)
-    if status in ("new", "done"):
+    if status in ("new", "done", "closed"):
         query = query.filter(SiteLead.status == status)
     leads = query.order_by(SiteLead.created_at.desc()).limit(300).all()
     return [serialize_lead(db, lead) for lead in leads]
+
+
+def count_by_status(db):
+    """Счётчики вкладок: {"new": N, "done": N, "closed": N} (бейдж в меню — по новым)."""
+    from sqlalchemy import func
+
+    counts = dict(db.query(SiteLead.status, func.count(SiteLead.id)).group_by(SiteLead.status).all())
+    return {key: counts.get(key, 0) for key in ("new", "done", "closed")}
 
 
 def get_lead_or_404(db, lead_id):
@@ -80,20 +92,52 @@ def get_lead_or_404(db, lead_id):
     return lead
 
 
-def update_lead_status(db, lead_id, status, result, employee):
-    """«Обработана» — только с результатом обработки; «Вернуть в новые» — результат сохраняется для истории."""
+def _clear_close(lead):
+    lead.outcome = None
+    lead.close_comment = None
+    lead.closed_by = None
+    lead.closed_at = None
+
+
+def update_lead_status(db, lead_id, status, result, employee, outcome=None, comment=""):
+    """Жизненный цикл заявки: new (новая) → done (обработана, в работе: ждём клиента, перезвон…)
+    → closed (закрыта с итогом positive / negative).
+
+    - new → done: обязателен результат обработки;
+    - closed → done («Вернуть в работу»): итог снимается, результат обработки остаётся;
+    - → closed: обязателен итог; комментарий необязателен;
+    - → new («Вернуть в новые»): таймер на принятие начинается заново, результат хранится для истории.
+    """
     lead = get_lead_or_404(db, lead_id)
     result = (result or "").strip()
     if status == "done":
-        if not result:
-            raise HTTPException(400, "Опишите результат обработки заявки")
-        lead.result = result
-        lead.processed_by = employee.id
-        lead.processed_at = datetime.utcnow()
-    elif lead.status == "done":
-        # Заявку вернули в работу — таймер на принятие начинается заново
-        lead.sla_start = datetime.utcnow()
-        lead.sla_notified = 0
+        if lead.status == "closed":
+            _clear_close(lead)
+            if result:
+                lead.result = result
+        else:
+            if not result:
+                raise HTTPException(400, "Опишите результат обработки заявки")
+            lead.result = result
+            lead.processed_by = employee.id
+            lead.processed_at = datetime.utcnow()
+    elif status == "closed":
+        if outcome not in ("positive", "negative"):
+            raise HTTPException(400, "Выберите итог: положительный или отрицательный")
+        if lead.status == "new" and not lead.result:
+            # Закрыли сразу из новых — считаем это и обработкой
+            lead.processed_by = employee.id
+            lead.processed_at = datetime.utcnow()
+        lead.outcome = outcome
+        lead.close_comment = (comment or "").strip() or None
+        lead.closed_by = employee.id
+        lead.closed_at = datetime.utcnow()
+    else:
+        if lead.status != "new":
+            # Заявку вернули в новые — таймер на принятие начинается заново
+            lead.sla_start = datetime.utcnow()
+            lead.sla_notified = 0
+        _clear_close(lead)
     lead.status = status
     db.commit()
     db.refresh(lead)
@@ -167,7 +211,7 @@ def prepare_contract(db, lead_id, employee):
 
 
 def link_contract(db, lead_id, contract_id, employee):
-    """Договор создан из заявки: привязываем и отмечаем заявку обработанной (таймер останавливается)."""
+    """Договор создан из заявки: привязываем и закрываем заявку с положительным итогом (таймер останавливается)."""
     from database import Contract
 
     lead = get_lead_or_404(db, lead_id)
@@ -175,10 +219,15 @@ def link_contract(db, lead_id, contract_id, employee):
     if not contract:
         raise HTTPException(404, "Договор не найден")
     lead.contract_id = contract.id
-    lead.status = "done"
-    lead.result = f"Создан договор № {contract.contract_number}" + (f"\n{lead.result}" if lead.result and "Создан договор" not in lead.result else "")
-    lead.processed_by = employee.id
-    lead.processed_at = datetime.utcnow()
+    if not lead.result:
+        lead.result = f"Создан договор № {contract.contract_number}"
+        lead.processed_by = employee.id
+        lead.processed_at = datetime.utcnow()
+    lead.status = "closed"
+    lead.outcome = "positive"
+    lead.close_comment = f"Создан договор № {contract.contract_number}"
+    lead.closed_by = employee.id
+    lead.closed_at = datetime.utcnow()
     db.commit()
     db.refresh(lead)
     return serialize_lead(db, lead)

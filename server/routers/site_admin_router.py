@@ -192,9 +192,15 @@ def list_leads(status: str = "", db: Session = Depends(get_db), _: Employee = De
     return site_leads.list_leads(db, status)
 
 
+@router.get("/leads/count")
+def count_leads(db: Session = Depends(get_db), _: Employee = Depends(require_site_admin)):
+    """Счётчики вкладок «Новые» / «Обработанные» / «Закрытые»."""
+    return site_leads.count_by_status(db)
+
+
 @router.put("/leads/{lead_id}", response_model=SiteLeadResponse)
 def update_lead_status(lead_id: int, data: SiteLeadStatusUpdate, db: Session = Depends(get_db), user: Employee = Depends(require_site_admin)):
-    return site_leads.update_lead_status(db, lead_id, data.status, data.result, user)
+    return site_leads.update_lead_status(db, lead_id, data.status, data.result, user, data.outcome, data.comment)
 
 
 @router.delete("/leads/{lead_id}")

@@ -9,7 +9,7 @@ from schemas import SiteLeadResponse, SiteLeadStatusUpdate
 from services import site_leads
 from sqlalchemy.orm import Session
 
-from database import Employee, SiteLead, get_db
+from database import Employee, get_db
 
 router = APIRouter(tags=["leads"])
 
@@ -21,12 +21,12 @@ def list_leads(status: str = "", db: Session = Depends(get_db), _: Employee = De
 
 @router.get("/count")
 def count_new_leads(db: Session = Depends(get_db), _: Employee = Depends(require_permission("access.leads"))):
-    return {"new": db.query(SiteLead).filter(SiteLead.status == "new").count()}
+    return site_leads.count_by_status(db)
 
 
 @router.put("/{lead_id}", response_model=SiteLeadResponse)
 def update_lead_status(lead_id: int, data: SiteLeadStatusUpdate, db: Session = Depends(get_db), user: Employee = Depends(require_permission("access.leads"))):
-    return site_leads.update_lead_status(db, lead_id, data.status, data.result, user)
+    return site_leads.update_lead_status(db, lead_id, data.status, data.result, user, data.outcome, data.comment)
 
 
 @router.post("/{lead_id}/prepare-contract")
