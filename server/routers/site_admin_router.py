@@ -201,12 +201,12 @@ def count_leads(db: Session = Depends(get_db), _: Employee = Depends(require_sit
 
 @router.put("/leads/{lead_id}", response_model=SiteLeadResponse)
 def update_lead_status(lead_id: int, data: SiteLeadStatusUpdate, db: Session = Depends(get_db), user: Employee = Depends(require_site_admin)):
-    return site_leads.update_lead_status(db, lead_id, data.status, data.result, user, data.outcome, data.comment)
+    return site_leads.update_lead_status(db, lead_id, data.status, data.result, user, data.outcome, data.comment, data.contact_date, data.contact_time)
 
 
 @router.post("/leads/{lead_id}/actions", response_model=SiteLeadResponse)
 def add_lead_action(lead_id: int, data: SiteLeadActionCreate, db: Session = Depends(get_db), user: Employee = Depends(require_site_admin)):
-    return site_leads.add_lead_action(db, lead_id, data.text, user)
+    return site_leads.add_lead_action(db, lead_id, data.text, user, data.contact_date, data.contact_time)
 
 
 @router.delete("/leads/{lead_id}")

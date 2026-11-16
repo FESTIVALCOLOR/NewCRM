@@ -116,6 +116,11 @@
               </div>
             </div>
 
+            <div v-if="item.status === 'done' && item.next_contact_date" :class="['lead-card__contact', { 'lead-card__contact--today': isToday(item.next_contact_date), 'lead-card__contact--past': isPast(item.next_contact_date) }]">
+              <q-icon name="event" size="16px" />
+              <span>{{ isToday(item.next_contact_date) ? 'Сегодня' : 'Созвон / встреча' }}: {{ contactLabel(item) }}</span>
+            </div>
+
             <div v-if="item.status === 'closed'" :class="['lead-card__close', `lead-card__close--${item.outcome}`]">
               <div class="lead-card__close-title">
                 {{ item.outcome === 'positive' ? 'Закрыта: положительный итог' : 'Закрыта: отрицательный итог' }}
@@ -248,6 +253,40 @@
               ? 'Что сделано и результат: перезвонил — клиент согласовал замер; провели замер, готовим КП…'
               : 'Например: созвонились, договорились о замере 20.11; клиент думает, перезвонить через неделю…'"
           />
+          <div class="lead-contact-row q-mt-md">
+            <q-input
+              v-model="contactDate"
+              type="date"
+              outlined
+              dense
+              stack-label
+              label="Созвон / встреча — дата"
+              :min="todayIso()"
+              class="lead-contact-row__date"
+            />
+            <q-input
+              v-model="contactTime"
+              type="time"
+              outlined
+              dense
+              stack-label
+              label="Время"
+              :disable="!contactDate"
+              class="lead-contact-row__time"
+            />
+            <q-btn
+              v-if="contactDate"
+              flat
+              dense
+              round
+              icon="close"
+              color="grey-7"
+              @click="contactDate = ''; contactTime = ''"
+            />
+          </div>
+          <div class="text-caption text-grey-7 q-mt-xs">
+            Необязательно. Утром в этот день вам придёт напоминание в Telegram и в CRM.
+          </div>
           <div class="text-caption text-grey-7 q-mt-xs">
             {{ dialogMode === 'action'
               ? 'Действие добавится в журнал заявки, она останется в «Обработанных».'
@@ -362,6 +401,20 @@ const resultText = ref('')
 const outcome = ref(null)
 const closeComment = ref('')
 const saving = ref(false)
+// Назначенный созвон / встреча (необязательно): в этот день утром — напоминание в Telegram и CRM
+const contactDate = ref('')
+const contactTime = ref('')
+
+function todayIso() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+function isToday(iso) { return iso === todayIso() }
+function isPast(iso) { return iso < todayIso() }
+function contactLabel(item) {
+  const [y, m, d] = item.next_contact_date.split('-')
+  return `${d}.${m}.${y}${item.next_contact_time ? ` в ${item.next_contact_time}` : ''}`
+}
 
 const canDelete = computed(() => permsStore.isSuperuser || permsStore.has('leads.delete'))
 const canCreateContract = computed(() => permsStore.isSuperuser || permsStore.has('contracts.create'))
@@ -462,6 +515,8 @@ function openProcess(item) {
   processing.value = item
   dialogMode.value = 'process'
   resultText.value = item.result || ''
+  contactDate.value = ''
+  contactTime.value = ''
   processDialog.value = true
 }
 
@@ -470,6 +525,8 @@ function openAction(item) {
   processing.value = item
   dialogMode.value = 'action'
   resultText.value = ''
+  contactDate.value = ''
+  contactTime.value = ''
   processDialog.value = true
 }
 
@@ -479,9 +536,10 @@ async function submitProcess() {
   saving.value = true
   try {
     const isAction = dialogMode.value === 'action'
+    const contact = { contact_date: contactDate.value || '', contact_time: (contactDate.value && contactTime.value) || '' }
     const { data } = isAction
-      ? await leadsApi.addAction(item.id, resultText.value.trim())
-      : await leadsApi.setStatus(item.id, 'done', resultText.value.trim())
+      ? await leadsApi.addAction(item.id, resultText.value.trim(), contact)
+      : await leadsApi.setStatus(item.id, 'done', resultText.value.trim(), null, '', contact)
     applyUpdated(item, data)
     processDialog.value = false
     $q.notify({ type: 'positive', message: isAction ? 'Действие добавлено' : 'Заявка обработана — она в «Обработанных»' })
@@ -604,6 +662,12 @@ function confirmDelete(item) {
 .lead-card--negative { background: rgba(231, 76, 60, 0.09); border-color: rgba(231, 76, 60, 0.35); }
 .lead-status--positive { background: rgba(39, 174, 96, 0.16); color: var(--fc-green); }
 .lead-status--negative { background: rgba(231, 76, 60, 0.14); color: var(--fc-red); }
+.lead-card__contact { margin-top: 8px; display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 6px; font-size: 13px; font-weight: 500; color: var(--fc-text); background: var(--fc-bg-alt); border: 1px solid var(--fc-border); }
+.lead-card__contact--today { color: #b26a00; background: rgba(255, 152, 0, 0.12); border-color: rgba(255, 152, 0, 0.5); }
+.lead-card__contact--past { color: var(--fc-text-muted); text-decoration: line-through; }
+.lead-contact-row { display: flex; align-items: center; gap: 10px; }
+.lead-contact-row__date { flex: 1 1 auto; }
+.lead-contact-row__time { flex: 0 0 120px; }
 .lead-card__action { margin-top: 6px; padding-top: 6px; border-top: 1px dashed rgba(102, 187, 106, 0.45); }
 .lead-card__action-title { font-size: 12px; font-weight: 600; color: var(--fc-green); }
 .lead-card__close { margin-top: 8px; padding: 6px 10px; border-radius: 0 6px 6px 0; }

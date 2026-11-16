@@ -54,10 +54,11 @@ export const settings = {
 export const leads = {
   list: (status = '') => req('GET', `/site/admin/leads${status ? `?status=${status}` : ''}`),
   // status: new / done (обработана, в работе) / closed (закрыта; outcome: positive | negative)
-  setStatus: (id, status, result = '', outcome = null, comment = '') => req('PUT', `/site/admin/leads/${id}`, { status, result, outcome, comment }),
+  // contact: { contact_date: 'ГГГГ-ММ-ДД', contact_time: 'ЧЧ:ММ' } — назначенный созвон / встреча (необязательно)
+  setStatus: (id, status, result = '', outcome = null, comment = '', contact = {}) => req('PUT', `/site/admin/leads/${id}`, { status, result, outcome, comment, ...contact }),
   count: () => req('GET', '/site/admin/leads/count'),
   // Ещё одно действие по обработанной заявке (журнал работы с клиентом)
-  addAction: (id, text) => req('POST', `/site/admin/leads/${id}/actions`, { text }),
+  addAction: (id, text, contact = {}) => req('POST', `/site/admin/leads/${id}/actions`, { text, ...contact }),
   delete: (id) => req('DELETE', `/site/admin/leads/${id}`),
 }
 

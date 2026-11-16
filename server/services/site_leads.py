@@ -82,14 +82,16 @@ def lead_actions(db, lead_id):
     return [{"id": a.id, "text": a.text, "employee_name": name, "created_at": a.created_at} for a, name in rows]
 
 
-def add_lead_action(db, lead_id, text, employee):
-    """«Добавить действие» у обработанной заявки: ещё один шаг работы с клиентом (их может быть сколько угодно)."""
+def add_lead_action(db, lead_id, text, employee, contact_date="", contact_time=""):
+    """«Добавить действие» у обработанной заявки: ещё один шаг работы с клиентом (их может быть сколько угодно).
+    Можно сразу назначить следующий созвон / встречу."""
     lead = get_lead_or_404(db, lead_id)
     text = (text or "").strip()
     if not text:
         raise HTTPException(400, "Опишите действие и его результат")
     if lead.status != "done":
         raise HTTPException(400, "Действия добавляются к заявкам в «Обработанных»")
+    set_next_contact(lead, contact_date, contact_time, employee)
     db.add(SiteLeadAction(lead_id=lead.id, text=text, employee_id=employee.id, created_at=datetime.utcnow()))
     db.commit()
     db.refresh(lead)
@@ -126,7 +128,39 @@ def _clear_close(lead):
     lead.closed_at = None
 
 
-def update_lead_status(db, lead_id, status, result, employee, outcome=None, comment=""):
+def _today_msk():
+    from services.lead_sla import MSK_OFFSET
+
+    return datetime.utcnow() + MSK_OFFSET
+
+
+def set_next_contact(lead, contact_date, contact_time, employee):
+    """Назначить созвон / встречу по заявке: в этот день назначившему придёт напоминание (CRM, Telegram, push).
+    Пустая дата — назначение не меняется."""
+    contact_date = (contact_date or "").strip()
+    contact_time = (contact_time or "").strip() or None
+    if not contact_date:
+        if contact_time:
+            raise HTTPException(400, "Укажите дату созвона или встречи")
+        return
+    try:
+        day = datetime.strptime(contact_date, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(400, "Неверная дата созвона или встречи")
+    now_msk = _today_msk()
+    if day < now_msk.date():
+        raise HTTPException(400, "Дата созвона или встречи уже прошла")
+    lead.next_contact_date = contact_date
+    lead.next_contact_time = contact_time
+    lead.next_contact_by = employee.id
+    # Назначили на сегодня уже после утреннего напоминания — сотрудник и так в курсе, повторно не шлём
+    lead.next_contact_notified = 1 if day == now_msk.date() and now_msk.hour >= CONTACT_REMIND_HOUR else 0
+
+
+CONTACT_REMIND_HOUR = 9  # во сколько (МСК) в день созвона / встречи уходит напоминание
+
+
+def update_lead_status(db, lead_id, status, result, employee, outcome=None, comment="", contact_date="", contact_time=""):
     """Жизненный цикл заявки: new (новая) → done (обработана, в работе: ждём клиента, перезвон…)
     → closed (закрыта с итогом positive / negative).
 
@@ -148,6 +182,7 @@ def update_lead_status(db, lead_id, status, result, employee, outcome=None, comm
             lead.result = result
             lead.processed_by = employee.id
             lead.processed_at = datetime.utcnow()
+        set_next_contact(lead, contact_date, contact_time, employee)
     elif status == "closed":
         if outcome not in ("positive", "negative"):
             raise HTTPException(400, "Выберите итог: положительный или отрицательный")
@@ -258,6 +293,83 @@ def link_contract(db, lead_id, contract_id, employee):
     db.commit()
     db.refresh(lead)
     return serialize_lead(db, lead)
+
+
+def _phone_key(phone):
+    import re
+
+    digits = re.sub(r"\D", "", phone or "")
+    return digits[-10:] if len(digits) >= 10 else None
+
+
+def close_leads_for_contract(db, contract, client, employee):
+    """Договор создан не кнопкой из заявки (обычным порядком) — открытые заявки (новые и обработанные)
+    с тем же телефоном клиента закрываются положительно и привязываются к договору."""
+    key = _phone_key(getattr(client, "phone", None))
+    if not key:
+        return []
+    closed = []
+    for lead in db.query(SiteLead).filter(SiteLead.status.in_(("new", "done"))).all():
+        if _phone_key(lead.phone) != key:
+            continue
+        lead.contract_id = contract.id
+        if not lead.result:
+            lead.result = f"Создан договор № {contract.contract_number}"
+            lead.processed_by = employee.id
+            lead.processed_at = datetime.utcnow()
+        lead.status = "closed"
+        lead.outcome = "positive"
+        lead.close_comment = f"Создан договор № {contract.contract_number}"
+        lead.closed_by = employee.id
+        lead.closed_at = datetime.utcnow()
+        closed.append(lead.id)
+    if closed:
+        db.commit()
+    return closed
+
+
+def _fmt_contact(lead):
+    day = datetime.strptime(lead.next_contact_date, "%Y-%m-%d").strftime("%d.%m.%Y")
+    return f"{day} в {lead.next_contact_time}" if lead.next_contact_time else day
+
+
+async def check_contact_reminders_once(now=None):
+    """Утром (CONTACT_REMIND_HOUR МСК) в день назначенного созвона / встречи — напоминание тому, кто назначил
+    (если его нет или он уволен — всем, у кого есть доступ к заявкам)."""
+    from services.lead_sla import MSK_OFFSET
+    from services.notification_dispatcher import dispatch_notification
+    from sqlalchemy import func
+    from sqlalchemy import text as sql
+
+    now_msk = (now or datetime.utcnow()) + MSK_OFFSET
+    if now_msk.hour < CONTACT_REMIND_HOUR:
+        return []
+    today = now_msk.strftime("%Y-%m-%d")
+    db = SessionLocal()
+    sent = []
+    try:
+        leads = db.query(SiteLead).filter(SiteLead.status == "done", SiteLead.next_contact_date == today, func.coalesce(SiteLead.next_contact_notified, 0) == 0).all()
+        for lead in leads:
+            # Атомарно «занимаем» отправку — сервер работает в нескольких процессах
+            claimed = db.execute(
+                sql("UPDATE site_leads SET next_contact_notified = 1 WHERE id = :id AND COALESCE(next_contact_notified, 0) = 0"),
+                {"id": lead.id},
+            ).rowcount
+            db.commit()
+            if not claimed:
+                continue
+            last = lead_actions(db, lead.id)
+            note = last[-1]["text"] if last else (lead.result or "")
+            message = f"Запланировано: {_fmt_contact(lead)}\n{lead_text(lead)}" + (f"\nПоследнее действие: {note}" if note else "")
+            author = db.query(Employee).filter(Employee.id == lead.next_contact_by, Employee.status == "активный").first() if lead.next_contact_by else None
+            recipients = [author.id] if author else [r[0] for r in _recipients(db)]
+            for employee_id in recipients:
+                await dispatch_notification(db, employee_id, "site_lead", f"Сегодня созвон / встреча по заявке: {lead.name}", message, related_entity_type="site_lead", related_entity_id=lead.id)
+            db.commit()
+            sent.append(lead.id)
+    finally:
+        db.close()
+    return sent
 
 
 def delete_lead(db, lead_id):

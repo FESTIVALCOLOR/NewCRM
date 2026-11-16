@@ -1609,6 +1609,12 @@ class SiteLead(Base):
     close_comment = Column(Text, nullable=True)
     closed_by = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
     closed_at = Column(DateTime, nullable=True)
+    # Назначенный созвон / встреча (заявка в «Обработанных»): дата ГГГГ-ММ-ДД, время ЧЧ:ММ (необязательно),
+    # кто назначил (ему в этот день уходит напоминание) и отправлено ли напоминание
+    next_contact_date = Column(String(10), nullable=True, index=True)
+    next_contact_time = Column(String(5), nullable=True)
+    next_contact_by = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    next_contact_notified = Column(Integer, default=0, nullable=True)
 
 
 class SiteLeadAction(Base):

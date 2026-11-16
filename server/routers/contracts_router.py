@@ -224,6 +224,18 @@ async def create_contract(contract_data: ContractCreate, current_user: Employee 
         db.commit()
         db.refresh(contract)
 
+        # Заявки с сайта от этого клиента (по телефону) — договор заключён, закрываем их положительно
+        if contract.project_type != "Авторский надзор":
+            try:
+                from services.site_leads import close_leads_for_contract
+
+                closed_leads = close_leads_for_contract(db, contract, client, current_user)
+                if closed_leads:
+                    logger.info(f"Договор {contract.id}: закрыты заявки с сайта {closed_leads}")
+            except Exception as _le:
+                db.rollback()
+                logger.warning(f"Закрытие заявок по договору {contract.id}: {_le}")
+
         # Авто-инициализация таймлайна (только если есть площадь)
         if contract.project_type != "Авторский надзор" and (contract.area or 0) > 0:
             try:

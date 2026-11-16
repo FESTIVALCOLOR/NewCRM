@@ -159,9 +159,15 @@ async def check_lead_sla_once():
 
 
 async def lead_sla_loop():
+    from services.site_leads import check_contact_reminders_once
+
     while True:
         try:
             await check_lead_sla_once()
         except Exception as e:
             logger.error(f"Таймер заявок: {e}")
+        try:
+            await check_contact_reminders_once()
+        except Exception as e:
+            logger.error(f"Напоминания о созвонах по заявкам: {e}")
         await asyncio.sleep(CHECK_INTERVAL_SEC)

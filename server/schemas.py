@@ -1812,6 +1812,10 @@ class SiteLeadResponse(BaseModel):
     closed_at: Optional[datetime] = None
     # Журнал действий по заявке в работе: [{id, text, employee_name, created_at}]
     actions: list[dict] = []
+    # Назначенный созвон / встреча: в этот день назначившему уходит напоминание
+    next_contact_date: Optional[str] = None
+    next_contact_time: Optional[str] = None
+    next_contact_by: Optional[int] = None
 
     class Config:
         from_attributes = True
@@ -1819,6 +1823,9 @@ class SiteLeadResponse(BaseModel):
 
 class SiteLeadActionCreate(BaseModel):
     text: str = Field(..., min_length=1, max_length=2000)
+    # Необязательно: следующий созвон / встреча (ГГГГ-ММ-ДД и ЧЧ:ММ)
+    contact_date: str = Field("", pattern=r"^(\d{4}-\d{2}-\d{2})?$")
+    contact_time: str = Field("", pattern=r"^(\d{2}:\d{2})?$")
 
 
 class SiteLeadStatusUpdate(BaseModel):
@@ -1829,6 +1836,9 @@ class SiteLeadStatusUpdate(BaseModel):
     # Итог закрытия (обязателен для closed) и комментарий к нему
     outcome: Optional[str] = Field(None, pattern="^(positive|negative)$")
     comment: str = Field("", max_length=2000)
+    # Необязательно при обработке: созвон / встреча (ГГГГ-ММ-ДД и ЧЧ:ММ)
+    contact_date: str = Field("", pattern=r"^(\d{4}-\d{2}-\d{2})?$")
+    contact_time: str = Field("", pattern=r"^(\d{2}:\d{2})?$")
 
 
 class SiteSectionResponse(BaseModel):

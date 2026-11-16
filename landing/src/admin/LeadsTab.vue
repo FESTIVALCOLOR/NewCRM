@@ -49,6 +49,9 @@
                   {{ act.text }}
                 </div>
               </div>
+              <div v-if="item.status === 'done' && item.next_contact_date" :class="['lead-row__contact', { 'lead-row__contact--today': item.next_contact_date === todayIso(), 'lead-row__contact--past': item.next_contact_date < todayIso() }]">
+                {{ item.next_contact_date === todayIso() ? 'Сегодня' : 'Созвон / встреча' }}: {{ contactLabel(item) }}
+              </div>
               <div v-if="item.status === 'closed'" :class="['lead-row__close', `lead-row__close--${item.outcome}`]">
                 <div class="lead-row__close-title">
                   {{ item.outcome === 'negative' ? 'Закрыта: отрицательный итог' : 'Закрыта: положительный итог' }}<span v-if="item.closed_by_name || item.closed_at" class="lead-row__result-who">
@@ -61,6 +64,11 @@
               <!-- Обработка: результат -->
               <div v-if="editing.id === item.id && editing.mode === 'process'" class="lead-row__process">
                 <textarea v-model="editing.text" rows="3" maxlength="2000" placeholder="Результат обработки: созвонились, назначили замер, клиент думает…" />
+                <div class="lead-row__contact-edit">
+                  <label>Созвон / встреча: <input v-model="editing.date" type="date" :min="todayIso()" /></label>
+                  <label>время <input v-model="editing.time" type="time" :disabled="!editing.date" /></label>
+                  <span class="lead-row__contact-hint">необязательно — утром в этот день придёт напоминание в Telegram</span>
+                </div>
                 <div class="lead-row__process-actions">
                   <button class="btn-sm btn-active" :disabled="!editing.text.trim()" @click="submitDone(item)">Отметить обработанной</button>
                   <button class="btn-sm" @click="editing.id = null">Отмена</button>
@@ -69,6 +77,11 @@
               <!-- Ещё одно действие по заявке в работе -->
               <div v-if="editing.id === item.id && editing.mode === 'action'" class="lead-row__process">
                 <textarea v-model="editing.text" rows="3" maxlength="2000" placeholder="Что сделано и результат: перезвонил — клиент согласовал замер; провели замер, готовим КП…" />
+                <div class="lead-row__contact-edit">
+                  <label>Созвон / встреча: <input v-model="editing.date" type="date" :min="todayIso()" /></label>
+                  <label>время <input v-model="editing.time" type="time" :disabled="!editing.date" /></label>
+                  <span class="lead-row__contact-hint">необязательно — утром в этот день придёт напоминание в Telegram</span>
+                </div>
                 <div class="lead-row__process-actions">
                   <button class="btn-sm btn-active" :disabled="!editing.text.trim()" @click="submitAction(item)">Добавить действие</button>
                   <button class="btn-sm" @click="editing.id = null">Отмена</button>
@@ -131,7 +144,20 @@ const leads = ref([])
 const counts = ref({ new: 0, done: 0, closed: 0 })
 const filter = ref('new')
 const loading = ref(false)
-const editing = reactive({ id: null, mode: '', text: '', outcome: null })
+const editing = reactive({ id: null, mode: '', text: '', outcome: null, date: '', time: '' })
+
+// Назначенный созвон / встреча
+function todayIso() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+function contactLabel(item) {
+  const [y, m, d] = item.next_contact_date.split('-')
+  return `${d}.${m}.${y}${item.next_contact_time ? ` в ${item.next_contact_time}` : ''}`
+}
+function contactPayload() {
+  return { contact_date: editing.date || '', contact_time: (editing.date && editing.time) || '' }
+}
 
 // Готовый дизайн — заявки из калькулятора готовых проектов; остальное (тарифы и пр.) — индивидуальный дизайн
 const columns = computed(() => [
@@ -199,12 +225,12 @@ function applyUpdated(item, updated) {
 }
 
 function startEdit(item, mode) {
-  Object.assign(editing, { id: item.id, mode, text: mode === 'process' ? (item.result || '') : '', outcome: null })
+  Object.assign(editing, { id: item.id, mode, text: mode === 'process' ? (item.result || '') : '', outcome: null, date: '', time: '' })
 }
 
 async function submitDone(item) {
   try {
-    applyUpdated(item, await api.leads.setStatus(item.id, 'done', editing.text.trim()))
+    applyUpdated(item, await api.leads.setStatus(item.id, 'done', editing.text.trim(), null, '', contactPayload()))
     editing.id = null
     props.toast('Заявка обработана — она в «Обработанных»')
   } catch (e) { props.toast(e.message, 'error') }
@@ -212,7 +238,7 @@ async function submitDone(item) {
 
 async function submitAction(item) {
   try {
-    applyUpdated(item, await api.leads.addAction(item.id, editing.text.trim()))
+    applyUpdated(item, await api.leads.addAction(item.id, editing.text.trim(), contactPayload()))
     editing.id = null
     props.toast('Действие добавлено')
   } catch (e) { props.toast(e.message, 'error') }
@@ -288,6 +314,12 @@ onUnmounted(() => {
 .lead-row__result { margin-top: 6px; font-size: 0.85rem; color: #374151; white-space: pre-line; background: #f1f8f2; border-left: 3px solid #66bb6a; padding: 6px 10px; }
 .lead-row__result-title { font-weight: 600; color: #2e7d32; white-space: normal; }
 .lead-row__result-who { font-weight: 400; color: #6b7280; }
+.lead-row__contact { display: inline-block; margin-top: 6px; padding: 3px 10px; border-radius: 6px; font-size: 0.85rem; font-weight: 500; color: #374151; background: #f3f4f6; border: 1px solid #e5e7eb; }
+.lead-row__contact--today { color: #b26a00; background: #fff4e0; border-color: #ffcc80; }
+.lead-row__contact--past { color: #9ca3af; text-decoration: line-through; }
+.lead-row__contact-edit { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 6px 0; font-size: 0.85rem; color: #374151; }
+.lead-row__contact-edit input { margin-left: 4px; padding: 3px 6px; border: 1px solid #d1d5db; border-radius: 4px; font: inherit; }
+.lead-row__contact-hint { color: #6b7280; font-size: 0.8rem; }
 .lead-row__action { margin-top: 6px; padding-top: 6px; border-top: 1px dashed #a5d6a7; }
 .lead-row__close { margin-top: 6px; font-size: 0.85rem; color: #374151; white-space: pre-line; padding: 6px 10px; background: rgba(255, 255, 255, 0.6); }
 .lead-row__close--positive { border-left: 3px solid #27ae60; }

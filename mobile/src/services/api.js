@@ -209,13 +209,14 @@ export const leadsApi = {
   getList: (status = '') => api.get('/api/v1/leads', { params: status ? { status } : {} }),
   countNew: () => api.get('/api/v1/leads/count'),
   // status: new / done (обработана, в работе) / closed (закрыта; outcome: positive | negative)
-  setStatus: (id, status, result = '', outcome = null, comment = '') => api.put(`/api/v1/leads/${id}`, { status, result, outcome, comment }),
+  // contact: { contact_date: 'ГГГГ-ММ-ДД', contact_time: 'ЧЧ:ММ' } — назначенный созвон / встреча (необязательно)
+  setStatus: (id, status, result = '', outcome = null, comment = '', contact = {}) => api.put(`/api/v1/leads/${id}`, { status, result, outcome, comment, ...contact }),
   remove: (id) => api.delete(`/api/v1/leads/${id}`),
   // «Создать договор» из заявки: клиент + предзаполнение формы; после создания — привязка договора
   prepareContract: (id) => api.post(`/api/v1/leads/${id}/prepare-contract`),
   linkContract: (id, contractId) => api.post(`/api/v1/leads/${id}/contract/${contractId}`),
   // Ещё одно действие по обработанной заявке (журнал работы с клиентом)
-  addAction: (id, text) => api.post(`/api/v1/leads/${id}/actions`, { text }),
+  addAction: (id, text, contact = {}) => api.post(`/api/v1/leads/${id}/actions`, { text, ...contact }),
 }
 
 // === Оплаты клиента по договору (СБП-ссылка, документ об оплате, доп. соглашения, возвраты) ===
