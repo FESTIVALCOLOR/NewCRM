@@ -1611,6 +1611,17 @@ class SiteLead(Base):
     closed_at = Column(DateTime, nullable=True)
 
 
+class SiteLeadAction(Base):
+    """Журнал действий по заявке в работе (перезвон, встреча, замер…): что сделано, кто и когда."""
+
+    __tablename__ = "site_lead_actions"
+    id = Column(Integer, primary_key=True)
+    lead_id = Column(Integer, ForeignKey("site_leads.id", ondelete="CASCADE"), nullable=False, index=True)
+    text = Column(Text, nullable=False)
+    employee_id = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 # =========================
 # ОПЛАТЫ КЛИЕНТА ПО ДОГОВОРУ (приход / возврат) И ДОКУМЕНТЫ ОБ ОПЛАТЕ
 # =========================

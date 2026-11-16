@@ -40,6 +40,14 @@
                     — {{ item.processed_by_name || 'сотрудник' }}<template v-if="item.processed_at">, {{ fmt(item.processed_at) }}</template></span>
                 </div>
                 {{ item.result }}
+                <!-- Дальнейшие действия по заявке в работе (журнал) -->
+                <div v-for="(act, idx) in item.actions || []" :key="act.id" class="lead-row__action">
+                  <div class="lead-row__result-title">
+                    Действие {{ idx + 2 }}<span class="lead-row__result-who">
+                      — {{ act.employee_name || 'сотрудник' }}<template v-if="act.created_at">, {{ fmt(act.created_at) }}</template></span>
+                  </div>
+                  {{ act.text }}
+                </div>
               </div>
               <div v-if="item.status === 'closed'" :class="['lead-row__close', `lead-row__close--${item.outcome}`]">
                 <div class="lead-row__close-title">
@@ -55,6 +63,14 @@
                 <textarea v-model="editing.text" rows="3" maxlength="2000" placeholder="Результат обработки: созвонились, назначили замер, клиент думает…" />
                 <div class="lead-row__process-actions">
                   <button class="btn-sm btn-active" :disabled="!editing.text.trim()" @click="submitDone(item)">Отметить обработанной</button>
+                  <button class="btn-sm" @click="editing.id = null">Отмена</button>
+                </div>
+              </div>
+              <!-- Ещё одно действие по заявке в работе -->
+              <div v-if="editing.id === item.id && editing.mode === 'action'" class="lead-row__process">
+                <textarea v-model="editing.text" rows="3" maxlength="2000" placeholder="Что сделано и результат: перезвонил — клиент согласовал замер; провели замер, готовим КП…" />
+                <div class="lead-row__process-actions">
+                  <button class="btn-sm btn-active" :disabled="!editing.text.trim()" @click="submitAction(item)">Добавить действие</button>
                   <button class="btn-sm" @click="editing.id = null">Отмена</button>
                 </div>
               </div>
@@ -81,6 +97,7 @@
               <span class="lead-row__date">{{ fmt(item.created_at) }}</span>
               <template v-if="editing.id !== item.id">
                 <button v-if="item.status === 'new'" class="btn-sm" @click="startEdit(item, 'process')">Обработать</button>
+                <button v-if="item.status === 'done'" class="btn-sm" @click="startEdit(item, 'action')">Добавить действие</button>
                 <button v-if="item.status === 'done'" class="btn-sm" @click="startEdit(item, 'close')">Закрыть</button>
                 <button v-if="item.status === 'done'" class="btn-sm" @click="setStatus(item, 'new')">Вернуть в новые</button>
                 <button v-if="item.status === 'closed'" class="btn-sm" @click="setStatus(item, 'done')">Вернуть в работу</button>
@@ -193,6 +210,14 @@ async function submitDone(item) {
   } catch (e) { props.toast(e.message, 'error') }
 }
 
+async function submitAction(item) {
+  try {
+    applyUpdated(item, await api.leads.addAction(item.id, editing.text.trim()))
+    editing.id = null
+    props.toast('Действие добавлено')
+  } catch (e) { props.toast(e.message, 'error') }
+}
+
 async function submitClose(item) {
   try {
     applyUpdated(item, await api.leads.setStatus(item.id, 'closed', '', editing.outcome, editing.text.trim()))
@@ -263,6 +288,7 @@ onUnmounted(() => {
 .lead-row__result { margin-top: 6px; font-size: 0.85rem; color: #374151; white-space: pre-line; background: #f1f8f2; border-left: 3px solid #66bb6a; padding: 6px 10px; }
 .lead-row__result-title { font-weight: 600; color: #2e7d32; white-space: normal; }
 .lead-row__result-who { font-weight: 400; color: #6b7280; }
+.lead-row__action { margin-top: 6px; padding-top: 6px; border-top: 1px dashed #a5d6a7; }
 .lead-row__close { margin-top: 6px; font-size: 0.85rem; color: #374151; white-space: pre-line; padding: 6px 10px; background: rgba(255, 255, 255, 0.6); }
 .lead-row__close--positive { border-left: 3px solid #27ae60; }
 .lead-row__close--negative { border-left: 3px solid #c0392b; }

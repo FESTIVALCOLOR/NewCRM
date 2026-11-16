@@ -56,6 +56,8 @@ export const leads = {
   // status: new / done (обработана, в работе) / closed (закрыта; outcome: positive | negative)
   setStatus: (id, status, result = '', outcome = null, comment = '') => req('PUT', `/site/admin/leads/${id}`, { status, result, outcome, comment }),
   count: () => req('GET', '/site/admin/leads/count'),
+  // Ещё одно действие по обработанной заявке (журнал работы с клиентом)
+  addAction: (id, text) => req('POST', `/site/admin/leads/${id}/actions`, { text }),
   delete: (id) => req('DELETE', `/site/admin/leads/${id}`),
 }
 

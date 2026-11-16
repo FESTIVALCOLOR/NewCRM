@@ -214,6 +214,8 @@ export const leadsApi = {
   // «Создать договор» из заявки: клиент + предзаполнение формы; после создания — привязка договора
   prepareContract: (id) => api.post(`/api/v1/leads/${id}/prepare-contract`),
   linkContract: (id, contractId) => api.post(`/api/v1/leads/${id}/contract/${contractId}`),
+  // Ещё одно действие по обработанной заявке (журнал работы с клиентом)
+  addAction: (id, text) => api.post(`/api/v1/leads/${id}/actions`, { text }),
 }
 
 // === Оплаты клиента по договору (СБП-ссылка, документ об оплате, доп. соглашения, возвраты) ===

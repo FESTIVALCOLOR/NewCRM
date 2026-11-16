@@ -5,7 +5,7 @@
 
 from fastapi import APIRouter, Depends
 from permissions import require_permission
-from schemas import SiteLeadResponse, SiteLeadStatusUpdate
+from schemas import SiteLeadActionCreate, SiteLeadResponse, SiteLeadStatusUpdate
 from services import site_leads
 from sqlalchemy.orm import Session
 
@@ -27,6 +27,12 @@ def count_new_leads(db: Session = Depends(get_db), _: Employee = Depends(require
 @router.put("/{lead_id}", response_model=SiteLeadResponse)
 def update_lead_status(lead_id: int, data: SiteLeadStatusUpdate, db: Session = Depends(get_db), user: Employee = Depends(require_permission("access.leads"))):
     return site_leads.update_lead_status(db, lead_id, data.status, data.result, user, data.outcome, data.comment)
+
+
+@router.post("/{lead_id}/actions", response_model=SiteLeadResponse)
+def add_lead_action(lead_id: int, data: SiteLeadActionCreate, db: Session = Depends(get_db), user: Employee = Depends(require_permission("access.leads"))):
+    """Ещё одно действие по обработанной заявке (журнал работы с клиентом)."""
+    return site_leads.add_lead_action(db, lead_id, data.text, user)
 
 
 @router.post("/{lead_id}/prepare-contract")

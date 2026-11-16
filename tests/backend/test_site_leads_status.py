@@ -21,7 +21,13 @@ from sqlalchemy.orm import sessionmaker  # noqa: E402
 @pytest.fixture()
 def db():
     engine = create_engine("sqlite://")
-    tables = [database.Employee.__table__, database.Client.__table__, database.Contract.__table__, database.SiteLead.__table__]
+    tables = [
+        database.Employee.__table__,
+        database.Client.__table__,
+        database.Contract.__table__,
+        database.SiteLead.__table__,
+        database.SiteLeadAction.__table__,
+    ]
     database.Base.metadata.create_all(engine, tables=tables)
     session = sessionmaker(bind=engine)()
     manager = database.Employee(full_name="Иванова Светлана", login="man", position="Менеджер", phone="0", password_hash="x", department="Тест", status="активный")
@@ -69,6 +75,25 @@ def test_back_to_new_restarts_timer(db):
     site_leads.update_lead_status(db, lead.id, "done", "Ок", db.manager)
     data = site_leads.update_lead_status(db, lead.id, "new", "", db.manager)
     assert data["status"] == "new" and data["sla"] is not None and data["sla_notified"] == 0
+
+
+def test_several_actions_in_work(db):
+    lead = make_lead(db)
+    with pytest.raises(HTTPException):
+        site_leads.add_lead_action(db, lead.id, "Позвонил", db.manager)  # новая — сначала «Обработать»
+    site_leads.update_lead_status(db, lead.id, "done", "Перезвонить в среду", db.manager)
+    with pytest.raises(HTTPException):
+        site_leads.add_lead_action(db, lead.id, "   ", db.manager)  # пустое действие нельзя
+    site_leads.add_lead_action(db, lead.id, "Перезвонил, договорились о замере", db.manager)
+    data = site_leads.add_lead_action(db, lead.id, "Замер проведён, готовим КП", db.manager)
+    assert [a["text"] for a in data["actions"]] == ["Перезвонил, договорились о замере", "Замер проведён, готовим КП"]
+    assert data["actions"][0]["employee_name"] == "Иванова Светлана"
+    assert data["result"] == "Перезвонить в среду" and data["status"] == "done"
+
+    closed = site_leads.update_lead_status(db, lead.id, "closed", "", db.manager, "positive")
+    assert len(closed["actions"]) == 2  # журнал виден и у закрытой
+    site_leads.delete_lead(db, lead.id)
+    assert db.query(database.SiteLeadAction).count() == 0
 
 
 def test_contract_from_lead_closes_positive(db):

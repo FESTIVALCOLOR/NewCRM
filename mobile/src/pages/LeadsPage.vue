@@ -104,6 +104,16 @@
               <div class="lead-card__result-text">
                 {{ item.result }}
               </div>
+              <!-- Дальнейшие действия по заявке в работе (журнал) -->
+              <div v-for="(act, idx) in item.actions || []" :key="act.id" class="lead-card__action">
+                <div class="lead-card__action-title">
+                  Действие {{ idx + 2 }}
+                  <span class="lead-card__result-who">— {{ act.employee_name || 'сотрудник' }}<template v-if="act.created_at">, {{ fmt(act.created_at) }}</template></span>
+                </div>
+                <div class="lead-card__result-text">
+                  {{ act.text }}
+                </div>
+              </div>
             </div>
 
             <div v-if="item.status === 'closed'" :class="['lead-card__close', `lead-card__close--${item.outcome}`]">
@@ -151,6 +161,17 @@
                 label="Обработать"
                 class="lead-btn"
                 @click="openProcess(item)"
+              />
+              <q-btn
+                v-if="item.status === 'done'"
+                outline
+                dense
+                no-caps
+                color="positive"
+                icon="playlist_add"
+                label="Добавить действие"
+                class="lead-btn"
+                @click="openAction(item)"
               />
               <q-btn
                 v-if="item.status === 'done'"
@@ -209,7 +230,7 @@
     <q-dialog v-model="processDialog" persistent>
       <q-card class="lead-dialog">
         <q-card-section class="lead-dialog__title">
-          Результат обработки заявки
+          {{ dialogMode === 'action' ? 'Новое действие по заявке' : 'Результат обработки заявки' }}
         </q-card-section>
         <q-card-section class="q-pt-none">
           <div class="text-grey-8 q-mb-sm">
@@ -223,10 +244,14 @@
             autofocus
             maxlength="2000"
             input-style="min-height: 90px"
-            placeholder="Например: созвонились, договорились о замере 20.11; клиент думает, перезвонить через неделю…"
+            :placeholder="dialogMode === 'action'
+              ? 'Что сделано и результат: перезвонил — клиент согласовал замер; провели замер, готовим КП…'
+              : 'Например: созвонились, договорились о замере 20.11; клиент думает, перезвонить через неделю…'"
           />
           <div class="text-caption text-grey-7 q-mt-xs">
-            Заявка перейдёт в «Обработанные». Когда с клиентом всё решится — закройте её с итогом.
+            {{ dialogMode === 'action'
+              ? 'Действие добавится в журнал заявки, она останется в «Обработанных».'
+              : 'Заявка перейдёт в «Обработанные». Когда с клиентом всё решится — закройте её с итогом.' }}
           </div>
         </q-card-section>
         <q-card-actions align="right">
@@ -241,7 +266,7 @@
             outline
             no-caps
             color="positive"
-            label="Отметить обработанной"
+            :label="dialogMode === 'action' ? 'Добавить' : 'Отметить обработанной'"
             :disable="!resultText.trim()"
             :loading="saving"
             @click="submitProcess"
@@ -331,6 +356,7 @@ const busyId = ref(null)
 
 const processDialog = ref(false)
 const closeDialog = ref(false)
+const dialogMode = ref('process') // process — первая обработка, action — ещё одно действие
 const processing = ref(null)
 const resultText = ref('')
 const outcome = ref(null)
@@ -434,7 +460,16 @@ function applyUpdated(item, updated) {
 
 function openProcess(item) {
   processing.value = item
+  dialogMode.value = 'process'
   resultText.value = item.result || ''
+  processDialog.value = true
+}
+
+// Ещё одно действие по заявке в работе — их может быть сколько угодно
+function openAction(item) {
+  processing.value = item
+  dialogMode.value = 'action'
+  resultText.value = ''
   processDialog.value = true
 }
 
@@ -443,10 +478,13 @@ async function submitProcess() {
   if (!item || !resultText.value.trim()) return
   saving.value = true
   try {
-    const { data } = await leadsApi.setStatus(item.id, 'done', resultText.value.trim())
+    const isAction = dialogMode.value === 'action'
+    const { data } = isAction
+      ? await leadsApi.addAction(item.id, resultText.value.trim())
+      : await leadsApi.setStatus(item.id, 'done', resultText.value.trim())
     applyUpdated(item, data)
     processDialog.value = false
-    $q.notify({ type: 'positive', message: 'Заявка обработана — она в «Обработанных»' })
+    $q.notify({ type: 'positive', message: isAction ? 'Действие добавлено' : 'Заявка обработана — она в «Обработанных»' })
   } catch (e) {
     $q.notify({ type: 'negative', message: errorText(e) })
   } finally {
@@ -566,6 +604,8 @@ function confirmDelete(item) {
 .lead-card--negative { background: rgba(231, 76, 60, 0.09); border-color: rgba(231, 76, 60, 0.35); }
 .lead-status--positive { background: rgba(39, 174, 96, 0.16); color: var(--fc-green); }
 .lead-status--negative { background: rgba(231, 76, 60, 0.14); color: var(--fc-red); }
+.lead-card__action { margin-top: 6px; padding-top: 6px; border-top: 1px dashed rgba(102, 187, 106, 0.45); }
+.lead-card__action-title { font-size: 12px; font-weight: 600; color: var(--fc-green); }
 .lead-card__close { margin-top: 8px; padding: 6px 10px; border-radius: 0 6px 6px 0; }
 .lead-card__close--positive { border-left: 3px solid var(--fc-green); background: rgba(39, 174, 96, 0.08); }
 .lead-card__close--negative { border-left: 3px solid var(--fc-red); background: rgba(231, 76, 60, 0.08); }

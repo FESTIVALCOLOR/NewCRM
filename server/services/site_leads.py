@@ -8,7 +8,7 @@ import logging
 
 from fastapi import HTTPException
 
-from database import Employee, SessionLocal, SiteLead
+from database import Employee, SessionLocal, SiteLead, SiteLeadAction
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +66,34 @@ def serialize_lead(db, lead):
 
         row = db.query(Contract.contract_number).filter(Contract.id == lead.contract_id).first()
         data["contract_number"] = row[0] if row else None
+    data["actions"] = lead_actions(db, lead.id)
     return data
+
+
+def lead_actions(db, lead_id):
+    """Журнал действий по заявке (по порядку): [{id, text, employee_name, created_at}]."""
+    rows = (
+        db.query(SiteLeadAction, Employee.full_name)
+        .outerjoin(Employee, Employee.id == SiteLeadAction.employee_id)
+        .filter(SiteLeadAction.lead_id == lead_id)
+        .order_by(SiteLeadAction.created_at, SiteLeadAction.id)
+        .all()
+    )
+    return [{"id": a.id, "text": a.text, "employee_name": name, "created_at": a.created_at} for a, name in rows]
+
+
+def add_lead_action(db, lead_id, text, employee):
+    """«Добавить действие» у обработанной заявки: ещё один шаг работы с клиентом (их может быть сколько угодно)."""
+    lead = get_lead_or_404(db, lead_id)
+    text = (text or "").strip()
+    if not text:
+        raise HTTPException(400, "Опишите действие и его результат")
+    if lead.status != "done":
+        raise HTTPException(400, "Действия добавляются к заявкам в «Обработанных»")
+    db.add(SiteLeadAction(lead_id=lead.id, text=text, employee_id=employee.id, created_at=datetime.utcnow()))
+    db.commit()
+    db.refresh(lead)
+    return serialize_lead(db, lead)
 
 
 def list_leads(db, status=""):
@@ -235,6 +262,7 @@ def link_contract(db, lead_id, contract_id, employee):
 
 def delete_lead(db, lead_id):
     lead = get_lead_or_404(db, lead_id)
+    db.query(SiteLeadAction).filter(SiteLeadAction.lead_id == lead.id).delete(synchronize_session=False)
     db.delete(lead)
     db.commit()
 

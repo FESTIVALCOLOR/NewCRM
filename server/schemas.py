@@ -1810,9 +1810,15 @@ class SiteLeadResponse(BaseModel):
     closed_by: Optional[int] = None
     closed_by_name: Optional[str] = None
     closed_at: Optional[datetime] = None
+    # Журнал действий по заявке в работе: [{id, text, employee_name, created_at}]
+    actions: list[dict] = []
 
     class Config:
         from_attributes = True
+
+
+class SiteLeadActionCreate(BaseModel):
+    text: str = Field(..., min_length=1, max_length=2000)
 
 
 class SiteLeadStatusUpdate(BaseModel):
