@@ -1,0 +1,24 @@
+[Unit]
+Description=Telegram HTTP CONNECT Proxy
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/interior_studio
+ExecStart=/usr/bin/python3 /opt/interior_studio/tg_proxy.py
+Restart=always
+RestartSec=10
+Environment=PROXY_PORT=3128
+# PROXY_HOST=172.18.0.1 — Docker bridge, недоступен из интернета (безопасный дефолт)
+
+# Лимиты файловых дескрипторов — без этого прокси падает при ~1024 соединениях
+LimitNOFILE=65536
+
+# Логи: только WARNING и выше — не засорять syslog INFO-строками о каждом CONNECT
+StandardOutput=append:/var/log/tg_proxy.log
+StandardError=append:/var/log/tg_proxy.log
+SyslogIdentifier=tg-proxy
+
+[Install]
+WantedBy=multi-user.target

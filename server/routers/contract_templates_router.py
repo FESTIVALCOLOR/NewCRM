@@ -1,0 +1,399 @@
+"""
+Роутер для управления шаблонами договоров и реквизитами компании.
+
+Файлы хранятся на Яндекс.Диске:
+  Реквизиты : disk:/CRM/Системные/Реквизиты/{type}.{ext}
+  Шаблоны   : disk:/CRM/Системные/Шаблоны/{project_type}_{doc_type}.docx
+
+Endpoints:
+  GET    /api/v1/contract-templates/requisites                — список реквизитов
+  POST   /api/v1/contract-templates/requisites/{type}         — загрузить реквизит (image)
+  DELETE /api/v1/contract-templates/requisites/{type}         — удалить реквизит
+
+  GET    /api/v1/contract-templates/templates                 — все шаблоны
+  POST   /api/v1/contract-templates/templates/{project_type}/{doc_type}  — загрузить шаблон
+  DELETE /api/v1/contract-templates/templates/{project_type}/{doc_type}  — удалить шаблон
+
+  POST   /api/v1/contract-templates/generate                  — сгенерировать документ
+"""
+
+from datetime import datetime
+from urllib.parse import quote
+
+from auth import get_current_user as get_current_active_user
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import Response
+from permissions import check_permission
+from schemas import (
+    CompanyRequisiteResponse,
+    CompositionTemplateResponse,
+    ContractTemplateResponse,
+    GenerateContractRequest,
+    GenerateContractResponse,
+)
+from services.docx_generator import generate_document, generate_document_for_print
+from sqlalchemy.orm import Session
+from yandex_disk_service import YandexDiskService
+
+from database import CompanyRequisite, CompositionTemplate, ContractTemplate, Employee, get_db
+
+router = APIRouter(prefix="/api/v1/contract-templates", tags=["contract-templates"])
+
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
+ALLOWED_DOC_TYPES = {
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/msword",
+    "application/octet-stream",
+}
+VALID_REQUISITE_TYPES = {"signature", "signature_name", "seal"}
+# Логотипы агентов — динамические типы вида logo_<agent_name>
+
+
+def _is_valid_requisite_type(req_type: str) -> bool:
+    return req_type in VALID_REQUISITE_TYPES or req_type.startswith("logo_")
+
+
+VALID_PROJECT_TYPES = {"Индивидуальный", "Шаблонный", "Авторский надзор"}
+VALID_DOC_TYPES = {"contract", "contract_print", "act_pr", "act_kd", "act_info", "act_final"}
+VALID_CLIENT_TYPES = {"физ", "юр"}
+
+# Папки на ЯД (без «disk:» префикса — YandexDiskService принимает без него)
+YD_REQUISITES_FOLDER = "/CRM/Системные/Реквизиты"
+YD_TEMPLATES_FOLDER = "/CRM/Системные/Шаблоны"
+YD_COMPOSITIONS_FOLDER = "/CRM/Системные/Составы"
+
+
+def _require_admin(current_user: Employee = Depends(get_current_active_user)):
+    if current_user.role not in ("admin", "director") and current_user.position not in (
+        "Руководитель студии",
+        "Старший менеджер проектов",
+    ):
+        raise HTTPException(status_code=403, detail="Доступ запрещён")
+    return current_user
+
+
+# ─── Реквизиты ───────────────────────────────────────────────────────────────
+
+
+@router.get("/requisites", response_model=list[CompanyRequisiteResponse])
+def get_requisites(
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_active_user),
+):
+    return db.query(CompanyRequisite).all()
+
+
+@router.post("/requisites/{requisite_type}", response_model=CompanyRequisiteResponse)
+async def upload_requisite(
+    requisite_type: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(_require_admin),
+):
+    if not _is_valid_requisite_type(requisite_type):
+        raise HTTPException(status_code=400, detail=f"Неверный тип реквизита: {requisite_type}")
+    if file.content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(status_code=400, detail="Разрешены только изображения (JPEG/PNG/WebP)")
+
+    import os
+
+    ext = os.path.splitext(file.filename or "")[1] or ".png"
+    yd_path = f"{YD_REQUISITES_FOLDER}/{requisite_type}{ext}"
+
+    content = await file.read()
+    yd = YandexDiskService()
+    try:
+        yd.upload_file_from_bytes(content, yd_path)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки на ЯД: {e}")
+
+    existing = db.query(CompanyRequisite).filter(CompanyRequisite.requisite_type == requisite_type).first()
+    if existing:
+        existing.file_name = file.filename or f"{requisite_type}{ext}"
+        existing.file_path = yd_path
+        existing.updated_at = datetime.utcnow()
+        existing.updated_by = current_user.id
+        db.commit()
+        db.refresh(existing)
+        return existing
+
+    req = CompanyRequisite(
+        requisite_type=requisite_type,
+        file_name=file.filename or f"{requisite_type}{ext}",
+        file_path=yd_path,
+        updated_by=current_user.id,
+    )
+    db.add(req)
+    db.commit()
+    db.refresh(req)
+    return req
+
+
+@router.delete("/requisites/{requisite_type}", status_code=204)
+def delete_requisite(
+    requisite_type: str,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(_require_admin),
+):
+    req = db.query(CompanyRequisite).filter(CompanyRequisite.requisite_type == requisite_type).first()
+    if not req:
+        raise HTTPException(status_code=404, detail="Реквизит не найден")
+    yd = YandexDiskService()
+    try:
+        yd.delete_file(req.file_path)
+    except Exception:
+        pass  # файл мог быть удалён вручную, не блокируем удаление записи
+    db.delete(req)
+    db.commit()
+
+
+# ─── Шаблоны договоров ───────────────────────────────────────────────────────
+
+
+@router.get("/templates", response_model=list[ContractTemplateResponse])
+def get_templates(
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_active_user),
+):
+    return db.query(ContractTemplate).all()
+
+
+@router.post("/templates/{project_type}/{doc_type}/{client_type}", response_model=ContractTemplateResponse)
+async def upload_template(
+    project_type: str,
+    doc_type: str,
+    client_type: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(_require_admin),
+):
+    if project_type not in VALID_PROJECT_TYPES:
+        raise HTTPException(status_code=400, detail=f"Неверный тип проекта: {project_type}")
+    if doc_type not in VALID_DOC_TYPES:
+        raise HTTPException(status_code=400, detail=f"Неверный тип документа: {doc_type}")
+    if client_type not in VALID_CLIENT_TYPES:
+        raise HTTPException(status_code=400, detail=f"Неверный тип клиента: {client_type}. Допустимо: физ, юр")
+
+    import os
+
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in (".docx", ".dotx", ".doc"):
+        raise HTTPException(status_code=400, detail="Разрешены только DOCX/DOC/DOTX файлы")
+
+    safe_type = project_type.replace(" ", "_")
+    file_name = f"{safe_type}_{doc_type}_{client_type}{ext}"
+    yd_path = f"{YD_TEMPLATES_FOLDER}/{file_name}"
+
+    content = await file.read()
+    yd = YandexDiskService()
+    try:
+        yd.upload_file_from_bytes(content, yd_path)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки на ЯД: {e}")
+
+    existing = (
+        db.query(ContractTemplate)
+        .filter(
+            ContractTemplate.project_type == project_type,
+            ContractTemplate.doc_type == doc_type,
+            ContractTemplate.client_type == client_type,
+        )
+        .first()
+    )
+    if existing:
+        existing.file_name = file.filename or file_name
+        existing.file_path = yd_path
+        existing.uploaded_at = datetime.utcnow()
+        existing.uploaded_by = current_user.id
+        db.commit()
+        db.refresh(existing)
+        return existing
+
+    tmpl = ContractTemplate(
+        project_type=project_type,
+        doc_type=doc_type,
+        client_type=client_type,
+        file_name=file.filename or file_name,
+        file_path=yd_path,
+        uploaded_by=current_user.id,
+    )
+    db.add(tmpl)
+    db.commit()
+    db.refresh(tmpl)
+    return tmpl
+
+
+@router.delete("/templates/{project_type}/{doc_type}/{client_type}", status_code=204)
+def delete_template(
+    project_type: str,
+    doc_type: str,
+    client_type: str,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(_require_admin),
+):
+    tmpl = (
+        db.query(ContractTemplate)
+        .filter(
+            ContractTemplate.project_type == project_type,
+            ContractTemplate.doc_type == doc_type,
+            ContractTemplate.client_type == client_type,
+        )
+        .first()
+    )
+    if not tmpl:
+        raise HTTPException(status_code=404, detail="Шаблон не найден")
+    yd = YandexDiskService()
+    try:
+        yd.delete_file(tmpl.file_path)
+    except Exception:
+        pass
+    db.delete(tmpl)
+    db.commit()
+
+
+# ─── Составы проекта ──────────────────────────────────────────────────────────
+
+
+@router.get("/composition-templates", response_model=list[CompositionTemplateResponse])
+def get_composition_templates(db: Session = Depends(get_db), current_user: Employee = Depends(get_current_active_user)):
+    return db.query(CompositionTemplate).all()
+
+
+@router.post("/composition-templates/{project_type}/{project_subtype}/{client_type}", response_model=CompositionTemplateResponse)
+async def upload_composition_template(
+    project_type: str,
+    project_subtype: str,
+    client_type: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(_require_admin),
+):
+    if project_type not in VALID_PROJECT_TYPES:
+        raise HTTPException(status_code=400, detail=f"Неверный тип проекта: {project_type}")
+    if client_type not in VALID_CLIENT_TYPES:
+        raise HTTPException(status_code=400, detail=f"Неверный тип клиента: {client_type}")
+
+    import os
+
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in (".docx", ".dotx", ".doc"):
+        raise HTTPException(status_code=400, detail="Разрешены только DOCX/DOC/DOTX файлы")
+
+    safe_type = project_type.replace(" ", "_")
+    safe_sub = project_subtype.replace(" ", "_").replace("(", "").replace(")", "").replace("/", "_")
+    file_name = f"{safe_type}_{safe_sub}_{client_type}{ext}"
+    yd_path = f"{YD_COMPOSITIONS_FOLDER}/{file_name}"
+
+    content = await file.read()
+    yd = YandexDiskService()
+    try:
+        yd.upload_file_from_bytes(content, yd_path)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки на ЯД: {e}")
+
+    existing = (
+        db.query(CompositionTemplate)
+        .filter(
+            CompositionTemplate.project_type == project_type,
+            CompositionTemplate.project_subtype == project_subtype,
+            CompositionTemplate.client_type == client_type,
+        )
+        .first()
+    )
+    if existing:
+        existing.file_name = file.filename or file_name
+        existing.file_path = yd_path
+        existing.uploaded_at = datetime.utcnow()
+        existing.uploaded_by = current_user.id
+        db.commit()
+        db.refresh(existing)
+        return existing
+
+    tmpl = CompositionTemplate(
+        project_type=project_type,
+        project_subtype=project_subtype,
+        client_type=client_type,
+        file_name=file.filename or file_name,
+        file_path=yd_path,
+        uploaded_by=current_user.id,
+    )
+    db.add(tmpl)
+    db.commit()
+    db.refresh(tmpl)
+    return tmpl
+
+
+@router.delete("/composition-templates/{project_type}/{project_subtype}/{client_type}", status_code=204)
+def delete_composition_template(
+    project_type: str,
+    project_subtype: str,
+    client_type: str,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(_require_admin),
+):
+    tmpl = (
+        db.query(CompositionTemplate)
+        .filter(
+            CompositionTemplate.project_type == project_type,
+            CompositionTemplate.project_subtype == project_subtype,
+            CompositionTemplate.client_type == client_type,
+        )
+        .first()
+    )
+    if not tmpl:
+        raise HTTPException(status_code=404, detail="Шаблон состава не найден")
+    yd = YandexDiskService()
+    try:
+        yd.delete_file(tmpl.file_path)
+    except Exception:
+        pass
+    db.delete(tmpl)
+    db.commit()
+
+
+# ─── Генерация ────────────────────────────────────────────────────────────────
+
+
+@router.post("/generate", response_model=GenerateContractResponse)
+def generate(
+    request: GenerateContractRequest,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_active_user),
+):
+    if request.doc_type not in VALID_DOC_TYPES:
+        raise HTTPException(status_code=400, detail=f"Неверный тип документа: {request.doc_type}")
+    if request.doc_type in ("contract", "contract_print"):
+        required_perm = "contracts.generate_contract"
+    else:
+        required_perm = "contracts.generate_acts"
+    if not check_permission(current_user, required_perm, db):
+        raise HTTPException(status_code=403, detail="Недостаточно прав для формирования документа")
+    yd_service = YandexDiskService()
+    result = generate_document(db, request.contract_id, request.doc_type, yd_service)
+    return GenerateContractResponse(**result)
+
+
+@router.post("/generate-print")
+def generate_print(
+    request: GenerateContractRequest,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_active_user),
+):
+    """Генерирует PDF акта без подписей и печати. Возвращает файл напрямую, не сохраняет на ЯД."""
+    _ACTS = {"act_pr", "act_kd", "act_info", "act_final"}
+    if request.doc_type not in _ACTS:
+        raise HTTPException(status_code=400, detail="generate-print поддерживает только акты")
+    if not check_permission(current_user, "contracts.generate_acts", db):
+        raise HTTPException(status_code=403, detail="Недостаточно прав для формирования документа")
+    yd_service = YandexDiskService()
+    try:
+        pdf_bytes, pdf_name = generate_document_for_print(db, request.contract_id, request.doc_type, yd_service)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    # RFC 5987 — имя файла может содержать кириллицу
+    encoded_name = quote(pdf_name, safe="")
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"inline; filename*=UTF-8''{encoded_name}"},
+    )

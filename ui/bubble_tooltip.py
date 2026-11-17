@@ -53,8 +53,11 @@ class BubbleToolTip(QWidget):
         # и размер пузырька будет рассчитан неправильно)
         self.ensurePolished()
         fm = QFontMetrics(self.font())
-        tw = fm.horizontalAdvance(text) + 2
-        th = fm.height()
+
+        # Поддержка многострочного текста
+        lines = text.split('\n')
+        tw = max(fm.horizontalAdvance(line) for line in lines) + 2
+        th = fm.height() * len(lines) + fm.leading() * max(0, len(lines) - 1)
 
         s = self.SHADOW
         self._body_w = tw + self._pad_h * 2
@@ -170,7 +173,7 @@ class BubbleToolTip(QWidget):
             text_rect = QRectF(0, 0, bw, bh - a)
 
         painter.setPen(QColor('#333333'))
-        painter.drawText(text_rect, Qt.AlignCenter, self._text)
+        painter.drawText(text_rect, Qt.AlignCenter | Qt.TextWordWrap, self._text)
 
         painter.end()
 

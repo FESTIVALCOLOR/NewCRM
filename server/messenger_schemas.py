@@ -22,6 +22,7 @@ class MessengerChatCreate(BaseModel):
     """Создание чата (автоматическое)"""
     crm_card_id: int
     messenger_type: str = "telegram"
+    chat_title: Optional[str] = None  # Кастомное имя чата (если None — автогенерация)
     members: List[ChatMemberInput] = []
 
 
@@ -37,6 +38,7 @@ class SupervisionChatCreate(BaseModel):
     """Создание чата для карточки надзора"""
     supervision_card_id: int
     messenger_type: str = "telegram"
+    chat_title: Optional[str] = None
     members: List[ChatMemberInput] = []
 
 
@@ -78,6 +80,7 @@ class ChatMemberResponse(BaseModel):
     invite_status: str
     invited_at: Optional[datetime] = None
     joined_at: Optional[datetime] = None
+    name: Optional[str] = None  # имя сотрудника (обогащается на сервере)
 
     class Config:
         from_attributes = True
@@ -95,24 +98,28 @@ class MessengerChatDetailResponse(BaseModel):
 
 class MessengerScriptCreate(BaseModel):
     """Создание скрипта"""
-    script_type: str  # project_start / stage_complete / project_end
+    name: Optional[str] = None
+    script_type: str  # project_start / stage_complete / project_end / personal_*
     project_type: Optional[str] = None
     stage_name: Optional[str] = None
     message_template: str = Field(..., min_length=1)
     memo_file_path: Optional[str] = None
     use_auto_deadline: bool = True
+    attach_stage_files: bool = True
     is_enabled: bool = True
     sort_order: int = 0
 
 
 class MessengerScriptUpdate(BaseModel):
     """Обновление скрипта"""
+    name: Optional[str] = None
     script_type: Optional[str] = None
     project_type: Optional[str] = None
     stage_name: Optional[str] = None
     message_template: Optional[str] = None
     memo_file_path: Optional[str] = None
     use_auto_deadline: Optional[bool] = None
+    attach_stage_files: Optional[bool] = None
     is_enabled: Optional[bool] = None
     sort_order: Optional[int] = None
 
@@ -120,12 +127,14 @@ class MessengerScriptUpdate(BaseModel):
 class MessengerScriptResponse(BaseModel):
     """Ответ с данными скрипта"""
     id: int
+    name: Optional[str] = None
     script_type: str
     project_type: Optional[str] = None
     stage_name: Optional[str] = None
     message_template: str
     memo_file_path: Optional[str] = None
     use_auto_deadline: bool
+    attach_stage_files: bool = True
     is_enabled: bool
     sort_order: int
     created_at: datetime
@@ -200,6 +209,62 @@ class MessageLogResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# =========================
+# PREVIEW / SEND SCRIPT
+# =========================
+
+class PreviewScriptRequest(BaseModel):
+    """Запрос предпросмотра скрипта перед отправкой"""
+    card_id: int
+    script_type: str = "stage_complete"
+    stage_name: Optional[str] = None  # подэтап, если None — берём column_name
+
+
+class PreviewScriptResponse(BaseModel):
+    """Ответ с рендеренным скриптом и файлами подэтапа"""
+    rendered_text: str  # готовый текст скрипта с подставленными переменными
+    script_id: Optional[int] = None
+    script_name: Optional[str] = None
+    stage_name: str  # стадия
+    deadline_date: Optional[str] = None  # дедлайн по норма-дням (dd.MM.yyyy)
+    norm_days: int = 0
+    files: List[dict] = []  # [{id, file_name, yandex_path, variation, file_type, public_link}]
+    sender_name: Optional[str] = None  # имя отправителя (текущий пользователь)
+    chat_id: Optional[int] = None  # telegram_chat_id (для отправки)
+    messenger_chat_id: Optional[int] = None  # ID записи в messenger_chats
+
+
+class SendEditedScriptRequest(BaseModel):
+    """Отправка отредактированного скрипта в чат"""
+    card_id: int
+    text: str  # отредактированный текст
+    file_ids: List[int] = []  # ID файлов для отправки
+    deadline_date: Optional[str] = None  # dd.MM.yyyy — дедлайн для отображения
+    custom_deadline: bool = False  # если True — обновить custom_norm_days в timeline
+
+
+class PreviewActRequest(BaseModel):
+    """Запрос на предпросмотр скрипта акта"""
+    card_id: int
+
+
+class PreviewActResponse(BaseModel):
+    """Ответ с текстом акта и файлами"""
+    rendered_text: str
+    stage_name: str
+    act_files: List[dict] = []  # [{prefix, file_name, link, yandex_path}]
+    sender_name: Optional[str] = None
+    chat_id: Optional[int] = None
+    messenger_chat_id: Optional[int] = None
+
+
+class SendActRequest(BaseModel):
+    """Отправка акта в групповой чат"""
+    card_id: int
+    text: str  # отредактированный текст
+    act_prefixes: List[str] = []  # ['act_planning', 'act_concept', 'info_letter', 'act_final']
 
 
 # =========================

@@ -1,0 +1,681 @@
+<template>
+  <q-page padding class="leads-page">
+    <q-pull-to-refresh @refresh="onRefresh">
+      <div class="row items-center justify-between q-mb-md q-gutter-y-sm">
+        <q-btn-toggle
+          v-model="filter"
+          no-caps
+          dense
+          unelevated
+          toggle-color="grey-4"
+          toggle-text-color="dark"
+          text-color="grey-8"
+          :options="filterOptions"
+          @update:model-value="load()"
+        >
+          <!-- Счётчики у вкладок «Новые» и «Обработанные» -->
+          <template v-for="f in FILTERS" :key="f.value" #[f.slot]>
+            <span>{{ f.label }}</span>
+            <span v-if="f.count && counts[f.value]" :class="['leads-count', `leads-count--${f.value}`]">{{ counts[f.value] }}</span>
+          </template>
+        </q-btn-toggle>
+        <q-btn
+          flat
+          dense
+          no-caps
+          icon="refresh"
+          label="Обновить"
+          color="grey-8"
+          :loading="loading"
+          @click="load()"
+        />
+      </div>
+
+      <div class="leads-hint q-mb-md">
+        Заявки из окна «Заказать» на сайте. Новая → «Обработать» (опишите результат, заявка переходит в «Обработанные» — ждём клиента, перезвон и т.п.)
+        → «Закрыть» с итогом: положительный или отрицательный. Создание договора из заявки закрывает её положительно.
+        Таймер у новых заявок — время на принятие в рабочих часах (будни 10:00–19:00): 12 ч, затем 3 напоминания каждые 3 ч и 6 — каждый час.
+      </div>
+
+      <div v-if="loading && !leads.length" class="text-center q-pa-lg">
+        <q-spinner size="32px" color="grey-6" />
+      </div>
+
+      <!-- Два столбца: индивидуальный дизайн (тарифы) и готовый дизайн -->
+      <div v-else class="leads-cols">
+        <div v-for="col in columns" :key="col.key" class="leads-col">
+          <div class="leads-col__title">
+            {{ col.title }} <span class="leads-col__count">{{ col.items.length }}</span>
+          </div>
+          <div v-if="!col.items.length" class="leads-col__empty">
+            Заявок нет
+          </div>
+
+          <div v-for="item in col.items" :key="item.id" :class="['lead-card', cardClass(item)]">
+            <div class="lead-card__head">
+              <div class="lead-card__main">
+                <div class="lead-card__name">
+                  {{ item.name }}
+                </div>
+                <div class="lead-card__meta">
+                  <a :href="`tel:${phoneDigits(item.phone)}`" class="lead-card__phone">{{ item.phone }}</a>
+                  <span class="lead-chip">{{ METHODS[item.contact_method] || 'звонок' }}</span>
+                </div>
+                <div class="lead-card__links">
+                  <a :href="`tel:${phoneDigits(item.phone)}`">Позвонить</a>
+                  <a :href="`https://wa.me/${phoneDigits(item.phone).replace('+', '')}`" target="_blank" rel="noopener">WhatsApp</a>
+                </div>
+              </div>
+              <!-- Справа: таймер (или статус) и под ним дата поступления, по центру -->
+              <div class="lead-card__side">
+                <div v-if="timer(item)" :class="['lead-timer', `lead-timer--${timer(item).phase}`, { 'lead-timer--paused': timer(item).paused }]">
+                  <div class="lead-timer__value">
+                    <q-icon :name="timer(item).phase === 'overdue' ? 'alarm_off' : 'timer'" size="15px" />
+                    {{ timer(item).text }}
+                  </div>
+                  <div class="lead-timer__caption">
+                    {{ timer(item).caption }}
+                  </div>
+                  <q-tooltip v-if="timer(item).hint" max-width="260px">
+                    {{ timer(item).hint }}
+                  </q-tooltip>
+                </div>
+                <span v-else :class="['lead-status', `lead-status--${statusKey(item)}`]">
+                  {{ STATUS_LABELS[statusKey(item)] }}
+                </span>
+                <span class="lead-card__date">{{ fmt(item.created_at) }}</span>
+              </div>
+            </div>
+
+            <div v-for="line in contextLines(item)" :key="line" class="lead-card__ctx">
+              {{ line }}
+            </div>
+            <div v-if="item.comment" class="lead-card__comment">
+              {{ item.comment }}
+            </div>
+
+            <div v-if="item.result" class="lead-card__result">
+              <div class="lead-card__result-title">
+                Результат обработки
+                <span v-if="item.processed_by_name || item.processed_at" class="lead-card__result-who">
+                  — {{ item.processed_by_name || 'сотрудник' }}<template v-if="item.processed_at">, {{ fmt(item.processed_at) }}</template>
+                </span>
+              </div>
+              <div class="lead-card__result-text">
+                {{ item.result }}
+              </div>
+              <!-- Дальнейшие действия по заявке в работе (журнал) -->
+              <div v-for="(act, idx) in item.actions || []" :key="act.id" class="lead-card__action">
+                <div class="lead-card__action-title">
+                  Действие {{ idx + 2 }}
+                  <span class="lead-card__result-who">— {{ act.employee_name || 'сотрудник' }}<template v-if="act.created_at">, {{ fmt(act.created_at) }}</template></span>
+                </div>
+                <div class="lead-card__result-text">
+                  {{ act.text }}
+                </div>
+              </div>
+            </div>
+
+            <div v-if="item.status === 'done' && item.next_contact_date" :class="['lead-card__contact', { 'lead-card__contact--today': isToday(item.next_contact_date), 'lead-card__contact--past': isPast(item.next_contact_date) }]">
+              <q-icon name="event" size="16px" />
+              <span>{{ isToday(item.next_contact_date) ? 'Сегодня' : 'Созвон / встреча' }}: {{ contactLabel(item) }}</span>
+            </div>
+
+            <div v-if="item.status === 'closed'" :class="['lead-card__close', `lead-card__close--${item.outcome}`]">
+              <div class="lead-card__close-title">
+                {{ item.outcome === 'positive' ? 'Закрыта: положительный итог' : 'Закрыта: отрицательный итог' }}
+                <span v-if="item.closed_by_name || item.closed_at" class="lead-card__result-who">
+                  — {{ item.closed_by_name || 'сотрудник' }}<template v-if="item.closed_at">, {{ fmt(item.closed_at) }}</template>
+                </span>
+              </div>
+              <div v-if="item.close_comment" class="lead-card__result-text">
+                {{ item.close_comment }}
+              </div>
+            </div>
+
+            <div class="lead-card__actions">
+              <q-btn
+                v-if="item.contract_id"
+                outline
+                dense
+                no-caps
+                color="primary"
+                icon="description"
+                :label="`Договор № ${item.contract_number || item.contract_id}`"
+                class="lead-btn"
+                :to="`/contracts/${item.contract_id}`"
+              />
+              <q-btn
+                v-else-if="canCreateContract && item.status !== 'closed'"
+                outline
+                dense
+                no-caps
+                color="primary"
+                icon="note_add"
+                label="Создать договор"
+                class="lead-btn"
+                :to="{ path: '/contracts', query: { lead: item.id } }"
+              />
+              <q-btn
+                v-if="item.status === 'new'"
+                outline
+                dense
+                no-caps
+                color="positive"
+                icon="task_alt"
+                label="Обработать"
+                class="lead-btn"
+                @click="openProcess(item)"
+              />
+              <q-btn
+                v-if="item.status === 'done'"
+                outline
+                dense
+                no-caps
+                color="positive"
+                icon="playlist_add"
+                label="Добавить действие"
+                class="lead-btn"
+                @click="openAction(item)"
+              />
+              <q-btn
+                v-if="item.status === 'done'"
+                outline
+                dense
+                no-caps
+                color="positive"
+                icon="flag"
+                label="Закрыть"
+                class="lead-btn"
+                @click="openClose(item)"
+              />
+              <q-btn
+                v-if="item.status === 'done'"
+                flat
+                dense
+                no-caps
+                color="grey-8"
+                icon="undo"
+                label="Вернуть в новые"
+                class="lead-btn"
+                :loading="busyId === item.id"
+                @click="setStatus(item, 'new')"
+              />
+              <q-btn
+                v-if="item.status === 'closed'"
+                flat
+                dense
+                no-caps
+                color="grey-8"
+                icon="undo"
+                label="Вернуть в работу"
+                class="lead-btn"
+                :loading="busyId === item.id"
+                @click="setStatus(item, 'done')"
+              />
+              <q-btn
+                v-if="canDelete"
+                flat
+                dense
+                no-caps
+                color="negative"
+                icon="delete_outline"
+                label="Удалить"
+                class="lead-btn"
+                :loading="busyId === `del-${item.id}`"
+                @click="confirmDelete(item)"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    </q-pull-to-refresh>
+
+    <!-- Результат обработки -->
+    <q-dialog v-model="processDialog" persistent>
+      <q-card class="lead-dialog">
+        <q-card-section class="lead-dialog__title">
+          {{ dialogMode === 'action' ? 'Новое действие по заявке' : 'Результат обработки заявки' }}
+        </q-card-section>
+        <q-card-section class="q-pt-none">
+          <div class="text-grey-8 q-mb-sm">
+            {{ processing?.name }}, {{ processing?.phone }}
+          </div>
+          <q-input
+            v-model="resultText"
+            type="textarea"
+            outlined
+            autogrow
+            autofocus
+            maxlength="2000"
+            input-style="min-height: 90px"
+            :placeholder="dialogMode === 'action'
+              ? 'Что сделано и результат: перезвонил — клиент согласовал замер; провели замер, готовим КП…'
+              : 'Например: созвонились, договорились о замере 20.11; клиент думает, перезвонить через неделю…'"
+          />
+          <div class="lead-contact-row q-mt-md">
+            <q-input
+              v-model="contactDate"
+              type="date"
+              outlined
+              dense
+              stack-label
+              label="Созвон / встреча — дата"
+              :min="todayIso()"
+              class="lead-contact-row__date"
+            />
+            <q-input
+              v-model="contactTime"
+              type="time"
+              outlined
+              dense
+              stack-label
+              label="Время"
+              :disable="!contactDate"
+              class="lead-contact-row__time"
+            />
+            <q-btn
+              v-if="contactDate"
+              flat
+              dense
+              round
+              icon="close"
+              color="grey-7"
+              @click="contactDate = ''; contactTime = ''"
+            />
+          </div>
+          <div class="text-caption text-grey-7 q-mt-xs">
+            Необязательно. Утром в этот день вам придёт напоминание в Telegram и в CRM.
+          </div>
+          <div class="text-caption text-grey-7 q-mt-xs">
+            {{ dialogMode === 'action'
+              ? 'Действие добавится в журнал заявки, она останется в «Обработанных».'
+              : 'Заявка перейдёт в «Обработанные». Когда с клиентом всё решится — закройте её с итогом.' }}
+          </div>
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn
+            flat
+            no-caps
+            label="Отмена"
+            color="grey-8"
+            @click="processDialog = false"
+          />
+          <q-btn
+            outline
+            no-caps
+            color="positive"
+            :label="dialogMode === 'action' ? 'Добавить' : 'Отметить обработанной'"
+            :disable="!resultText.trim()"
+            :loading="saving"
+            @click="submitProcess"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- Закрытие заявки с итогом -->
+    <q-dialog v-model="closeDialog" persistent>
+      <q-card class="lead-dialog">
+        <q-card-section class="lead-dialog__title">
+          Закрыть заявку
+        </q-card-section>
+        <q-card-section class="q-pt-none">
+          <div class="text-grey-8 q-mb-sm">
+            {{ processing?.name }}, {{ processing?.phone }}
+          </div>
+          <div class="lead-outcome">
+            <button type="button" :class="['lead-outcome__btn', 'lead-outcome__btn--positive', { 'is-active': outcome === 'positive' }]" @click="outcome = 'positive'">
+              <q-icon name="thumb_up" size="18px" />Положительный
+            </button>
+            <button type="button" :class="['lead-outcome__btn', 'lead-outcome__btn--negative', { 'is-active': outcome === 'negative' }]" @click="outcome = 'negative'">
+              <q-icon name="thumb_down" size="18px" />Отрицательный
+            </button>
+          </div>
+          <q-input
+            v-model="closeComment"
+            type="textarea"
+            outlined
+            autogrow
+            maxlength="2000"
+            class="q-mt-md"
+            input-style="min-height: 70px"
+            placeholder="Комментарий (необязательно): заключили договор, клиент отказался — дорого…"
+          />
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn
+            flat
+            no-caps
+            label="Отмена"
+            color="grey-8"
+            @click="closeDialog = false"
+          />
+          <q-btn
+            outline
+            no-caps
+            color="positive"
+            label="Закрыть заявку"
+            :disable="!outcome"
+            :loading="saving"
+            @click="submitClose"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+  </q-page>
+</template>
+
+<script setup>
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useQuasar } from 'quasar'
+import { leadsApi } from 'src/services/api'
+import { leadTimerView } from 'src/utils/leadTimer'
+import { usePermissionsStore } from 'src/stores/permissions'
+
+const $q = useQuasar()
+const permsStore = usePermissionsStore()
+
+const FILTERS = [
+  { label: 'Новые', value: 'new', slot: 'f-new', count: true },
+  { label: 'Обработанные', value: 'done', slot: 'f-done', count: true },
+  { label: 'Закрытые', value: 'closed', slot: 'f-closed', count: false },
+  { label: 'Все', value: '', slot: 'f-all', count: false },
+]
+const filterOptions = FILTERS.map(f => ({ value: f.value, slot: f.slot }))
+const STATUS_LABELS = { new: 'Новая', done: 'Обработана', positive: 'Закрыта +', negative: 'Закрыта −' }
+const METHODS = { call: 'звонок', whatsapp: 'WhatsApp', telegram: 'Telegram', max: 'MAX' }
+const CONTEXT = [['design', 'Дизайн'], ['plan', 'Тариф'], ['city', 'Город'], ['area', 'Площадь, м²'], ['price', 'Стоимость'], ['days', 'Срок']]
+
+const leads = ref([])
+const counts = ref({ new: 0, done: 0, closed: 0 })
+const filter = ref('new')
+const loading = ref(false)
+const busyId = ref(null)
+
+const processDialog = ref(false)
+const closeDialog = ref(false)
+const dialogMode = ref('process') // process — первая обработка, action — ещё одно действие
+const processing = ref(null)
+const resultText = ref('')
+const outcome = ref(null)
+const closeComment = ref('')
+const saving = ref(false)
+// Назначенный созвон / встреча (необязательно): в этот день утром — напоминание в Telegram и CRM
+const contactDate = ref('')
+const contactTime = ref('')
+
+function todayIso() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+function isToday(iso) { return iso === todayIso() }
+function isPast(iso) { return iso < todayIso() }
+function contactLabel(item) {
+  const [y, m, d] = item.next_contact_date.split('-')
+  return `${d}.${m}.${y}${item.next_contact_time ? ` в ${item.next_contact_time}` : ''}`
+}
+
+const canDelete = computed(() => permsStore.isSuperuser || permsStore.has('leads.delete'))
+const canCreateContract = computed(() => permsStore.isSuperuser || permsStore.has('contracts.create'))
+
+// Готовый дизайн — заявки из калькулятора готовых проектов; остальное (тарифы и пр.) — индивидуальный дизайн
+const columns = computed(() => [
+  { key: 'individual', title: 'Индивидуальные', items: leads.value.filter(l => l.source !== 'ready_design') },
+  { key: 'ready', title: 'Готовые', items: leads.value.filter(l => l.source === 'ready_design') },
+])
+
+function statusKey(item) {
+  return item.status === 'closed' ? (item.outcome === 'negative' ? 'negative' : 'positive') : item.status
+}
+function cardClass(item) {
+  if (item.status === 'closed') return `lead-card--${item.outcome === 'negative' ? 'negative' : 'positive'}`
+  return item.status === 'done' ? 'lead-card--done' : ''
+}
+
+function phoneDigits(phone) {
+  return (phone || '').replace(/[^\d+]/g, '')
+}
+
+function contextLines(item) {
+  let ctx = {}
+  try { ctx = JSON.parse(item.context || '{}') } catch { /* старая запись без контекста */ }
+  return CONTEXT.filter(([key]) => ctx[key]).map(([key, label]) => `${label}: ${ctx[key]}`)
+}
+
+function fmt(value) {
+  if (!value) return ''
+  // Сервер хранит время в UTC без пометки зоны
+  const date = new Date(/Z|[+-]\d\d:?\d\d$/.test(value) ? value : `${value}Z`)
+  return date.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
+function errorText(e) {
+  return e?.response?.data?.detail || e?.message || 'Ошибка'
+}
+
+// Таймер: тикает каждую секунду, раз в минуту (и когда интервал истёк) сверяемся с сервером
+const now = ref(Date.now())
+const fetchedAt = ref(Date.now())
+let tickTimer = null
+let syncTimer = null
+
+function timer(item) {
+  return leadTimerView(item.sla, fetchedAt.value, now.value)
+}
+
+async function loadCounts() {
+  try { counts.value = { ...counts.value, ...(await leadsApi.countNew()).data } } catch { /* счётчики не критичны */ }
+}
+
+async function load(silent = false) {
+  if (!silent) loading.value = true
+  try {
+    const { data } = await leadsApi.getList(filter.value)
+    leads.value = data || []
+    fetchedAt.value = Date.now()
+  } catch (e) {
+    if (!silent) $q.notify({ type: 'negative', message: `Не удалось загрузить заявки: ${errorText(e)}` })
+  } finally {
+    loading.value = false
+  }
+  loadCounts()
+}
+
+function tick() {
+  now.value = Date.now()
+  // Интервал истёк — сервер отправит напоминание и переключит таймер на следующий интервал
+  if (!loading.value && now.value - fetchedAt.value > 5000 && leads.value.some(item => timer(item)?.expired)) load(true)
+}
+
+onMounted(() => {
+  load()
+  tickTimer = setInterval(tick, 1000)
+  syncTimer = setInterval(() => load(true), 60000)
+})
+onUnmounted(() => {
+  clearInterval(tickTimer)
+  clearInterval(syncTimer)
+})
+
+async function onRefresh(done) {
+  await load()
+  done()
+}
+
+// Заявка больше не подходит под фильтр — убираем из списка, иначе обновляем на месте
+function applyUpdated(item, updated) {
+  if (filter.value && updated.status !== filter.value) leads.value = leads.value.filter(l => l.id !== item.id)
+  else Object.assign(item, updated)
+  loadCounts()
+  window.dispatchEvent(new CustomEvent('leads:changed'))
+}
+
+function openProcess(item) {
+  processing.value = item
+  dialogMode.value = 'process'
+  resultText.value = item.result || ''
+  contactDate.value = ''
+  contactTime.value = ''
+  processDialog.value = true
+}
+
+// Ещё одно действие по заявке в работе — их может быть сколько угодно
+function openAction(item) {
+  processing.value = item
+  dialogMode.value = 'action'
+  resultText.value = ''
+  contactDate.value = ''
+  contactTime.value = ''
+  processDialog.value = true
+}
+
+async function submitProcess() {
+  const item = processing.value
+  if (!item || !resultText.value.trim()) return
+  saving.value = true
+  try {
+    const isAction = dialogMode.value === 'action'
+    const contact = { contact_date: contactDate.value || '', contact_time: (contactDate.value && contactTime.value) || '' }
+    const { data } = isAction
+      ? await leadsApi.addAction(item.id, resultText.value.trim(), contact)
+      : await leadsApi.setStatus(item.id, 'done', resultText.value.trim(), null, '', contact)
+    applyUpdated(item, data)
+    processDialog.value = false
+    $q.notify({ type: 'positive', message: isAction ? 'Действие добавлено' : 'Заявка обработана — она в «Обработанных»' })
+  } catch (e) {
+    $q.notify({ type: 'negative', message: errorText(e) })
+  } finally {
+    saving.value = false
+  }
+}
+
+function openClose(item) {
+  processing.value = item
+  outcome.value = null
+  closeComment.value = ''
+  closeDialog.value = true
+}
+
+async function submitClose() {
+  const item = processing.value
+  if (!item || !outcome.value) return
+  saving.value = true
+  try {
+    const { data } = await leadsApi.setStatus(item.id, 'closed', '', outcome.value, closeComment.value.trim())
+    applyUpdated(item, data)
+    closeDialog.value = false
+    $q.notify({ type: 'positive', message: 'Заявка закрыта' })
+  } catch (e) {
+    $q.notify({ type: 'negative', message: errorText(e) })
+  } finally {
+    saving.value = false
+  }
+}
+
+async function setStatus(item, status) {
+  busyId.value = item.id
+  try {
+    const { data } = await leadsApi.setStatus(item.id, status)
+    applyUpdated(item, data)
+  } catch (e) {
+    $q.notify({ type: 'negative', message: errorText(e) })
+  } finally {
+    busyId.value = null
+  }
+}
+
+function confirmDelete(item) {
+  $q.dialog({
+    title: 'Удалить заявку?',
+    message: `${item.name}, ${item.phone}. Заявка будет удалена без возможности восстановления — и в CRM, и в панели сайта.`,
+    cancel: { label: 'Отмена', flat: true, noCaps: true, color: 'grey-8' },
+    ok: { label: 'Удалить', flat: true, noCaps: true, color: 'negative' },
+    persistent: true,
+  }).onOk(async () => {
+    busyId.value = `del-${item.id}`
+    try {
+      await leadsApi.remove(item.id)
+      leads.value = leads.value.filter(l => l.id !== item.id)
+      loadCounts()
+      window.dispatchEvent(new CustomEvent('leads:changed'))
+      $q.notify({ type: 'positive', message: 'Заявка удалена' })
+    } catch (e) {
+      $q.notify({ type: 'negative', message: errorText(e) })
+    } finally {
+      busyId.value = null
+    }
+  })
+}
+</script>
+
+<style scoped>
+/* Растягивается на всю ширину, как остальные страницы CRM (на ультрашироких экранах — тоже) */
+.leads-page { width: 100%; }
+/* Цвета — через переменные темы (--fc-*), чтобы страница работала и в тёмной теме */
+.leads-hint { font-size: 12px; color: var(--fc-text-secondary); background: var(--fc-bg-info); border: 1px solid var(--fc-border-light); border-radius: 8px; padding: 8px 12px; }
+.lead-card { background: var(--fc-bg); border: 1px solid var(--fc-border-light); border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; }
+.lead-card--done { background: var(--fc-bg-info); }
+.lead-card__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.lead-card__main { min-width: 0; flex: 1; }
+.lead-card__side { display: flex; flex-direction: column; align-items: center; gap: 4px; flex-shrink: 0; }
+.lead-card__name { font-size: 15px; font-weight: 600; color: var(--fc-text); overflow-wrap: anywhere; }
+.lead-status { font-size: 11px; border-radius: 10px; padding: 2px 10px; white-space: nowrap; }
+.lead-status--new { background: rgba(231, 76, 60, 0.14); color: var(--fc-red); }
+.lead-status--done { background: var(--fc-state-success-bg); color: var(--fc-green); }
+.lead-timer { text-align: right; border-radius: 8px; padding: 3px 9px; line-height: 1.2; white-space: nowrap; cursor: default; }
+.lead-timer__value { display: flex; align-items: center; justify-content: flex-end; gap: 4px; font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.lead-timer__caption { font-size: 10.5px; opacity: 0.85; }
+.lead-timer--first { background: rgba(52, 152, 219, 0.14); color: var(--fc-blue); }
+.lead-timer--three { background: rgba(243, 156, 18, 0.16); color: var(--fc-orange); }
+.lead-timer--hour { background: rgba(231, 76, 60, 0.14); color: var(--fc-red); }
+.lead-timer--overdue { background: #c0392b; color: #fff; }
+.lead-timer--paused .lead-timer__value { opacity: 0.6; }
+.lead-card__meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin-top: 4px; }
+.lead-card__phone { color: var(--fc-red); font-weight: 500; text-decoration: none; }
+.lead-chip { font-size: 11px; background: var(--fc-bg-alt); border-radius: 4px; padding: 1px 8px; color: var(--fc-text-medium); }
+.lead-card__date { font-size: 11px; color: var(--fc-text-light); white-space: nowrap; }
+.lead-card__links { display: flex; gap: 14px; margin: 4px 0 6px; font-size: 12px; }
+.lead-card__links a { color: var(--fc-link); text-decoration: none; }
+.lead-card__ctx { font-size: 13px; color: var(--fc-text-medium); }
+.lead-card__comment { margin-top: 6px; font-size: 13px; color: var(--fc-text-medium); white-space: pre-line; background: var(--fc-bg-info); border-left: 3px solid var(--fc-border-light); padding: 6px 10px; }
+.lead-card__result { margin-top: 8px; background: var(--fc-state-success-bg); border-left: 3px solid #66bb6a; padding: 6px 10px; border-radius: 0 6px 6px 0; }
+.lead-card__result-title { font-size: 12px; font-weight: 600; color: var(--fc-green); }
+.lead-card__result-who { font-weight: 400; color: var(--fc-text-light); }
+.lead-card__result-text { font-size: 13px; color: var(--fc-text-medium); white-space: pre-line; overflow-wrap: anywhere; }
+.lead-card__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.lead-btn { font-size: 12px; padding: 0 10px; }
+.lead-dialog { width: 480px; max-width: 92vw; }
+.lead-dialog__title { font-size: 16px; font-weight: 600; }
+/* Вкладки со счётчиками */
+.leads-count { display: inline-block; min-width: 18px; margin-left: 6px; padding: 0 5px; border-radius: 9px; font-size: 11px; line-height: 18px; text-align: center; color: #fff; }
+.leads-count--new { background: var(--fc-red); }
+.leads-count--done { background: var(--fc-orange); }
+/* Два столбца: индивидуальные и готовые (на узком экране — друг под другом) */
+.leads-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+@media (max-width: 900px) { .leads-cols { grid-template-columns: minmax(0, 1fr); } }
+.leads-col__title { font-size: 14px; font-weight: 600; color: var(--fc-text); margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+.leads-col__count { font-size: 12px; font-weight: 500; color: var(--fc-text-light); background: var(--fc-bg-alt); border-radius: 9px; padding: 0 8px; }
+.leads-col__empty { font-size: 13px; color: var(--fc-text-muted); padding: 12px 0; }
+/* Закрытые: светло-зелёные (положительно) и светло-красные (отрицательно) */
+.lead-card--positive { background: rgba(39, 174, 96, 0.10); border-color: rgba(39, 174, 96, 0.35); }
+.lead-card--negative { background: rgba(231, 76, 60, 0.09); border-color: rgba(231, 76, 60, 0.35); }
+.lead-status--positive { background: rgba(39, 174, 96, 0.16); color: var(--fc-green); }
+.lead-status--negative { background: rgba(231, 76, 60, 0.14); color: var(--fc-red); }
+.lead-card__contact { margin-top: 8px; display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 6px; font-size: 13px; font-weight: 500; color: var(--fc-text); background: var(--fc-bg-alt); border: 1px solid var(--fc-border); }
+.lead-card__contact--today { color: #b26a00; background: rgba(255, 152, 0, 0.12); border-color: rgba(255, 152, 0, 0.5); }
+.lead-card__contact--past { color: var(--fc-text-muted); text-decoration: line-through; }
+.lead-contact-row { display: flex; align-items: center; gap: 10px; }
+.lead-contact-row__date { flex: 1 1 auto; }
+.lead-contact-row__time { flex: 0 0 120px; }
+.lead-card__action { margin-top: 6px; padding-top: 6px; border-top: 1px dashed rgba(102, 187, 106, 0.45); }
+.lead-card__action-title { font-size: 12px; font-weight: 600; color: var(--fc-green); }
+.lead-card__close { margin-top: 8px; padding: 6px 10px; border-radius: 0 6px 6px 0; }
+.lead-card__close--positive { border-left: 3px solid var(--fc-green); background: rgba(39, 174, 96, 0.08); }
+.lead-card__close--negative { border-left: 3px solid var(--fc-red); background: rgba(231, 76, 60, 0.08); }
+.lead-card__close-title { font-size: 12px; font-weight: 600; color: var(--fc-text); }
+.lead-outcome { display: flex; gap: 10px; }
+.lead-outcome__btn { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 42px; border-radius: 8px; cursor: pointer; font-size: 14px; background: transparent; color: var(--fc-text); border: 1px solid var(--fc-border); }
+.lead-outcome__btn--positive.is-active { background: rgba(39, 174, 96, 0.15); border-color: var(--fc-green); color: var(--fc-green); font-weight: 600; }
+.lead-outcome__btn--negative.is-active { background: rgba(231, 76, 60, 0.13); border-color: var(--fc-red); color: var(--fc-red); font-weight: 600; }
+</style>

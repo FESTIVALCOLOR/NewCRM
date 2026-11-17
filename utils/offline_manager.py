@@ -4,31 +4,69 @@
 Обеспечивает работу приложения при отсутствии связи с сервером.
 """
 
+from datetime import datetime
+from enum import Enum
+import hashlib
+import hmac
 import json
+import os
 import sqlite3
 import threading
 import time
-import hmac
-import hashlib
-import os
-from datetime import datetime
-from typing import Dict, List, Any, Optional, Callable
-from enum import Enum
-from PyQt5.QtCore import QObject, pyqtSignal, QTimer
+from typing import Any, Callable, Dict, List, Optional
+
+try:
+    from PyQt5.QtCore import QObject, QTimer, pyqtSignal
+except ImportError:
+
+    class QObject:  # type: ignore[no-redef]
+        def __init__(self, *args, **kwargs):
+            pass
+
+    class _NoSignal:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def emit(self, *a, **kw):
+            pass
+
+        def connect(self, *a, **kw):
+            pass
+
+        def disconnect(self, *a, **kw):
+            pass
+
+    def pyqtSignal(*args, **kwargs):  # type: ignore[no-redef]
+        return _NoSignal()
+
+    class QTimer:  # type: ignore[no-redef]
+        def __init__(self, *args, **kwargs):
+            self.timeout = _NoSignal()
+
+        def start(self, *a, **kw):
+            pass
+
+        def stop(self, *a, **kw):
+            pass
+
+        @staticmethod
+        def singleShot(ms, func):
+            func()
+
 
 # Ключ для HMAC подписи offline-операций (генерируется при первом запуске)
-_HMAC_KEY_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.offline_hmac_key')
+_HMAC_KEY_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".offline_hmac_key")
 
 
 def _get_hmac_key() -> bytes:
     """Получить или сгенерировать HMAC ключ для подписи offline-операций"""
     if os.path.exists(_HMAC_KEY_FILE):
-        with open(_HMAC_KEY_FILE, 'rb') as f:
+        with open(_HMAC_KEY_FILE, "rb") as f:
             return f.read()
     # Генерируем новый ключ
     key = os.urandom(32)
     try:
-        with open(_HMAC_KEY_FILE, 'wb') as f:
+        with open(_HMAC_KEY_FILE, "wb") as f:
             f.write(key)
     except OSError:
         pass  # Если не удалось сохранить, используем в памяти
@@ -38,7 +76,7 @@ def _get_hmac_key() -> bytes:
 def _sign_operation(data_json: str, operation_type: str, entity_type: str) -> str:
     """Подписать операцию HMAC-SHA256"""
     key = _get_hmac_key()
-    message = f"{operation_type}:{entity_type}:{data_json}".encode('utf-8')
+    message = f"{operation_type}:{entity_type}:{data_json}".encode("utf-8")
     return hmac.new(key, message, hashlib.sha256).hexdigest()
 
 
@@ -50,6 +88,7 @@ def _verify_operation_signature(data_json: str, operation_type: str, entity_type
 
 class ConnectionStatus(Enum):
     """Статус подключения к серверу"""
+
     ONLINE = "online"
     OFFLINE = "offline"
     CONNECTING = "connecting"
@@ -58,6 +97,7 @@ class ConnectionStatus(Enum):
 
 class OperationType(Enum):
     """Тип операции в очереди"""
+
     CREATE = "create"
     UPDATE = "update"
     DELETE = "delete"
@@ -65,6 +105,7 @@ class OperationType(Enum):
 
 class OperationStatus(Enum):
     """Статус операции в очереди"""
+
     PENDING = "pending"
     SYNCING = "syncing"
     SYNCED = "synced"
@@ -219,19 +260,16 @@ class OfflineManager(QObject):
         # между OfflineManager и APIClient.
         try:
             # Используем новый метод force_online_check если доступен
-            if hasattr(self.api_client, 'force_online_check'):
+            if hasattr(self.api_client, "force_online_check"):
                 is_online = self.api_client.force_online_check()
             else:
                 # Fallback на старую логику для совместимости
                 import requests
+
                 session = requests.Session()
                 session.trust_env = False
 
-                response = session.get(
-                    f"{self.api_client.base_url}/",
-                    timeout=self.PING_TIMEOUT,
-                    verify=False
-                )
+                response = session.get(f"{self.api_client.base_url}/", timeout=self.PING_TIMEOUT, verify=False)
                 is_online = response.status_code == 200
 
             if is_online:
@@ -240,9 +278,9 @@ class OfflineManager(QObject):
 
                 # ИСПРАВЛЕНИЕ 30.01.2026: Используем reset_offline_cache()
                 # для полной синхронизации статуса
-                if hasattr(self.api_client, 'reset_offline_cache'):
+                if hasattr(self.api_client, "reset_offline_cache"):
                     self.api_client.reset_offline_cache()
-                elif hasattr(self.api_client, '_last_offline_time'):
+                elif hasattr(self.api_client, "_last_offline_time"):
                     self.api_client._last_offline_time = None
                     self.api_client._is_online = True
 
@@ -265,8 +303,7 @@ class OfflineManager(QObject):
         """Проверить, есть ли подключение к серверу"""
         return self.status == ConnectionStatus.ONLINE
 
-    def queue_operation(self, operation_type: OperationType, entity_type: str,
-                       entity_id: Optional[int], data: Dict[str, Any]) -> int:
+    def queue_operation(self, operation_type: OperationType, entity_type: str, entity_id: Optional[int], data: dict[str, Any]) -> int:
         """
         Добавить операцию в очередь.
 
@@ -287,19 +324,14 @@ class OfflineManager(QObject):
             conn = self._get_connection()
             cursor = conn.cursor()
 
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT INTO offline_operations_queue
                 (operation_type, entity_type, entity_id, data, status, created_at, signature)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (
-                operation_type.value,
-                entity_type,
-                entity_id,
-                data_json,
-                OperationStatus.PENDING.value,
-                datetime.now().isoformat(),
-                signature
-            ))
+            """,
+                (operation_type.value, entity_type, entity_id, data_json, OperationStatus.PENDING.value, datetime.now().isoformat(), signature),
+            )
 
             operation_id = cursor.lastrowid
             conn.commit()
@@ -318,50 +350,56 @@ class OfflineManager(QObject):
             conn = self._get_connection()
             cursor = conn.cursor()
 
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT COUNT(*) FROM offline_operations_queue
                 WHERE status = ?
-            """, (OperationStatus.PENDING.value,))
+            """,
+                (OperationStatus.PENDING.value,),
+            )
 
             count = cursor.fetchone()[0]
             conn.close()
 
         return count
 
-    def get_pending_operations(self) -> List[Dict[str, Any]]:
+    def get_pending_operations(self) -> list[dict[str, Any]]:
         """Получить список ожидающих операций"""
         with self._db_lock:
             conn = self._get_connection()
             cursor = conn.cursor()
 
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT * FROM offline_operations_queue
                 WHERE status = ?
                 ORDER BY created_at ASC
-            """, (OperationStatus.PENDING.value,))
+            """,
+                (OperationStatus.PENDING.value,),
+            )
 
             operations = []
             for row in cursor.fetchall():
-                data_json = row['data']
-                signature = row['signature'] if 'signature' in row.keys() else None
+                data_json = row["data"]
+                signature = row["signature"] if "signature" in row.keys() else None
 
                 # Проверяем HMAC подпись для защиты от tampering
-                if signature and not _verify_operation_signature(
-                    data_json, row['operation_type'], row['entity_type'], signature
-                ):
+                if signature and not _verify_operation_signature(data_json, row["operation_type"], row["entity_type"], signature):
                     print(f"[OFFLINE] ВНИМАНИЕ: Операция #{row['id']} имеет невалидную подпись! Пропускаем.")
                     continue
 
-                operations.append({
-                    'id': row['id'],
-                    'operation_type': row['operation_type'],
-                    'entity_type': row['entity_type'],
-                    'entity_id': row['entity_id'],
-                    'data': json.loads(data_json),
-                    'status': row['status'],
-                    'created_at': row['created_at'],
-                    'retry_count': row['retry_count']
-                })
+                operations.append(
+                    {
+                        "id": row["id"],
+                        "operation_type": row["operation_type"],
+                        "entity_type": row["entity_type"],
+                        "entity_id": row["entity_id"],
+                        "data": json.loads(data_json),
+                        "status": row["status"],
+                        "created_at": row["created_at"],
+                        "retry_count": row["retry_count"],
+                    }
+                )
 
             conn.close()
         return operations
@@ -392,7 +430,7 @@ class OfflineManager(QObject):
             QTimer.singleShot(0, func)
 
         try:
-            _gui(lambda: setattr(self, 'status', ConnectionStatus.SYNCING))
+            _gui(lambda: setattr(self, "status", ConnectionStatus.SYNCING))
 
             operations = self.get_pending_operations()
             total = len(operations)
@@ -407,7 +445,7 @@ class OfflineManager(QObject):
             failed = 0
 
             for i, op in enumerate(operations):
-                _idx, _total, _type = i + 1, total, op['entity_type']
+                _idx, _total, _type = i + 1, total, op["entity_type"]
                 _gui(lambda idx=_idx, t=_total, tp=_type: self.sync_progress.emit(idx, t, f"Синхронизация {tp}..."))
 
                 success = self._sync_single_operation(op)
@@ -436,25 +474,26 @@ class OfflineManager(QObject):
 
         except Exception as e:
             print(f"[OFFLINE] Ошибка синхронизации: {e}")
-            _gui(lambda: self.sync_completed.emit(False, str(e)))
+            _err = str(e)
+            _gui(lambda err=_err: self.sync_completed.emit(False, err))
 
         finally:
             self._is_syncing = False
             # _check_connection тоже меняет status → emit, нужно в GUI потоке
             _gui(lambda: self._check_connection())
 
-    def _sync_single_operation(self, operation: Dict[str, Any]) -> bool:
+    def _sync_single_operation(self, operation: dict[str, Any]) -> bool:
         """
         Синхронизировать одну операцию.
 
         Returns:
             True если успешно, False если ошибка
         """
-        op_id = operation['id']
-        op_type = operation['operation_type']
-        entity_type = operation['entity_type']
-        entity_id = operation['entity_id']
-        data = operation['data']
+        op_id = operation["id"]
+        op_type = operation["operation_type"]
+        entity_type = operation["entity_type"]
+        entity_id = operation["entity_id"]
+        data = operation["data"]
 
         try:
             # Обновляем статус на "syncing"
@@ -463,26 +502,18 @@ class OfflineManager(QObject):
             # Выполняем операцию на сервере
             result = self._execute_server_operation(op_type, entity_type, entity_id, data)
 
-            if result['success']:
+            if result["success"]:
                 # Обновляем статус на "synced"
-                self._update_operation_status(
-                    op_id,
-                    OperationStatus.SYNCED,
-                    server_entity_id=result.get('server_id')
-                )
+                self._update_operation_status(op_id, OperationStatus.SYNCED, server_entity_id=result.get("server_id"))
 
                 # Если это была операция создания, обновляем локальный ID
-                if op_type == OperationType.CREATE.value and result.get('server_id'):
-                    self._update_local_entity_id(entity_type, entity_id, result['server_id'])
+                if op_type == OperationType.CREATE.value and result.get("server_id"):
+                    self._update_local_entity_id(entity_type, entity_id, result["server_id"])
 
                 return True
             else:
                 # Обновляем статус на "failed"
-                self._update_operation_status(
-                    op_id,
-                    OperationStatus.FAILED,
-                    error_message=result.get('error', 'Unknown error')
-                )
+                self._update_operation_status(op_id, OperationStatus.FAILED, error_message=result.get("error", "Unknown error"))
                 return False
 
         except Exception as e:
@@ -490,8 +521,7 @@ class OfflineManager(QObject):
             self._update_operation_status(op_id, OperationStatus.FAILED, error_message=str(e))
             return False
 
-    def _execute_server_operation(self, op_type: str, entity_type: str,
-                                  entity_id: Optional[int], data: Dict) -> Dict[str, Any]:
+    def _execute_server_operation(self, op_type: str, entity_type: str, entity_id: Optional[int], data: dict) -> dict[str, Any]:
         """
         Выполнить операцию на сервере.
 
@@ -499,7 +529,7 @@ class OfflineManager(QObject):
             Dict с результатом: {'success': bool, 'server_id': int, 'error': str}
         """
         if not self.api_client:
-            return {'success': False, 'error': 'API client not available'}
+            return {"success": False, "error": "API client not available"}
 
         # Временно увеличиваем таймаут для синхронизации
         original_timeout = self.api_client.DEFAULT_TIMEOUT
@@ -507,497 +537,506 @@ class OfflineManager(QObject):
 
         try:
             # Маппинг операций на методы API
-            if entity_type == 'client':
+            if entity_type == "client":
                 return self._sync_client_operation(op_type, entity_id, data)
-            elif entity_type == 'contract':
+            elif entity_type == "contract":
                 return self._sync_contract_operation(op_type, entity_id, data)
-            elif entity_type == 'crm_card':
+            elif entity_type == "crm_card":
                 return self._sync_crm_card_operation(op_type, entity_id, data)
-            elif entity_type == 'supervision_card':
+            elif entity_type == "supervision_card":
                 return self._sync_supervision_card_operation(op_type, entity_id, data)
-            elif entity_type == 'employee':
+            elif entity_type == "employee":
                 return self._sync_employee_operation(op_type, entity_id, data)
-            elif entity_type == 'payment':
+            elif entity_type == "payment":
                 return self._sync_payment_operation(op_type, entity_id, data)
-            elif entity_type == 'yandex_folder':
+            elif entity_type == "yandex_folder":
                 return self._sync_yandex_folder_operation(op_type, entity_id, data)
-            elif entity_type == 'project_file':
+            elif entity_type == "project_file":
                 return self._sync_project_file_operation(op_type, entity_id, data)
-            elif entity_type == 'rate':
+            elif entity_type == "rate":
                 return self._sync_rate_operation(op_type, entity_id, data)
-            elif entity_type == 'salary':
+            elif entity_type == "salary":
                 return self._sync_salary_operation(op_type, entity_id, data)
-            elif entity_type == 'action_history':
+            elif entity_type == "action_history":
                 return self._sync_action_history_operation(op_type, entity_id, data)
-            elif entity_type == 'supervision_history':
+            elif entity_type == "supervision_history":
                 return self._sync_supervision_history_operation(op_type, entity_id, data)
-            elif entity_type == 'timeline_entry':
+            elif entity_type == "timeline_entry":
                 return self._sync_timeline_entry_operation(op_type, entity_id, data)
-            elif entity_type == 'supervision_timeline_entry':
+            elif entity_type == "supervision_timeline_entry":
                 return self._sync_supervision_timeline_entry_operation(op_type, entity_id, data)
-            elif entity_type == 'stage_executor':
+            elif entity_type == "stage_executor":
                 return self._sync_stage_executor_operation(op_type, entity_id, data)
-            elif entity_type == 'agent':
+            elif entity_type == "agent":
                 return self._sync_agent_operation(op_type, entity_id, data)
-            elif entity_type == 'project_template':
+            elif entity_type == "project_template":
                 return self._sync_project_template_operation(op_type, entity_id, data)
-            elif entity_type == 'permission':
+            elif entity_type == "permission":
                 return self._sync_permission_operation(op_type, entity_id, data)
             else:
-                return {'success': False, 'error': f'Unknown entity type: {entity_type}'}
+                return {"success": False, "error": f"Unknown entity type: {entity_type}"}
 
         except Exception as e:
-            return {'success': False, 'error': str(e)}
+            return {"success": False, "error": str(e)}
 
         finally:
             # Восстанавливаем оригинальный таймаут
             self.api_client.DEFAULT_TIMEOUT = original_timeout
 
-    def _sync_client_operation(self, op_type: str, entity_id: int, data: Dict) -> Dict:
+    def _sync_client_operation(self, op_type: str, entity_id: int, data: dict) -> dict:
         """Синхронизация операции с клиентом"""
         if op_type == OperationType.CREATE.value:
             result = self.api_client.create_client(data)
             if result:
-                return {'success': True, 'server_id': result.get('id')}
-            return {'success': False, 'error': 'Failed to create client'}
+                return {"success": True, "server_id": result.get("id")}
+            return {"success": False, "error": "Failed to create client"}
 
         elif op_type == OperationType.UPDATE.value:
             result = self.api_client.update_client(entity_id, data)
             if result:
-                return {'success': True, 'server_id': entity_id}
-            return {'success': False, 'error': 'Failed to update client'}
+                return {"success": True, "server_id": entity_id}
+            return {"success": False, "error": "Failed to update client"}
 
         elif op_type == OperationType.DELETE.value:
             success = self.api_client.delete_client(entity_id)
-            return {'success': success, 'error': None if success else 'Failed to delete client'}
+            return {"success": success, "error": None if success else "Failed to delete client"}
 
-        return {'success': False, 'error': 'Unknown operation type'}
+        return {"success": False, "error": "Unknown operation type"}
 
-    def _sync_contract_operation(self, op_type: str, entity_id: int, data: Dict) -> Dict:
+    def _sync_contract_operation(self, op_type: str, entity_id: int, data: dict) -> dict:
         """Синхронизация операции с договором"""
         if op_type == OperationType.CREATE.value:
             result = self.api_client.create_contract(data)
             if result:
-                return {'success': True, 'server_id': result.get('id')}
-            return {'success': False, 'error': 'Failed to create contract'}
+                return {"success": True, "server_id": result.get("id")}
+            return {"success": False, "error": "Failed to create contract"}
 
         elif op_type == OperationType.UPDATE.value:
             result = self.api_client.update_contract(entity_id, data)
             if result:
-                return {'success': True, 'server_id': entity_id}
-            return {'success': False, 'error': 'Failed to update contract'}
+                return {"success": True, "server_id": entity_id}
+            return {"success": False, "error": "Failed to update contract"}
 
         elif op_type == OperationType.DELETE.value:
             success = self.api_client.delete_contract(entity_id)
-            return {'success': success, 'error': None if success else 'Failed to delete contract'}
+            return {"success": success, "error": None if success else "Failed to delete contract"}
 
-        return {'success': False, 'error': 'Unknown operation type'}
+        return {"success": False, "error": "Unknown operation type"}
 
-    def _sync_crm_card_operation(self, op_type: str, entity_id: int, data: Dict) -> Dict:
+    def _sync_crm_card_operation(self, op_type: str, entity_id: int, data: dict) -> dict:
         """Синхронизация операции с CRM карточкой"""
         if op_type == OperationType.CREATE.value:
             result = self.api_client.create_crm_card(data)
             if result:
-                return {'success': True, 'server_id': result.get('id')}
-            return {'success': False, 'error': 'Failed to create CRM card'}
+                return {"success": True, "server_id": result.get("id")}
+            return {"success": False, "error": "Failed to create CRM card"}
 
         elif op_type == OperationType.UPDATE.value:
             result = self.api_client.update_crm_card(entity_id, data)
             if result:
-                return {'success': True, 'server_id': entity_id}
-            return {'success': False, 'error': 'Failed to update CRM card'}
+                return {"success": True, "server_id": entity_id}
+            return {"success": False, "error": "Failed to update CRM card"}
 
         elif op_type == OperationType.DELETE.value:
             try:
                 self.api_client.delete_crm_card(entity_id)
-                return {'success': True, 'server_id': entity_id}
+                return {"success": True, "server_id": entity_id}
             except Exception as e:
-                return {'success': False, 'error': str(e)}
+                return {"success": False, "error": str(e)}
 
-        return {'success': False, 'error': 'Unknown operation type for CRM card'}
+        return {"success": False, "error": "Unknown operation type for CRM card"}
 
-    def _sync_supervision_card_operation(self, op_type: str, entity_id: int, data: Dict) -> Dict:
+    def _sync_supervision_card_operation(self, op_type: str, entity_id: int, data: dict) -> dict:
         """Синхронизация операции с карточкой надзора"""
         if op_type == OperationType.CREATE.value:
             result = self.api_client.create_supervision_card(data)
             if result:
-                return {'success': True, 'server_id': result.get('id')}
-            return {'success': False, 'error': 'Failed to create supervision card'}
+                return {"success": True, "server_id": result.get("id")}
+            return {"success": False, "error": "Failed to create supervision card"}
 
         elif op_type == OperationType.UPDATE.value:
+            # Специальные случаи: pause/resume/reset_stage_completion
+            action = data.get("_action")
+            if action == "pause":
+                try:
+                    result = self.api_client.pause_supervision_card(entity_id, data.get("reason", ""))
+                    if result is not None:
+                        return {"success": True, "server_id": entity_id}
+                    return {"success": False, "error": "Failed to pause supervision card"}
+                except Exception as e:
+                    return {"success": False, "error": str(e)}
+            elif action == "resume":
+                try:
+                    result = self.api_client.resume_supervision_card(entity_id, data.get("employee_id"))
+                    if result is not None:
+                        return {"success": True, "server_id": entity_id}
+                    return {"success": False, "error": "Failed to resume supervision card"}
+                except Exception as e:
+                    return {"success": False, "error": str(e)}
+            elif action == "reset_stage_completion":
+                try:
+                    result = self.api_client.reset_supervision_stage_completion(entity_id)
+                    if result is not None:
+                        return {"success": True, "server_id": entity_id}
+                    return {"success": False, "error": "Failed to reset stage completion"}
+                except Exception as e:
+                    return {"success": False, "error": str(e)}
+
             result = self.api_client.update_supervision_card(entity_id, data)
             if result:
-                return {'success': True, 'server_id': entity_id}
-            return {'success': False, 'error': 'Failed to update supervision card'}
+                return {"success": True, "server_id": entity_id}
+            return {"success": False, "error": "Failed to update supervision card"}
 
         elif op_type == OperationType.DELETE.value:
             try:
                 self.api_client.delete_supervision_card(entity_id)
-                return {'success': True, 'server_id': entity_id}
+                return {"success": True, "server_id": entity_id}
             except Exception as e:
-                return {'success': False, 'error': str(e)}
+                return {"success": False, "error": str(e)}
 
-        return {'success': False, 'error': 'Unknown operation type for supervision card'}
+        return {"success": False, "error": "Unknown operation type for supervision card"}
 
-    def _sync_payment_operation(self, op_type: str, entity_id: int, data: Dict) -> Dict:
+    def _sync_payment_operation(self, op_type: str, entity_id: int, data: dict) -> dict:
         """Синхронизация операции с платежом"""
         if op_type == OperationType.CREATE.value:
             result = self.api_client.create_payment(data)
             if result:
-                return {'success': True, 'server_id': result.get('id')}
-            return {'success': False, 'error': 'Failed to create payment'}
+                return {"success": True, "server_id": result.get("id")}
+            return {"success": False, "error": "Failed to create payment"}
 
         elif op_type == OperationType.UPDATE.value:
             # Специальный случай: отметить платёж как оплаченный
-            action = data.get('_action')
-            if action == 'mark_paid':
-                result = self.api_client.mark_payment_as_paid(
-                    entity_id,
-                    data.get('employee_id', 0)
-                )
+            action = data.get("_action")
+            if action == "mark_paid":
+                result = self.api_client.mark_payment_as_paid(entity_id, data.get("employee_id", 0))
                 if result is not None:
-                    return {'success': True, 'server_id': entity_id}
-                return {'success': False, 'error': 'Failed to mark payment as paid'}
+                    return {"success": True, "server_id": entity_id}
+                return {"success": False, "error": "Failed to mark payment as paid"}
 
             result = self.api_client.update_payment(entity_id, data)
             if result:
-                return {'success': True, 'server_id': entity_id}
-            return {'success': False, 'error': 'Failed to update payment'}
+                return {"success": True, "server_id": entity_id}
+            return {"success": False, "error": "Failed to update payment"}
 
         elif op_type == OperationType.DELETE.value:
             # Удаляем платеж по ID (source хранится для информации, но API принимает только ID)
             result = self.api_client.delete_payment(entity_id)
             success = result is not None
-            return {'success': success, 'error': None if success else 'Failed to delete payment'}
+            return {"success": success, "error": None if success else "Failed to delete payment"}
 
-        return {'success': False, 'error': 'Unknown operation type for payment'}
+        return {"success": False, "error": "Unknown operation type for payment"}
 
-    def _sync_employee_operation(self, op_type: str, entity_id: int, data: Dict) -> Dict:
+    def _sync_employee_operation(self, op_type: str, entity_id: int, data: dict) -> dict:
         """Синхронизация операции с сотрудником"""
         if op_type == OperationType.CREATE.value:
             result = self.api_client.create_employee(data)
             if result:
-                return {'success': True, 'server_id': result.get('id')}
-            return {'success': False, 'error': 'Failed to create employee'}
+                return {"success": True, "server_id": result.get("id")}
+            return {"success": False, "error": "Failed to create employee"}
 
         elif op_type == OperationType.UPDATE.value:
             result = self.api_client.update_employee(entity_id, data)
             if result:
-                return {'success': True, 'server_id': entity_id}
-            return {'success': False, 'error': 'Failed to update employee'}
+                return {"success": True, "server_id": entity_id}
+            return {"success": False, "error": "Failed to update employee"}
 
         elif op_type == OperationType.DELETE.value:
             success = self.api_client.delete_employee(entity_id)
-            return {'success': success, 'error': None if success else 'Failed to delete employee'}
+            return {"success": success, "error": None if success else "Failed to delete employee"}
 
-        return {'success': False, 'error': 'Unknown operation type for employee'}
+        return {"success": False, "error": "Unknown operation type for employee"}
 
-    def _sync_yandex_folder_operation(self, op_type: str, entity_id: int, data: Dict) -> Dict:
+    def _sync_yandex_folder_operation(self, op_type: str, entity_id: int, data: dict) -> dict:
         """Синхронизация операции с папкой Яндекс.Диска"""
         try:
-            from utils.yandex_disk import YandexDiskManager
             from config import YANDEX_DISK_TOKEN
+            from utils.yandex_disk import YandexDiskManager
 
             if not YANDEX_DISK_TOKEN:
-                return {'success': False, 'error': 'Yandex Disk token not configured'}
+                return {"success": False, "error": "Yandex Disk token not configured"}
 
             yd = YandexDiskManager(YANDEX_DISK_TOKEN)
 
             if op_type == OperationType.UPDATE.value:
                 # Переименование/перемещение папки
-                old_path = data.get('old_path')
-                new_path = data.get('new_path')
+                old_path = data.get("old_path")
+                new_path = data.get("new_path")
 
                 if not old_path or not new_path:
-                    return {'success': False, 'error': 'Missing old_path or new_path'}
+                    return {"success": False, "error": "Missing old_path or new_path"}
 
                 success = yd.move_folder(old_path, new_path)
                 if success:
                     print(f"[YANDEX] Папка переименована: {old_path} -> {new_path}")
-                    return {'success': True, 'server_id': entity_id}
-                return {'success': False, 'error': 'Failed to rename Yandex folder'}
+                    return {"success": True, "server_id": entity_id}
+                return {"success": False, "error": "Failed to rename Yandex folder"}
 
             elif op_type == OperationType.CREATE.value:
                 # Создание папки
-                folder_path = data.get('folder_path')
+                folder_path = data.get("folder_path")
                 if not folder_path:
-                    return {'success': False, 'error': 'Missing folder_path'}
+                    return {"success": False, "error": "Missing folder_path"}
 
                 success = yd.create_folder(folder_path)
                 if success:
                     print(f"[YANDEX] Папка создана: {folder_path}")
-                    return {'success': True, 'server_id': entity_id}
-                return {'success': False, 'error': 'Failed to create Yandex folder'}
+                    return {"success": True, "server_id": entity_id}
+                return {"success": False, "error": "Failed to create Yandex folder"}
 
             elif op_type == OperationType.DELETE.value:
                 # Удаление папки
-                folder_path = data.get('folder_path')
+                folder_path = data.get("folder_path")
                 if not folder_path:
-                    return {'success': False, 'error': 'Missing folder_path'}
+                    return {"success": False, "error": "Missing folder_path"}
 
                 success = yd.delete_folder(folder_path)
                 if success:
                     print(f"[YANDEX] Папка удалена: {folder_path}")
-                    return {'success': True, 'server_id': entity_id}
-                return {'success': False, 'error': 'Failed to delete Yandex folder'}
+                    return {"success": True, "server_id": entity_id}
+                return {"success": False, "error": "Failed to delete Yandex folder"}
 
-            return {'success': False, 'error': 'Unknown operation type for yandex_folder'}
+            return {"success": False, "error": "Unknown operation type for yandex_folder"}
 
         except Exception as e:
             print(f"[YANDEX] Ошибка синхронизации: {e}")
-            return {'success': False, 'error': str(e)}
+            return {"success": False, "error": str(e)}
 
-    def _sync_project_file_operation(self, op_type: str, entity_id: int, data: Dict) -> Dict:
+    def _sync_project_file_operation(self, op_type: str, entity_id: int, data: dict) -> dict:
         """Синхронизация операции с файлом проекта"""
         if op_type == OperationType.CREATE.value:
             result = self.api_client.create_file_record(data)
             if result:
-                return {'success': True, 'server_id': result.get('id')}
-            return {'success': False, 'error': 'Failed to create file record'}
+                return {"success": True, "server_id": result.get("id")}
+            return {"success": False, "error": "Failed to create file record"}
 
         elif op_type == OperationType.DELETE.value:
             try:
                 self.api_client.delete_file_record(entity_id)
-                return {'success': True, 'server_id': entity_id}
+                return {"success": True, "server_id": entity_id}
             except Exception as e:
-                return {'success': False, 'error': str(e)}
+                return {"success": False, "error": str(e)}
 
-        return {'success': False, 'error': 'Unknown operation type for project_file'}
+        return {"success": False, "error": "Unknown operation type for project_file"}
 
-    def _sync_rate_operation(self, op_type: str, entity_id: int, data: Dict) -> Dict:
+    def _sync_rate_operation(self, op_type: str, entity_id: int, data: dict) -> dict:
         """Синхронизация операции со ставкой"""
         if op_type == OperationType.CREATE.value:
             result = self.api_client.create_rate(data)
             if result:
-                return {'success': True, 'server_id': result.get('id')}
-            return {'success': False, 'error': 'Failed to create rate'}
+                return {"success": True, "server_id": result.get("id")}
+            return {"success": False, "error": "Failed to create rate"}
 
         elif op_type == OperationType.UPDATE.value:
             result = self.api_client.update_rate(entity_id, data)
             if result:
-                return {'success': True, 'server_id': entity_id}
-            return {'success': False, 'error': 'Failed to update rate'}
+                return {"success": True, "server_id": entity_id}
+            return {"success": False, "error": "Failed to update rate"}
 
         elif op_type == OperationType.DELETE.value:
             try:
                 self.api_client.delete_rate(entity_id)
-                return {'success': True, 'server_id': entity_id}
+                return {"success": True, "server_id": entity_id}
             except Exception as e:
-                return {'success': False, 'error': str(e)}
+                return {"success": False, "error": str(e)}
 
-        return {'success': False, 'error': 'Unknown operation type for rate'}
+        return {"success": False, "error": "Unknown operation type for rate"}
 
-    def _sync_salary_operation(self, op_type: str, entity_id: int, data: Dict) -> Dict:
+    def _sync_salary_operation(self, op_type: str, entity_id: int, data: dict) -> dict:
         """Синхронизация операции с зарплатой"""
         if op_type == OperationType.CREATE.value:
             result = self.api_client.create_salary(data)
             if result:
-                return {'success': True, 'server_id': result.get('id')}
-            return {'success': False, 'error': 'Failed to create salary'}
+                return {"success": True, "server_id": result.get("id")}
+            return {"success": False, "error": "Failed to create salary"}
 
         elif op_type == OperationType.UPDATE.value:
             result = self.api_client.update_salary(entity_id, data)
             if result:
-                return {'success': True, 'server_id': entity_id}
-            return {'success': False, 'error': 'Failed to update salary'}
+                return {"success": True, "server_id": entity_id}
+            return {"success": False, "error": "Failed to update salary"}
 
         elif op_type == OperationType.DELETE.value:
             try:
                 self.api_client.delete_salary(entity_id)
-                return {'success': True, 'server_id': entity_id}
+                return {"success": True, "server_id": entity_id}
             except Exception as e:
-                return {'success': False, 'error': str(e)}
+                return {"success": False, "error": str(e)}
 
-        return {'success': False, 'error': 'Unknown operation type for salary'}
+        return {"success": False, "error": "Unknown operation type for salary"}
 
-    def _sync_action_history_operation(self, op_type: str, entity_id: int, data: Dict) -> Dict:
+    def _sync_action_history_operation(self, op_type: str, entity_id: int, data: dict) -> dict:
         """Синхронизация записи истории действий"""
         if op_type == OperationType.CREATE.value:
             try:
                 result = self.api_client.create_action_history(data)
                 if result:
-                    return {'success': True, 'server_id': result.get('id', entity_id)}
-                return {'success': False, 'error': 'Failed to create action history'}
+                    return {"success": True, "server_id": result.get("id", entity_id)}
+                return {"success": False, "error": "Failed to create action history"}
             except Exception as e:
-                return {'success': False, 'error': str(e)}
+                return {"success": False, "error": str(e)}
 
-        return {'success': False, 'error': 'Unknown operation type for action_history'}
+        return {"success": False, "error": "Unknown operation type for action_history"}
 
-    def _sync_supervision_history_operation(self, op_type: str, entity_id: int, data: Dict) -> Dict:
+    def _sync_supervision_history_operation(self, op_type: str, entity_id: int, data: dict) -> dict:
         """Синхронизация записи истории надзора"""
         if op_type == OperationType.CREATE.value:
             try:
-                card_id = data.get('card_id', entity_id)
-                result = self.api_client.add_supervision_history(
-                    card_id,
-                    entry_type=data.get('entry_type', ''),
-                    message=data.get('message', ''),
-                    employee_id=data.get('employee_id')
-                )
+                card_id = data.get("card_id", entity_id)
+                result = self.api_client.add_supervision_history(card_id, entry_type=data.get("entry_type", ""), message=data.get("message", ""), employee_id=data.get("employee_id"))
                 if result:
-                    return {'success': True, 'server_id': entity_id}
-                return {'success': False, 'error': 'Failed to create supervision history'}
+                    return {"success": True, "server_id": entity_id}
+                return {"success": False, "error": "Failed to create supervision history"}
             except Exception as e:
-                return {'success': False, 'error': str(e)}
+                return {"success": False, "error": str(e)}
 
-        return {'success': False, 'error': 'Unknown operation type for supervision_history'}
+        return {"success": False, "error": "Unknown operation type for supervision_history"}
 
-    def _sync_timeline_entry_operation(self, op_type: str, entity_id: int, data: Dict) -> Dict:
+    def _sync_timeline_entry_operation(self, op_type: str, entity_id: int, data: dict) -> dict:
         """Синхронизация записи таблицы сроков CRM"""
         if op_type == OperationType.UPDATE.value:
             try:
-                contract_id = data.get('contract_id', entity_id)
-                stage_code = data.get('stage_code', '')
+                contract_id = data.get("contract_id", entity_id)
+                stage_code = data.get("stage_code", "")
                 # Формируем данные без служебных ключей
-                entry_data = {k: v for k, v in data.items()
-                              if k not in ('contract_id', 'stage_code')}
+                entry_data = {k: v for k, v in data.items() if k not in ("contract_id", "stage_code")}
                 self.api_client.update_timeline_entry(contract_id, stage_code, entry_data)
-                return {'success': True, 'server_id': entity_id}
+                return {"success": True, "server_id": entity_id}
             except Exception as e:
-                return {'success': False, 'error': str(e)}
+                return {"success": False, "error": str(e)}
 
-        return {'success': False, 'error': 'Unknown operation type for timeline_entry'}
+        return {"success": False, "error": "Unknown operation type for timeline_entry"}
 
-    def _sync_supervision_timeline_entry_operation(self, op_type: str, entity_id: int, data: Dict) -> Dict:
+    def _sync_supervision_timeline_entry_operation(self, op_type: str, entity_id: int, data: dict) -> dict:
         """Синхронизация записи таблицы сроков надзора"""
         if op_type == OperationType.UPDATE.value:
             try:
-                card_id = data.get('card_id', entity_id)
-                stage_code = data.get('stage_code', '')
+                card_id = data.get("card_id", entity_id)
+                stage_code = data.get("stage_code", "")
                 # Формируем данные без служебных ключей
-                entry_data = {k: v for k, v in data.items()
-                              if k not in ('card_id', 'stage_code')}
+                entry_data = {k: v for k, v in data.items() if k not in ("card_id", "stage_code")}
                 self.api_client.update_supervision_timeline_entry(card_id, stage_code, entry_data)
-                return {'success': True, 'server_id': entity_id}
+                return {"success": True, "server_id": entity_id}
             except Exception as e:
-                return {'success': False, 'error': str(e)}
+                return {"success": False, "error": str(e)}
 
-        return {'success': False, 'error': 'Unknown operation type for supervision_timeline_entry'}
+        return {"success": False, "error": "Unknown operation type for supervision_timeline_entry"}
 
-    def _sync_stage_executor_operation(self, op_type: str, entity_id: int, data: Dict) -> Dict:
+    def _sync_stage_executor_operation(self, op_type: str, entity_id: int, data: dict) -> dict:
         """Синхронизация операции с исполнителем стадии"""
-        card_id = data.get('card_id', entity_id)
-        stage_name = data.get('stage_name', '')
-        action = data.get('_action', op_type)
+        card_id = data.get("card_id", entity_id)
+        stage_name = data.get("stage_name", "")
+        action = data.get("_action", op_type)
 
-        if action == 'assign' or op_type == OperationType.CREATE.value:
+        if action == "assign" or op_type == OperationType.CREATE.value:
             try:
                 result = self.api_client.assign_stage_executor(card_id, data)
                 if result:
-                    return {'success': True, 'server_id': entity_id}
-                return {'success': False, 'error': 'Failed to assign stage executor'}
+                    return {"success": True, "server_id": entity_id}
+                return {"success": False, "error": "Failed to assign stage executor"}
             except Exception as e:
-                return {'success': False, 'error': str(e)}
+                return {"success": False, "error": str(e)}
 
-        elif action == 'complete':
+        elif action == "complete":
             try:
-                executor_id = data.get('executor_id')
+                executor_id = data.get("executor_id")
                 result = self.api_client.complete_stage_for_executor(card_id, stage_name, executor_id)
-                return {'success': result is not None, 'server_id': entity_id,
-                        'error': None if result is not None else 'Failed to complete stage'}
+                return {"success": result is not None, "server_id": entity_id, "error": None if result is not None else "Failed to complete stage"}
             except Exception as e:
-                return {'success': False, 'error': str(e)}
+                return {"success": False, "error": str(e)}
 
-        elif action == 'accept':
+        elif action == "accept":
             try:
-                executor_name = data.get('executor_name', '')
-                manager_id = data.get('manager_id')
+                executor_name = data.get("executor_name", "")
+                manager_id = data.get("manager_id")
                 result = self.api_client.save_manager_acceptance(card_id, stage_name, executor_name, manager_id)
-                return {'success': result is not None, 'server_id': entity_id,
-                        'error': None if result is not None else 'Failed to save acceptance'}
+                return {"success": result is not None, "server_id": entity_id, "error": None if result is not None else "Failed to save acceptance"}
             except Exception as e:
-                return {'success': False, 'error': str(e)}
+                return {"success": False, "error": str(e)}
 
-        elif action in ('reset', 'reset_designer', 'reset_draftsman', 'reset_approval'):
+        elif action in ("reset", "reset_designer", "reset_draftsman", "reset_approval"):
             try:
                 method_map = {
-                    'reset': 'reset_stage_completion',
-                    'reset_designer': 'reset_designer_completion',
-                    'reset_draftsman': 'reset_draftsman_completion',
-                    'reset_approval': 'reset_approval_stages',
+                    "reset": "reset_stage_completion",
+                    "reset_designer": "reset_designer_completion",
+                    "reset_draftsman": "reset_draftsman_completion",
+                    "reset_approval": "reset_approval_stages",
                 }
                 method = getattr(self.api_client, method_map[action])
                 result = method(card_id)
-                return {'success': result is not None, 'server_id': entity_id,
-                        'error': None if result is not None else f'Failed to {action}'}
+                return {"success": result is not None, "server_id": entity_id, "error": None if result is not None else f"Failed to {action}"}
             except Exception as e:
-                return {'success': False, 'error': str(e)}
+                return {"success": False, "error": str(e)}
 
         elif op_type == OperationType.UPDATE.value:
             try:
-                update_data = {k: v for k, v in data.items() if k not in ('card_id', 'stage_name', '_action')}
+                update_data = {k: v for k, v in data.items() if k not in ("card_id", "stage_name", "_action")}
                 result = self.api_client.update_stage_executor(card_id, stage_name, update_data)
-                return {'success': result is not None, 'server_id': entity_id,
-                        'error': None if result is not None else 'Failed to update stage executor'}
+                return {"success": result is not None, "server_id": entity_id, "error": None if result is not None else "Failed to update stage executor"}
             except Exception as e:
-                return {'success': False, 'error': str(e)}
+                return {"success": False, "error": str(e)}
 
-        return {'success': False, 'error': f'Unknown action for stage_executor: {action}'}
+        return {"success": False, "error": f"Unknown action for stage_executor: {action}"}
 
-    def _sync_agent_operation(self, op_type: str, entity_id: int, data: Dict) -> Dict:
+    def _sync_agent_operation(self, op_type: str, entity_id: int, data: dict) -> dict:
         """Синхронизация операции с агентом"""
         if op_type == OperationType.CREATE.value:
             try:
-                name = data.get('name', '')
-                color = data.get('color')
+                name = data.get("name", "")
+                color = data.get("color")
                 result = self.api_client.add_agent(name, color)
                 if result:
-                    return {'success': True, 'server_id': result.get('id', entity_id)}
-                return {'success': False, 'error': 'Failed to create agent'}
+                    return {"success": True, "server_id": result.get("id", entity_id)}
+                return {"success": False, "error": "Failed to create agent"}
             except Exception as e:
-                return {'success': False, 'error': str(e)}
+                return {"success": False, "error": str(e)}
 
         elif op_type == OperationType.UPDATE.value:
             try:
-                name = data.get('name', '')
-                color = data.get('color', '')
+                name = data.get("name", "")
+                color = data.get("color", "")
                 result = self.api_client.update_agent_color(name, color)
-                return {'success': bool(result), 'server_id': entity_id,
-                        'error': None if result else 'Failed to update agent color'}
+                return {"success": bool(result), "server_id": entity_id, "error": None if result else "Failed to update agent color"}
             except Exception as e:
-                return {'success': False, 'error': str(e)}
+                return {"success": False, "error": str(e)}
 
-        return {'success': False, 'error': f'Unknown operation type for agent: {op_type}'}
+        return {"success": False, "error": f"Unknown operation type for agent: {op_type}"}
 
-    def _sync_project_template_operation(self, op_type: str, entity_id: int, data: Dict) -> Dict:
+    def _sync_project_template_operation(self, op_type: str, entity_id: int, data: dict) -> dict:
         """Синхронизация операции с шаблоном проекта"""
         if op_type == OperationType.CREATE.value:
             try:
-                contract_id = data.get('contract_id')
-                url = data.get('url', '')
+                contract_id = data.get("contract_id")
+                url = data.get("url", "")
                 result = self.api_client.add_project_template(contract_id, url)
                 if result is not None:
-                    return {'success': True, 'server_id': entity_id}
-                return {'success': False, 'error': 'Failed to add project template'}
+                    return {"success": True, "server_id": entity_id}
+                return {"success": False, "error": "Failed to add project template"}
             except Exception as e:
-                return {'success': False, 'error': str(e)}
+                return {"success": False, "error": str(e)}
 
         elif op_type == OperationType.DELETE.value:
             try:
                 result = self.api_client.delete_project_template(entity_id)
-                return {'success': bool(result), 'server_id': entity_id,
-                        'error': None if result else 'Failed to delete project template'}
+                return {"success": bool(result), "server_id": entity_id, "error": None if result else "Failed to delete project template"}
             except Exception as e:
-                return {'success': False, 'error': str(e)}
+                return {"success": False, "error": str(e)}
 
-        return {'success': False, 'error': f'Unknown operation type for project_template: {op_type}'}
+        return {"success": False, "error": f"Unknown operation type for project_template: {op_type}"}
 
-    def _sync_permission_operation(self, op_type: str, entity_id: int, data: Dict) -> Dict:
+    def _sync_permission_operation(self, op_type: str, entity_id: int, data: dict) -> dict:
         """Синхронизация операции с правами сотрудника"""
         if op_type == OperationType.UPDATE.value:
             try:
-                employee_id = data.get('employee_id', entity_id)
-                permissions = data.get('permissions', [])
+                employee_id = data.get("employee_id", entity_id)
+                permissions = data.get("permissions", [])
                 result = self.api_client.set_employee_permissions(employee_id, permissions)
-                return {'success': bool(result), 'server_id': entity_id,
-                        'error': None if result else 'Failed to set permissions'}
+                return {"success": bool(result), "server_id": entity_id, "error": None if result else "Failed to set permissions"}
             except Exception as e:
-                return {'success': False, 'error': str(e)}
+                return {"success": False, "error": str(e)}
 
-        return {'success': False, 'error': f'Unknown operation type for permission: {op_type}'}
+        return {"success": False, "error": f"Unknown operation type for permission: {op_type}"}
 
-    def _update_operation_status(self, operation_id: int, status: OperationStatus,
-                                 error_message: str = None, server_entity_id: int = None):
+    def _update_operation_status(self, operation_id: int, status: OperationStatus, error_message: str = None, server_entity_id: int = None):
         """Обновить статус операции в очереди"""
         with self._db_lock:
             conn = self._get_connection()
@@ -1021,11 +1060,14 @@ class OfflineManager(QObject):
 
             params.append(operation_id)
 
-            cursor.execute(f"""
+            cursor.execute(
+                f"""
                 UPDATE offline_operations_queue
-                SET {', '.join(update_fields)}
+                SET {", ".join(update_fields)}
                 WHERE id = ?
-            """, params)
+            """,
+                params,
+            )
 
             conn.commit()
             conn.close()
@@ -1039,14 +1081,14 @@ class OfflineManager(QObject):
             return
 
         table_map = {
-            'client': 'clients',
-            'contract': 'contracts',
-            'crm_card': 'crm_cards',
-            'supervision_card': 'supervision_cards',
-            'payment': 'payments',
-            'rate': 'rates',
-            'salary': 'salaries',
-            'project_file': 'project_files',
+            "client": "clients",
+            "contract": "contracts",
+            "crm_card": "crm_cards",
+            "supervision_card": "supervision_cards",
+            "payment": "payments",
+            "rate": "rates",
+            "salary": "salaries",
+            "project_file": "project_files",
         }
 
         table = table_map.get(entity_type)
@@ -1069,10 +1111,13 @@ class OfflineManager(QObject):
             conn = self._get_connection()
             cursor = conn.cursor()
 
-            cursor.execute("""
+            cursor.execute(
+                """
                 DELETE FROM offline_operations_queue
                 WHERE status = ?
-            """, (OperationStatus.SYNCED.value,))
+            """,
+                (OperationStatus.SYNCED.value,),
+            )
 
             deleted = cursor.rowcount
             conn.commit()
@@ -1088,11 +1133,14 @@ class OfflineManager(QObject):
             cursor = conn.cursor()
 
             # Сбрасываем статус failed операций на pending (максимум 3 попытки)
-            cursor.execute("""
+            cursor.execute(
+                """
                 UPDATE offline_operations_queue
                 SET status = ?
                 WHERE status = ? AND retry_count < 3
-            """, (OperationStatus.PENDING.value, OperationStatus.FAILED.value))
+            """,
+                (OperationStatus.PENDING.value, OperationStatus.FAILED.value),
+            )
 
             updated = cursor.rowcount
             conn.commit()
@@ -1105,32 +1153,37 @@ class OfflineManager(QObject):
 
         return updated
 
-    def get_operation_history(self, limit: int = 100) -> List[Dict[str, Any]]:
+    def get_operation_history(self, limit: int = 100) -> list[dict[str, Any]]:
         """Получить историю операций"""
         with self._db_lock:
             conn = self._get_connection()
             cursor = conn.cursor()
 
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT * FROM offline_operations_queue
                 ORDER BY created_at DESC
                 LIMIT ?
-            """, (limit,))
+            """,
+                (limit,),
+            )
 
             operations = []
             for row in cursor.fetchall():
-                operations.append({
-                    'id': row['id'],
-                    'operation_type': row['operation_type'],
-                    'entity_type': row['entity_type'],
-                    'entity_id': row['entity_id'],
-                    'data': json.loads(row['data']) if row['data'] else {},
-                    'status': row['status'],
-                    'created_at': row['created_at'],
-                    'synced_at': row['synced_at'],
-                    'error_message': row['error_message'],
-                    'retry_count': row['retry_count']
-                })
+                operations.append(
+                    {
+                        "id": row["id"],
+                        "operation_type": row["operation_type"],
+                        "entity_type": row["entity_type"],
+                        "entity_id": row["entity_id"],
+                        "data": json.loads(row["data"]) if row["data"] else {},
+                        "status": row["status"],
+                        "created_at": row["created_at"],
+                        "synced_at": row["synced_at"],
+                        "error_message": row["error_message"],
+                        "retry_count": row["retry_count"],
+                    }
+                )
 
             conn.close()
         return operations

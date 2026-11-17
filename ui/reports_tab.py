@@ -389,7 +389,7 @@ class ReportsTab(QWidget):
         grid.setSpacing(12)
 
         self.chart_clients_dynamics = LineChartWidget("Динамика новых клиентов")
-        self.chart_clients_types = ProjectTypePieChart()
+        self.chart_clients_types = ProjectTypePieChart(title="Тип клиентов")
         self.chart_clients_by_agent = HorizontalBarWidget("Клиенты по агентам")
         self.chart_clients_new_vs_returning = StackedBarChartWidget("Новые vs Повторные")
 
@@ -424,6 +424,8 @@ class ReportsTab(QWidget):
             ("individual", "Индивидуальных", "#F57C00"),
             ("template", "Шаблонных", "#C62828"),
             ("amount", "Стоимость", "#F57C00"),
+            ("individual_amount", "Сумма инд.", "#F57C00"),
+            ("template_amount", "Сумма шабл.", "#C62828"),
             ("avg", "Средний чек", "#E91E63"),
         ]
         for key, title, color in items:
@@ -534,11 +536,19 @@ class ReportsTab(QWidget):
         funnel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         layout.addWidget(funnel)
 
-        # Время стадий vs норматив — на всю ширину
+        # Время стадий vs норматив — в горизонтальном скролле для большого числа стадий
         stage_duration = StackedBarChartWidget(f"Время стадий vs норматив — {project_type}")
-        stage_duration.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        stage_duration.setMinimumHeight(420)
-        layout.addWidget(stage_duration)
+        stage_scroll = QScrollArea()
+        stage_scroll.setWidgetResizable(False)
+        stage_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        stage_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        stage_scroll.setWidget(stage_duration)
+        stage_scroll.setFrameShape(QFrame.NoFrame)
+        stage_scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
+        stage_scroll.setMinimumHeight(480)
+        stage_scroll.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        stage_scroll.setAlignment(Qt.AlignHCenter | Qt.AlignTop)
+        layout.addWidget(stage_scroll)
 
         # Прижимаем контент к верху — spacer забирает лишнюю высоту
         layout.addStretch(1)
@@ -549,6 +559,7 @@ class ReportsTab(QWidget):
             "mini_flow_w": mini_flow_w,
             "funnel": funnel,
             "stage_duration": stage_duration,
+            "stage_scroll": stage_scroll,
         }
 
     # ===================================================================
@@ -782,6 +793,8 @@ class ReportsTab(QWidget):
                 lambda: self.data_access.get_reports_distribution("agent", **time_filters), [])
             dist_city = _safe_call("dist_city",
                 lambda: self.data_access.get_reports_distribution("city", **time_filters), [])
+            contracts_dash = _safe_call("contracts_dashboard",
+                lambda: self.data_access.get_contracts_dashboard_stats(year=year_filter), {})
 
             self._cache = {
                 "summary": summary or {},
@@ -792,6 +805,7 @@ class ReportsTab(QWidget):
                 "supervision": sv or {},
                 "dist_agent": dist_agent or [],
                 "dist_city": dist_city or [],
+                "contracts_dashboard": contracts_dash or {},
             }
 
             # Обновить UI строго в главном потоке
@@ -1018,6 +1032,7 @@ class ReportsTab(QWidget):
         dynamics = self._cache.get("contracts_dynamics", [])
         dist_agent = self._cache.get("dist_agent", [])
         dist_city = self._cache.get("dist_city", [])
+        self._contracts_dashboard = self._cache.get("contracts_dashboard", {})
 
         # Мини-дашборд
         self._mini_contracts["total"].set_value(str(s.get("total_contracts", 0)))
@@ -1034,6 +1049,16 @@ class ReportsTab(QWidget):
         )
         self._mini_contracts["avg"].set_value(
             f"{avg:,.0f}\u00a0руб".replace(",", "\u00a0")
+        )
+
+        # Суммы инд/шабл (из dashboard/contracts API)
+        ind_amt = self._contracts_dashboard.get("individual_amount", 0) or 0
+        tmpl_amt = self._contracts_dashboard.get("template_amount", 0) or 0
+        self._mini_contracts["individual_amount"].set_value(
+            f"{ind_amt:,.0f}\u00a0руб".replace(",", "\u00a0")
+        )
+        self._mini_contracts["template_amount"].set_value(
+            f"{tmpl_amt:,.0f}\u00a0руб".replace(",", "\u00a0")
         )
 
         # Графики
@@ -1152,6 +1177,11 @@ class ReportsTab(QWidget):
                         stacked=False,
                         highlight_prefixes=["СТАДИЯ", "ЭТАП", "ДАТА"]
                     )
+                    # Прокрутить скролл на середину графика
+                    scroll = subtab.get("stage_scroll")
+                    if scroll:
+                        QTimer.singleShot(0, lambda s=scroll: s.horizontalScrollBar().setValue(
+                            s.horizontalScrollBar().maximum() // 2))
             except Exception as e:
                 logger.error(f"[Reports] Ошибка обновления CRM ({cache_key}): {e}", exc_info=True)
 

@@ -1,0 +1,1384 @@
+"""
+Сервис внутреннего чата Interior Studio CRM.
+
+Бизнес-логика:
+- Создание чатов (сотрудники / клиенты)
+- Управление участниками
+- Сохранение сообщений
+- Загрузка файлов в ЯД (папка внутри карточки)
+- WebSocket ConnectionManager
+- Пересылка сообщений
+"""
+
+from datetime import datetime
+import logging
+from typing import Dict, Optional, Set
+import uuid
+
+from fastapi import WebSocket
+from sqlalchemy import func, or_
+from sqlalchemy.orm import Session
+
+from database import (
+    Contract,
+    CRMCard,
+    Employee,
+    InternalChat,
+    InternalChatMember,
+    InternalChatMessage,
+    InternalChatMessageReaction,
+    StageExecutor,
+    SupervisionCard,
+    UserChatPin,
+)
+
+logger = logging.getLogger(__name__)
+
+
+# =========================
+# WebSocket ConnectionManager
+# =========================
+
+
+class ChatConnectionManager:
+    """Управление активными WebSocket-соединениями чатов.
+
+    Структура: {chat_id: {participant_key: WebSocket}}
+    participant_key = f"emp_{employee_id}" или f"guest_{token}"
+    """
+
+    def __init__(self):
+        # {chat_id: {participant_key: WebSocket}}
+        self.active: dict[int, dict[str, WebSocket]] = {}
+
+    async def connect(self, chat_id: int, participant_key: str, ws: WebSocket):
+        await ws.accept()
+        if chat_id not in self.active:
+            self.active[chat_id] = {}
+        self.active[chat_id][participant_key] = ws
+        logger.debug(f"WS connect: chat={chat_id} participant={participant_key}")
+
+    def disconnect(self, chat_id: int, participant_key: str):
+        if chat_id in self.active:
+            self.active[chat_id].pop(participant_key, None)
+            if not self.active[chat_id]:
+                del self.active[chat_id]
+        logger.debug(f"WS disconnect: chat={chat_id} participant={participant_key}")
+
+    async def broadcast(self, chat_id: int, data: dict, exclude: Optional[str] = None):
+        """Разослать сообщение всем участникам чата."""
+        if chat_id not in self.active:
+            return
+        dead: set[str] = set()
+        for key, ws in self.active[chat_id].items():
+            if key == exclude:
+                continue
+            try:
+                await ws.send_json(data)
+            except Exception:
+                dead.add(key)
+        for key in dead:
+            self.active[chat_id].pop(key, None)
+
+    async def send_personal(self, chat_id: int, participant_key: str, data: dict):
+        """Отправить сообщение конкретному участнику."""
+        ws = self.active.get(chat_id, {}).get(participant_key)
+        if ws:
+            try:
+                await ws.send_json(data)
+            except Exception:
+                self.active[chat_id].pop(participant_key, None)
+
+    def is_online(self, chat_id: int, participant_key: str) -> bool:
+        return participant_key in self.active.get(chat_id, {})
+
+    def online_count(self, chat_id: int) -> int:
+        return len(self.active.get(chat_id, {}))
+
+
+# Глобальный экземпляр — один на приложение
+manager = ChatConnectionManager()
+
+
+# =========================
+# Вспомогательные функции
+# =========================
+
+
+def _get_contract_for_card(db: Session, crm_card_id: int) -> Optional[Contract]:
+    card = db.query(CRMCard).filter(CRMCard.id == crm_card_id).first()
+    if not card:
+        return None
+    return db.query(Contract).filter(Contract.id == card.contract_id).first()
+
+
+def _get_card_folder(db: Session, crm_card_id: Optional[int] = None, supervision_card_id: Optional[int] = None) -> str:
+    """Вернуть yandex_folder_path карточки без disk: префикса."""
+    if crm_card_id:
+        contract = _get_contract_for_card(db, crm_card_id)
+        if contract and contract.yandex_folder_path:
+            return contract.yandex_folder_path.replace("disk:", "").rstrip("/")
+    if supervision_card_id:
+        card = db.query(SupervisionCard).filter(SupervisionCard.id == supervision_card_id).first()
+        if card:
+            contract = db.query(Contract).filter(Contract.id == card.contract_id).first()
+            if contract and contract.yandex_folder_path:
+                return contract.yandex_folder_path.replace("disk:", "").rstrip("/")
+    return "/CRM/Временные файлы"
+
+
+def _chat_folder_name(chat_type: str) -> str:
+    return "Чат сотрудников" if chat_type == "employee" else "Чат с клиентом"
+
+
+def _ensure_yd_folder(folder_path: str) -> bool:
+    """Создать папку на ЯД если не существует (рекурсивно). Возвращает True при успехе."""
+    try:
+        from yandex_disk_service import get_yandex_disk_service
+
+        yd = get_yandex_disk_service()
+        if not yd or not yd.token:
+            return False
+        # create_folder создаёт все промежуточные папки рекурсивно (аналог os.makedirs)
+        yd.create_folder(folder_path)
+        return True
+    except Exception as e:
+        logger.warning(f"ЯД: не удалось создать папку {folder_path}: {e}")
+        return False
+
+
+def _message_to_dict(msg: InternalChatMessage) -> dict:
+    reply_to_id = getattr(msg, "reply_to_id", None)
+    reply_preview = None
+    if reply_to_id:
+        try:
+            from sqlalchemy.orm import object_session
+
+            session = object_session(msg)
+            if session:
+                r = session.get(InternalChatMessage, reply_to_id)
+                if r and not r.is_deleted:
+                    reply_preview = {
+                        "id": r.id,
+                        "sender_display_name": r.sender_display_name,
+                        "content": r.content or ("[Изображение]" if r.message_type == "image" else "[Файл]"),
+                        "message_type": r.message_type,
+                        "yandex_path": r.yandex_path,
+                        "file_name": r.file_name,
+                    }
+        except Exception:
+            pass
+    return {
+        "id": msg.id,
+        "chat_id": msg.chat_id,
+        "sender_employee_id": msg.sender_employee_id,
+        "sender_guest_token": msg.sender_guest_token,
+        "sender_display_name": msg.sender_display_name,
+        "message_type": msg.message_type,
+        "content": msg.content,
+        "file_url": msg.file_url,
+        "file_name": msg.file_name,
+        "file_size": msg.file_size,
+        "yandex_path": msg.yandex_path,
+        "group_id": getattr(msg, "group_id", None),
+        "is_pinned": getattr(msg, "is_pinned", False),
+        "is_deleted": msg.is_deleted,
+        "is_edited": getattr(msg, "is_edited", False),
+        "created_at": (msg.created_at.strftime("%Y-%m-%dT%H:%M:%S.%f") + "Z") if msg.created_at else None,
+        "reply_to_id": reply_to_id,
+        "reply_preview": reply_preview,
+        "reactions": {},
+    }
+
+
+def _reactions_summary(reactions: list, emp_names: dict = None) -> dict:
+    """Сгруппировать список ORM-объектов реакций в dict {emoji: [reactor, ...]}."""
+    result: dict = {}
+    for r in reactions:
+        if r.emoji not in result:
+            result[r.emoji] = []
+        reactor = {
+            "employee_id": r.employee_id,
+            "guest_token": r.guest_token,
+            "display_name": (emp_names or {}).get(r.employee_id) if r.employee_id else None,
+        }
+        result[r.emoji].append(reactor)
+    return result
+
+
+def get_reactions_for_message(db: Session, message_id: int) -> dict:
+    """Вернуть реакции для одного сообщения."""
+    rows = db.query(InternalChatMessageReaction).filter(InternalChatMessageReaction.message_id == message_id).all()
+    emp_ids = list({r.employee_id for r in rows if r.employee_id})
+    emp_names = {e.id: e.full_name for e in db.query(Employee).filter(Employee.id.in_(emp_ids)).all()} if emp_ids else {}
+    return _reactions_summary(rows, emp_names)
+
+
+def get_batch_reactions(db: Session, message_ids: list) -> dict:
+    """Загрузить реакции для списка сообщений одним запросом. Возвращает {message_id: {emoji: [...]}}."""
+    if not message_ids:
+        return {}
+    rows = db.query(InternalChatMessageReaction).filter(InternalChatMessageReaction.message_id.in_(message_ids)).all()
+    emp_ids = list({r.employee_id for r in rows if r.employee_id})
+    emp_names = {e.id: e.full_name for e in db.query(Employee).filter(Employee.id.in_(emp_ids)).all()} if emp_ids else {}
+    result: dict = {}
+    for r in rows:
+        if r.message_id not in result:
+            result[r.message_id] = {}
+        if r.emoji not in result[r.message_id]:
+            result[r.message_id][r.emoji] = []
+        result[r.message_id][r.emoji].append(
+            {
+                "employee_id": r.employee_id,
+                "guest_token": r.guest_token,
+                "display_name": emp_names.get(r.employee_id) if r.employee_id else None,
+            }
+        )
+    return result
+
+
+def toggle_reaction(db: Session, message_id: int, emoji: str, employee_id: int = None, guest_token: str = None) -> dict:
+    """Добавить реакцию если её нет, удалить если есть. Возвращает обновлённые реакции."""
+    q = db.query(InternalChatMessageReaction).filter(
+        InternalChatMessageReaction.message_id == message_id,
+        InternalChatMessageReaction.emoji == emoji,
+    )
+    if employee_id is not None:
+        q = q.filter(InternalChatMessageReaction.employee_id == employee_id)
+    elif guest_token is not None:
+        q = q.filter(InternalChatMessageReaction.guest_token == guest_token)
+    else:
+        return get_reactions_for_message(db, message_id)
+
+    existing = q.first()
+    if existing:
+        db.delete(existing)
+    else:
+        db.add(InternalChatMessageReaction(message_id=message_id, employee_id=employee_id, guest_token=guest_token, emoji=emoji))
+    db.commit()
+    return get_reactions_for_message(db, message_id)
+
+
+def _get_assigned_employee_ids(db: Session, crm_card_id: int) -> list:
+    """Вернуть список ID всех назначенных сотрудников по карточке."""
+    card = db.query(CRMCard).filter(CRMCard.id == crm_card_id).first()
+    if not card:
+        return []
+    ids = []
+    for fid in [card.senior_manager_id, card.sdp_id, card.gap_id, card.manager_id, card.surveyor_id]:
+        if fid:
+            ids.append(fid)
+    # StageExecutor — дизайнеры, чертёжники
+    executors = db.query(StageExecutor).filter(StageExecutor.crm_card_id == crm_card_id).all()
+    for ex in executors:
+        if ex.executor_id and ex.executor_id not in ids:
+            ids.append(ex.executor_id)
+    return ids
+
+
+def _get_employee_display_name(emp: Employee) -> str:
+    if emp.full_name:
+        return emp.full_name
+    return emp.login or f"Сотрудник #{emp.id}"
+
+
+# =========================
+# Создание чатов
+# =========================
+
+
+def create_employee_chat(db: Session, crm_card_id: int, created_by_id: int, supervision_card_id: Optional[int] = None) -> InternalChat:
+    """Создать чат сотрудников для карточки.
+
+    Автоматически:
+    - Добавляет всех назначенных на карточку сотрудников
+    - Создаёт папку {contract.yandex_folder_path}/Чат сотрудников на ЯД
+    """
+    # Проверить нет ли уже чата
+    existing = (
+        db.query(InternalChat)
+        .filter(
+            InternalChat.chat_type == "employee",
+            InternalChat.crm_card_id == crm_card_id,
+            InternalChat.is_active == True,
+        )
+        .first()
+    )
+    if existing:
+        return existing
+
+    # Получить заголовок из карточки
+    title = None
+    contract_id = None
+    card = db.query(CRMCard).filter(CRMCard.id == crm_card_id).first()
+    if card:
+        contract = db.query(Contract).filter(Contract.id == card.contract_id).first()
+        if contract:
+            title = contract.address or f"Договор #{contract.id}"
+            contract_id = contract.id
+
+    # Папка ЯД
+    base_folder = _get_card_folder(db, crm_card_id=crm_card_id)
+    chat_folder = f"{base_folder}/{_chat_folder_name('employee')}"
+    _ensure_yd_folder(f"disk:{chat_folder}")
+
+    chat = InternalChat(
+        chat_type="employee",
+        crm_card_id=crm_card_id,
+        supervision_card_id=supervision_card_id,
+        contract_id=contract_id,
+        title=title,
+        yandex_folder_path=f"disk:{chat_folder}",
+        created_by=created_by_id,
+        is_active=True,
+    )
+    db.add(chat)
+    db.flush()  # получаем chat.id
+
+    # Добавить создателя
+    creator = db.query(Employee).filter(Employee.id == created_by_id).first()
+    if creator:
+        _add_employee_member(db, chat, creator)
+
+    # Добавить всех назначенных сотрудников
+    assigned_ids = _get_assigned_employee_ids(db, crm_card_id)
+    for emp_id in assigned_ids:
+        if emp_id == created_by_id:
+            continue
+        emp = db.query(Employee).filter(Employee.id == emp_id).first()
+        if emp:
+            _add_employee_member(db, chat, emp)
+
+    # Системное сообщение
+    _add_system_message(db, chat, "Чат сотрудников создан")
+
+    db.commit()
+    db.refresh(chat)
+    return chat
+
+
+def create_client_chat(db: Session, crm_card_id: int, created_by_id: int, supervision_card_id: Optional[int] = None) -> InternalChat:
+    """Создать чат с клиентом для карточки.
+
+    Генерирует UUID-токен для первой ссылки доступа.
+    Создаёт папку {contract.yandex_folder_path}/Чат с клиентом на ЯД.
+    """
+    existing = (
+        db.query(InternalChat)
+        .filter(
+            InternalChat.chat_type == "client",
+            InternalChat.crm_card_id == crm_card_id,
+            InternalChat.is_active == True,
+        )
+        .first()
+    )
+    if existing:
+        # Добавить текущего пользователя как участника если ещё не является им
+        creator = db.query(Employee).filter(Employee.id == created_by_id).first()
+        if creator:
+            _add_employee_member(db, existing, creator)
+            db.commit()
+        return existing
+
+    title = None
+    contract_id = None
+    card = db.query(CRMCard).filter(CRMCard.id == crm_card_id).first()
+    if card:
+        contract = db.query(Contract).filter(Contract.id == card.contract_id).first()
+        if contract:
+            title = contract.address or f"Договор #{contract.id}"
+            contract_id = contract.id
+
+    base_folder = _get_card_folder(db, crm_card_id=crm_card_id)
+    chat_folder = f"{base_folder}/{_chat_folder_name('client')}"
+    _ensure_yd_folder(f"disk:{chat_folder}")
+
+    chat = InternalChat(
+        chat_type="client",
+        crm_card_id=crm_card_id,
+        supervision_card_id=supervision_card_id,
+        contract_id=contract_id,
+        title=title,
+        yandex_folder_path=f"disk:{chat_folder}",
+        client_access_token=str(uuid.uuid4()),
+        created_by=created_by_id,
+        is_active=True,
+    )
+    db.add(chat)
+    db.flush()
+
+    # Создатель как участник
+    creator = db.query(Employee).filter(Employee.id == created_by_id).first()
+    if creator:
+        _add_employee_member(db, chat, creator)
+
+    _add_system_message(db, chat, "Чат с клиентом создан")
+
+    db.commit()
+    db.refresh(chat)
+    return chat
+
+
+def _add_employee_member(db: Session, chat: InternalChat, emp: Employee):
+    """Добавить сотрудника в чат если ещё не участник."""
+    existing = (
+        db.query(InternalChatMember)
+        .filter(
+            InternalChatMember.chat_id == chat.id,
+            InternalChatMember.employee_id == emp.id,
+            InternalChatMember.is_active == True,
+        )
+        .first()
+    )
+    if not existing:
+        member = InternalChatMember(
+            chat_id=chat.id,
+            member_type="employee",
+            employee_id=emp.id,
+            is_active=True,
+        )
+        db.add(member)
+
+
+def _add_system_message(db: Session, chat: InternalChat, text: str):
+    msg = InternalChatMessage(
+        chat_id=chat.id,
+        sender_display_name="Система",
+        message_type="system",
+        content=text,
+    )
+    db.add(msg)
+
+
+# =========================
+# Управление участниками
+# =========================
+
+
+def add_member_to_chat(db: Session, chat_id: int, employee_id: int) -> InternalChatMember:
+    """Добавить сотрудника в существующий чат."""
+    chat = db.query(InternalChat).filter(InternalChat.id == chat_id).first()
+    if not chat:
+        raise ValueError(f"Чат {chat_id} не найден")
+    emp = db.query(Employee).filter(Employee.id == employee_id).first()
+    if not emp:
+        raise ValueError(f"Сотрудник {employee_id} не найден")
+    _add_employee_member(db, chat, emp)
+    # Системное уведомление
+    _add_system_message(db, chat, f"{_get_employee_display_name(emp)} добавлен в чат")
+    db.commit()
+    return (
+        db.query(InternalChatMember)
+        .filter(
+            InternalChatMember.chat_id == chat_id,
+            InternalChatMember.employee_id == employee_id,
+        )
+        .first()
+    )
+
+
+def create_invite_link(db: Session, chat_id: int) -> InternalChatMember:
+    """Создать новую ссылку (guest_token) для представителя клиента."""
+    token = str(uuid.uuid4())
+    member = InternalChatMember(
+        chat_id=chat_id,
+        member_type="client_guest",
+        guest_access_token=token,
+        is_active=True,
+    )
+    db.add(member)
+    db.commit()
+    db.refresh(member)
+    return member
+
+
+def register_guest(db: Session, guest_token: str, name: str, phone: str) -> InternalChatMember:
+    """Первый вход гостя по ссылке — сохранить имя и телефон.
+
+    Поддерживает два сценария:
+    1. guest_token — персональный токен гостя (InternalChatMember.guest_access_token)
+    2. guest_token — основная ссылка чата (InternalChat.client_access_token)
+       В этом случае создаётся новый участник с уникальным персональным токеном.
+    """
+    member = (
+        db.query(InternalChatMember)
+        .filter(
+            InternalChatMember.guest_access_token == guest_token,
+            InternalChatMember.is_active == True,
+        )
+        .first()
+    )
+
+    if not member:
+        # Проверяем: возможно, это основная ссылка чата
+        chat = (
+            db.query(InternalChat)
+            .filter(
+                InternalChat.client_access_token == guest_token,
+                InternalChat.is_active == True,
+            )
+            .first()
+        )
+        if not chat:
+            raise ValueError("Ссылка недействительна или устарела")
+        # Создаём нового участника-гостя с уникальным персональным токеном
+        member = InternalChatMember(
+            chat_id=chat.id,
+            member_type="client_guest",
+            guest_access_token=str(uuid.uuid4()),
+            is_active=True,
+        )
+        db.add(member)
+        db.flush()
+
+    member.guest_name = name
+    member.guest_phone = phone
+    db.commit()
+    db.refresh(member)
+    chat_obj = db.query(InternalChat).filter(InternalChat.id == member.chat_id).first()
+    _add_system_message(db, chat_obj, f"{name} присоединился к чату")
+    db.commit()
+    return member
+
+
+# =========================
+# Сообщения
+# =========================
+
+
+def get_messages(db: Session, chat_id: int, limit: int = 50, offset: int = 0, before_id: Optional[int] = None) -> list:
+    """Получить историю сообщений. Поддерживает cursor-пагинацию через before_id.
+
+    before_id: если передан — вернуть сообщения с id < before_id (для подгрузки истории).
+    Возвращает последние limit сообщений в хронологическом порядке.
+    """
+    q = db.query(InternalChatMessage).filter(
+        InternalChatMessage.chat_id == chat_id,
+        InternalChatMessage.is_deleted == False,
+    )
+    if before_id is not None:
+        q = q.filter(InternalChatMessage.id < before_id)
+    msgs = q.order_by(InternalChatMessage.id.desc()).limit(limit).all()
+    return list(reversed(msgs))
+
+
+def add_text_message(
+    db: Session,
+    chat_id: int,
+    content: str,
+    sender_employee_id: Optional[int] = None,
+    sender_guest_token: Optional[str] = None,
+    sender_display_name: Optional[str] = None,
+    reply_to_id: Optional[int] = None,
+) -> InternalChatMessage:
+    """Сохранить текстовое сообщение."""
+    if not sender_display_name:
+        if sender_employee_id:
+            emp = db.query(Employee).filter(Employee.id == sender_employee_id).first()
+            sender_display_name = _get_employee_display_name(emp) if emp else "Сотрудник"
+        elif sender_guest_token:
+            member = db.query(InternalChatMember).filter(InternalChatMember.guest_access_token == sender_guest_token).first()
+            sender_display_name = member.guest_name if member and member.guest_name else "Клиент"
+        else:
+            sender_display_name = "Система"
+
+    msg = InternalChatMessage(
+        chat_id=chat_id,
+        sender_employee_id=sender_employee_id,
+        sender_guest_token=sender_guest_token,
+        sender_display_name=sender_display_name,
+        message_type="text",
+        content=content,
+        reply_to_id=reply_to_id if reply_to_id else None,
+    )
+    db.add(msg)
+    db.commit()
+    db.refresh(msg)
+    return msg
+
+
+def add_file_message(
+    db: Session,
+    chat_id: int,
+    file_url: str,
+    file_name: str,
+    yandex_path: str,
+    file_size: Optional[int] = None,
+    message_type: str = "file",
+    sender_employee_id: Optional[int] = None,
+    sender_guest_token: Optional[str] = None,
+    sender_display_name: Optional[str] = None,
+    group_id: Optional[str] = None,
+    content: Optional[str] = None,
+    reply_to_id: Optional[int] = None,
+) -> InternalChatMessage:
+    """Сохранить сообщение с файлом/голосом/изображением."""
+    if not sender_display_name:
+        if sender_employee_id:
+            emp = db.query(Employee).filter(Employee.id == sender_employee_id).first()
+            sender_display_name = _get_employee_display_name(emp) if emp else "Сотрудник"
+        elif sender_guest_token:
+            member = db.query(InternalChatMember).filter(InternalChatMember.guest_access_token == sender_guest_token).first()
+            sender_display_name = member.guest_name if member and member.guest_name else "Клиент"
+        else:
+            sender_display_name = "Система"
+
+    msg = InternalChatMessage(
+        chat_id=chat_id,
+        sender_employee_id=sender_employee_id,
+        sender_guest_token=sender_guest_token,
+        sender_display_name=sender_display_name,
+        message_type=message_type,
+        content=content,
+        file_url=file_url,
+        file_name=file_name,
+        file_size=file_size,
+        yandex_path=yandex_path,
+        group_id=group_id,
+        reply_to_id=reply_to_id or None,
+    )
+    db.add(msg)
+    db.commit()
+    db.refresh(msg)
+    return msg
+
+
+MAX_PINNED_MESSAGES = 10
+
+
+def pin_message(db: Session, chat_id: int, message_id: int) -> Optional[dict]:
+    """Закрепить/открепить сообщение. До 10 закреплённых на чат (как в Telegram).
+    При добавлении 11-го самое старое открепляется автоматически."""
+    msg = (
+        db.query(InternalChatMessage)
+        .filter(
+            InternalChatMessage.id == message_id,
+            InternalChatMessage.chat_id == chat_id,
+            InternalChatMessage.is_deleted == False,  # noqa: E712
+        )
+        .first()
+    )
+    if not msg:
+        return None
+
+    currently_pinned = getattr(msg, "is_pinned", False)
+    if currently_pinned:
+        # Открепить
+        msg.is_pinned = False
+        db.commit()
+        return {"pinned": False, "message_id": message_id}
+    else:
+        # Считаем текущее кол-во закреплённых
+        pinned_count = (
+            db.query(InternalChatMessage)
+            .filter(
+                InternalChatMessage.chat_id == chat_id,
+                InternalChatMessage.is_pinned == True,  # noqa: E712
+            )
+            .count()
+        )
+        if pinned_count >= MAX_PINNED_MESSAGES:
+            # Открепить самое старое (наименьший id)
+            oldest = (
+                db.query(InternalChatMessage)
+                .filter(
+                    InternalChatMessage.chat_id == chat_id,
+                    InternalChatMessage.is_pinned == True,  # noqa: E712
+                )
+                .order_by(InternalChatMessage.id.asc())
+                .first()
+            )
+            if oldest:
+                oldest.is_pinned = False
+        msg.is_pinned = True
+        db.commit()
+        db.refresh(msg)
+        return {"pinned": True, "message_id": message_id, "message": _message_to_dict(msg)}
+
+
+def edit_message(db: Session, message_id: int, employee_id: int, content: str) -> "InternalChatMessage | None":
+    """Редактировать своё текстовое сообщение."""
+    msg = (
+        db.query(InternalChatMessage)
+        .filter(
+            InternalChatMessage.id == message_id,
+            InternalChatMessage.sender_employee_id == employee_id,
+            InternalChatMessage.message_type == "text",
+            InternalChatMessage.is_deleted == False,  # noqa: E712
+        )
+        .first()
+    )
+    if not msg:
+        return None
+    msg.content = content.strip()
+    msg.is_edited = True
+    db.commit()
+    db.refresh(msg)
+    return msg
+
+
+def delete_message(db: Session, message_id: int, employee_id: int) -> bool:
+    """Мягкое удаление своего сообщения."""
+    msg = (
+        db.query(InternalChatMessage)
+        .filter(
+            InternalChatMessage.id == message_id,
+            InternalChatMessage.sender_employee_id == employee_id,
+        )
+        .first()
+    )
+    if not msg:
+        return False
+    msg.is_deleted = True
+    msg.content = "[Сообщение удалено]"
+    db.commit()
+    return True
+
+
+def mark_read(db: Session, chat_id: int, employee_id: int, last_message_id: int):
+    """Обновить last_read_message_id для участника (все дубликаты)."""
+    members = (
+        db.query(InternalChatMember)
+        .filter(
+            InternalChatMember.chat_id == chat_id,
+            InternalChatMember.employee_id == employee_id,
+            InternalChatMember.is_active == True,
+        )
+        .all()
+    )
+    if members:
+        for member in members:
+            member.last_read_message_id = last_message_id
+        db.commit()
+
+
+def get_unread_count(db: Session, chat_id: int, employee_id: int) -> int:
+    """Количество непрочитанных сообщений."""
+    member = (
+        db.query(InternalChatMember)
+        .filter(
+            InternalChatMember.chat_id == chat_id,
+            InternalChatMember.employee_id == employee_id,
+            InternalChatMember.is_active == True,  # noqa: E712
+        )
+        .order_by(InternalChatMember.last_read_message_id.desc().nulls_last())
+        .first()
+    )
+    if not member:
+        return 0
+    last_read = member.last_read_message_id or 0
+    # IS DISTINCT FROM: корректно обрабатывает NULL (сообщения от клиентов имеют sender_employee_id=NULL)
+    count = (
+        db.query(InternalChatMessage)
+        .filter(
+            InternalChatMessage.chat_id == chat_id,
+            InternalChatMessage.id > last_read,
+            InternalChatMessage.is_deleted == False,
+            InternalChatMessage.sender_employee_id.is_distinct_from(employee_id),
+            InternalChatMessage.message_type != "system",
+        )
+        .count()
+    )
+    return count
+
+
+def get_first_unread_message_id(db: Session, chat_id: int, employee_id: int) -> Optional[int]:
+    """ID первого непрочитанного сообщения для сотрудника (не своего, не системного)."""
+    member = (
+        db.query(InternalChatMember)
+        .filter(
+            InternalChatMember.chat_id == chat_id,
+            InternalChatMember.employee_id == employee_id,
+        )
+        .first()
+    )
+    if not member:
+        return None
+    last_read = member.last_read_message_id or 0
+    msg = (
+        db.query(InternalChatMessage)
+        .filter(
+            InternalChatMessage.chat_id == chat_id,
+            InternalChatMessage.id > last_read,
+            InternalChatMessage.is_deleted == False,  # noqa: E712
+            InternalChatMessage.sender_employee_id.is_distinct_from(employee_id),
+            InternalChatMessage.message_type != "system",
+        )
+        .order_by(InternalChatMessage.id.asc())
+        .first()
+    )
+    return msg.id if msg else None
+
+
+# =========================
+# Список чатов сотрудника
+# =========================
+
+
+def get_employee_chats(db: Session, employee_id: int, chat_type: Optional[str] = None) -> list:
+    """Вернуть список активных чатов где сотрудник является участником."""
+    q = (
+        db.query(InternalChat)
+        .join(InternalChatMember, InternalChatMember.chat_id == InternalChat.id)
+        .filter(
+            InternalChatMember.employee_id == employee_id,
+            InternalChatMember.is_active == True,
+            InternalChat.is_active == True,
+        )
+    )
+    if chat_type:
+        q = q.filter(InternalChat.chat_type == chat_type)
+    return q.order_by(InternalChat.created_at.desc()).all()
+
+
+def get_all_accessible_chats(db: Session, employee_id: int, chat_type: Optional[str] = None) -> tuple:
+    """Все чаты, доступные сотруднику: явный участник + назначен на карточку + адм.чаты по позиции.
+
+    Возвращает (chats, extra_ids) — extra_ids это чаты где сотрудник назначен на карточку
+    но ещё не является явным участником. Caller должен запланировать авто-добавление через
+    BackgroundTask чтобы не блокировать GET-запрос записями в БД.
+    """
+    # Чаты где сотрудник явно участник (включает адм.чаты — они туда добавляются при ensure)
+    q_member_ids = (
+        db.query(InternalChat.id)
+        .join(InternalChatMember, InternalChatMember.chat_id == InternalChat.id)
+        .filter(
+            InternalChatMember.employee_id == employee_id,
+            InternalChatMember.is_active == True,  # noqa: E712
+            InternalChat.is_active == True,  # noqa: E712
+        )
+    )
+    if chat_type:
+        q_member_ids = q_member_ids.filter(InternalChat.chat_type == chat_type)
+    member_chat_ids = {r[0] for r in q_member_ids.all()}
+
+    # Карточки, к которым назначен сотрудник напрямую
+    card_ids_fields = [
+        r[0]
+        for r in db.query(CRMCard.id)
+        .filter(
+            or_(
+                CRMCard.senior_manager_id == employee_id,
+                CRMCard.sdp_id == employee_id,
+                CRMCard.gap_id == employee_id,
+                CRMCard.manager_id == employee_id,
+                CRMCard.surveyor_id == employee_id,
+            )
+        )
+        .all()
+    ]
+    # Карточки через StageExecutor
+    card_ids_exec = [r[0] for r in db.query(StageExecutor.crm_card_id).filter(StageExecutor.executor_id == employee_id).all()]
+    all_card_ids = list(set(card_ids_fields + card_ids_exec))
+
+    # SupervisionCard, в которых сотрудник назначен как ДАН / старший менеджер / директор
+    supervision_card_ids = [
+        r[0]
+        for r in db.query(SupervisionCard.id)
+        .filter(
+            or_(
+                SupervisionCard.dan_id == employee_id,
+                SupervisionCard.senior_manager_id == employee_id,
+                SupervisionCard.studio_director_id == employee_id,
+            )
+        )
+        .all()
+    ]
+
+    # Чаты для этих карточек (исключаем уже найденные через членство).
+    # ВАЖНО: только чаты сотрудников — клиентские чаты доступны только явным участникам.
+    extra_ids: set[int] = set()
+    if all_card_ids and (chat_type is None or chat_type == "employee"):
+        q_card = db.query(InternalChat.id).filter(
+            InternalChat.crm_card_id.in_(all_card_ids),
+            InternalChat.is_active == True,  # noqa: E712
+            InternalChat.id.notin_(member_chat_ids),
+            InternalChat.chat_type == "employee",  # только чаты сотрудников
+        )
+        extra_ids = {r[0] for r in q_card.all()}
+
+    # Чаты для карточек надзора (supervision_card_id)
+    if supervision_card_ids and (chat_type is None or chat_type == "employee"):
+        q_sv = db.query(InternalChat.id).filter(
+            InternalChat.supervision_card_id.in_(supervision_card_ids),
+            InternalChat.is_active == True,  # noqa: E712
+            InternalChat.id.notin_(member_chat_ids),
+            InternalChat.chat_type == "employee",
+        )
+        extra_ids.update(r[0] for r in q_sv.all())
+
+    all_ids = member_chat_ids | extra_ids
+    if not all_ids:
+        return [], extra_ids
+
+    chats = db.query(InternalChat).filter(InternalChat.id.in_(all_ids)).order_by(InternalChat.created_at.desc()).all()
+    # Возвращаем extra_ids отдельно — caller планирует авто-добавление через BackgroundTask
+    # чтобы не выполнять db.commit() внутри GET-эндпоинта (предотвращает lock contention с DDL)
+    return chats, extra_ids
+
+
+def auto_add_chat_members(employee_id: int, extra_chat_ids: set) -> None:
+    """BackgroundTask: авто-добавить сотрудника в чаты карточки после GET-ответа.
+
+    Создаёт собственную DB-сессию, не блокирует GET-запрос.
+    """
+    if not extra_chat_ids:
+        return
+    import logging as _logging
+
+    from database import SessionLocal
+
+    _log = _logging.getLogger(__name__)
+    db = SessionLocal()
+    try:
+        emp = db.query(Employee).filter(Employee.id == employee_id).first()
+        if emp:
+            chats = db.query(InternalChat).filter(InternalChat.id.in_(extra_chat_ids)).all()
+            for chat in chats:
+                _add_employee_member(db, chat, emp)
+            db.commit()
+    except Exception as e:
+        db.rollback()
+        _log.debug(f"auto_add_chat_members background: {e}")
+    finally:
+        db.close()
+
+
+def get_card_chat_for_employee(db: Session, crm_card_id: int, chat_type: str, employee_id: int) -> Optional[InternalChat]:
+    """Получить чат карточки.
+
+    Чат сотрудников: авто-добавляет сотрудника в участники при первом доступе.
+    Чат с клиентом: возвращает только если сотрудник уже явный участник (membership required).
+    """
+    chat = get_chat_by_card(db, crm_card_id, chat_type)
+    if not chat:
+        return None
+
+    existing = (
+        db.query(InternalChatMember)
+        .filter(
+            InternalChatMember.chat_id == chat.id,
+            InternalChatMember.employee_id == employee_id,
+            InternalChatMember.is_active == True,  # noqa: E712
+        )
+        .first()
+    )
+
+    if chat_type == "employee":
+        # Авто-добавляем сотрудника если ещё не участник
+        if not existing:
+            emp = db.query(Employee).filter(Employee.id == employee_id).first()
+            if emp:
+                _add_employee_member(db, chat, emp)
+                _add_system_message(db, chat, f"{_get_employee_display_name(emp)} присоединился к чату")
+                db.commit()
+        return chat
+    else:
+        # Клиентский чат: только для явных участников
+        return chat if existing else None
+
+
+def get_chat_by_card(db: Session, crm_card_id: int, chat_type: str) -> Optional[InternalChat]:
+    """Получить чат карточки по типу."""
+    return (
+        db.query(InternalChat)
+        .filter(
+            InternalChat.crm_card_id == crm_card_id,
+            InternalChat.chat_type == chat_type,
+            InternalChat.is_active == True,
+        )
+        .first()
+    )
+
+
+def get_chat_by_token(db: Session, token: str) -> Optional[InternalChat]:
+    """Найти клиентский чат по токену.
+
+    Поддерживает два типа токенов:
+    - InternalChat.client_access_token  — основная ссылка чата
+    - InternalChatMember.guest_access_token — персональный токен гостя
+    """
+    chat = (
+        db.query(InternalChat)
+        .filter(
+            InternalChat.client_access_token == token,
+            InternalChat.is_active == True,
+        )
+        .first()
+    )
+    if chat:
+        return chat
+    # Fallback: токен принадлежит конкретному гостю
+    member = (
+        db.query(InternalChatMember)
+        .filter(
+            InternalChatMember.guest_access_token == token,
+            InternalChatMember.is_active == True,
+        )
+        .first()
+    )
+    if member:
+        return db.query(InternalChat).filter(InternalChat.id == member.chat_id, InternalChat.is_active == True).first()
+    return None
+
+
+def get_guest_by_token(db: Session, guest_token: str) -> Optional[InternalChatMember]:
+    """Найти участника-гостя по токену."""
+    return (
+        db.query(InternalChatMember)
+        .filter(
+            InternalChatMember.guest_access_token == guest_token,
+            InternalChatMember.is_active == True,
+        )
+        .first()
+    )
+
+
+# =========================
+# Batch-запросы для списка чатов (устраняем N+1)
+# =========================
+
+
+def get_batch_unread_counts(db: Session, chat_ids: list[int], employee_id: int) -> dict[int, int]:
+    """Количество непрочитанных для всех чатов за 2 запроса вместо N×2."""
+    if not chat_ids:
+        return {}
+
+    # 1. Получить MAX(last_read_message_id) для каждого чата — GROUP BY защищает от дублей участников
+    rows = (
+        db.query(InternalChatMember.chat_id, func.max(InternalChatMember.last_read_message_id).label("last_read"))
+        .filter(
+            InternalChatMember.chat_id.in_(chat_ids),
+            InternalChatMember.employee_id == employee_id,
+            InternalChatMember.is_active == True,  # noqa: E712
+        )
+        .group_by(InternalChatMember.chat_id)
+        .all()
+    )
+    last_read_map: dict[int, int] = {r.chat_id: (r.last_read or 0) for r in rows}
+
+    # 2. Для каждого чата считаем unread через GROUP BY — один запрос
+    # Фильтруем id > last_read через CASE...WHEN per chat_id (через Python post-filter)
+    # Альтернатива через subquery невозможна без lateral join в SQLAlchemy легко,
+    # поэтому загружаем по одному запросу на группу last_read значений.
+    # Быстрее N+1 т.к. группируем по уникальным last_read значениям.
+    unread_map: dict[int, int] = dict.fromkeys(chat_ids, 0)
+
+    unique_last_reads = {}
+    for cid in chat_ids:
+        lr = last_read_map.get(cid, 0)
+        unique_last_reads.setdefault(lr, []).append(cid)
+
+    for last_read, ids in unique_last_reads.items():
+        counts = (
+            db.query(InternalChatMessage.chat_id, func.count(InternalChatMessage.id).label("cnt"))
+            .filter(
+                InternalChatMessage.chat_id.in_(ids),
+                InternalChatMessage.id > last_read,
+                InternalChatMessage.is_deleted == False,  # noqa: E712
+                InternalChatMessage.sender_employee_id.is_distinct_from(employee_id),
+                InternalChatMessage.message_type != "system",
+            )
+            .group_by(InternalChatMessage.chat_id)
+            .all()
+        )
+        for row in counts:
+            unread_map[row.chat_id] = row.cnt
+
+    return unread_map
+
+
+def get_batch_last_messages(db: Session, chat_ids: list[int]) -> dict[int, Optional[InternalChatMessage]]:
+    """Последнее сообщение для каждого чата — один запрос через ROW_NUMBER."""
+    if not chat_ids:
+        return {}
+    from sqlalchemy import text
+
+    # Используем subquery с MAX(id) per chat_id — простой и эффективный подход
+    subq = (
+        db.query(
+            InternalChatMessage.chat_id,
+            func.max(InternalChatMessage.id).label("max_id"),
+        )
+        .filter(
+            InternalChatMessage.chat_id.in_(chat_ids),
+            InternalChatMessage.is_deleted == False,  # noqa: E712
+        )
+        .group_by(InternalChatMessage.chat_id)
+        .subquery()
+    )
+    msgs = db.query(InternalChatMessage).join(subq, InternalChatMessage.id == subq.c.max_id).all()
+    return {m.chat_id: m for m in msgs}
+
+
+def get_batch_member_counts(db: Session, chat_ids: list[int]) -> dict[int, int]:
+    """Количество участников для каждого чата — один запрос."""
+    if not chat_ids:
+        return {}
+    rows = (
+        db.query(InternalChatMember.chat_id, func.count(InternalChatMember.id).label("cnt"))
+        .filter(
+            InternalChatMember.chat_id.in_(chat_ids),
+            InternalChatMember.is_active == True,  # noqa: E712
+        )
+        .group_by(InternalChatMember.chat_id)
+        .all()
+    )
+    return {r.chat_id: r.cnt for r in rows}
+
+
+# =========================
+# Удаление чата
+# =========================
+
+
+def delete_chat(db: Session, chat_id: int, delete_yd_folder: bool = True):
+    """Мягкое удаление чата. Опционально удаляет папку ЯД."""
+    chat = db.query(InternalChat).filter(InternalChat.id == chat_id).first()
+    if not chat:
+        return
+    if delete_yd_folder and chat.yandex_folder_path:
+        try:
+            from yandex_disk_service import get_yandex_disk_service
+
+            yd = get_yandex_disk_service()
+            if yd and yd.token:
+                yd.delete_file(chat.yandex_folder_path.replace("disk:", ""), permanently=False)
+        except Exception as e:
+            logger.warning(f"Не удалось удалить папку ЯД {chat.yandex_folder_path}: {e}")
+    chat.is_active = False
+    db.commit()
+
+
+# =========================
+# Чат авторского надзора
+# =========================
+
+
+def get_supervision_chat_for_employee(db: Session, supervision_card_id: int, employee_id: int) -> Optional[InternalChat]:
+    """Получить чат сотрудников для карточки надзора.
+    Авто-добавляет сотрудника как участника при первом доступе.
+    """
+    chat = (
+        db.query(InternalChat)
+        .filter(
+            InternalChat.supervision_card_id == supervision_card_id,
+            InternalChat.chat_type == "employee",
+            InternalChat.is_active == True,  # noqa: E712
+        )
+        .first()
+    )
+    if not chat:
+        return None
+
+    # Авто-добавляем сотрудника если ещё не участник
+    existing = (
+        db.query(InternalChatMember)
+        .filter(
+            InternalChatMember.chat_id == chat.id,
+            InternalChatMember.employee_id == employee_id,
+            InternalChatMember.is_active == True,  # noqa: E712
+        )
+        .first()
+    )
+    if not existing:
+        emp = db.query(Employee).filter(Employee.id == employee_id).first()
+        if emp:
+            _add_employee_member(db, chat, emp)
+            _add_system_message(db, chat, f"{_get_employee_display_name(emp)} присоединился к чату")
+            db.commit()
+    return chat
+
+
+def create_supervision_employee_chat(db: Session, supervision_card_id: int, created_by_id: int) -> InternalChat:
+    """Создать чат сотрудников для карточки авторского надзора.
+
+    Автоматически добавляет исполнителей надзора (ДАН, старший менеджер, руководитель студии).
+    """
+    # Проверить нет ли уже чата
+    existing = (
+        db.query(InternalChat)
+        .filter(
+            InternalChat.chat_type == "employee",
+            InternalChat.supervision_card_id == supervision_card_id,
+            InternalChat.is_active == True,  # noqa: E712
+        )
+        .first()
+    )
+    if existing:
+        return existing
+
+    card = db.query(SupervisionCard).filter(SupervisionCard.id == supervision_card_id).first()
+    title = None
+    contract_id = None
+    if card:
+        contract = db.query(Contract).filter(Contract.id == card.contract_id).first()
+        if contract:
+            title = contract.address or f"Надзор #{supervision_card_id}"
+            contract_id = contract.id
+
+    title = title or f"Надзор #{supervision_card_id}"
+
+    # Папка ЯД
+    base_folder = _get_card_folder(db, supervision_card_id=supervision_card_id)
+    chat_folder = f"{base_folder}/Чат надзора"
+    _ensure_yd_folder(f"disk:{chat_folder}")
+
+    chat = InternalChat(
+        chat_type="employee",
+        crm_card_id=None,
+        supervision_card_id=supervision_card_id,
+        contract_id=contract_id,
+        title=title,
+        yandex_folder_path=f"disk:{chat_folder}",
+        created_by=created_by_id,
+        is_active=True,
+    )
+    db.add(chat)
+    db.flush()
+
+    # Добавляем создателя
+    creator = db.query(Employee).filter(Employee.id == created_by_id).first()
+    if creator:
+        _add_employee_member(db, chat, creator)
+
+    # Добавляем исполнителей карточки надзора
+    if card:
+        for emp_id in filter(None, [card.dan_id, card.senior_manager_id, card.studio_director_id]):
+            if emp_id == created_by_id:
+                continue  # уже добавлен
+            emp = db.query(Employee).filter(Employee.id == emp_id).first()
+            if emp:
+                _add_employee_member(db, chat, emp)
+
+    _add_system_message(db, chat, "Чат надзора создан")
+    db.commit()
+    db.refresh(chat)
+    return chat
+
+
+# =========================
+# Административные чаты
+# =========================
+
+_ADMIN_CHAT_CONFIGS = [
+    {
+        "admin_chat_type": "ip",
+        "title": "Административный чат ИП",
+        "positions": None,  # заполняется ниже после импорта констант
+    },
+    {
+        "admin_chat_type": "shp",
+        "title": "Административный чат ШП",
+        "positions": None,
+    },
+    {
+        "admin_chat_type": "an",
+        "title": "Административный чат АН",
+        "positions": None,
+    },
+]
+
+
+def _get_admin_chat_positions(admin_chat_type: str) -> list[str]:
+    from constants import ADMIN_POSITIONS, DAN_ROLES, POSITION_MANAGER
+
+    base = list(ADMIN_POSITIONS) + [POSITION_MANAGER]
+    if admin_chat_type == "an":
+        return base + list(DAN_ROLES)
+    return base
+
+
+def ensure_admin_chats(db: Session) -> None:
+    """Создать три административных чата если не существуют и синхронизировать участников."""
+    for cfg in _ADMIN_CHAT_CONFIGS:
+        atype = cfg["admin_chat_type"]
+        chat = (
+            db.query(InternalChat)
+            .filter(
+                InternalChat.is_admin_chat == True,  # noqa: E712
+                InternalChat.admin_chat_type == atype,
+            )
+            .first()
+        )
+
+        if not chat:
+            chat = InternalChat(
+                chat_type="employee",
+                title=cfg["title"],
+                is_admin_chat=True,
+                admin_chat_type=atype,
+                is_active=True,
+            )
+            db.add(chat)
+            db.flush()
+
+        # Синхронизировать участников (проверяем по employee_id без учёта is_active)
+        positions = _get_admin_chat_positions(atype)
+        eligible = db.query(Employee).filter(Employee.position.in_(positions), Employee.status == "активный").all()
+        existing = {m.employee_id: m for m in db.query(InternalChatMember).filter(InternalChatMember.chat_id == chat.id).all()}
+        for emp in eligible:
+            if emp.id not in existing:
+                db.add(
+                    InternalChatMember(
+                        chat_id=chat.id,
+                        member_type="employee",
+                        employee_id=emp.id,
+                        is_active=True,
+                    )
+                )
+            elif not existing[emp.id].is_active:
+                existing[emp.id].is_active = True
+
+    db.commit()
+
+
+def add_employee_to_admin_chats(db: Session, employee_id: int, position: str) -> None:
+    """Добавить сотрудника в административные чаты при изменении позиции."""
+    from constants import ADMIN_POSITIONS, DAN_ROLES
+
+    for atype in ("ip", "shp", "an"):
+        positions = _get_admin_chat_positions(atype)
+        if position not in positions:
+            continue
+        chat = (
+            db.query(InternalChat)
+            .filter(
+                InternalChat.is_admin_chat == True,  # noqa: E712
+                InternalChat.admin_chat_type == atype,
+            )
+            .first()
+        )
+        if not chat:
+            continue
+        already = (
+            db.query(InternalChatMember)
+            .filter(
+                InternalChatMember.chat_id == chat.id,
+                InternalChatMember.employee_id == employee_id,
+            )
+            .first()
+        )
+        if already:
+            already.is_active = True
+        else:
+            db.add(
+                InternalChatMember(
+                    chat_id=chat.id,
+                    member_type="employee",
+                    employee_id=employee_id,
+                    is_active=True,
+                )
+            )
+    db.commit()
+
+
+# =========================
+# Закреплённые чаты
+# =========================
+
+
+def get_user_pinned_chat_ids(db: Session, employee_id: int) -> set[int]:
+    """Множество ID чатов, закреплённых пользователем."""
+    rows = db.query(UserChatPin.chat_id).filter(UserChatPin.employee_id == employee_id).all()
+    return {r[0] for r in rows}

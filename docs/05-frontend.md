@@ -1,6 +1,7 @@
 # Фронтенд проекта
 
 > PyQt5 Desktop клиент, модули UI, виджеты, диалоги.
+> Последнее обновление: 2026-03-29
 
 ## Архитектура фронтенда
 
@@ -14,118 +15,130 @@ LoginWindow (ui/login_window.py)
 MainWindow (ui/main_window.py)
     ├── CustomTitleBar
     ├── QTabWidget
-    │   ├── DashboardWidget      (ui/dashboard_widget.py)
-    │   ├── CRMTab               (ui/crm_tab.py) — 17K+ строк
-    │   ├── CRMSupervisionTab    (ui/crm_supervision_tab.py)
-    │   ├── ClientsTab           (ui/clients_tab.py)
-    │   ├── ContractsTab         (ui/contracts_tab.py)
-    │   ├── SalariesTab          (ui/salaries_tab.py)
-    │   ├── EmployeesTab         (ui/employees_tab.py)
-    │   └── EmployeeReportsTab   (ui/employee_reports_tab.py)
+    │   ├── DashboardWidget           (ui/dashboard_widget.py)
+    │   ├── CRMTab                    (ui/crm_tab.py)
+    │   ├── CRMSupervisionTab         (ui/crm_supervision_tab.py)
+    │   ├── ClientsTab                (ui/clients_tab.py)
+    │   ├── ContractsTab              (ui/contracts_tab.py)
+    │   ├── SalariesTab               (ui/salaries_tab.py)
+    │   ├── EmployeesTab              (ui/employees_tab.py)
+    │   └── EmployeeReportsTab        (ui/employee_reports_tab.py)
     └── SyncManager (utils/sync_manager.py)
 ```
 
-## Модули UI
+## Модули UI — полный список (47 файлов)
 
 ### Главное окно ([ui/main_window.py](../ui/main_window.py))
 
 **Класс:** `MainWindow(QMainWindow)`
 
-**Назначение:** Главное окно приложения с табами, CustomTitleBar, SyncManager.
-
 **Ключевые методы:**
 - `__init__(employee, api_client)` — инициализация, создание табов по ролям
 - `_create_tabs()` — создание табов согласно `config.ROLES[employee.role]`
-- `_on_tab_changed(index)` — lazy loading: загрузка данных при первом переключении
+- `_on_tab_changed(index)` — lazy loading при первом переключении
 - `closeEvent()` — остановка SyncManager, освобождение блокировок
-
-**Сигналы:**
-- Подписка на `SyncManager.data_updated` для обновления табов
 
 ### Окно входа ([ui/login_window.py](../ui/login_window.py))
 
 **Класс:** `LoginWindow(QMainWindow)`
 
-**Назначение:** Авторизация пользователя.
-
 **Ключевые методы:**
-- `_try_login()` — попытка авторизации (API → fallback на локальную БД)
+- `_try_login()` — авторизация (API → fallback на локальную БД)
 - `_on_login_success(employee, api_client)` — переход к MainWindow
 - `_check_server_connection()` — проверка доступности сервера
 
-### CRM Kanban ([ui/crm_tab.py](../ui/crm_tab.py)) — 17K+ строк
+### CRM Kanban ([ui/crm_tab.py](../ui/crm_tab.py))
 
 **Класс:** `CRMTab(QWidget)`
 
-**Назначение:** Kanban доска проектов с Drag & Drop, стадиями согласования, workflow.
+**Назначение:** Kanban доска проектов с Drag & Drop, стадиями, workflow.
 
 **Ключевые методы:**
 - `load_data()` — загрузка карточек по типу проекта
 - `_create_kanban_board()` — построение колонок Kanban
-- `_on_card_dropped()` — обработка Drag & Drop между колонками
-- `_open_card_dialog()` — открытие детальной карточки
+- `_on_card_dropped()` — Drag & Drop между колонками
+- `_open_card_dialog()` — детальная карточка
 - `_assign_executor()` — назначение исполнителя на стадию
-- `submit_work()` — сдача работы исполнителем
-- `accept_work()` — принятие работы менеджером
-- `reject_work()` — отправка на исправление
-- `_send_to_client()` — отправка клиенту на согласование
-- `_client_approved()` — подтверждение согласования клиентом
-
-**Внутренние классы:**
-- `DraggableListWidget` — виджет с поддержкой Drag & Drop
-- `KanbanCardWidget` — карточка на доске
-- `ExecutorSelectionDialog` — диалог назначения исполнителя
+- `submit_work()` / `accept_work()` / `reject_work()` — workflow
+- `_send_to_client()` / `_client_approved()` — согласование
 
 ### Авторский надзор ([ui/crm_supervision_tab.py](../ui/crm_supervision_tab.py))
 
 **Класс:** `CRMSupervisionTab(QWidget)`
-
-**Назначение:** Kanban доска авторского надзора, управление ДАН.
 
 **Ключевые методы:**
 - `load_data()` — загрузка карточек надзора
 - `_open_supervision_dialog()` — детальная карточка надзора
 - `_pause_card()` / `_resume_card()` — пауза/возобновление
 
-### Договоры ([ui/contracts_tab.py](../ui/contracts_tab.py))
+### Диалог карточки надзора ([ui/supervision_card_edit_dialog.py](../ui/supervision_card_edit_dialog.py))
+
+Вкладки:
+- **Информация** — данные договора, команда
+- **Таблица закупок** — `SupervisionTimelineWidget`
+- **Выезды** — `SupervisionVisitsWidget` (новый виджет)
+- **История** — голосовые заметки, события
+- **Чат** — Telegram чат проекта
+- **Файлы** — документы на ЯД
+
+### Виджет выездов надзора ([ui/supervision_visits_widget.py](../ui/supervision_visits_widget.py))
+
+**Класс:** `SupervisionVisitsWidget(QWidget)`
+
+**Назначение:** Таблица выездов и дефектов авторского надзора.
+
+**Функционал:**
+- Добавление/удаление выездов
+- Выпадающий список стадий (12 стандартных стадий)
+- Дата, ФИО исполнителя, примечание
+- Счётчики дефектов (найдено/устранено)
+- Итого по месяцам (`/visits/summary`)
+- Кнопка «Файлы на ЯД» — открывает папку выезда на Яндекс.Диске
+- Экспорт PDF и Excel
+- Блок «Отчёты» — загрузка и управление отчётами выездов
+
+**Ключевые методы:**
+```python
+class SupervisionVisitsWidget(QWidget):
+    def _load_data(self)          # Загрузка выездов с сервера
+    def _populate_table(self)     # Отрисовка таблицы
+    def _add_row(self)            # Добавить выезд
+    def _delete_row(self, id)     # Удалить выезд
+    def _update_summary(self)     # Обновить итого по месяцам
+    def _open_visit_folder(self)  # Открыть папку ЯД
+    def _export_excel(self)       # Экспорт в Excel
+    def _export_pdf(self)         # Экспорт в PDF
+    def _upload_report(self)      # Загрузить отчёт
+    def load_reports(self)        # Загрузить список отчётов
+```
+
+### Виджет договоров ([ui/contracts_tab.py](../ui/contracts_tab.py))
 
 **Класс:** `ContractsTab(QWidget)`
 
-**Назначение:** CRUD договоров, таблица с фильтрацией, привязка к клиентам.
-
 **Ключевые методы:**
-- `load_data()` — загрузка списка договоров
-- `_add_contract()` — создание нового договора (+ папка на Я.Диске)
+- `load_data()` — список договоров с фильтрацией
+- `_add_contract()` — создание (+ папка на Я.Диске)
 - `_edit_contract()` — редактирование
-- `_delete_contract()` — удаление (+ папка на Я.Диске)
+- `_delete_contract()` — удаление
 
 ### Зарплаты ([ui/salaries_tab.py](../ui/salaries_tab.py))
 
 **Класс:** `SalariesTab(QWidget)`
 
-**Назначение:** Управление платежами, зарплатные отчёты по месяцам.
-
 **Ключевые методы:**
 - `load_data()` — загрузка платежей
 - `_add_payment()` — создание платежа
-- `_calculate_payment()` — расчёт суммы через API
-- `_filter_by_month()` — фильтрация по отчётному месяцу
+- `_calculate_payment()` — расчёт через API
+- `_filter_by_month()` — фильтрация по месяцу
 
 ### Сотрудники ([ui/employees_tab.py](../ui/employees_tab.py))
 
-**Класс:** `EmployeesTab(QWidget)`
-
-**Назначение:** CRUD сотрудников, фильтрация по отделу/должности.
+**Класс:** `EmployeesTab(QWidget)` — CRUD, фильтрация по отделу/должности.
 
 ### Дашборд ([ui/dashboard_widget.py](../ui/dashboard_widget.py))
 
-**Класс:** `DashboardWidget(QWidget)`
-
-**Назначение:** Статистика, графики, сводка по проектам.
-
-**Ключевые методы:**
-- `load_data()` — загрузка статистики с сервера
-- `_build_widgets()` — построение виджетов дашборда
+**Класс:** `DashboardWidget(QWidget)` — статистика, графики, сводка по проектам.
 
 ## Вспомогательные виджеты
 
@@ -133,51 +146,141 @@ MainWindow (ui/main_window.py)
 
 **Класс:** `ProjectTimelineWidget(QWidget)`
 
-**7 колонок:** Действия по этапам | Дата | Кол-во дней | Норма дней | Статус | Исполнитель | ФИО
+**7 колонок:** Этап | Дата | Кол-во дней | Норма дней | Статус | Исполнитель | ФИО
 
-### Таблица сроков надзора ([ui/supervision_timeline_widget.py](../ui/supervision_timeline_widget.py))
+**Особенности:**
+- Зелёная рамка текущего активного подэтапа
+- Блокировка редактирования завершённых строк
+- Предупреждение о превышении нормодней
+
+### Таблица закупок надзора ([ui/supervision_timeline_widget.py](../ui/supervision_timeline_widget.py))
 
 **Класс:** `SupervisionTimelineWidget(QWidget)`
 
-**11 колонок:** Стадия | План. дата | Факт. дата | Дней | Бюджет план | Бюджет факт | Экономия | Поставщик | Комиссия | Статус | Примечания
+**11 колонок:** Стадия | План. дата | Факт. дата | Дни | Бюджет план | Бюджет факт | Экономия | Поставщик | Комиссия | Статус | Примечания
 
-### Галерея файлов ([ui/file_gallery_widget.py](../ui/file_gallery_widget.py))
+### Файловые виджеты
 
-**Класс:** `FileGalleryWidget(QWidget)`
+| Виджет | Файл | Назначение |
+|--------|------|-----------|
+| FileGalleryWidget | file_gallery_widget.py | Сетка превью файлов |
+| FileListWidget | file_list_widget.py | Таблица файлов |
+| FilePreviewWidget | file_preview_widget.py | Предпросмотр файлов |
+| VariationGalleryWidget | variation_gallery_widget.py | Вариации дизайна |
 
-**Назначение:** Отображение файлов проекта в виде сетки превью.
+### Уведомления
 
-### Список файлов ([ui/file_list_widget.py](../ui/file_list_widget.py))
-
-**Класс:** `FileListWidget(QWidget)`
-
-**Назначение:** Отображение файлов проекта в виде таблицы.
-
-### Превью файлов ([ui/file_preview_widget.py](../ui/file_preview_widget.py))
-
-**Класс:** `FilePreviewWidget(QWidget)`
-
-**Назначение:** Предпросмотр изображений и документов.
-
-### Галерея вариаций ([ui/variation_gallery_widget.py](../ui/variation_gallery_widget.py))
-
-**Класс:** `VariationGalleryWidget(QWidget)`
-
-**Назначение:** Отображение вариаций дизайн-проекта.
+| Виджет | Файл | Назначение |
+|--------|------|-----------|
+| NotificationsListWidget | notifications_list_widget.py | Список входящих уведомлений |
+| NotificationSettingsWidget | notification_settings_widget.py | Настройка каналов уведомлений |
 
 ## Кастомные компоненты
 
 | Компонент | Файл | Назначение |
 |-----------|------|-----------|
-| CustomTitleBar | [ui/custom_title_bar.py](../ui/custom_title_bar.py) | Frameless заголовок окна (простой/полный режим) |
-| CustomComboBox | [ui/custom_combobox.py](../ui/custom_combobox.py) | Стилизованный ComboBox |
-| CustomDateEdit | [ui/custom_dateedit.py](../ui/custom_dateedit.py) | Стилизованный DateEdit |
-| CustomMessageBox | [ui/custom_message_box.py](../ui/custom_message_box.py) | Стилизованные диалоги (info/warning/error/question) |
-| FlowLayout | [ui/flow_layout.py](../ui/flow_layout.py) | Flow-раскладка (как CSS flex-wrap) |
+| CustomTitleBar | custom_title_bar.py | Frameless заголовок окна |
+| CustomComboBox | custom_combobox.py | Стилизованный ComboBox с поиском |
+| CustomDateEdit | custom_dateedit.py | Стилизованный DateEdit |
+| CustomMessageBox | custom_message_box.py | Диалоги: info/warning/error |
+| CustomQuestionBox | custom_message_box.py | Диалог подтверждения: Yes/No |
+| FlowLayout | flow_layout.py | Flow-раскладка (как CSS flex-wrap) |
+
+## Диалоги
+
+| Диалог | Файл | Назначение |
+|--------|------|-----------|
+| CRMCardEditDialog | crm_card_edit_dialog.py | Редактирование карточки CRM |
+| SupervisionCardEditDialog | supervision_card_edit_dialog.py | Редактирование карточки надзора |
+| ContractDialogs | contract_dialogs.py | Создание/редактирование договора |
+| CRMDialogs | crm_dialogs.py | Отклонение, скрипты, клиент |
+| SupervisionDialogs | supervision_dialogs.py | Добавление закупок, выездов |
+| AdminDialog | admin_dialog.py | Управление сотрудниками и правами |
+| MessengerAdminDialog | messenger_admin_dialog.py | Управление проектными чатами |
+| UpdateDialogs | update_dialogs.py | Проверка и установка обновлений |
+| RatesDialog | rates_dialog.py | Тарифы и прайс-листы |
+
+## Мобильная PWA (Quasar/Vue3)
+
+### Страницы (mobile/src/pages/ — 21 страница)
+
+| Страница | Назначение |
+|----------|-----------|
+| LoginPage.vue | Аутентификация |
+| DashboardPage.vue | KPI и аналитика |
+| CrmBoardPage.vue | Kanban с drag-and-drop |
+| CrmCardPage.vue | Детали проекта, workflow |
+| ClientsPage.vue / ClientDetailPage.vue | Управление клиентами |
+| ContractsPage.vue / ContractDetailPage.vue | Договора |
+| SupervisionPage.vue | Канбан надзора |
+| SupervisionDetailPage.vue | Выезды, закупки, файлы |
+| EmployeesPage.vue | Штат |
+| ReportsPage.vue / EmployeeReportsPage.vue | Отчёты |
+| SalariesPage.vue | Зарплаты |
+| FilesPage.vue | Файлы проекта |
+| NotificationsPage.vue | Входящие уведомления |
+| **NotificationSettingsPage.vue** | Настройка каналов уведомлений (новая) |
+| AdminPage.vue | Управление системой |
+| ProfilePage.vue | Профиль пользователя |
+| OfflinePage.vue | Индикатор offline режима |
+| ErrorNotFound.vue | Страница 404 |
+
+### Компоненты (mobile/src/components/ — 12 компонентов)
+
+| Компонент | Назначение |
+|-----------|-----------|
+| CrmCardItem.vue | Карточка на канбан-доске |
+| CrmActionsSheet.vue | Bottom-sheet действий с карточкой |
+| ClientFormDialog.vue | Диалог редактирования клиента |
+| ContractFormDialog.vue | Диалог редактирования договора |
+| MeasurementDialog.vue | Диалог замеров |
+| TechTaskDialog.vue | Техническое задание |
+| **VoiceRecorder.vue** | Запись голосовых заметок (новый) |
+| InstallBanner.vue | PWA install prompt |
+| PageDashboard.vue | Компонент дашборда |
+| charts/BarChart.vue | Столбчатая диаграмма |
+| charts/LineChart.vue | Линейная диаграмма |
+| charts/PieChart.vue | Круговая диаграмма |
+
+### VoiceRecorder.vue — голосовые заметки
+
+**Функционал:**
+- Запись голоса через microphone API браузера
+- Визуализация записи (пульсирующая анимация)
+- Таймер записи
+- Воспроизведение записанного аудио
+- Загрузка на Яндекс.Диск (папка выезда/проекта)
+- Сохранение пути `voice_url` в запись (visit или history)
+
+**Используется в:** SupervisionDetailPage (выезды), CrmCardPage (история)
+
+### Stores (mobile/src/stores/ — 8 stores)
+
+| Store | Назначение |
+|-------|-----------|
+| auth.js | Авторизация, токены, auto-refresh |
+| crm.js | Канбан: карточки, фильтры, перемещение |
+| clients.js | Кеш клиентов, поиск |
+| dashboard.js | KPI данные, графики |
+| notifications.js | Уведомления, badge-счётчик |
+| permissions.js | Роли, права доступа |
+| references.js | Справочники (агенты, статусы, города) |
+| index.js | Инициализация и экспорт всех stores |
+
+### Composables (mobile/src/composables/)
+
+| Composable | Назначение |
+|------------|-----------|
+| useAuth.js | Проверка авторизации, ролей |
+| usePermission.js | Проверка прав (can/cannot) |
+| useCalendar.js | Работа с датами |
+| useDeadline.js | Расчёт рабочих дней с праздниками РФ |
+| useOptimistic.js | Оптимистичные обновления UI |
+| useWebSocket.js | WebSocket real-time подписки |
 
 ## Паттерны инициализации
 
-### Инициализация таба
+### Таб (desktop)
 
 ```python
 class SomeTab(QWidget):
@@ -198,7 +301,7 @@ class SomeTab(QWidget):
             self._data_loaded = True
 ```
 
-### Инициализация диалога
+### Диалог (desktop)
 
 ```python
 class SomeDialog(QDialog):
@@ -210,15 +313,13 @@ class SomeDialog(QDialog):
         self._setup_ui()
 ```
 
-## Lazy Loading табов
+## Критические правила UI
 
-Табы загружают данные **только при первом переключении** — это ускоряет запуск приложения:
-
-```
-MainWindow.__init__()
-    → создаёт все QWidget табов
-    → НЕ загружает данные
-    → при переключении таба → showEvent → load_data()
-```
-
-Оптимизация: `setUpdatesEnabled(False)` на время загрузки данных, затем `setUpdatesEnabled(True)`.
+1. **Без emoji** — только SVG через IconLoader
+2. **`resource_path()`** для всех ресурсов (PyInstaller совместимость)
+3. **Рамка диалога = 1px** (`border: 1px solid #E0E0E0`)
+4. **Border-radius** у всех виджетов внутри `borderFrame`
+5. **`setAlternatingRowColors(False)`** при ручной раскраске строк
+6. **PyQt Signal Safety** — emit из Thread только через `QTimer.singleShot(0, ...)`
+7. **DataAccess** для всех CRUD — не api_client/db напрямую
+8. **Кнопки 28px** — `setFixedHeight(28)` + CSS `max-height: 26px; padding: 0 14px`

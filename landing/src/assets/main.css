@@ -1,0 +1,93 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --accent: #E8622A;
+  --accent-hover: #d0541e;
+  --dark: #1a1a1a;
+  --text: #333;
+  --text-light: #666;
+  --bg: #fff;
+  --bg-alt: #f8f8f8;
+  --border: #e0e0e0;
+  --radius: 8px;
+  --font-head: 'Montserrat', sans-serif;
+  --font-body: 'Open Sans', sans-serif;
+  --max-w: 1200px;
+  --section-py: 80px;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--font-body);
+  color: var(--text);
+  background: var(--bg);
+  line-height: 1.6;
+}
+
+h1, h2, h3, h4 { font-family: var(--font-head); line-height: 1.25; }
+h2, h3 { color: var(--head-color, inherit); }
+h1 { color: var(--h1-color, inherit); }
+/* Блок может переопределить шрифт и цвет текста через свои переменные */
+main section { font-family: var(--font-body); color: var(--text); }
+
+.container {
+  max-width: var(--max-w);
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+.section { padding: var(--section-py) 0; }
+.section--alt { background: var(--bg-alt); }
+
+.section-title {
+  font-size: calc(clamp(1.5rem, 3vw, 2.2rem) * var(--head-scale, 1));
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 48px;
+  letter-spacing: 0.03em;
+}
+
+.btn {
+  display: inline-block;
+  padding: 14px 32px;
+  border-radius: var(--radius);
+  font-family: var(--font-head);
+  font-weight: 600;
+  font-size: calc(0.95rem * var(--ts, 1));
+  letter-spacing: 0.04em;
+  text-decoration: none;
+  cursor: pointer;
+  border: none;
+  transition: background 0.2s, transform 0.1s;
+}
+
+.btn--accent {
+  background: var(--accent);
+  color: #fff;
+}
+.btn--accent:hover { background: var(--accent-hover); }
+.btn--outline {
+  background: transparent;
+  color: var(--accent);
+  border: 2px solid var(--accent);
+}
+.btn--outline:hover { background: var(--accent); color: #fff; }
+
+/* Scroll reveal */
+.reveal { opacity: 0; transform: translateY(24px); transition: opacity 0.6s ease, transform 0.6s ease; }
+.reveal.visible { opacity: 1; transform: none; }
+
+@media (max-width: 768px) {
+  :root { --section-py: 48px; }
+  .section-title { margin-bottom: 32px; }
+}
+
+/* Шапка внутренних страниц (у главной её роль выполняет первый экран) */
+.page-head { padding: calc(68px + 56px) 0 48px; background: var(--dark); color: #fff; text-align: center; }
+.page-head h1 { font-size: calc(clamp(1.7rem, 4vw, 2.6rem) * var(--head-scale, 1)); font-weight: 800; letter-spacing: 0.03em; color: #fff; }
+.page-head p { max-width: 720px; margin: 16px auto 0; font-size: calc(1.05rem * var(--ts, 1)); color: rgba(255, 255, 255, 0.82); }
+.page-head__crumbs { font-size: calc(0.85rem * var(--ts, 1)); margin-bottom: 14px; color: rgba(255, 255, 255, 0.6); }
+.page-head__crumbs a { color: rgba(255, 255, 255, 0.8); text-decoration: none; }
+.page-head__crumbs a:hover { color: var(--accent); }
+@media (max-width: 768px) { .page-head { padding: calc(68px + 36px) 0 36px; } }

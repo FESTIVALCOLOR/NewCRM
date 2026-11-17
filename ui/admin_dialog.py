@@ -48,6 +48,7 @@ class AdminDialog(QDialog):
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setMinimumSize(1250, 750)
         self.setMaximumSize(1500, 900)
+        self._force_close = False
 
         self._init_ui()
 
@@ -126,7 +127,7 @@ class AdminDialog(QDialog):
             }
             QPushButton:hover { background-color: #f5f5f5; }
         """)
-        close_btn.clicked.connect(self.close)
+        close_btn.clicked.connect(self._on_close_clicked)
         bottom_row.addWidget(close_btn)
 
         content_layout.addLayout(bottom_row)
@@ -167,6 +168,54 @@ class AdminDialog(QDialog):
             lbl = self._tab_permissions.findChild(QLabel)
             if lbl:
                 lbl.setText(f"Ошибка загрузки: {e}")
+
+    # ================================================================
+    # Закрытие с проверкой несохранённых изменений
+    # ================================================================
+
+    def _has_unsaved_changes(self):
+        """Проверить есть ли несохранённые изменения в дочерних виджетах"""
+        try:
+            from ui.permissions_matrix_widget import PermissionsMatrixWidget
+            perm_widget = self._tab_permissions.findChild(PermissionsMatrixWidget)
+            if perm_widget and perm_widget.is_dirty():
+                return True
+        except Exception:
+            pass
+        return False
+
+    def _on_close_clicked(self):
+        """Обработка нажатия кнопки Закрыть"""
+        if self._has_unsaved_changes():
+            from ui.custom_message_box import CustomQuestionBox
+            reply = CustomQuestionBox(
+                self,
+                'Несохранённые изменения',
+                'В матрице прав доступа есть несохранённые изменения.\n'
+                'Закрыть без сохранения?',
+            ).exec_()
+            if reply != QDialog.Accepted:
+                return
+        self._force_close = True
+        self.close()
+
+    def closeEvent(self, event):
+        """Перехват закрытия — проверяем несохранённые изменения"""
+        if self._force_close:
+            event.accept()
+            return
+        if self._has_unsaved_changes():
+            from ui.custom_message_box import CustomQuestionBox
+            reply = CustomQuestionBox(
+                self,
+                'Несохранённые изменения',
+                'В матрице прав доступа есть несохранённые изменения.\n'
+                'Закрыть без сохранения?',
+            ).exec_()
+            if reply != QDialog.Accepted:
+                event.ignore()
+                return
+        event.accept()
 
     # ================================================================
     # Вкладка: Настройка чата

@@ -20,6 +20,7 @@ ACCESS_TAB_MAP = {
     "access.employees": "Сотрудники",
     "access.salaries": "Зарплаты",
     "access.employee_reports": "Отчеты по сотрудникам",
+    "access.employee_analytics": "Аналитика сотрудников",
 }
 
 

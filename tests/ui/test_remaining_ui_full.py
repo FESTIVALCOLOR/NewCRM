@@ -1334,7 +1334,6 @@ class TestLoginWindowLogic:
     @pytest.fixture(autouse=True)
     def _login_patches(self):
         with patch('ui.login_window.resource_path', return_value='/fake'), \
-             patch('ui.login_window.os.path.exists', return_value=False), \
              patch('ui.login_window.DatabaseManager', return_value=MagicMock()), \
              patch('ui.login_window.MULTI_USER_MODE', False), \
              patch('ui.login_window.CustomMessageBox'):
