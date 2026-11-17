@@ -120,10 +120,7 @@ def test_next_contact_validation(db):
     assert (data["next_contact_date"], data["next_contact_time"]) == (later, None)
 
 
-def test_contact_reminder_sent_once_on_the_day(db, monkeypatch):
-    import asyncio
-    from datetime import datetime
-
+def _fake_dispatch(monkeypatch, db):
     import services.notification_dispatcher as dispatcher
 
     sent = []
@@ -133,18 +130,53 @@ def test_contact_reminder_sent_once_on_the_day(db, monkeypatch):
 
     monkeypatch.setattr(dispatcher, "dispatch_notification", fake_dispatch)
     monkeypatch.setattr(site_leads, "SessionLocal", db.factory)
+    return sent
 
+
+def test_contact_reminders_morning_and_before_time(db, monkeypatch):
+    import asyncio
+    from datetime import datetime
+
+    sent = _fake_dispatch(monkeypatch, db)
     lead = make_lead(db)
     site_leads.update_lead_status(db, lead.id, "done", "Перезвонить", db.manager)
     lead.next_contact_date, lead.next_contact_time, lead.next_contact_by, lead.next_contact_notified = "2030-03-12", "15:30", db.manager.id, 0
     db.commit()
 
-    early = datetime(2030, 3, 12, 4, 0)  # 07:00 МСК — рано
-    assert asyncio.run(site_leads.check_contact_reminders_once(early)) == []
-    the_day = datetime(2030, 3, 12, 7, 0)  # 10:00 МСК
-    assert asyncio.run(site_leads.check_contact_reminders_once(the_day)) == [lead.id]
-    assert asyncio.run(site_leads.check_contact_reminders_once(the_day)) == []  # повторно не шлём
-    assert len(sent) == 1 and sent[0][0] == db.manager.id and "12.03.2030 в 15:30" in sent[0][2]
+    def run(utc):
+        return asyncio.run(site_leads.check_contact_reminders_once(utc))
+
+    assert run(datetime(2030, 3, 12, 4, 0)) == []  # 07:00 МСК — рано
+    assert run(datetime(2030, 3, 12, 7, 0)) == [(lead.id, "morning")]  # 10:00 МСК — утреннее
+    assert run(datetime(2030, 3, 12, 7, 0)) == []  # повторно не шлём
+    assert run(datetime(2030, 3, 12, 12, 10)) == []  # 15:10 МСК — ещё рано (за 15 мин — в 15:15)
+    assert run(datetime(2030, 3, 12, 12, 16)) == [(lead.id, "soon")]  # 15:16 МСК
+    assert run(datetime(2030, 3, 12, 12, 20)) == []
+    assert len(sent) == 2 and all(s[0] == db.manager.id for s in sent)
+    assert "12.03.2030 в 15:30" in sent[0][2] and "через 14 мин" in sent[1][1]
+
+
+def test_contact_set_today_after_morning_still_reminds_before_time(db, monkeypatch):
+    """Сценарий из жалобы: в 16:34 назначили созвон на сегодня 16:40 — напоминание должно прийти."""
+    import asyncio
+    from datetime import datetime
+
+    sent = _fake_dispatch(monkeypatch, db)
+    monkeypatch.setattr(site_leads, "_today_msk", lambda: datetime(2030, 3, 12, 16, 34))
+    lead = make_lead(db)
+    data = site_leads.update_lead_status(db, lead.id, "done", "Перезвонить", db.manager, contact_date="2030-03-12", contact_time="16:40")
+    assert data["next_contact_notified"] == site_leads.CONTACT_MORNING_SENT  # утреннее пропускаем, перед временем — ждём
+    assert asyncio.run(site_leads.check_contact_reminders_once(datetime(2030, 3, 12, 13, 34))) == [(lead.id, "soon")]
+    assert "через 6 мин" in sent[0][1]
+
+    # Время уже прошло на момент назначения — ничего не шлём; без времени после 9:00 — тоже
+    data = site_leads.add_lead_action(db, lead.id, "Перенос", db.manager, "2030-03-12", "10:00")
+    assert data["next_contact_notified"] == site_leads.CONTACT_ALL_SENT
+    data = site_leads.add_lead_action(db, lead.id, "Без времени", db.manager, "2030-03-12", "")
+    assert data["next_contact_notified"] == site_leads.CONTACT_ALL_SENT
+    # На завтра — оба напоминания впереди
+    data = site_leads.add_lead_action(db, lead.id, "На завтра", db.manager, "2030-03-13", "11:00")
+    assert data["next_contact_notified"] == site_leads.CONTACT_NONE_SENT
 
 
 def test_contract_created_normally_closes_open_leads_by_phone(db):

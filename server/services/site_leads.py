@@ -150,14 +150,53 @@ def set_next_contact(lead, contact_date, contact_time, employee):
     now_msk = _today_msk()
     if day < now_msk.date():
         raise HTTPException(400, "Дата созвона или встречи уже прошла")
+    if contact_time:
+        try:
+            datetime.strptime(contact_time, "%H:%M")
+        except ValueError:
+            raise HTTPException(400, "Неверное время созвона или встречи")
     lead.next_contact_date = contact_date
     lead.next_contact_time = contact_time
     lead.next_contact_by = employee.id
-    # Назначили на сегодня уже после утреннего напоминания — сотрудник и так в курсе, повторно не шлём
-    lead.next_contact_notified = 1 if day == now_msk.date() and now_msk.hour >= CONTACT_REMIND_HOUR else 0
+    stage = CONTACT_NONE_SENT
+    if day == now_msk.date():
+        # Назначили на сегодня после утреннего напоминания — его не шлём (сотрудник и так в курсе),
+        # но напоминание перед назначенным временем придёт; если и время уже прошло — ничего не шлём
+        if now_msk.hour >= CONTACT_REMIND_HOUR:
+            stage = CONTACT_MORNING_SENT
+        moment = _contact_moment(lead)
+        if (moment is None and stage == CONTACT_MORNING_SENT) or (moment is not None and now_msk >= moment):
+            stage = CONTACT_ALL_SENT
+    lead.next_contact_notified = stage
 
 
-CONTACT_REMIND_HOUR = 9  # во сколько (МСК) в день созвона / встречи уходит напоминание
+CONTACT_REMIND_HOUR = 9  # во сколько (МСК) в день созвона / встречи уходит утреннее напоминание
+CONTACT_BEFORE_MIN = 15  # за сколько минут до назначенного времени — второе напоминание
+# next_contact_notified: что уже отправлено
+CONTACT_NONE_SENT, CONTACT_MORNING_SENT, CONTACT_ALL_SENT = 0, 1, 2
+
+
+def _contact_moment(lead):
+    """Назначенный момент созвона (МСК, без зоны) или None, если время не указано."""
+    if not lead.next_contact_date or not lead.next_contact_time:
+        return None
+    return datetime.strptime(f"{lead.next_contact_date} {lead.next_contact_time}", "%Y-%m-%d %H:%M")
+
+
+def contact_reminder_due(lead, now_msk):
+    """Какое напоминание пора отправить: (kind, новое значение next_contact_notified) или None.
+    kind: morning — утром в день созвона, soon — за CONTACT_BEFORE_MIN минут до назначенного времени."""
+    from datetime import timedelta
+
+    stage = lead.next_contact_notified or CONTACT_NONE_SENT
+    if lead.status != "done" or stage >= CONTACT_ALL_SENT or lead.next_contact_date != now_msk.strftime("%Y-%m-%d"):
+        return None
+    moment = _contact_moment(lead)
+    if moment is not None and now_msk >= moment - timedelta(minutes=CONTACT_BEFORE_MIN):
+        return "soon", CONTACT_ALL_SENT
+    if stage < CONTACT_MORNING_SENT and now_msk.hour >= CONTACT_REMIND_HOUR:
+        return "morning", CONTACT_MORNING_SENT if moment is not None else CONTACT_ALL_SENT
+    return None
 
 
 def update_lead_status(db, lead_id, status, result, employee, outcome=None, comment="", contact_date="", contact_time=""):
@@ -334,26 +373,29 @@ def _fmt_contact(lead):
 
 
 async def check_contact_reminders_once(now=None):
-    """Утром (CONTACT_REMIND_HOUR МСК) в день назначенного созвона / встречи — напоминание тому, кто назначил
-    (если его нет или он уволен — всем, у кого есть доступ к заявкам)."""
+    """Напоминания о назначенном созвоне / встрече тому, кто назначил (если его нет или он уволен — всем,
+    у кого есть доступ к заявкам): утром в этот день (CONTACT_REMIND_HOUR МСК) и, если указано время,
+    за CONTACT_BEFORE_MIN минут до него. Возвращает [(lead_id, kind)]."""
     from services.lead_sla import MSK_OFFSET
     from services.notification_dispatcher import dispatch_notification
     from sqlalchemy import func
     from sqlalchemy import text as sql
 
     now_msk = (now or datetime.utcnow()) + MSK_OFFSET
-    if now_msk.hour < CONTACT_REMIND_HOUR:
-        return []
     today = now_msk.strftime("%Y-%m-%d")
     db = SessionLocal()
     sent = []
     try:
-        leads = db.query(SiteLead).filter(SiteLead.status == "done", SiteLead.next_contact_date == today, func.coalesce(SiteLead.next_contact_notified, 0) == 0).all()
+        leads = db.query(SiteLead).filter(SiteLead.status == "done", SiteLead.next_contact_date == today, func.coalesce(SiteLead.next_contact_notified, 0) < CONTACT_ALL_SENT).all()
         for lead in leads:
+            due = contact_reminder_due(lead, now_msk)
+            if not due:
+                continue
+            kind, new_stage = due
             # Атомарно «занимаем» отправку — сервер работает в нескольких процессах
             claimed = db.execute(
-                sql("UPDATE site_leads SET next_contact_notified = 1 WHERE id = :id AND COALESCE(next_contact_notified, 0) = 0"),
-                {"id": lead.id},
+                sql("UPDATE site_leads SET next_contact_notified = :new WHERE id = :id AND COALESCE(next_contact_notified, 0) = :old"),
+                {"new": new_stage, "id": lead.id, "old": lead.next_contact_notified or CONTACT_NONE_SENT},
             ).rowcount
             db.commit()
             if not claimed:
@@ -361,12 +403,18 @@ async def check_contact_reminders_once(now=None):
             last = lead_actions(db, lead.id)
             note = last[-1]["text"] if last else (lead.result or "")
             message = f"Запланировано: {_fmt_contact(lead)}\n{lead_text(lead)}" + (f"\nПоследнее действие: {note}" if note else "")
+            if kind == "soon":
+                left = int((_contact_moment(lead) - now_msk).total_seconds() // 60)
+                when = f"через {left} мин" if left > 0 else "сейчас"
+                title = f"Созвон / встреча {when} ({lead.next_contact_time}) по заявке: {lead.name}"
+            else:
+                title = f"Сегодня созвон / встреча по заявке: {lead.name}"
             author = db.query(Employee).filter(Employee.id == lead.next_contact_by, Employee.status == "активный").first() if lead.next_contact_by else None
             recipients = [author.id] if author else [r[0] for r in _recipients(db)]
             for employee_id in recipients:
-                await dispatch_notification(db, employee_id, "site_lead", f"Сегодня созвон / встреча по заявке: {lead.name}", message, related_entity_type="site_lead", related_entity_id=lead.id)
+                await dispatch_notification(db, employee_id, "site_lead", title, message, related_entity_type="site_lead", related_entity_id=lead.id)
             db.commit()
-            sent.append(lead.id)
+            sent.append((lead.id, kind))
     finally:
         db.close()
     return sent
